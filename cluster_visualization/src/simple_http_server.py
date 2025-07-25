@@ -2,6 +2,9 @@
 """
 Standalone Simple HTTP Server for Cluster Visualization
 Serves the generated HTML file without complex dependencies
+
+REQUIREMENTS:
+- Must activate EDEN environment first: source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 """
 
 import os
@@ -11,10 +14,28 @@ import socketserver
 import webbrowser
 from pathlib import Path
 
+def check_environment():
+    """Check if EDEN environment is activated"""
+    eden_path = "/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1"
+    if eden_path not in os.environ.get('PATH', ''):
+        print("⚠️  WARNING: EDEN environment not detected!")
+        print("   Please activate the EDEN environment first:")
+        print(f"   source {eden_path}/bin/activate")
+        print("")
+        print("   This ensures all required scientific packages are available.")
+        print("")
+        return False
+    return True
+
 def serve_visualization(port=8000, auto_open=True):
     """Serve the cluster visualization HTML file"""
     
     print("=== Cluster Visualization HTTP Server ===")
+    
+    # Check environment first
+    if not check_environment():
+        print("Continuing anyway, but some features may not work properly...")
+        print("")
     
     # Get the script directory and project directory
     script_dir = Path(__file__).parent.absolute()

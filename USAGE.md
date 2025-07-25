@@ -1,5 +1,12 @@
 # Cluster Visualization - Quick Usage Guide
 
+## 🔧 Prerequisites
+
+**REQUIRED**: Activate EDEN-3.1 environment before using any tools:
+```bash
+source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
+```
+
 ## 🎯 Standalone HTML Generator
 
 **Solution**: Interactive HTML visualizations with algorithm comparison functionality.
@@ -8,6 +15,7 @@
 
 ### 1. Quick Start (Recommended)
 ```bash
+source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 python generate_standalone_html.py --algorithm BOTH
 ```
 - Generates comparison visualization for both PZWAV and AMICO algorithms

@@ -6,6 +6,33 @@
 echo "=== Cluster Visualization Launcher ==="
 echo "Testing available solutions..."
 
+# Check and activate EDEN environment if needed
+check_eden_environment() {
+    if [[ ":$PATH:" != *":/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/"* ]]; then
+        echo "⚠️  EDEN environment not detected!"
+        echo "   Attempting to activate EDEN environment..."
+        
+        if [ -f "/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate" ]; then
+            source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
+            echo "✓ EDEN environment activated"
+        else
+            echo "✗ EDEN environment not available at /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/"
+            echo "   Please ensure CVMFS is mounted and EDEN is available"
+            echo "   Or manually activate: source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate"
+            return 1
+        fi
+    else
+        echo "✓ EDEN environment already active"
+    fi
+    return 0
+}
+
+# Activate environment
+if ! check_eden_environment; then
+    echo "Warning: Continuing without EDEN environment - some features may not work"
+fi
+echo ""
+
 # Get the script directory and move to project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"

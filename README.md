@@ -2,7 +2,18 @@
 
 This directory contains an interactive web-based visualization solution for cluster detection data, providing a reliable replacement for Jupyter notebook FigureWidget functionality.
 
-## � Current Solution: Standalone HTML Generator
+## 🔧 Environment Requirements
+
+**Required Environment**: This tool requires the EDEN-3.1 scientific Python environment.
+
+Before using any tools, activate the environment:
+```bash
+source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
+```
+
+This provides required packages: `astropy`, `plotly`, `pandas`, `numpy`, `shapely`
+
+## 🛠 Current Solution: Standalone HTML Generator
 
 The standalone HTML generator creates self-contained, interactive visualizations that work reliably in any web browser without server dependencies.
 
@@ -45,7 +56,12 @@ The standalone HTML generator creates self-contained, interactive visualizations
 
 ## 🚀 Quick Start
 
-### Recommended: Generate Comparison Visualization
+### 1. Activate Environment
+```bash
+source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
+```
+
+### 2. Recommended: Generate Comparison Visualization
 ```bash
 python generate_standalone_html.py --algorithm BOTH
 # Opens cluster_visualization_comparison.html in browser

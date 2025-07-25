@@ -2,6 +2,10 @@
 """
 Standalone Cluster Visualization
 Generates an interactive HTML file with cluster detection data
+
+REQUIREMENTS:
+- Must activate EDEN environment first: source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
+- This provides required packages: astropy, plotly, pandas, numpy, shapely
 """
 
 import os
@@ -16,6 +20,19 @@ from shapely.geometry import Polygon as ShapelyPolygon
 import plotly.graph_objs as go
 import plotly.offline as pyo
 import plotly.io as pio
+
+def check_environment():
+    """Check if EDEN environment is activated"""
+    eden_path = "/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1"
+    if eden_path not in os.environ.get('PATH', ''):
+        print("⚠️  ERROR: EDEN environment not activated!")
+        print("   Please activate the EDEN environment first:")
+        print(f"   source {eden_path}/bin/activate")
+        print("")
+        print("   This provides required packages: astropy, plotly, pandas, numpy, shapely")
+        print("")
+        return False
+    return True
 
 # Add local utils path
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'utils'))
@@ -539,6 +556,11 @@ def create_interactive_html(traces_pzwav, traces_amico, data_pzwav, data_amico):
 def main():
     """Main function to generate the visualization"""
     import argparse
+    
+    # Check environment first
+    if not check_environment():
+        print("Cannot proceed without EDEN environment. Exiting...")
+        sys.exit(1)
     
     # Set up command line argument parsing
     parser = argparse.ArgumentParser(description='Generate interactive cluster visualization HTML')
