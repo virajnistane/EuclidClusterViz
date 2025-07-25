@@ -5,6 +5,14 @@ Cluster Visualization Dash App
 A self-contained Dash application for interactive cluster detection data visualization.
 This app runs as a web server and automatically opens in browser without manual intervention.
 
+Features:
+- Algorithm switching (PZWAV/AMICO)
+- Manual render control with interactive button
+- Always-visible polygon outlines with fill toggle
+- MER tile display (only available with outline polygons for better visibility)
+- Configurable aspect ratio: free (flexible zoom, default) or equal (astronomical accuracy)
+- Responsive plot sizing with 1200x900 dimensions
+
 REQUIREMENTS:
 - Must activate EDEN environment first: source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 - This provides required packages: astropy, plotly, pandas, numpy, shapely, dash
@@ -200,8 +208,9 @@ class ClusterVisualizationApp:
     def create_traces(self, data, show_polygons=True, show_mer_tiles=False):
         """Create all Plotly traces"""
         traces = []
+        data_traces = []  # Keep data traces separate to add them last (top layer)
         
-        # Merged data trace
+        # Merged data trace - will be added to top layer
         merged_trace = go.Scattergl(
             x=data['merged_data']['RIGHT_ASCENSION_CLUSTER'],
             y=data['merged_data']['DECLINATION_CLUSTER'],
@@ -217,7 +226,7 @@ class ClusterVisualizationApp:
             ],
             hoverinfo='text'
         )
-        traces.append(merged_trace)
+        data_traces.append(merged_trace)
         
         # Individual tiles traces and polygons
         for tileid, value in data['tile_data'].items():
@@ -229,7 +238,7 @@ class ClusterVisualizationApp:
             else:
                 datamod = tile_data[tile_data['SNR_CLUSTER'] > data['snr_threshold']]
             
-            # Tile data trace
+            # Tile data trace - will be added to top layer
             tile_trace = go.Scattergl(
                 x=datamod['RIGHT_ASCENSION_CLUSTER'],
                 y=datamod['DECLINATION_CLUSTER'],
@@ -243,78 +252,80 @@ class ClusterVisualizationApp:
                 ],
                 hoverinfo='text'
             )
-            traces.append(tile_trace)
+            data_traces.append(tile_trace)
             
+            # Always load tile definition and create polygons
+            with open(os.path.join(data['data_dir'], value['tilefile']), 'r') as f:
+                tile = json.load(f)
+            
+            # LEV1 polygon - always show outline
+            poly = tile['LEV1']['POLYGON'][0]
+            poly_x = [p[0] for p in poly] + [poly[0][0]]
+            poly_y = [p[1] for p in poly] + [poly[0][1]]
+            level1_trace = go.Scatter(
+                x=poly_x,
+                y=poly_y,
+                mode='lines',
+                line=dict(width=2, color=colors_list[int(tileid)], dash='dash'),
+                name=f'Tile {tileid} LEV1',
+                showlegend=False,
+                text=f'Tile {tileid} - LEV1 Polygon',
+                hoverinfo='text'
+            )
+            traces.append(level1_trace)
+            
+            # CORE polygon
+            poly2 = tile['CORE']['POLYGON'][0]
+            poly_x2 = [p[0] for p in poly2] + [poly2[0][0]]
+            poly_y2 = [p[1] for p in poly2] + [poly2[0][1]]
+            
+            # Always show polygon outline, toggle fill based on show_polygons
             if show_polygons:
-                # Load tile definition
-                with open(os.path.join(data['data_dir'], value['tilefile']), 'r') as f:
-                    tile = json.load(f)
+                fillcolor = colors_list_transparent[int(tileid)]
+                fill = 'toself'
+            else:
+                fillcolor = None
+                fill = None
                 
-                # LEV1 polygon
-                poly = tile['LEV1']['POLYGON'][0]
-                poly_x = [p[0] for p in poly] + [poly[0][0]]
-                poly_y = [p[1] for p in poly] + [poly[0][1]]
-                level1_trace = go.Scatter(
-                    x=poly_x,
-                    y=poly_y,
-                    mode='lines',
-                    line=dict(width=2, color=colors_list[int(tileid)], dash='dash'),
-                    name=f'Tile {tileid} LEV1',
-                    showlegend=False,
-                    text=f'Tile {tileid} - LEV1 Polygon',
-                    hoverinfo='text'
-                )
-                traces.append(level1_trace)
-                
-                # CORE polygon
-                poly2 = tile['CORE']['POLYGON'][0]
-                poly_x2 = [p[0] for p in poly2] + [poly2[0][0]]
-                poly_y2 = [p[1] for p in poly2] + [poly2[0][1]]
-                
-                if show_polygons:
-                    fillcolor = colors_list_transparent[int(tileid)]
-                    fill = 'toself'
-                else:
-                    fillcolor = None
-                    fill = None
-                    
-                core_trace = go.Scatter(
-                    x=poly_x2,
-                    y=poly_y2,
-                    fill=fill,
-                    fillcolor=fillcolor,
-                    mode='lines',
-                    line=dict(width=2, color=colors_list[int(tileid)]),
-                    name=f'Tile {tileid} CORE',
-                    showlegend=False,
-                    text=f'Tile {tileid} - CORE Polygon',
-                    hoverinfo='text'
-                )
-                traces.append(core_trace)
-                
-                # MER tile polygons (if requested and data available)
-                if show_mer_tiles and not data['catred_info'].empty and 'polygon' in data['catred_info'].columns:
-                    for mertileid in tile['LEV1']['ID_INTERSECTED']:
-                        if mertileid in data['catred_info'].index:
-                            merpoly = data['catred_info'].at[mertileid, 'polygon']
-                            if merpoly is not None:
-                                x, y = merpoly.exterior.xy
-                                mertile_trace = go.Scatter(
-                                    x=list(x),
-                                    y=list(y),
-                                    fill='toself',
-                                    fillcolor=colors_list_transparent[int(tileid)],
-                                    mode='lines',
-                                    line=dict(width=2, color=colors_list[int(tileid)], dash='dot'),
-                                    name=f'MerTile {mertileid}',
-                                    showlegend=False,
-                                    text=f'MerTile {mertileid} - CLtile {tileid}',
-                                    hoverinfo='text',
-                                    hoveron='fills+points'
-                                )
-                                traces.append(mertile_trace)
+            core_trace = go.Scatter(
+                x=poly_x2,
+                y=poly_y2,
+                fill=fill,
+                fillcolor=fillcolor,
+                mode='lines',
+                line=dict(width=2, color=colors_list[int(tileid)]),
+                name=f'Tile {tileid} CORE',
+                showlegend=False,
+                text=f'Tile {tileid} - CORE Polygon',
+                hoverinfo='text'
+            )
+            traces.append(core_trace)
+            
+            # MER tile polygons (only show when polygons are in outline mode and requested)
+            if show_mer_tiles and not show_polygons and not data['catred_info'].empty and 'polygon' in data['catred_info'].columns:
+                for mertileid in tile['LEV1']['ID_INTERSECTED']:
+                    if mertileid in data['catred_info'].index:
+                        merpoly = data['catred_info'].at[mertileid, 'polygon']
+                        if merpoly is not None:
+                            x, y = merpoly.exterior.xy
+                            mertile_trace = go.Scatter(
+                                x=list(x),
+                                y=list(y),
+                                fill='toself',
+                                fillcolor=colors_list_transparent[int(tileid)],
+                                mode='lines',
+                                line=dict(width=2, color=colors_list[int(tileid)], dash='dot'),
+                                name=f'MerTile {mertileid}',
+                                showlegend=False,
+                                text=f'MerTile {mertileid} - CLtile {tileid}',
+                                hoverinfo='text',
+                                hoveron='fills+points'
+                            )
+                            traces.append(mertile_trace)
         
-        return traces
+        # Combine traces: polygon traces first (bottom layer), then data traces (top layer)
+        # This ensures data points and their hover info are always visible on top
+        return traces + data_traces
 
     def setup_layout(self):
         """Setup the Dash app layout"""
@@ -344,16 +355,16 @@ class ClusterVisualizationApp:
                                         value='PZWAV',
                                         clearable=False
                                     )
-                                ], width=4),
+                                ], width=3),
                                 
                                 dbc.Col([
-                                    html.Label("Show Polygons:"),
+                                    html.Label("Polygon Fill:"),
                                     dbc.Switch(
                                         id="polygon-switch",
                                         label="Fill polygons",
                                         value=True,
                                     )
-                                ], width=4),
+                                ], width=3),
                                 
                                 dbc.Col([
                                     html.Label("Show MER Tiles:"),
@@ -361,8 +372,19 @@ class ClusterVisualizationApp:
                                         id="mer-switch",
                                         label="Show MER tiles",
                                         value=False,
-                                    )
-                                ], width=4)
+                                    ),
+                                    html.Small("(Only with outline polygons)", className="text-muted")
+                                ], width=3),
+                                
+                                dbc.Col([
+                                    html.Label("Aspect Ratio:"),
+                                    dbc.Switch(
+                                        id="aspect-ratio-switch",
+                                        label="Free aspect ratio",
+                                        value=True,
+                                    ),
+                                    html.Small("(Default: flexible zoom)", className="text-muted")
+                                ], width=3)
                             ]),
                             
                             html.Hr(),
@@ -391,11 +413,12 @@ class ClusterVisualizationApp:
                         children=[
                             dcc.Graph(
                                 id='cluster-plot',
-                                style={'height': '800px'},
+                                style={'height': '900px', 'width': '100%'},
                                 config={
                                     'displayModeBar': True,
                                     'displaylogo': False,
-                                    'modeBarButtonsToRemove': ['lasso2d', 'select2d']
+                                    'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
+                                    'responsive': True
                                 }
                             )
                         ],
@@ -419,18 +442,42 @@ class ClusterVisualizationApp:
             [Input('render-button', 'n_clicks')],
             [State('algorithm-dropdown', 'value'),
              State('polygon-switch', 'value'),
-             State('mer-switch', 'value')]
+             State('mer-switch', 'value'),
+             State('aspect-ratio-switch', 'value')]
         )
-        def update_plot(n_clicks, algorithm, show_polygons, show_mer_tiles):
+        def update_plot(n_clicks, algorithm, show_polygons, show_mer_tiles, free_aspect_ratio):
             # Only render if button has been clicked at least once
             if n_clicks == 0:
                 # Initial empty figure
                 initial_fig = go.Figure()
+                
+                # Configure aspect ratio based on setting
+                if free_aspect_ratio:
+                    # Free aspect ratio - no constraints
+                    xaxis_config = dict(visible=False)
+                    yaxis_config = dict(visible=False)
+                else:
+                    # Equal aspect ratio - astronomical accuracy
+                    xaxis_config = dict(
+                        scaleanchor="y",
+                        scaleratio=1,
+                        constrain="domain",
+                        visible=False
+                    )
+                    yaxis_config = dict(
+                        constrain="domain",
+                        visible=False
+                    )
+                
                 initial_fig.update_layout(
-                    title='Cluster Detection Visualization - Select options and click "Render Visualization"',
-                    xaxis_title='Right Ascension (degrees)',
-                    yaxis_title='Declination (degrees)',
-                    height=800,
+                    title='',
+                    height=900,
+                    width=1200,
+                    margin=dict(l=60, r=200, t=60, b=60),
+                    xaxis=xaxis_config,
+                    yaxis=yaxis_config,
+                    autosize=True,
+                    showlegend=False,
                     annotations=[
                         dict(
                             text="Select your preferred algorithm and display options above,<br>then click the 'Render Visualization' button to generate the plot.",
@@ -458,6 +505,25 @@ class ClusterVisualizationApp:
                 
                 # Create figure
                 fig = go.Figure(traces)
+                
+                # Configure aspect ratio based on setting
+                if free_aspect_ratio:
+                    # Free aspect ratio - no constraints, better for zooming
+                    xaxis_config = dict(visible=True)
+                    yaxis_config = dict(visible=True)
+                else:
+                    # Equal aspect ratio - astronomical accuracy
+                    xaxis_config = dict(
+                        scaleanchor="y",
+                        scaleratio=1,
+                        constrain="domain",
+                        visible=True
+                    )
+                    yaxis_config = dict(
+                        constrain="domain",
+                        visible=True
+                    )
+                
                 fig.update_layout(
                     title=f'Cluster Detection Visualization - {algorithm}',
                     xaxis_title='Right Ascension (degrees)',
@@ -471,15 +537,31 @@ class ClusterVisualizationApp:
                         y=1
                     ),
                     hovermode='closest',
-                    height=800,
-                    margin=dict(l=50, r=150, t=50, b=50)
+                    height=900,
+                    width=1200,
+                    margin=dict(l=60, r=200, t=60, b=60),
+                    xaxis=xaxis_config,
+                    yaxis=yaxis_config,
+                    autosize=True
                 )
                 
                 # Status info
+                mer_status = ""
+                if show_mer_tiles and not show_polygons:
+                    mer_status = " | MER tiles: ON"
+                elif show_mer_tiles and show_polygons:
+                    mer_status = " | MER tiles: OFF (fill mode)"
+                else:
+                    mer_status = " | MER tiles: OFF"
+                
+                aspect_mode = "Free aspect ratio" if free_aspect_ratio else "Equal aspect ratio"
+                
                 status = dbc.Alert([
                     html.H6(f"Algorithm: {algorithm}", className="mb-1"),
                     html.P(f"Merged clusters: {len(data['merged_data'])}", className="mb-1"),
                     html.P(f"Individual tiles: {len(data['tile_data'])}", className="mb-1"),
+                    html.P(f"Polygon mode: {'Filled' if show_polygons else 'Outline'}{mer_status}", className="mb-1"),
+                    html.P(f"Aspect ratio: {aspect_mode}", className="mb-1"),
                     html.Small(f"Rendered at: {pd.Timestamp.now().strftime('%H:%M:%S')}", className="text-muted")
                 ], color="success", className="mt-2")
                 
@@ -496,7 +578,10 @@ class ClusterVisualizationApp:
                 )
                 error_fig.update_layout(
                     title="Error Loading Visualization",
-                    height=800
+                    height=900,
+                    width=1200,
+                    margin=dict(l=60, r=200, t=60, b=60),
+                    autosize=True
                 )
                 
                 error_status = dbc.Alert(
@@ -512,15 +597,24 @@ class ClusterVisualizationApp:
             [Input('algorithm-dropdown', 'value'),
              Input('polygon-switch', 'value'),
              Input('mer-switch', 'value'),
+             Input('aspect-ratio-switch', 'value'),
              Input('render-button', 'n_clicks')]
         )
-        def update_button_text(algorithm, show_polygons, show_mer_tiles, n_clicks):
+        def update_button_text(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, n_clicks):
             if n_clicks == 0:
                 return "🚀 Render Visualization"
             else:
-                polygon_text = "with polygons" if show_polygons else "without polygons"
-                mer_text = " + MER tiles" if show_mer_tiles else ""
-                return f"🔄 Re-render {algorithm} ({polygon_text}{mer_text})"
+                polygon_text = "filled polygons" if show_polygons else "outline polygons"
+                aspect_text = "free aspect" if free_aspect_ratio else "equal aspect"
+                
+                # MER tiles only show when polygons are in outline mode
+                mer_text = ""
+                if show_mer_tiles and not show_polygons:
+                    mer_text = " + MER tiles"
+                elif show_mer_tiles and show_polygons:
+                    mer_text = " (MER tiles disabled with fill)"
+                
+                return f"🔄 Re-render {algorithm} ({polygon_text}, {aspect_text}{mer_text})"
 
     def open_browser(self, port=8050, delay=1.5):
         """Open browser after a short delay"""
