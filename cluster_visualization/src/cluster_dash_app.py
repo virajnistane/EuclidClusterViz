@@ -90,10 +90,42 @@ def check_environment():
 if not check_environment():
     sys.exit(1)
 
+# Add project root to path for configuration import
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# Import configuration
+try:
+    from config import get_config
+    config = get_config()
+    print("✓ Configuration loaded successfully")
+    USE_CONFIG = True
+except ImportError as e:
+    print(f"⚠️  Configuration not found: {e}")
+    print("   Using fallback hardcoded paths")
+    USE_CONFIG = False
+
 # Add local utils path
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'utils'))
-from myutils import get_xml_element
-from colordefinitions import colors_list, colors_list_transparent
+if USE_CONFIG:
+    utils_path = config.utils_dir
+else:
+    # Fallback: look for mypackage in the user's home directory
+    utils_path = os.path.join(os.path.expanduser('~'), 'mypackage')
+
+if utils_path not in sys.path:
+    sys.path.append(utils_path)
+
+# Import utilities with error handling
+try:
+    from myutils import get_xml_element
+    from colordefinitions import colors_list, colors_list_transparent
+    print(f"✓ Utilities loaded from: {utils_path}")
+except ImportError as e:
+    print(f"⚠️  Error importing utilities: {e}")
+    print(f"   Searched in: {utils_path}")
+    print("   Please ensure myutils.py and colordefinitions.py are available")
+    sys.exit(1)
 
 class ClusterVisualizationApp:
     def __init__(self):
@@ -118,20 +150,38 @@ class ClusterVisualizationApp:
             print(f"Warning: Unknown algorithm '{select_algorithm}'. Using 'PZWAV' as default.")
             select_algorithm = 'PZWAV'
         
-        # Paths
-        mergedetcatdir = '/sps/euclid/OU-LE3/CL/ial_workspace/workdir/MergeDetCat/RR2_south/'
-        mergedetcat_datadir = os.path.join(mergedetcatdir, 'data')
-        mergedetcat_inputsdir = os.path.join(mergedetcatdir, 'inputs')
-        mergedetcatoutputdir = os.path.join(mergedetcatdir, f'outvn_mergedetcat_rr2south_{select_algorithm}_3')
+        # Use configuration for paths if available, otherwise fallback to hardcoded paths
+        if USE_CONFIG:
+            mergedetcatdir = config.mergedetcat_dir
+            mergedetcat_datadir = config.mergedetcat_data_dir
+            mergedetcat_inputsdir = config.mergedetcat_inputs_dir
+            mergedetcatoutputdir = config.get_output_dir(select_algorithm)
+            rr2downloadsdir = config.rr2_downloads_dir
+            print("✓ Using configuration-based paths")
+        else:
+            # Fallback to hardcoded paths
+            mergedetcatdir = '/sps/euclid/OU-LE3/CL/ial_workspace/workdir/MergeDetCat/RR2_south/'
+            mergedetcat_datadir = os.path.join(mergedetcatdir, 'data')
+            mergedetcat_inputsdir = os.path.join(mergedetcatdir, 'inputs')
+            mergedetcatoutputdir = os.path.join(mergedetcatdir, f'outvn_mergedetcat_rr2south_{select_algorithm}_3')
+            rr2downloadsdir = '/sps/euclid/OU-LE3/CL/ial_workspace/workdir/RR2_downloads'
+            print("⚠️  Using fallback hardcoded paths")
         
-        rr2downloadsdir = '/sps/euclid/OU-LE3/CL/ial_workspace/workdir/RR2_downloads'
+        # Validate critical paths exist
+        if not os.path.exists(mergedetcatoutputdir):
+            raise FileNotFoundError(f"Output directory not found: {mergedetcatoutputdir}")
+        if not os.path.exists(mergedetcat_datadir):
+            raise FileNotFoundError(f"Data directory not found: {mergedetcat_datadir}")
         
         # Load merged detection catalog
         det_xml = os.path.join(mergedetcatoutputdir, 'mergedetcat.xml')
+        if not os.path.exists(det_xml):
+            raise FileNotFoundError(f"Merged detection XML not found: {det_xml}")
+            
         fitsfile = os.path.join(mergedetcat_datadir, 
                                get_xml_element(det_xml, 'Data/ClustersFile/DataContainer/FileName').text)
         
-        print(f"Loading merged catalog from: {fitsfile}")
+        print(f"Loading merged catalog from: {os.path.basename(fitsfile)}")
         with fits.open(fitsfile) as hdul:
             data_merged = hdul[1].data
         
@@ -149,7 +199,14 @@ class ClusterVisualizationApp:
         print(f"Loaded {len(datamod_merged)} merged clusters")
         
         # Load individual detection files
-        indiv_detfiles_list = os.path.join(mergedetcatdir, f'detfiles_input_{select_algorithm.lower()}_3.json')
+        if USE_CONFIG:
+            indiv_detfiles_list = config.get_detfiles_list(select_algorithm)
+        else:
+            indiv_detfiles_list = os.path.join(mergedetcatdir, f'detfiles_input_{select_algorithm.lower()}_3.json')
+        
+        if not os.path.exists(indiv_detfiles_list):
+            raise FileNotFoundError(f"Detection files list not found: {indiv_detfiles_list}")
+            
         with open(indiv_detfiles_list, 'r') as f:
             detfiles_list = json.load(f)
         
@@ -172,25 +229,30 @@ class ClusterVisualizationApp:
         data_by_tile = dict(sorted(data_by_tile.items()))
         print(f"Loaded {len(data_by_tile)} individual tiles")
         
-        # Load catred file info
-        catred_fileinfo_csv = os.path.join(rr2downloadsdir, 'catred_fileinfo.csv')
+        # Load catred file info using configuration
+        if USE_CONFIG:
+            catred_fileinfo_csv = config.get_catred_fileinfo_csv()
+            catred_polygon_pkl = config.get_catred_polygons_pkl()
+        else:
+            catred_fileinfo_csv = os.path.join(rr2downloadsdir, 'catred_fileinfo.csv')
+            catred_polygon_pkl = os.path.join(rr2downloadsdir, 'catred_polygons_by_tileid.pkl')
+        
         catred_fileinfo_df = pd.DataFrame()
         if os.path.exists(catred_fileinfo_csv):
             catred_fileinfo_df = pd.read_csv(catred_fileinfo_csv)
             catred_fileinfo_df.set_index('tileid', inplace=True)
             print("Loaded catred file info")
         else:
-            print("Warning: catred_fileinfo.csv not found!")
+            print(f"Warning: catred_fileinfo.csv not found at {catred_fileinfo_csv}")
         
         # Load catred polygons
-        catred_polygon_pkl = os.path.join(rr2downloadsdir, 'catred_polygons_by_tileid.pkl')
         if os.path.exists(catred_polygon_pkl) and not catred_fileinfo_df.empty:
             with open(catred_polygon_pkl, 'rb') as f:
                 catred_fileinfo_dict = pickle.load(f)
             catred_fileinfo_df['polygon'] = pd.Series(catred_fileinfo_dict)
             print("Loaded catred polygons")
         else:
-            print("Warning: catred_polygons_by_tileid.pkl not found!")
+            print(f"Warning: catred polygons not found at {catred_polygon_pkl}")
         
         data = {
             'merged_data': datamod_merged,
@@ -749,13 +811,25 @@ class ClusterVisualizationApp:
         browser_thread.daemon = True
         browser_thread.start()
 
-    def run(self, host='localhost', port=8050, debug=False, auto_open=True):
+    def run(self, host='localhost', port=8050, debug=False, auto_open=True, external_access=False):
         """Run the Dash app"""
+        # If external_access is True, bind to all interfaces and don't auto-open browser
+        if external_access:
+            host = '0.0.0.0'
+            auto_open = False
+        
         if auto_open:
             self.open_browser(port)
         
         print("=== Cluster Visualization Dash App ===")
-        print(f"Starting server at: http://{host}:{port}")
+        if external_access:
+            print(f"Starting server for external access on port {port}")
+            print("Access from your local machine using:")
+            print(f"  - SSH tunnel: ssh -L {port}:localhost:{port} username@this-server")
+            print(f"  - Then open: http://localhost:{port} in your local browser")
+            print("NOTE: Keep the SSH connection alive while using the app")
+        else:
+            print(f"Starting server at: http://{host}:{port}")
         print("Loading data and setting up visualization...")
         print("Press Ctrl+C to stop the server")
         print("")
@@ -771,12 +845,17 @@ class ClusterVisualizationApp:
 
 def main():
     """Main function to run the app"""
+    import sys
+    
+    # Check for external access flag
+    external_access = '--external' in sys.argv or '--remote' in sys.argv
+    
     app = ClusterVisualizationApp()
     
     # Try different ports if default is busy
     for port in [8050, 8051, 8052]:
         try:
-            app.run(port=port, debug=False, auto_open=True)
+            app.run(port=port, debug=False, auto_open=False, external_access=external_access)
             break
         except OSError as e:
             if "Address already in use" in str(e):
