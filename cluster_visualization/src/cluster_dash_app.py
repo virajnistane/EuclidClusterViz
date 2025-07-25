@@ -342,6 +342,8 @@ class ClusterVisualizationApp:
                     dbc.Card([
                         dbc.CardBody([
                             html.H5("Visualization Controls", className="card-title"),
+                            html.P("Options update in real-time while preserving your current zoom level", 
+                                   className="text-muted small mb-3"),
                             
                             dbc.Row([
                                 dbc.Col([
@@ -392,13 +394,15 @@ class ClusterVisualizationApp:
                             dbc.Row([
                                 dbc.Col([
                                     dbc.Button(
-                                        "🔄 Render Visualization",
+                                        "� Initial Render",
                                         id="render-button",
                                         color="primary",
                                         size="lg",
                                         className="w-100 mt-2",
                                         n_clicks=0
-                                    )
+                                    ),
+                                    html.Small("After initial render, options update automatically", 
+                                              className="text-muted d-block text-center mt-1")
                                 ], width=12)
                             ])
                         ])
@@ -443,9 +447,10 @@ class ClusterVisualizationApp:
             [State('algorithm-dropdown', 'value'),
              State('polygon-switch', 'value'),
              State('mer-switch', 'value'),
-             State('aspect-ratio-switch', 'value')]
+             State('aspect-ratio-switch', 'value'),
+             State('cluster-plot', 'relayoutData')]
         )
-        def update_plot(n_clicks, algorithm, show_polygons, show_mer_tiles, free_aspect_ratio):
+        def update_plot(n_clicks, algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, relayout_data):
             # Only render if button has been clicked at least once
             if n_clicks == 0:
                 # Initial empty figure
@@ -491,7 +496,7 @@ class ClusterVisualizationApp:
                 
                 initial_status = dbc.Alert([
                     html.H6("Ready to render", className="mb-1"),
-                    html.P("Select your options and click 'Render Visualization' to begin", className="mb-0")
+                    html.P("Click 'Initial Render' to begin. After that, options will update automatically while preserving your zoom level.", className="mb-0")
                 ], color="secondary", className="mt-2")
                 
                 return initial_fig, initial_status
@@ -544,6 +549,19 @@ class ClusterVisualizationApp:
                     yaxis=yaxis_config,
                     autosize=True
                 )
+                
+                # Preserve zoom state if available
+                if relayout_data and any(key in relayout_data for key in ['xaxis.range[0]', 'xaxis.range[1]', 'yaxis.range[0]', 'yaxis.range[1]']):
+                    # Extract zoom ranges from relayoutData
+                    if 'xaxis.range[0]' in relayout_data and 'xaxis.range[1]' in relayout_data:
+                        fig.update_xaxes(range=[relayout_data['xaxis.range[0]'], relayout_data['xaxis.range[1]']])
+                    if 'yaxis.range[0]' in relayout_data and 'yaxis.range[1]' in relayout_data:
+                        fig.update_yaxes(range=[relayout_data['yaxis.range[0]'], relayout_data['yaxis.range[1]']])
+                elif relayout_data and 'xaxis.range' in relayout_data:
+                    # Handle different relayoutData format
+                    fig.update_xaxes(range=relayout_data['xaxis.range'])
+                    if 'yaxis.range' in relayout_data:
+                        fig.update_yaxes(range=relayout_data['yaxis.range'])
                 
                 # Status info
                 mer_status = ""
@@ -602,19 +620,124 @@ class ClusterVisualizationApp:
         )
         def update_button_text(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, n_clicks):
             if n_clicks == 0:
-                return "🚀 Render Visualization"
+                return "🚀 Initial Render"
             else:
-                polygon_text = "filled polygons" if show_polygons else "outline polygons"
-                aspect_text = "free aspect" if free_aspect_ratio else "equal aspect"
+                return "✅ Live Updates Active"
+
+        # Callback for real-time option updates (preserves zoom)
+        @self.app.callback(
+            [Output('cluster-plot', 'figure', allow_duplicate=True), Output('status-info', 'children', allow_duplicate=True)],
+            [Input('algorithm-dropdown', 'value'),
+             Input('polygon-switch', 'value'),
+             Input('mer-switch', 'value'),
+             Input('aspect-ratio-switch', 'value')],
+            [State('render-button', 'n_clicks'),
+             State('cluster-plot', 'relayoutData'),
+             State('cluster-plot', 'figure')],
+            prevent_initial_call=True
+        )
+        def update_plot_options(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, n_clicks, relayout_data, current_figure):
+            # Only update if render button has been clicked at least once
+            if n_clicks == 0:
+                return dash.no_update, dash.no_update
+            
+            try:
+                # Load data for selected algorithm
+                data = self.load_data(algorithm)
                 
-                # MER tiles only show when polygons are in outline mode
-                mer_text = ""
+                # Create traces
+                traces = self.create_traces(data, show_polygons, show_mer_tiles)
+                
+                # Create figure
+                fig = go.Figure(traces)
+                
+                # Configure aspect ratio based on setting
+                if free_aspect_ratio:
+                    # Free aspect ratio - no constraints, better for zooming
+                    xaxis_config = dict(visible=True)
+                    yaxis_config = dict(visible=True)
+                else:
+                    # Equal aspect ratio - astronomical accuracy
+                    xaxis_config = dict(
+                        scaleanchor="y",
+                        scaleratio=1,
+                        constrain="domain",
+                        visible=True
+                    )
+                    yaxis_config = dict(
+                        constrain="domain",
+                        visible=True
+                    )
+                
+                fig.update_layout(
+                    title=f'Cluster Detection Visualization - {algorithm}',
+                    xaxis_title='Right Ascension (degrees)',
+                    yaxis_title='Declination (degrees)',
+                    legend=dict(
+                        title='Legend',
+                        orientation='v',
+                        xanchor='left',
+                        x=1.02,
+                        yanchor='top',
+                        y=1
+                    ),
+                    hovermode='closest',
+                    height=900,
+                    width=1200,
+                    margin=dict(l=60, r=200, t=60, b=60),
+                    xaxis=xaxis_config,
+                    yaxis=yaxis_config,
+                    autosize=True
+                )
+                
+                # Preserve zoom state from current figure or relayoutData
+                if relayout_data and any(key in relayout_data for key in ['xaxis.range[0]', 'xaxis.range[1]', 'yaxis.range[0]', 'yaxis.range[1]']):
+                    # Extract zoom ranges from relayoutData
+                    if 'xaxis.range[0]' in relayout_data and 'xaxis.range[1]' in relayout_data:
+                        fig.update_xaxes(range=[relayout_data['xaxis.range[0]'], relayout_data['xaxis.range[1]']])
+                    if 'yaxis.range[0]' in relayout_data and 'yaxis.range[1]' in relayout_data:
+                        fig.update_yaxes(range=[relayout_data['yaxis.range[0]'], relayout_data['yaxis.range[1]']])
+                elif relayout_data and 'xaxis.range' in relayout_data:
+                    # Handle different relayoutData format
+                    fig.update_xaxes(range=relayout_data['xaxis.range'])
+                    if 'yaxis.range' in relayout_data:
+                        fig.update_yaxes(range=relayout_data['yaxis.range'])
+                elif current_figure and 'layout' in current_figure:
+                    # Fallback: try to preserve from current figure layout
+                    current_layout = current_figure['layout']
+                    if 'xaxis' in current_layout and 'range' in current_layout['xaxis']:
+                        fig.update_xaxes(range=current_layout['xaxis']['range'])
+                    if 'yaxis' in current_layout and 'range' in current_layout['yaxis']:
+                        fig.update_yaxes(range=current_layout['yaxis']['range'])
+                
+                # Status info
+                mer_status = ""
                 if show_mer_tiles and not show_polygons:
-                    mer_text = " + MER tiles"
+                    mer_status = " | MER tiles: ON"
                 elif show_mer_tiles and show_polygons:
-                    mer_text = " (MER tiles disabled with fill)"
+                    mer_status = " | MER tiles: OFF (fill mode)"
+                else:
+                    mer_status = " | MER tiles: OFF"
                 
-                return f"🔄 Re-render {algorithm} ({polygon_text}, {aspect_text}{mer_text})"
+                aspect_mode = "Free aspect ratio" if free_aspect_ratio else "Equal aspect ratio"
+                
+                status = dbc.Alert([
+                    html.H6(f"Algorithm: {algorithm}", className="mb-1"),
+                    html.P(f"Merged clusters: {len(data['merged_data'])}", className="mb-1"),
+                    html.P(f"Individual tiles: {len(data['tile_data'])}", className="mb-1"),
+                    html.P(f"Polygon mode: {'Filled' if show_polygons else 'Outline'}{mer_status}", className="mb-1"),
+                    html.P(f"Aspect ratio: {aspect_mode}", className="mb-1"),
+                    html.Small(f"Updated at: {pd.Timestamp.now().strftime('%H:%M:%S')}", className="text-muted")
+                ], color="info", className="mt-2")
+                
+                return fig, status
+                
+            except Exception as e:
+                error_status = dbc.Alert(
+                    f"Error updating: {str(e)}",
+                    color="warning"
+                )
+                return dash.no_update, error_status
 
     def open_browser(self, port=8050, delay=1.5):
         """Open browser after a short delay"""
