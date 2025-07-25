@@ -1,5 +1,7 @@
+__pycache__/*
+
 *ipynb
 *.backup
 
 cluster_dash_venv/
-cluster_visualization/*/__pycache__/
+
