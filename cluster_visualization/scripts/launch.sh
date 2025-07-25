@@ -65,13 +65,35 @@ print('Dependencies test passed')
 get_choice() {
     echo "" >&2
     echo "Available options:" >&2
-    echo "1) Simple Server (Recommended - Always works)" >&2
-    echo "2) Standalone HTML (Open directly in browser)" >&2
-    echo "3) Generate new HTML file" >&2
-    echo "4) Test dependencies" >&2
+    echo "1) Dash App (Interactive - Auto-opens browser)" >&2
+    echo "2) Dash App with Virtual Env (Recommended for missing modules)" >&2
+    echo "3) Simple Server (Always works)" >&2
+    echo "4) Standalone HTML (Open directly in browser)" >&2
+    echo "5) Generate new HTML file" >&2
+    echo "6) Test dependencies" >&2
     echo "" >&2
-    read -p "Choose an option (1-4): " choice >&2
+    read -p "Choose an option (1-6): " choice >&2
     echo "$choice"
+}
+
+# Function to launch Dash app
+launch_dash() {
+    echo "Launching interactive Dash app..."
+    echo "Features: Algorithm switching, interactive plotting, real-time updates"
+    echo "The app will automatically open in your browser"
+    echo ""
+    ./scripts/run_dash_app.sh
+}
+
+# Function to launch Dash app with virtual environment
+launch_dash_venv() {
+    echo "Launching Dash app with virtual environment..."
+    echo "This will automatically install missing modules if needed"
+    echo "Features: Algorithm switching, interactive plotting, real-time updates"
+    echo "The app will automatically open in your browser"
+    echo ""
+    cd "$PROJECT_DIR"
+    ./run_dash_app_venv.sh
 }
 
 # Function to launch simple server
@@ -186,19 +208,25 @@ choice=$(echo "$choice" | tr -d '[:space:]')  # Remove whitespace
 
 case $choice in
     1)
-        launch_simple
+        launch_dash
         ;;
     2)
-        open_html
+        launch_dash_venv
         ;;
     3)
-        generate_html
+        launch_simple
         ;;
     4)
+        open_html
+        ;;
+    5)
+        generate_html
+        ;;
+    6)
         test_all
         ;;
     *)
-        echo "Invalid choice '$choice'. Using recommended option (Simple Server)..."
-        launch_simple
+        echo "Invalid choice '$choice'. Using recommended option (Dash App with Virtual Env)..."
+        launch_dash_venv
         ;;
 esac

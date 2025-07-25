@@ -19,12 +19,14 @@ The standalone HTML generator creates self-contained, interactive visualizations
 
 ## ✅ Available Solutions
 
-1. **Standalone HTML Generator** (✅ **RECOMMENDED**): Creates self-contained interactive HTML files
-2. **Simple HTTP Server** (✅ **RELIABLE**): Serves HTML files via built-in Python server
+1. **Interactive Dash App** (🆕 **RECOMMENDED**): Real-time interactive web application with algorithm switching
+2. **Standalone HTML Generator** (✅ **RELIABLE**): Creates self-contained interactive HTML files
+3. **Simple HTTP Server** (✅ **FALLBACK**): Serves HTML files via built-in Python server
 
 ## Features
 
-- **Algorithm Comparison**: Switch between PZWAV and AMICO detection algorithms
+- **🆕 Render Button Control**: Manual rendering trigger for better performance control
+- **Algorithm Comparison**: Switch between PZWAV and AMICO detection algorithms  
 - **Interactive scatter plots** of merged detection catalog data
 - **Polygon fill toggle** for CORE tile boundaries (Basic View only)
 - **Zoom-based MER tile display** - MER tile polygons shown in Detailed View
@@ -38,7 +40,8 @@ The standalone HTML generator creates self-contained, interactive visualizations
 ## Files
 
 ### Main Application
-- `generate_standalone_html.py` - **PRIMARY TOOL**: Standalone HTML generator with algorithm comparison
+- `cluster_dash_app.py` - **NEW**: Interactive Dash web application with real-time controls
+- `generate_standalone_html.py` - **RELIABLE**: Standalone HTML generator with algorithm comparison
 
 ### Launch Scripts
 - `launch.sh` - Universal launcher script with dependency testing
@@ -61,19 +64,26 @@ The standalone HTML generator creates self-contained, interactive visualizations
 source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 ```
 
-### 2. Recommended: Generate Comparison Visualization
+### 2. **NEW: Interactive Dash App** (Recommended)
+```bash
+./run_dash_app.sh
+# Launches web app at http://localhost:8050 with browser auto-open
+# Features: Real-time algorithm switching, interactive controls
+```
+
+### 3. Alternative: Generate Comparison Visualization
 ```bash
 python generate_standalone_html.py --algorithm BOTH
 # Opens cluster_visualization_comparison.html in browser
 ```
 
-### Alternative 1: Universal Launcher
+### 4. Alternative: Universal Launcher
 ```bash
 ./launch.sh
-# Interactive menu with options and dependency testing
+# Interactive menu with all options including Dash app
 ```
 
-### Alternative 2: Simple HTTP Server
+### 5. Alternative: Simple HTTP Server
 ```bash
 python simple_server.py
 # Then open: http://localhost:8000/cluster_visualization_comparison.html

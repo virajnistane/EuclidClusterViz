@@ -13,7 +13,20 @@ source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 
 ## ✅ USAGE METHODS
 
-### 1. Quick Start (Recommended)
+### 1. **NEW: Interactive Dash App** (Recommended)
+```bash
+source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
+./run_dash_app.sh
+```
+- 🆕 **Real-time interactive web application**
+- 🆕 **Auto-opens browser** at http://localhost:8050
+- 🆕 **Manual render button** for performance control - select options then click "Render Visualization" 
+- 🆕 **Live algorithm switching** between PZWAV and AMICO
+- 🆕 **Interactive controls** for polygons and MER tiles
+- 🆕 **No file generation needed** - works with live data
+- ✅ **Zoom, pan, hover** with real-time updates
+
+### 2. Standalone HTML Generation
 ```bash
 source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 python generate_standalone_html.py --algorithm BOTH
@@ -22,16 +35,16 @@ python generate_standalone_html.py --algorithm BOTH
 - Creates `cluster_visualization_comparison.html` (50+ MB with full data)
 - Includes algorithm switching, polygon fill toggle, and all interactive features
 
-### 2. Universal Launcher
+### 3. Universal Launcher
 ```bash
 ./launch.sh
 ```
-- Interactive menu with multiple options
+- Interactive menu with all options including new Dash app
 - Tests dependencies automatically
-- Provides simple HTTP server option
+- Provides fallback options
 - Generates HTML files as needed
 
-### 3. Simple HTTP Server
+### 4. Simple HTTP Server
 ```bash
 python simple_server.py
 ```
@@ -40,7 +53,7 @@ python simple_server.py
 - ✅ Auto-detects and serves available visualizations
 - ✅ No external dependencies
 
-### 4. Algorithm-Specific Generation
+### 5. Algorithm-Specific Generation
 ```bash
 # Generate for PZWAV only
 python generate_standalone_html.py --algorithm PZWAV

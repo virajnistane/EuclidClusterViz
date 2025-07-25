@@ -18,7 +18,7 @@ from astropy.coordinates import SkyCoord
 from astropy import units as u
 
 import xml.etree.ElementTree as ET
-from bs4 import BeautifulSoup
+# from bs4 import BeautifulSoup
 
 def get_xml_tree(xml_file):
     """
