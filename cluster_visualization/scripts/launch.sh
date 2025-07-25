@@ -92,7 +92,7 @@ launch_dash_venv() {
     echo "Features: Algorithm switching, interactive plotting, real-time updates"
     echo "The app will automatically open in your browser"
     echo ""
-    cd "$PROJECT_DIR"
+    cd "$(dirname "$PROJECT_DIR")"
     ./run_dash_app_venv.sh
 }
 
