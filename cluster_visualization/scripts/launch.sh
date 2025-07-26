@@ -35,13 +35,13 @@ echo ""
 
 # Get the script directory and move to project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 cd "$PROJECT_DIR"
 
 # Test if HTML file exists in output/current
-if [ ! -f "output/current/cluster_visualization_comparison.html" ]; then
+if [ ! -f "cluster_visualization/output/current/cluster_visualization_comparison.html" ]; then
     echo "HTML visualization not found. Generating..."
-    python src/generate_standalone_html.py --algorithm BOTH
+    python cluster_visualization/src/generate_standalone_html.py --algorithm BOTH
     if [ $? -ne 0 ]; then
         echo "Error: Could not generate HTML file"
         exit 1
@@ -65,24 +65,14 @@ print('Dependencies test passed')
 get_choice() {
     echo "" >&2
     echo "Available options:" >&2
-    echo "1) Dash App (Interactive - Auto-opens browser)" >&2
-    echo "2) Dash App with Virtual Env (Recommended for missing modules)" >&2
-    echo "3) Simple Server (Always works)" >&2
-    echo "4) Standalone HTML (Open directly in browser)" >&2
-    echo "5) Generate new HTML file" >&2
-    echo "6) Test dependencies" >&2
+    echo "1) Dash App with Virtual Env (Recommended)" >&2
+    echo "2) Simple Server (Always works)" >&2
+    echo "3) Standalone HTML (Open directly in browser)" >&2
+    echo "4) Generate new HTML file" >&2
+    echo "5) Test dependencies" >&2
     echo "" >&2
-    read -p "Choose an option (1-6): " choice >&2
+    read -p "Choose an option (1-5): " choice >&2
     echo "$choice"
-}
-
-# Function to launch Dash app
-launch_dash() {
-    echo "Launching interactive Dash app..."
-    echo "Features: Algorithm switching, interactive plotting, real-time updates"
-    echo "The app will automatically open in your browser"
-    echo ""
-    ./scripts/run_dash_app.sh
 }
 
 # Function to launch Dash app with virtual environment
@@ -92,8 +82,7 @@ launch_dash_venv() {
     echo "Features: Algorithm switching, interactive plotting, real-time updates"
     echo "The app will automatically open in your browser"
     echo ""
-    cd "$(dirname "$PROJECT_DIR")"
-    ./run_dash_app_venv.sh
+    ./cluster_visualization/scripts/run_dash_app_venv.sh
 }
 
 # Function to launch simple server
@@ -122,12 +111,12 @@ launch_simple() {
 # Function to open HTML directly
 open_html() {
     echo "Opening HTML file directly in browser..."
-    if [ -f "output/current/cluster_visualization_comparison.html" ]; then
-        html_file="output/current/cluster_visualization_comparison.html"
+    if [ -f "cluster_visualization/output/current/cluster_visualization_comparison.html" ]; then
+        html_file="cluster_visualization/output/current/cluster_visualization_comparison.html"
     else
         echo "Comparison file not found, generating it first..."
-        python src/generate_standalone_html.py --algorithm BOTH
-        html_file="output/current/cluster_visualization_comparison.html"
+        python cluster_visualization/src/generate_standalone_html.py --algorithm BOTH
+        html_file="cluster_visualization/output/current/cluster_visualization_comparison.html"
     fi
     
     if command -v firefox >/dev/null 2>&1; then
@@ -147,11 +136,11 @@ open_html() {
 # Function to generate new HTML
 generate_html() {
     echo "Generating new HTML visualization..."
-    python src/generate_standalone_html.py --algorithm BOTH
+    python cluster_visualization/src/generate_standalone_html.py --algorithm BOTH
     if [ $? -eq 0 ]; then
         echo "✓ HTML file generated successfully"
-        echo "File: output/current/cluster_visualization_comparison.html"
-        size=$(ls -lh output/current/cluster_visualization_comparison.html | awk '{print $5}')
+        echo "File: cluster_visualization/output/current/cluster_visualization_comparison.html"
+        size=$(ls -lh cluster_visualization/output/current/cluster_visualization_comparison.html | awk '{print $5}')
         echo "Size: $size"
     else
         echo "✗ Error generating HTML file"
@@ -178,7 +167,7 @@ test_all() {
     python -c "
 import sys
 import os
-utils_dir = os.path.join(os.getcwd(), 'utils')
+utils_dir = os.path.join(os.getcwd(), 'cluster_visualization/utils')
 sys.path.append(utils_dir)
 from myutils import get_xml_element
 from colordefinitions import colors_list
@@ -187,8 +176,8 @@ print('✓ Custom modules OK')
     
     echo ""
     echo "5. Data files:"
-    if [ -f "output/current/cluster_visualization_comparison.html" ]; then
-        size=$(ls -lh "output/current/cluster_visualization_comparison.html" | awk '{print $5}')
+    if [ -f "cluster_visualization/output/current/cluster_visualization_comparison.html" ]; then
+        size=$(ls -lh "cluster_visualization/output/current/cluster_visualization_comparison.html" | awk '{print $5}')
         echo "✓ HTML visualization exists ($size)"
     else
         echo "✗ HTML visualization missing"
@@ -208,21 +197,18 @@ choice=$(echo "$choice" | tr -d '[:space:]')  # Remove whitespace
 
 case $choice in
     1)
-        launch_dash
-        ;;
-    2)
         launch_dash_venv
         ;;
-    3)
+    2)
         launch_simple
         ;;
-    4)
+    3)
         open_html
         ;;
-    5)
+    4)
         generate_html
         ;;
-    6)
+    5)
         test_all
         ;;
     *)

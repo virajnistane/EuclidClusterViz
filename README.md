@@ -66,9 +66,10 @@ source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 
 ### 2. **NEW: Interactive Dash App** (Recommended)
 ```bash
-./run_dash_app.sh
+./cluster_visualization/scripts/run_dash_app_venv.sh
 # Launches web app at http://localhost:8050 with browser auto-open
 # Features: Real-time algorithm switching, interactive controls
+# Automatically sets up virtual environment with required packages
 ```
 
 ### 3. Alternative: Generate Comparison Visualization

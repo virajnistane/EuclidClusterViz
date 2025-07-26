@@ -77,7 +77,7 @@ def check_environment():
             print(f"   - {module}")
         print("")
         print("   Solutions:")
-        print("   1. Use virtual environment: ./run_dash_app_venv.sh")
+        print("   1. Use virtual environment: ./cluster_visualization/scripts/run_dash_app_venv.sh")
         print("   2. Setup virtual environment: ./setup_venv.sh")
         print("   3. Install manually: pip install dash dash-bootstrap-components")
         print("")

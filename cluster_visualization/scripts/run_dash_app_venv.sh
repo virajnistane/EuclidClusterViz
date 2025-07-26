@@ -28,8 +28,8 @@ check_eden_environment() {
 # Activate EDEN environment
 check_eden_environment
 
-# Get project directory
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get project directory (go up two levels from scripts directory)
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VENV_DIR="$PROJECT_DIR/cluster_dash_venv"
 
 echo "Project directory: $PROJECT_DIR"

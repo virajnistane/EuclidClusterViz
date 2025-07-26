@@ -139,7 +139,7 @@ if [ $? -eq 0 ]; then
     echo "2. Activate venv: source $VENV_DIR/bin/activate"
     echo "3. Run app: python cluster_visualization/src/cluster_dash_app.py"
     echo ""
-    echo "Or use the launcher script: ./run_dash_app_venv.sh"
+    echo "Or use the launcher script: ./cluster_visualization/scripts/run_dash_app_venv.sh"
 else
     echo ""
     echo "✗ Setup failed. Please check the error messages above."

@@ -16,7 +16,7 @@ source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 ### 1. **NEW: Interactive Dash App** (Recommended)
 ```bash
 source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
-./run_dash_app.sh
+./cluster_visualization/scripts/run_dash_app_venv.sh
 ```
 - 🆕 **Real-time interactive web application**
 - 🆕 **Auto-opens browser** at http://localhost:8050
@@ -24,6 +24,7 @@ source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 - 🆕 **Live algorithm switching** between PZWAV and AMICO
 - 🆕 **Interactive controls** for polygons and MER tiles
 - 🆕 **No file generation needed** - works with live data
+- 🆕 **Automatic virtual environment setup** - handles all dependencies
 - ✅ **Zoom, pan, hover** with real-time updates
 
 ### 2. Standalone HTML Generation
