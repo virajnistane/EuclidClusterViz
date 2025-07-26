@@ -45,15 +45,13 @@ case $choice in
         echo ""
         
         # Check for virtual environment
-        if [ -d "../venv" ]; then
+        if [ -d "venv" ]; then
             echo "Using virtual environment..."
-            cd ..
             source venv/bin/activate
-            cd cluster_visualization/src
-            python cluster_dash_app.py
-        elif [ -f "cluster_dash_app.py" ]; then
+            python cluster_visualization/src/cluster_dash_app.py
+        elif [ -f "cluster_visualization/src/cluster_dash_app.py" ]; then
             echo "Using EDEN environment..."
-            python cluster_dash_app.py
+            python cluster_visualization/src/cluster_dash_app.py
         else
             echo "Error: Cannot find cluster_dash_app.py"
             exit 1
@@ -77,15 +75,13 @@ case $choice in
         echo ""
         
         # Check for virtual environment
-        if [ -d "../venv" ]; then
+        if [ -d "venv" ]; then
             echo "Using virtual environment..."
-            cd ..
             source venv/bin/activate
-            cd cluster_visualization/src
-            python cluster_dash_app.py --external
-        elif [ -f "cluster_dash_app.py" ]; then
+            python cluster_visualization/src/cluster_dash_app.py --external
+        elif [ -f "cluster_visualization/src/cluster_dash_app.py" ]; then
             echo "Using EDEN environment..."
-            python cluster_dash_app.py --external
+            python cluster_visualization/src/cluster_dash_app.py --external
         else
             echo "Error: Cannot find cluster_dash_app.py"
             exit 1
