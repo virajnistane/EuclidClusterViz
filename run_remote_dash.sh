@@ -45,10 +45,10 @@ case $choice in
         echo ""
         
         # Check for virtual environment
-        if [ -d "../cluster_dash_venv" ]; then
+        if [ -d "../venv" ]; then
             echo "Using virtual environment..."
             cd ..
-            source cluster_dash_venv/bin/activate
+            source venv/bin/activate
             cd cluster_visualization/src
             python cluster_dash_app.py
         elif [ -f "cluster_dash_app.py" ]; then
@@ -77,10 +77,10 @@ case $choice in
         echo ""
         
         # Check for virtual environment
-        if [ -d "../cluster_dash_venv" ]; then
+        if [ -d "../venv" ]; then
             echo "Using virtual environment..."
             cd ..
-            source cluster_dash_venv/bin/activate
+            source venv/bin/activate
             cd cluster_visualization/src
             python cluster_dash_app.py --external
         elif [ -f "cluster_dash_app.py" ]; then

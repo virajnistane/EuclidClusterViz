@@ -30,7 +30,7 @@ check_eden_environment
 
 # Get project directory
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VENV_DIR="$PROJECT_DIR/cluster_dash_venv"
+VENV_DIR="$PROJECT_DIR/venv"
 
 echo "Project directory: $PROJECT_DIR"
 echo "Virtual environment: $VENV_DIR"
