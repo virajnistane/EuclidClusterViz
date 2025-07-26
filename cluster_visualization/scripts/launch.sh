@@ -91,20 +91,31 @@ launch_simple() {
     echo "Will try ports 8000, 8001, 8002 if needed..."
     echo "Press Ctrl+C to stop"
     
-    # Get the project directory
-    PROJECT_ROOT="$(pwd)"
+    # Get the actual script directory (this file's directory)
+    # Handle case where script is called from different locations
+    if [[ "${BASH_SOURCE[0]}" == *"/scripts/launch.sh" ]]; then
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+    else
+        # Fallback: assume we're in project root and find scripts directory
+        PROJECT_ROOT="$(pwd)"
+        SCRIPT_DIR="$PROJECT_ROOT/cluster_visualization/scripts"
+    fi
     
     # Try different ports if 8000 is in use
     for port in 8000 8001 8002; do
         echo "Trying port $port..."
         
-        # Use the emergency server approach to avoid directory-specific Python issues
-        if cd /pbs/home/v/vnistane && python emergency_server.py "$PROJECT_ROOT" $port; then
-            echo "✓ Server started successfully on port $port"
-            break
-        else
-            echo "Port $port failed, trying next..."
+        # Check if port is available first
+        if netstat -ln 2>/dev/null | grep -q ":$port "; then
+            echo "Port $port is already in use, trying next..."
+            continue
         fi
+        
+        # Use the emergency server from the scripts directory
+        echo "Starting server on port $port..."
+        python "$SCRIPT_DIR/emergency_server.py" "$PROJECT_ROOT/cluster_visualization" $port
+        break
     done
 }
 
