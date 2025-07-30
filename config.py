@@ -7,7 +7,26 @@ configured for different users or environments.
 """
 
 import os
+import subprocess
 from pathlib import Path
+
+def get_git_repo_root():
+    """Get the root directory of the current git repository"""
+    try:
+        # Try to get the git repository root
+        result = subprocess.run(
+            ['git', 'rev-parse', '--show-toplevel'],
+            capture_output=True,
+            text=True,
+            cwd=os.path.dirname(os.path.abspath(__file__))
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except (subprocess.SubprocessError, FileNotFoundError):
+        pass
+    
+    # Fallback: assume config.py is in the project root
+    return os.path.dirname(os.path.abspath(__file__))
 
 class Config:
     """Configuration class for cluster visualization paths and settings"""
@@ -16,7 +35,9 @@ class Config:
         # Base configuration - modify these paths for your environment
         self._base_workspace = '/sps/euclid/OU-LE3/CL/ial_workspace/workdir'
         self._cvmfs_eden_path = '/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1'
-        self._user_home = '/pbs/home/v/vnistane'
+        
+        # Auto-detect project root from git repository
+        self._detected_project_root = get_git_repo_root()
         
         # Validate and set up paths
         self._setup_paths()
@@ -37,8 +58,8 @@ class Config:
         # Environment paths
         self.eden_path = self._cvmfs_eden_path
         
-        # Project paths
-        self.project_root = os.path.join(self._user_home, 'ClusterVisualization')
+        # Project paths - use auto-detected git repository root
+        self.project_root = self._detected_project_root
         self.utils_dir = os.path.join(self.project_root, 'cluster_visualization', 'utils')
     
     def get_output_dir(self, algorithm):
@@ -103,9 +124,8 @@ class Config:
         """Print a summary of current configuration"""
         print("=== Cluster Visualization Configuration ===")
         print(f"Base workspace: {self._base_workspace}")
-        print(f"User home: {self._user_home}")
         print(f"EDEN path: {self.eden_path}")
-        print(f"Project root: {self.project_root}")
+        print(f"Project root (auto-detected): {self.project_root}")
         print("")
         print("Data directories:")
         print(f"  MergeDetCat: {self.mergedetcat_dir}")
@@ -144,7 +164,9 @@ class ConfigFromEnv(Config):
         # Read from environment with fallbacks
         self._base_workspace = from_env('EUCLID_WORKSPACE', '/sps/euclid/OU-LE3/CL/ial_workspace/workdir')
         self._cvmfs_eden_path = from_env('EDEN_PATH', '/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1')
-        self._user_home = from_env('USER_HOME', os.path.expanduser('~'))
+        
+        # Auto-detect project root from git repository
+        self._detected_project_root = get_git_repo_root()
         
         super()._setup_paths()
 

@@ -27,7 +27,6 @@ If you prefer to configure manually, edit `config.py`:
 # Base configuration - modify these paths for your environment
 self._base_workspace = '/your/euclid/workspace/path'
 self._cvmfs_eden_path = '/your/cvmfs/eden/path'
-self._user_home = '/your/home/directory'
 ```
 
 ### 3. Environment Variables (Alternative)
@@ -37,7 +36,6 @@ You can also use environment variables:
 ```bash
 export EUCLID_WORKSPACE="/your/workspace/path"
 export EDEN_PATH="/your/eden/path"
-export USER_HOME="/your/home/path"
 ```
 
 Then use `ConfigFromEnv` in your scripts.
@@ -197,7 +195,6 @@ User on different system:
 ```python
 # In config.py, update these lines:
 self._base_workspace = '/data/euclid/workspace'
-self._user_home = '/home/researcher'
 self._cvmfs_eden_path = '/opt/euclid/eden'
 ```
 
