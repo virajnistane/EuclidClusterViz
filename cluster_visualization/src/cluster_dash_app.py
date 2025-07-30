@@ -267,10 +267,53 @@ class ClusterVisualizationApp:
         self.data_cache[select_algorithm] = data
         return data
 
-    def create_traces(self, data, show_polygons=True, show_mer_tiles=False):
+    def get_radec_mertile(self, mertileid):
+        """Load CATRED data"""
+        if isinstance(mertileid, str):
+            mertileid = int(mertileid)
+        with fits.open(self.data_cache['catred_info'].loc[mertileid]['fits_file']) as hdul:
+            data = hdul[1].data
+        return data['RIGHT_ASCENSION'], data['DECLINATION']
+
+    # def set_mer_tiles_scatter_data(self, x_coords, y_coords):
+    #     """Set the x,y coordinates for high-resolution MER tiles scatter data
+        
+    #     Args:
+    #         x_coords (list): List of RIGHT_ASCENSION coordinates
+    #         y_coords (list): List of DECLINATION coordinates
+    #     """
+    #     if len(x_coords) != len(y_coords):
+    #         raise ValueError("x_coords and y_coords must have the same length")
+        
+    #     self.data_cache['mer_scatter_x'] = x_coords
+    #     self.data_cache['mer_scatter_y'] = y_coords
+    #     print(f"✓ MER tiles scatter data set: {len(x_coords)} data points")
+
+    def create_traces(self, data, show_polygons=True, show_mer_tiles=False, relayout_data=None, show_catred_mertile_data=False):
         """Create all Plotly traces"""
         traces = []
         data_traces = []  # Keep data traces separate to add them last (top layer)
+        
+        # Check zoom level for high-resolution MER tiles data
+        zoom_threshold_met = False
+        if relayout_data and show_mer_tiles:
+            # Extract zoom ranges from relayout_data
+            ra_range = None
+            dec_range = None
+            
+            if 'xaxis.range[0]' in relayout_data and 'xaxis.range[1]' in relayout_data:
+                ra_range = abs(relayout_data['xaxis.range[1]'] - relayout_data['xaxis.range[0]'])
+            elif 'xaxis.range' in relayout_data:
+                ra_range = abs(relayout_data['xaxis.range'][1] - relayout_data['xaxis.range'][0])
+                
+            if 'yaxis.range[0]' in relayout_data and 'yaxis.range[1]' in relayout_data:
+                dec_range = abs(relayout_data['yaxis.range[1]'] - relayout_data['yaxis.range[0]'])
+            elif 'yaxis.range' in relayout_data:
+                dec_range = abs(relayout_data['yaxis.range'][1] - relayout_data['yaxis.range'][0])
+            
+            # Check if zoom level is less than 2 degrees in both RA and DEC
+            if ra_range is not None and dec_range is not None and ra_range < 2.0 and dec_range < 2.0:
+                zoom_threshold_met = True
         
         # Merged data trace - will be added to top layer
         merged_trace = go.Scattergl(
@@ -385,6 +428,72 @@ class ClusterVisualizationApp:
                             )
                             traces.append(mertile_trace)
         
+        # High-resolution MER tiles scatter data (when zoomed in < 2 degrees)
+        if show_mer_tiles and zoom_threshold_met and show_catred_mertile_data:
+            # Get high-resolution scatter data from cache if available
+            
+            mer_scatter_x = []
+            mer_scatter_y = []
+
+            if 'catred_info' in data and not data['catred_info'].empty and 'polygon' in data['catred_info'].columns:
+                # Get current zoom ranges
+                if relayout_data:
+                    if 'xaxis.range[0]' in relayout_data and 'xaxis.range[1]' in relayout_data:
+                        ra_min = relayout_data['xaxis.range[0]']
+                        ra_max = relayout_data['xaxis.range[1]']
+                    elif 'xaxis.range' in relayout_data:
+                        ra_min = relayout_data['xaxis.range'][0]
+                        ra_max = relayout_data['xaxis.range'][1]
+                    else:
+                        ra_min = None
+                        ra_max = None
+
+                    if 'yaxis.range[0]' in relayout_data and 'yaxis.range[1]' in relayout_data:
+                        dec_min = relayout_data['yaxis.range[0]']
+                        dec_max = relayout_data['yaxis.range[1]']
+                    elif 'yaxis.range' in relayout_data:
+                        dec_min = relayout_data['yaxis.range'][0]
+                        dec_max = relayout_data['yaxis.range'][1]
+                    else:
+                        dec_min = None
+                        dec_max = None
+
+                    # Find mertileids whose polygons are within the current zoom box
+                    for mertileid, row in data['catred_info'].iterrows():
+                        poly = row['polygon']
+                        if poly is not None:
+                            x, y = poly.exterior.xy
+                            # Check if any vertex is inside the zoom box
+                            if ra_min is not None and ra_max is not None and dec_min is not None and dec_max is not None:
+                                if any((ra_min <= px <= ra_max) and (dec_min <= py <= dec_max) for px, py in zip(x, y)):
+                                    # Add all vertices of this polygon to scatter data
+                                    # mertiles_in_zoom = data['catred_info'].loc[mertileid]
+                                    ra_coords, dec_coords = self.get_radec_mertile(mertileid)
+                                    mer_scatter_x.extend(ra_coords)
+                                    mer_scatter_y.extend(dec_coords)
+                                    
+                                
+            
+            if mer_scatter_x and mer_scatter_y:  # Only add trace if data is available
+                mer_scatter_trace = go.Scattergl(
+                    x=mer_scatter_x,
+                    y=mer_scatter_y,
+                    mode='markers',
+                    marker=dict(size=4, symbol='circle', color='red', opacity=0.7),
+                    name='MER Tiles High-Res Data',
+                    # text=[f'MER Data Point {i+1}<br>RA: {x:.6f}<br>Dec: {y:.6f}' 
+                    #       for i, (x, y) in enumerate(zip(mer_scatter_x, mer_scatter_y))],
+                    # hoverinfo='text',
+                    showlegend=True
+                )
+                data_traces.append(mer_scatter_trace)
+
+        # Combine traces: polygon traces first (bottom layer), then data traces (top layer)
+        # This ensures data points and their hover info are always visible on top
+        return traces + data_traces
+        
+
+
         # Combine traces: polygon traces first (bottom layer), then data traces (top layer)
         # This ensures data points and their hover info are always visible on top
         return traces + data_traces
@@ -451,6 +560,20 @@ class ClusterVisualizationApp:
                                 ], width=3)
                             ]),
                             
+                            dbc.Row([
+                                dbc.Col([
+                                    html.Label("Show CATRED MER Tile Data:"),
+                                    dbc.Switch(
+                                        id="catred-mertile-switch",
+                                        label="High-res MER data",
+                                        value=False,
+                                    ),
+                                    html.Small("(When zoomed < 2°)", className="text-muted")
+                                ], width=3),
+                                
+                                dbc.Col([], width=9)  # Empty columns to maintain layout
+                            ]),
+                            
                             html.Hr(),
                             
                             dbc.Row([
@@ -510,9 +633,10 @@ class ClusterVisualizationApp:
              State('polygon-switch', 'value'),
              State('mer-switch', 'value'),
              State('aspect-ratio-switch', 'value'),
+             State('catred-mertile-switch', 'value'),
              State('cluster-plot', 'relayoutData')]
         )
-        def update_plot(n_clicks, algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, relayout_data):
+        def update_plot(n_clicks, algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data):
             # Only render if button has been clicked at least once
             if n_clicks == 0:
                 # Initial empty figure
@@ -568,7 +692,7 @@ class ClusterVisualizationApp:
                 data = self.load_data(algorithm)
                 
                 # Create traces
-                traces = self.create_traces(data, show_polygons, show_mer_tiles)
+                traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data)
                 
                 # Create figure
                 fig = go.Figure(traces)
@@ -678,9 +802,10 @@ class ClusterVisualizationApp:
              Input('polygon-switch', 'value'),
              Input('mer-switch', 'value'),
              Input('aspect-ratio-switch', 'value'),
+             Input('catred-mertile-switch', 'value'),
              Input('render-button', 'n_clicks')]
         )
-        def update_button_text(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, n_clicks):
+        def update_button_text(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, n_clicks):
             if n_clicks == 0:
                 return "🚀 Initial Render"
             else:
@@ -692,13 +817,14 @@ class ClusterVisualizationApp:
             [Input('algorithm-dropdown', 'value'),
              Input('polygon-switch', 'value'),
              Input('mer-switch', 'value'),
-             Input('aspect-ratio-switch', 'value')],
+             Input('aspect-ratio-switch', 'value'),
+             Input('catred-mertile-switch', 'value')],
             [State('render-button', 'n_clicks'),
              State('cluster-plot', 'relayoutData'),
              State('cluster-plot', 'figure')],
             prevent_initial_call=True
         )
-        def update_plot_options(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, n_clicks, relayout_data, current_figure):
+        def update_plot_options(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, n_clicks, relayout_data, current_figure):
             # Only update if render button has been clicked at least once
             if n_clicks == 0:
                 return dash.no_update, dash.no_update
@@ -708,7 +834,7 @@ class ClusterVisualizationApp:
                 data = self.load_data(algorithm)
                 
                 # Create traces
-                traces = self.create_traces(data, show_polygons, show_mer_tiles)
+                traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data)
                 
                 # Create figure
                 fig = go.Figure(traces)
@@ -851,6 +977,13 @@ def main():
     external_access = '--external' in sys.argv or '--remote' in sys.argv
     
     app = ClusterVisualizationApp()
+    
+    # Example: Set high-resolution MER tiles scatter data
+    # You can call this method with your x,y coordinates like this:
+    # app.set_mer_tiles_scatter_data(
+    #     x_coords=[12.345, 12.346, 12.347],  # RIGHT_ASCENSION coordinates
+    #     y_coords=[0.123, 0.124, 0.125]     # DECLINATION coordinates
+    # )
     
     # Try different ports if default is busy
     for port in [8050, 8051, 8052]:
