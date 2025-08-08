@@ -647,7 +647,7 @@ class ClusterVisualizationApp:
                                     dbc.Switch(
                                         id="polygon-switch",
                                         label="Fill polygons",
-                                        value=True,
+                                        value=False,
                                     )
                                 ], width=3),
                                 
