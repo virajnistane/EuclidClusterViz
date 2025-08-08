@@ -400,20 +400,6 @@ class ClusterVisualizationApp:
         print(f"Debug: Total MER scatter points loaded: {len(mer_scatter_x)}")
         return mer_scatter_x, mer_scatter_y
 
-    # def set_mer_tiles_scatter_data(self, x_coords, y_coords):
-    #     """Set the x,y coordinates for high-resolution MER tiles scatter data
-        
-    #     Args:
-    #         x_coords (list): List of RIGHT_ASCENSION coordinates
-    #         y_coords (list): List of DECLINATION coordinates
-    #     """
-    #     if len(x_coords) != len(y_coords):
-    #         raise ValueError("x_coords and y_coords must have the same length")
-        
-    #     self.data_cache['mer_scatter_x'] = x_coords
-    #     self.data_cache['mer_scatter_y'] = y_coords
-    #     print(f"✓ MER tiles scatter data set: {len(x_coords)} data points")
-
     def create_traces(self, data, show_polygons=True, show_mer_tiles=False, relayout_data=None, show_catred_mertile_data=False, manual_mer_data=None, existing_mer_traces=None):
         """Create all Plotly traces
         
@@ -455,8 +441,48 @@ class ClusterVisualizationApp:
         
         print(f"Debug: Final zoom_threshold_met: {zoom_threshold_met}, show_catred_mertile_data: {show_catred_mertile_data}")
         
-        # Merged data trace - will be added to top layer
-        merged_trace = go.Scattergl(
+        # Create data traces in the desired order: 1. MER traces (bottom), 2. merged trace (middle), 3. tile traces (top)
+        
+        # 1. BOTTOM LAYER: Add existing MER traces from previous renders
+        if existing_mer_traces:
+            print(f"Debug: Adding {len(existing_mer_traces)} existing MER traces to bottom layer")
+            data_traces.extend(existing_mer_traces)
+
+        # 2. BOTTOM LAYER: High-resolution MER tiles scatter data (manual render mode)
+        if show_mer_tiles and show_catred_mertile_data and manual_mer_data:
+            mer_scatter_x, mer_scatter_y = manual_mer_data
+            print(f"Debug: Using manually loaded MER scatter data with {len(mer_scatter_x)} points")
+            
+            # Add the scatter trace if we have data
+            if mer_scatter_x and mer_scatter_y:
+                print(f"Debug: Creating MER scatter trace with {len(mer_scatter_x)} points")
+                
+                # Create unique name for this MER trace based on current number of existing traces
+                trace_number = len(self.mer_traces_cache) + 1
+                trace_name = f'MER High-Res Data #{trace_number}'
+                
+                mer_catred_trace = go.Scattergl(
+                    x=mer_scatter_x,
+                    y=mer_scatter_y,
+                    mode='markers',
+                    marker=dict(size=4, symbol='circle', color='black', opacity=0.5),
+                    name=trace_name,
+                    text=[f'MER Data Point<br>RA: {x:.6f}<br>Dec: {y:.6f}' 
+                          for x, y in zip(mer_scatter_x, mer_scatter_y)],
+                    hoverinfo='text',
+                    showlegend=True
+                )
+                data_traces.append(mer_catred_trace)
+                print("Debug: MER CATRED trace added to bottom layer")
+            else:
+                print("Debug: No MER scatter data available to display")
+        elif show_mer_tiles and show_catred_mertile_data and zoom_threshold_met:
+            print(f"Debug: MER scatter conditions met but no manual data provided - use render button")
+        else:
+            print(f"Debug: MER scatter data conditions not met - show_mer_tiles: {show_mer_tiles}, show_catred_mertile_data: {show_catred_mertile_data}, manual_data: {manual_mer_data is not None}")
+
+        # 3. MIDDLE LAYER: Merged data trace
+        merged_det_trace = go.Scattergl(
             x=data['merged_data']['RIGHT_ASCENSION_CLUSTER'],
             y=data['merged_data']['DECLINATION_CLUSTER'],
             mode='markers',
@@ -471,7 +497,10 @@ class ClusterVisualizationApp:
             ],
             hoverinfo='text'
         )
-        data_traces.append(merged_trace)
+        data_traces.append(merged_det_trace)
+        
+        # Store tile traces separately to add them as the top layer
+        det_in_tile_trace = []
         
         # Individual tiles traces and polygons
         for tileid, value in data['tile_data'].items():
@@ -483,7 +512,7 @@ class ClusterVisualizationApp:
             else:
                 datamod = tile_data[tile_data['SNR_CLUSTER'] > data['snr_threshold']]
             
-            # Tile data trace - will be added to top layer
+            # 4. TOP LAYER: Tile data trace - will be added last for maximum visibility
             tile_trace = go.Scattergl(
                 x=datamod['RIGHT_ASCENSION_CLUSTER'],
                 y=datamod['DECLINATION_CLUSTER'],
@@ -497,7 +526,7 @@ class ClusterVisualizationApp:
                 ],
                 hoverinfo='text'
             )
-            data_traces.append(tile_trace)
+            det_in_tile_trace.append(tile_trace)  # Add to separate list for now
             
             # Always load tile definition and create polygons
             with open(os.path.join(data['data_dir'], value['tilefile']), 'r') as f:
@@ -507,7 +536,7 @@ class ClusterVisualizationApp:
             poly = tile['LEV1']['POLYGON'][0]
             poly_x = [p[0] for p in poly] + [poly[0][0]]
             poly_y = [p[1] for p in poly] + [poly[0][1]]
-            level1_trace = go.Scatter(
+            cltile_lev1_polygon_trace = go.Scatter(
                 x=poly_x,
                 y=poly_y,
                 mode='lines',
@@ -517,7 +546,7 @@ class ClusterVisualizationApp:
                 text=f'Tile {tileid} - LEV1 Polygon',
                 hoverinfo='text'
             )
-            traces.append(level1_trace)
+            traces.append(cltile_lev1_polygon_trace)
             
             # CORE polygon
             poly2 = tile['CORE']['POLYGON'][0]
@@ -532,7 +561,7 @@ class ClusterVisualizationApp:
                 fillcolor = None
                 fill = None
                 
-            core_trace = go.Scatter(
+            cltile_core_polygon_trace = go.Scatter(
                 x=poly_x2,
                 y=poly_y2,
                 fill=fill,
@@ -544,7 +573,7 @@ class ClusterVisualizationApp:
                 text=f'Tile {tileid} - CORE Polygon',
                 hoverinfo='text'
             )
-            traces.append(core_trace)
+            traces.append(cltile_core_polygon_trace)
             
             # MER tile polygons (only show when polygons are in outline mode and requested)
             if show_mer_tiles and not show_polygons and not data['catred_info'].empty and 'polygon' in data['catred_info'].columns:
@@ -568,46 +597,13 @@ class ClusterVisualizationApp:
                             )
                             traces.append(mertile_trace)
         
-        # High-resolution MER tiles scatter data (manual render mode)
-        if show_mer_tiles and show_catred_mertile_data and manual_mer_data:
-            mer_scatter_x, mer_scatter_y = manual_mer_data
-            print(f"Debug: Using manually loaded MER scatter data with {len(mer_scatter_x)} points")
-            
-            # Add the scatter trace if we have data
-            if mer_scatter_x and mer_scatter_y:
-                print(f"Debug: Creating MER scatter trace with {len(mer_scatter_x)} points")
-                
-                # Create unique name for this MER trace based on current number of existing traces
-                trace_number = len(self.mer_traces_cache) + 1
-                trace_name = f'MER High-Res Data #{trace_number}'
-                
-                mer_scatter_trace = go.Scattergl(
-                    x=mer_scatter_x,
-                    y=mer_scatter_y,
-                    mode='markers',
-                    marker=dict(size=4, symbol='circle', color='black', opacity=0.5),
-                    name=trace_name,
-                    text=[f'MER Data Point<br>RA: {x:.6f}<br>Dec: {y:.6f}' 
-                          for x, y in zip(mer_scatter_x, mer_scatter_y)],
-                    hoverinfo='text',
-                    showlegend=True
-                )
-                data_traces.append(mer_scatter_trace)
-                print("Debug: MER scatter trace added to data_traces")
-            else:
-                print("Debug: No MER scatter data available to display")
-        elif show_mer_tiles and show_catred_mertile_data and zoom_threshold_met:
-            print(f"Debug: MER scatter conditions met but no manual data provided - use render button")
-        else:
-            print(f"Debug: MER scatter data conditions not met - show_mer_tiles: {show_mer_tiles}, show_catred_mertile_data: {show_catred_mertile_data}, manual_data: {manual_mer_data is not None}")
-
-        # Add existing MER traces from previous renders
-        if existing_mer_traces:
-            print(f"Debug: Adding {len(existing_mer_traces)} existing MER traces")
-            data_traces.extend(existing_mer_traces)
-
-        # Combine traces: polygon traces first (bottom layer), then data traces (top layer)
-        # This ensures data points and their hover info are always visible on top
+        # 4. TOP LAYER: Add tile traces last for maximum visibility
+        data_traces.extend(det_in_tile_trace)
+        
+        # Combine traces: polygon traces first (bottom layer), then data traces in order:
+        # 1. MER CATRED traces (bottom)
+        # 2. Merged detection trace (middle) 
+        # 3. Detection in tile traces (top)
         return traces + data_traces
 
     def setup_layout(self):
