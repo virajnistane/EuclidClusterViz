@@ -694,7 +694,7 @@ class ClusterVisualizationApp:
                                         n_clicks=0,
                                         disabled=True
                                     ),
-                                    html.Small("(Zoom in first, then click)", className="text-muted")
+                                    html.Small("(Zoom in first, then click, rendering is slow)", className="text-muted")
                                 ], width=3),
                                 
                                 dbc.Col([
