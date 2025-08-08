@@ -131,6 +131,7 @@ class ClusterVisualizationApp:
     def __init__(self):
         self.app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
         self.data_cache = {}
+        self.mer_traces_cache = []  # Store accumulated MER scatter traces
         self.setup_layout()
         self.setup_callbacks()
         
@@ -267,13 +268,137 @@ class ClusterVisualizationApp:
         self.data_cache[select_algorithm] = data
         return data
 
-    def get_radec_mertile(self, mertileid):
-        """Load CATRED data"""
-        if isinstance(mertileid, str):
-            mertileid = int(mertileid)
-        with fits.open(self.data_cache['catred_info'].loc[mertileid]['fits_file']) as hdul:
-            data = hdul[1].data
-        return data['RIGHT_ASCENSION'], data['DECLINATION']
+    def get_radec_mertile(self, mertileid, data):
+        """Load CATRED data for a specific MER tile
+        
+        Args:
+            mertileid: The MER tile ID
+            data: The data dictionary containing catred_info
+            
+        Returns:
+            tuple: (ra_coords, dec_coords) or ([], []) if unable to load
+        """
+        try:
+            if isinstance(mertileid, str):
+                mertileid = int(mertileid)
+            
+            # Check if we have the necessary data
+            if 'catred_info' not in data or data['catred_info'].empty:
+                print(f"Debug: No catred_info available for mertile {mertileid}")
+                return [], []
+            
+            if mertileid not in data['catred_info'].index:
+                print(f"Debug: MerTile {mertileid} not found in catred_info")
+                return [], []
+            
+            mertile_row = data['catred_info'].loc[mertileid]
+            
+            # Check if fits_file column exists
+            if 'fits_file' not in mertile_row or pd.isna(mertile_row['fits_file']):
+                print(f"Debug: No fits_file for mertile {mertileid}, using polygon vertices as demo data")
+                # Fallback: use polygon vertices as demonstration data
+                if 'polygon' in mertile_row and mertile_row['polygon'] is not None:
+                    poly = mertile_row['polygon']
+                    x_coords, y_coords = poly.exterior.xy
+                    return list(x_coords), list(y_coords)
+                else:
+                    return [], []
+            
+            # Try to load actual FITS file
+            fits_path = mertile_row['fits_file']
+            if not os.path.exists(fits_path):
+                print(f"Debug: FITS file not found at {fits_path}, using polygon vertices")
+                # Fallback to polygon vertices
+                if 'polygon' in mertile_row and mertile_row['polygon'] is not None:
+                    poly = mertile_row['polygon']
+                    x_coords, y_coords = poly.exterior.xy
+                    return list(x_coords), list(y_coords)
+                else:
+                    return [], []
+            
+            # Load actual FITS data
+            with fits.open(fits_path) as hdul:
+                fits_data = hdul[1].data
+                return fits_data['RIGHT_ASCENSION'].tolist(), fits_data['DECLINATION'].tolist()
+                
+        except Exception as e:
+            print(f"Debug: Error loading MER tile {mertileid}: {e}")
+            # Fallback: try to use polygon vertices
+            try:
+                if mertileid in data['catred_info'].index:
+                    mertile_row = data['catred_info'].loc[mertileid]
+                    if 'polygon' in mertile_row and mertile_row['polygon'] is not None:
+                        poly = mertile_row['polygon']
+                        x_coords, y_coords = poly.exterior.xy
+                        print(f"Debug: Using polygon vertices for MER tile {mertileid} ({len(x_coords)} points)")
+                        return list(x_coords), list(y_coords)
+            except Exception as fallback_error:
+                print(f"Debug: Fallback also failed for MER tile {mertileid}: {fallback_error}")
+            
+            return [], []
+
+    def load_mer_scatter_data(self, data, relayout_data):
+        """Load MER scatter data for the current zoom window
+        
+        Args:
+            data: The main data dictionary
+            relayout_data: Current zoom/pan state
+            
+        Returns:
+            tuple: (mer_scatter_x, mer_scatter_y) lists of coordinates
+        """
+        mer_scatter_x = []
+        mer_scatter_y = []
+        
+        if 'catred_info' not in data or data['catred_info'].empty or 'polygon' not in data['catred_info'].columns:
+            print("Debug: No catred_info data available for MER scatter")
+            return mer_scatter_x, mer_scatter_y
+        
+        if not relayout_data:
+            print("Debug: No relayout data available for MER scatter")
+            return mer_scatter_x, mer_scatter_y
+        
+        # Get current zoom ranges from relayout_data
+        ra_min = ra_max = dec_min = dec_max = None
+        
+        if 'xaxis.range[0]' in relayout_data and 'xaxis.range[1]' in relayout_data:
+            ra_min = relayout_data['xaxis.range[0]']
+            ra_max = relayout_data['xaxis.range[1]']
+        elif 'xaxis.range' in relayout_data:
+            ra_min = relayout_data['xaxis.range'][0]
+            ra_max = relayout_data['xaxis.range'][1]
+
+        if 'yaxis.range[0]' in relayout_data and 'yaxis.range[1]' in relayout_data:
+            dec_min = relayout_data['yaxis.range[0]']
+            dec_max = relayout_data['yaxis.range[1]']
+        elif 'yaxis.range' in relayout_data:
+            dec_min = relayout_data['yaxis.range'][0]
+            dec_max = relayout_data['yaxis.range'][1]
+
+        print(f"Debug: Loading MER data for zoom box - RA: [{ra_min}, {ra_max}], Dec: [{dec_min}, {dec_max}]")
+
+        # Find mertileids whose polygons intersect with the current zoom box
+        mertiles_to_load = []
+        for mertileid, row in data['catred_info'].iterrows():
+            poly = row['polygon']
+            if poly is not None and ra_min is not None and ra_max is not None and dec_min is not None and dec_max is not None:
+                x, y = poly.exterior.xy
+                # Check if any vertex is inside the zoom box
+                if any((ra_min <= px <= ra_max) and (dec_min <= py <= dec_max) for px, py in zip(x, y)):
+                    mertiles_to_load.append(mertileid)
+
+        print(f"Debug: Found {len(mertiles_to_load)} MER tiles in zoom area: {mertiles_to_load[:5]}{'...' if len(mertiles_to_load) > 5 else ''}")
+
+        # Load data for each MER tile in the zoom area
+        for mertileid in mertiles_to_load:
+            ra_coords, dec_coords = self.get_radec_mertile(mertileid, data)
+            if ra_coords and dec_coords:
+                mer_scatter_x.extend(ra_coords)
+                mer_scatter_y.extend(dec_coords)
+                print(f"Debug: Added {len(ra_coords)} points from MER tile {mertileid}")
+        
+        print(f"Debug: Total MER scatter points loaded: {len(mer_scatter_x)}")
+        return mer_scatter_x, mer_scatter_y
 
     # def set_mer_tiles_scatter_data(self, x_coords, y_coords):
     #     """Set the x,y coordinates for high-resolution MER tiles scatter data
@@ -289,14 +414,20 @@ class ClusterVisualizationApp:
     #     self.data_cache['mer_scatter_y'] = y_coords
     #     print(f"✓ MER tiles scatter data set: {len(x_coords)} data points")
 
-    def create_traces(self, data, show_polygons=True, show_mer_tiles=False, relayout_data=None, show_catred_mertile_data=False):
-        """Create all Plotly traces"""
+    def create_traces(self, data, show_polygons=True, show_mer_tiles=False, relayout_data=None, show_catred_mertile_data=False, manual_mer_data=None, existing_mer_traces=None):
+        """Create all Plotly traces
+        
+        Args:
+            manual_mer_data: Tuple of (mer_scatter_x, mer_scatter_y) for manually loaded MER data
+            existing_mer_traces: List of existing MER scatter traces to preserve
+        """
         traces = []
         data_traces = []  # Keep data traces separate to add them last (top layer)
         
         # Check zoom level for high-resolution MER tiles data
         zoom_threshold_met = False
         if relayout_data and show_mer_tiles:
+            print(f"Debug: Checking zoom threshold - relayout_data: {relayout_data}")
             # Extract zoom ranges from relayout_data
             ra_range = None
             dec_range = None
@@ -311,9 +442,18 @@ class ClusterVisualizationApp:
             elif 'yaxis.range' in relayout_data:
                 dec_range = abs(relayout_data['yaxis.range'][1] - relayout_data['yaxis.range'][0])
             
+            print(f"Debug: Zoom ranges - RA: {ra_range}, Dec: {dec_range}")
+            
             # Check if zoom level is less than 2 degrees in both RA and DEC
             if ra_range is not None and dec_range is not None and ra_range < 2.0 and dec_range < 2.0:
                 zoom_threshold_met = True
+                print(f"Debug: Zoom threshold MET! RA: {ra_range:.3f}° < 2°, Dec: {dec_range:.3f}° < 2°")
+            else:
+                print(f"Debug: Zoom threshold NOT met. RA: {ra_range}, Dec: {dec_range}")
+        else:
+            print(f"Debug: Zoom check skipped - relayout_data: {relayout_data is not None}, show_mer_tiles: {show_mer_tiles}")
+        
+        print(f"Debug: Final zoom_threshold_met: {zoom_threshold_met}, show_catred_mertile_data: {show_catred_mertile_data}")
         
         # Merged data trace - will be added to top layer
         merged_trace = go.Scattergl(
@@ -428,71 +568,43 @@ class ClusterVisualizationApp:
                             )
                             traces.append(mertile_trace)
         
-        # High-resolution MER tiles scatter data (when zoomed in < 2 degrees)
-        if show_mer_tiles and zoom_threshold_met and show_catred_mertile_data:
-            # Get high-resolution scatter data from cache if available
+        # High-resolution MER tiles scatter data (manual render mode)
+        if show_mer_tiles and show_catred_mertile_data and manual_mer_data:
+            mer_scatter_x, mer_scatter_y = manual_mer_data
+            print(f"Debug: Using manually loaded MER scatter data with {len(mer_scatter_x)} points")
             
-            mer_scatter_x = []
-            mer_scatter_y = []
-
-            if 'catred_info' in data and not data['catred_info'].empty and 'polygon' in data['catred_info'].columns:
-                # Get current zoom ranges
-                if relayout_data:
-                    if 'xaxis.range[0]' in relayout_data and 'xaxis.range[1]' in relayout_data:
-                        ra_min = relayout_data['xaxis.range[0]']
-                        ra_max = relayout_data['xaxis.range[1]']
-                    elif 'xaxis.range' in relayout_data:
-                        ra_min = relayout_data['xaxis.range'][0]
-                        ra_max = relayout_data['xaxis.range'][1]
-                    else:
-                        ra_min = None
-                        ra_max = None
-
-                    if 'yaxis.range[0]' in relayout_data and 'yaxis.range[1]' in relayout_data:
-                        dec_min = relayout_data['yaxis.range[0]']
-                        dec_max = relayout_data['yaxis.range[1]']
-                    elif 'yaxis.range' in relayout_data:
-                        dec_min = relayout_data['yaxis.range'][0]
-                        dec_max = relayout_data['yaxis.range'][1]
-                    else:
-                        dec_min = None
-                        dec_max = None
-
-                    # Find mertileids whose polygons are within the current zoom box
-                    for mertileid, row in data['catred_info'].iterrows():
-                        poly = row['polygon']
-                        if poly is not None:
-                            x, y = poly.exterior.xy
-                            # Check if any vertex is inside the zoom box
-                            if ra_min is not None and ra_max is not None and dec_min is not None and dec_max is not None:
-                                if any((ra_min <= px <= ra_max) and (dec_min <= py <= dec_max) for px, py in zip(x, y)):
-                                    # Add all vertices of this polygon to scatter data
-                                    # mertiles_in_zoom = data['catred_info'].loc[mertileid]
-                                    ra_coords, dec_coords = self.get_radec_mertile(mertileid)
-                                    mer_scatter_x.extend(ra_coords)
-                                    mer_scatter_y.extend(dec_coords)
-                                    
-                                
-            
-            if mer_scatter_x and mer_scatter_y:  # Only add trace if data is available
+            # Add the scatter trace if we have data
+            if mer_scatter_x and mer_scatter_y:
+                print(f"Debug: Creating MER scatter trace with {len(mer_scatter_x)} points")
+                
+                # Create unique name for this MER trace based on current number of existing traces
+                trace_number = len(self.mer_traces_cache) + 1
+                trace_name = f'MER High-Res Data #{trace_number}'
+                
                 mer_scatter_trace = go.Scattergl(
                     x=mer_scatter_x,
                     y=mer_scatter_y,
                     mode='markers',
-                    marker=dict(size=4, symbol='circle', color='red', opacity=0.7),
-                    name='MER Tiles High-Res Data',
-                    # text=[f'MER Data Point {i+1}<br>RA: {x:.6f}<br>Dec: {y:.6f}' 
-                    #       for i, (x, y) in enumerate(zip(mer_scatter_x, mer_scatter_y))],
-                    # hoverinfo='text',
+                    marker=dict(size=4, symbol='circle', color='black', opacity=0.5),
+                    name=trace_name,
+                    text=[f'MER Data Point<br>RA: {x:.6f}<br>Dec: {y:.6f}' 
+                          for x, y in zip(mer_scatter_x, mer_scatter_y)],
+                    hoverinfo='text',
                     showlegend=True
                 )
                 data_traces.append(mer_scatter_trace)
+                print("Debug: MER scatter trace added to data_traces")
+            else:
+                print("Debug: No MER scatter data available to display")
+        elif show_mer_tiles and show_catred_mertile_data and zoom_threshold_met:
+            print(f"Debug: MER scatter conditions met but no manual data provided - use render button")
+        else:
+            print(f"Debug: MER scatter data conditions not met - show_mer_tiles: {show_mer_tiles}, show_catred_mertile_data: {show_catred_mertile_data}, manual_data: {manual_mer_data is not None}")
 
-        # Combine traces: polygon traces first (bottom layer), then data traces (top layer)
-        # This ensures data points and their hover info are always visible on top
-        return traces + data_traces
-        
-
+        # Add existing MER traces from previous renders
+        if existing_mer_traces:
+            print(f"Debug: Adding {len(existing_mer_traces)} existing MER traces")
+            data_traces.extend(existing_mer_traces)
 
         # Combine traces: polygon traces first (bottom layer), then data traces (top layer)
         # This ensures data points and their hover info are always visible on top
@@ -571,7 +683,34 @@ class ClusterVisualizationApp:
                                     html.Small("(When zoomed < 2°)", className="text-muted")
                                 ], width=3),
                                 
-                                dbc.Col([], width=9)  # Empty columns to maintain layout
+                                dbc.Col([
+                                    html.Label("Manual MER Data Render:"),
+                                    dbc.Button(
+                                        "🔍 Render MER Data",
+                                        id="mer-render-button",
+                                        color="info",
+                                        size="sm",
+                                        className="w-100",
+                                        n_clicks=0,
+                                        disabled=True
+                                    ),
+                                    html.Small("(Zoom in first, then click)", className="text-muted")
+                                ], width=3),
+                                
+                                dbc.Col([
+                                    html.Label("Clear MER Data:"),
+                                    dbc.Button(
+                                        "🗑️ Clear All MER",
+                                        id="mer-clear-button",
+                                        color="warning",
+                                        size="sm",
+                                        className="w-100",
+                                        n_clicks=0
+                                    ),
+                                    html.Small("(Remove all MER traces)", className="text-muted")
+                                ], width=3),
+                                
+                                dbc.Col([], width=3)  # Empty column to maintain layout
                             ]),
                             
                             html.Hr(),
@@ -691,6 +830,9 @@ class ClusterVisualizationApp:
                 # Load data for selected algorithm
                 data = self.load_data(algorithm)
                 
+                # Reset MER traces cache for fresh render
+                self.mer_traces_cache = []
+                
                 # Create traces
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data)
                 
@@ -797,19 +939,27 @@ class ClusterVisualizationApp:
 
         # Callback to update button text based on current settings
         @self.app.callback(
-            Output('render-button', 'children'),
+            [Output('render-button', 'children'), Output('mer-render-button', 'children')],
             [Input('algorithm-dropdown', 'value'),
              Input('polygon-switch', 'value'),
              Input('mer-switch', 'value'),
              Input('aspect-ratio-switch', 'value'),
              Input('catred-mertile-switch', 'value'),
-             Input('render-button', 'n_clicks')]
+             Input('render-button', 'n_clicks'),
+             Input('mer-render-button', 'n_clicks')]
         )
-        def update_button_text(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, n_clicks):
-            if n_clicks == 0:
-                return "🚀 Initial Render"
-            else:
-                return "✅ Live Updates Active"
+        def update_button_texts(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, n_clicks, mer_n_clicks):
+            main_button_text = "🚀 Initial Render" if n_clicks == 0 else "✅ Live Updates Active"
+            mer_button_text = f"� Render MER Data ({mer_n_clicks})" if mer_n_clicks > 0 else "🔍 Render MER Data"
+            return main_button_text, mer_button_text
+
+        # Callback to update clear button text
+        @self.app.callback(
+            Output('mer-clear-button', 'children'),
+            [Input('mer-clear-button', 'n_clicks')]
+        )
+        def update_clear_button_text(clear_n_clicks):
+            return f"🗑️ Clear All MER ({clear_n_clicks})" if clear_n_clicks > 0 else "🗑️ Clear All MER"
 
         # Callback for real-time option updates (preserves zoom)
         @self.app.callback(
@@ -833,8 +983,33 @@ class ClusterVisualizationApp:
                 # Load data for selected algorithm
                 data = self.load_data(algorithm)
                 
-                # Create traces
-                traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data)
+                # Extract existing MER traces from current figure to preserve them
+                existing_mer_traces = []
+                if current_figure and 'data' in current_figure:
+                    for trace in current_figure['data']:
+                        # Look for existing MER traces by name pattern
+                        if (isinstance(trace, dict) and 
+                            'name' in trace and 
+                            trace['name'] and 
+                            ('MER High-Res Data' in trace['name'] or 'MER Tiles High-Res Data' in trace['name'])):
+                            # Convert dict to Scattergl object for consistency
+                            existing_trace = go.Scattergl(
+                                x=trace.get('x', []),
+                                y=trace.get('y', []),
+                                mode=trace.get('mode', 'markers'),
+                                marker=trace.get('marker', {}),
+                                name=trace.get('name', 'MER Data'),
+                                text=trace.get('text', []),
+                                hoverinfo=trace.get('hoverinfo', 'text'),
+                                showlegend=trace.get('showlegend', True)
+                            )
+                            existing_mer_traces.append(existing_trace)
+                
+                print(f"Debug: Options update - preserving {len(existing_mer_traces)} MER traces")
+                
+                # Create traces with existing MER traces preserved
+                traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data, 
+                                          existing_mer_traces=existing_mer_traces)
                 
                 # Create figure
                 fig = go.Figure(traces)
@@ -924,6 +1099,285 @@ class ClusterVisualizationApp:
                 error_status = dbc.Alert(
                     f"Error updating: {str(e)}",
                     color="warning"
+                )
+                return dash.no_update, error_status
+
+        # Callback to enable/disable MER render button based on zoom level
+        @self.app.callback(
+            Output('mer-render-button', 'disabled'),
+            [Input('cluster-plot', 'relayoutData'),
+             Input('mer-switch', 'value'),
+             Input('catred-mertile-switch', 'value')],
+            [State('render-button', 'n_clicks')],
+            prevent_initial_call=True
+        )
+        def update_mer_button_state(relayout_data, show_mer_tiles, show_catred_mertile_data, n_clicks):
+            # Only enable if main app has been rendered and conditions are met
+            if n_clicks == 0:
+                return True  # Disabled
+            
+            if not show_mer_tiles or not show_catred_mertile_data:
+                return True  # Disabled - switches not turned on
+            
+            if not relayout_data:
+                return True  # Disabled - no zoom data
+            
+            # Check zoom level
+            ra_range = None
+            dec_range = None
+            
+            if 'xaxis.range[0]' in relayout_data and 'xaxis.range[1]' in relayout_data:
+                ra_range = abs(relayout_data['xaxis.range[1]'] - relayout_data['xaxis.range[0]'])
+            elif 'xaxis.range' in relayout_data:
+                ra_range = abs(relayout_data['xaxis.range'][1] - relayout_data['xaxis.range'][0])
+                
+            if 'yaxis.range[0]' in relayout_data and 'yaxis.range[1]' in relayout_data:
+                dec_range = abs(relayout_data['yaxis.range[1]'] - relayout_data['yaxis.range[0]'])
+            elif 'yaxis.range' in relayout_data:
+                dec_range = abs(relayout_data['yaxis.range'][1] - relayout_data['yaxis.range'][0])
+            
+            # Enable button if zoomed in enough
+            if ra_range is not None and dec_range is not None and ra_range < 2.0 and dec_range < 2.0:
+                return False  # Enabled
+            else:
+                return True   # Disabled - not zoomed in enough
+
+        # Callback for manual MER data rendering
+        @self.app.callback(
+            [Output('cluster-plot', 'figure', allow_duplicate=True), Output('status-info', 'children', allow_duplicate=True)],
+            [Input('mer-render-button', 'n_clicks')],
+            [State('algorithm-dropdown', 'value'),
+             State('polygon-switch', 'value'),
+             State('mer-switch', 'value'),
+             State('aspect-ratio-switch', 'value'),
+             State('catred-mertile-switch', 'value'),
+             State('cluster-plot', 'relayoutData'),
+             State('cluster-plot', 'figure')],
+            prevent_initial_call=True
+        )
+        def manual_render_mer_data(mer_n_clicks, algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data, current_figure):
+            if mer_n_clicks == 0:
+                return dash.no_update, dash.no_update
+            
+            print(f"Debug: Manual MER render button clicked (click #{mer_n_clicks})")
+            
+            try:
+                # Load data for selected algorithm
+                data = self.load_data(algorithm)
+                
+                # Load MER scatter data for current zoom window
+                mer_scatter_x, mer_scatter_y = self.load_mer_scatter_data(data, relayout_data)
+                
+                # Extract existing MER traces from current figure to preserve them
+                existing_mer_traces = []
+                if current_figure and 'data' in current_figure:
+                    for trace in current_figure['data']:
+                        # Look for existing MER traces by name pattern
+                        if (isinstance(trace, dict) and 
+                            'name' in trace and 
+                            trace['name'] and 
+                            ('MER High-Res Data' in trace['name'] or 'MER Tiles High-Res Data' in trace['name'])):
+                            # Convert dict to Scattergl object for consistency
+                            existing_trace = go.Scattergl(
+                                x=trace.get('x', []),
+                                y=trace.get('y', []),
+                                mode=trace.get('mode', 'markers'),
+                                marker=trace.get('marker', {}),
+                                name=trace.get('name', 'MER Data'),
+                                text=trace.get('text', []),
+                                hoverinfo=trace.get('hoverinfo', 'text'),
+                                showlegend=trace.get('showlegend', True)
+                            )
+                            existing_mer_traces.append(existing_trace)
+                            print(f"Debug: Preserved existing MER trace: {trace['name']}")
+                
+                print(f"Debug: Found {len(existing_mer_traces)} existing MER traces to preserve")
+                
+                # Create traces with the manually loaded MER data and existing traces
+                traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data, 
+                                          manual_mer_data=(mer_scatter_x, mer_scatter_y), existing_mer_traces=existing_mer_traces)
+                
+                # Update the MER traces cache with the new trace count
+                if mer_scatter_x and mer_scatter_y:
+                    self.mer_traces_cache.extend(existing_mer_traces)
+                    # Add the new trace placeholder (actual trace is created in create_traces)
+                    self.mer_traces_cache.append(None)  # Placeholder for the new trace
+                
+                # Create figure
+                fig = go.Figure(traces)
+                
+                # Configure aspect ratio based on setting
+                if free_aspect_ratio:
+                    xaxis_config = dict(visible=True)
+                    yaxis_config = dict(visible=True)
+                else:
+                    xaxis_config = dict(
+                        scaleanchor="y",
+                        scaleratio=1,
+                        constrain="domain",
+                        visible=True
+                    )
+                    yaxis_config = dict(
+                        constrain="domain",
+                        visible=True
+                    )
+                
+                fig.update_layout(
+                    title=f'Cluster Detection Visualization - {algorithm}',
+                    xaxis_title='Right Ascension (degrees)',
+                    yaxis_title='Declination (degrees)',
+                    legend=dict(
+                        title='Legend',
+                        orientation='v',
+                        xanchor='left',
+                        x=1.02,
+                        yanchor='top',
+                        y=1
+                    ),
+                    hovermode='closest',
+                    height=900,
+                    width=1200,
+                    margin=dict(l=60, r=200, t=60, b=60),
+                    xaxis=xaxis_config,
+                    yaxis=yaxis_config,
+                    autosize=True
+                )
+                
+                # Preserve zoom state
+                if relayout_data:
+                    if 'xaxis.range[0]' in relayout_data and 'xaxis.range[1]' in relayout_data:
+                        fig.update_xaxes(range=[relayout_data['xaxis.range[0]'], relayout_data['xaxis.range[1]']])
+                    elif 'xaxis.range' in relayout_data:
+                        fig.update_xaxes(range=relayout_data['xaxis.range'])
+                        
+                    if 'yaxis.range[0]' in relayout_data and 'yaxis.range[1]' in relayout_data:
+                        fig.update_yaxes(range=[relayout_data['yaxis.range[0]'], relayout_data['yaxis.range[1]']])
+                    elif 'yaxis.range' in relayout_data:
+                        fig.update_yaxes(range=relayout_data['yaxis.range'])
+                
+                # Status info
+                total_mer_traces = len(existing_mer_traces) + (1 if mer_scatter_x and mer_scatter_y else 0)
+                mer_status = f" | MER high-res data: {len(mer_scatter_x)} points in {total_mer_traces} regions"
+                aspect_mode = "Free aspect ratio" if free_aspect_ratio else "Equal aspect ratio"
+                
+                status = dbc.Alert([
+                    html.H6(f"Algorithm: {algorithm}", className="mb-1"),
+                    html.P(f"Merged clusters: {len(data['merged_data'])}", className="mb-1"),
+                    html.P(f"Individual tiles: {len(data['tile_data'])}", className="mb-1"),
+                    html.P(f"Polygon mode: {'Filled' if show_polygons else 'Outline'}{mer_status}", className="mb-1"),
+                    html.P(f"Aspect ratio: {aspect_mode}", className="mb-1"),
+                    html.Small(f"MER data rendered at: {pd.Timestamp.now().strftime('%H:%M:%S')}", className="text-muted")
+                ], color="success", className="mt-2")
+                
+                return fig, status
+                
+            except Exception as e:
+                error_status = dbc.Alert(
+                    f"Error rendering MER data: {str(e)}",
+                    color="danger"
+                )
+                return dash.no_update, error_status
+
+        # Callback for clearing all MER data
+        @self.app.callback(
+            [Output('cluster-plot', 'figure', allow_duplicate=True), Output('status-info', 'children', allow_duplicate=True)],
+            [Input('mer-clear-button', 'n_clicks')],
+            [State('algorithm-dropdown', 'value'),
+             State('polygon-switch', 'value'),
+             State('mer-switch', 'value'),
+             State('aspect-ratio-switch', 'value'),
+             State('catred-mertile-switch', 'value'),
+             State('cluster-plot', 'relayoutData'),
+             State('render-button', 'n_clicks')],
+            prevent_initial_call=True
+        )
+        def clear_mer_data(clear_n_clicks, algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data, render_n_clicks):
+            if clear_n_clicks == 0 or render_n_clicks == 0:
+                return dash.no_update, dash.no_update
+            
+            print(f"Debug: Clear MER data button clicked (click #{clear_n_clicks})")
+            
+            try:
+                # Clear MER traces cache
+                self.mer_traces_cache = []
+                
+                # Load data for selected algorithm
+                data = self.load_data(algorithm)
+                
+                # Create traces without any MER data
+                traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data)
+                
+                # Create figure
+                fig = go.Figure(traces)
+                
+                # Configure aspect ratio based on setting
+                if free_aspect_ratio:
+                    xaxis_config = dict(visible=True)
+                    yaxis_config = dict(visible=True)
+                else:
+                    xaxis_config = dict(
+                        scaleanchor="y",
+                        scaleratio=1,
+                        constrain="domain",
+                        visible=True
+                    )
+                    yaxis_config = dict(
+                        constrain="domain",
+                        visible=True
+                    )
+                
+                fig.update_layout(
+                    title=f'Cluster Detection Visualization - {algorithm}',
+                    xaxis_title='Right Ascension (degrees)',
+                    yaxis_title='Declination (degrees)',
+                    legend=dict(
+                        title='Legend',
+                        orientation='v',
+                        xanchor='left',
+                        x=1.02,
+                        yanchor='top',
+                        y=1
+                    ),
+                    hovermode='closest',
+                    height=900,
+                    width=1200,
+                    margin=dict(l=60, r=200, t=60, b=60),
+                    xaxis=xaxis_config,
+                    yaxis=yaxis_config,
+                    autosize=True
+                )
+                
+                # Preserve zoom state
+                if relayout_data:
+                    if 'xaxis.range[0]' in relayout_data and 'xaxis.range[1]' in relayout_data:
+                        fig.update_xaxes(range=[relayout_data['xaxis.range[0]'], relayout_data['xaxis.range[1]']])
+                    elif 'xaxis.range' in relayout_data:
+                        fig.update_xaxes(range=relayout_data['xaxis.range'])
+                        
+                    if 'yaxis.range[0]' in relayout_data and 'yaxis.range[1]' in relayout_data:
+                        fig.update_yaxes(range=[relayout_data['yaxis.range[0]'], relayout_data['yaxis.range[1]']])
+                    elif 'yaxis.range' in relayout_data:
+                        fig.update_yaxes(range=relayout_data['yaxis.range'])
+                
+                # Status info
+                mer_status = " | MER high-res data: cleared"
+                aspect_mode = "Free aspect ratio" if free_aspect_ratio else "Equal aspect ratio"
+                
+                status = dbc.Alert([
+                    html.H6(f"Algorithm: {algorithm}", className="mb-1"),
+                    html.P(f"Merged clusters: {len(data['merged_data'])}", className="mb-1"),
+                    html.P(f"Individual tiles: {len(data['tile_data'])}", className="mb-1"),
+                    html.P(f"Polygon mode: {'Filled' if show_polygons else 'Outline'}{mer_status}", className="mb-1"),
+                    html.P(f"Aspect ratio: {aspect_mode}", className="mb-1"),
+                    html.Small(f"MER data cleared at: {pd.Timestamp.now().strftime('%H:%M:%S')}", className="text-muted")
+                ], color="warning", className="mt-2")
+                
+                return fig, status
+                
+            except Exception as e:
+                error_status = dbc.Alert(
+                    f"Error clearing MER data: {str(e)}",
+                    color="danger"
                 )
                 return dash.no_update, error_status
 
