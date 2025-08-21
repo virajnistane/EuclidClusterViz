@@ -25,7 +25,7 @@ import pickle
 import pandas as pd
 import numpy as np
 from astropy.io import fits
-from shapely.geometry import Polygon as ShapelyPolygon
+from shapely.geometry import Polygon as ShapelyPolygon, box
 import webbrowser
 import threading
 import time
@@ -441,13 +441,18 @@ class ClusterVisualizationApp:
 
         # Find mertileids whose polygons intersect with the current zoom box
         mertiles_to_load = []
-        for mertileid, row in data['catred_info'].iterrows():
-            poly = row['polygon']
-            if poly is not None and ra_min is not None and ra_max is not None and dec_min is not None and dec_max is not None:
-                x, y = poly.exterior.xy
-                # Check if any vertex is inside the zoom box
-                if any((ra_min <= px <= ra_max) and (dec_min <= py <= dec_max) for px, py in zip(x, y)):
-                    mertiles_to_load.append(mertileid)
+        if ra_min is not None and ra_max is not None and dec_min is not None and dec_max is not None:
+            # Create a zoom box polygon for proper intersection testing
+            zoom_box = box(ra_min, dec_min, ra_max, dec_max)
+            
+            for mertileid, row in data['catred_info'].iterrows():
+                poly = row['polygon']
+                if poly is not None:
+                    # Use proper geometric intersection: checks if polygons overlap in any way
+                    # This handles cases where zoom box is inside polygon, polygon is inside zoom box,
+                    # or they partially overlap
+                    if poly.intersects(zoom_box):
+                        mertiles_to_load.append(mertileid)
 
         print(f"Debug: Found {len(mertiles_to_load)} MER tiles in zoom area: {mertiles_to_load[:5]}{'...' if len(mertiles_to_load) > 5 else ''}")
 
@@ -778,7 +783,8 @@ class ClusterVisualizationApp:
                                     color="secondary",
                                     size="sm",
                                     className="w-100 mt-2",
-                                    n_clicks=0
+                                    n_clicks=0,
+                                    disabled=True
                                 )
                             ], className="mb-4"),
                             
@@ -1240,6 +1246,16 @@ class ClusterVisualizationApp:
             mer_button_text = f"🔍 Render MER Data ({mer_n_clicks})" if mer_n_clicks > 0 else "🔍 Render MER Data"
             snr_button_text = f"Apply SNR Filter ({snr_n_clicks})" if snr_n_clicks > 0 else "Apply SNR Filter"
             return main_button_text, mer_button_text, snr_button_text
+
+        # Callback to enable SNR render button after initial render
+        @self.app.callback(
+            Output('snr-render-button', 'disabled'),
+            [Input('render-button', 'n_clicks')],
+            prevent_initial_call=False
+        )
+        def enable_snr_button(n_clicks):
+            # Disable SNR button until initial render is clicked
+            return n_clicks == 0
 
         # Callback to update clear button text
         @self.app.callback(
