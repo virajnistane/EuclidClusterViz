@@ -132,6 +132,7 @@ class ClusterVisualizationApp:
         self.app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
         self.data_cache = {}
         self.mer_traces_cache = []  # Store accumulated MER scatter traces
+        self.current_mer_data = None  # Store current MER data for click callbacks
         self.setup_layout()
         self.setup_callbacks()
         
@@ -567,9 +568,20 @@ class ClusterVisualizationApp:
                           for x, y, p1, p70 in zip(manual_mer_data['ra'], manual_mer_data['dec'], 
                                                    manual_mer_data['phz_mode_1'], manual_mer_data['phz_70_int'])],
                     hoverinfo='text',
-                    showlegend=True
+                    showlegend=True,
+                    customdata=list(range(len(manual_mer_data['ra'])))  # Add index for click tracking
                 )
                 data_traces.append(mer_catred_trace)
+                
+                # Store MER data for click callbacks
+                if not hasattr(self, 'current_mer_data') or self.current_mer_data is None:
+                    self.current_mer_data = {}
+                self.current_mer_data[trace_name] = manual_mer_data
+                
+                print(f"Debug: Stored MER data for trace '{trace_name}' with {len(manual_mer_data['ra'])} points")
+                print(f"Debug: PHZ_PDF sample length: {len(manual_mer_data['phz_pdf'][0]) if manual_mer_data['phz_pdf'] else 'No PHZ_PDF data'}")
+                print(f"Debug: Current MER data keys: {list(self.current_mer_data.keys())}")
+                
                 print("Debug: MER CATRED trace added to bottom layer")
             else:
                 print("Debug: No MER scatter data available to display")
@@ -795,7 +807,7 @@ class ClusterVisualizationApp:
                                     dbc.Switch(
                                         id="aspect-ratio-switch",
                                         label="Free aspect ratio",
-                                        value=False,
+                                        value=True,
                                     ),
                                     html.Small("(Default: maintain astronomical aspect)", className="text-muted")
                                 ], className="mb-2"),
@@ -861,7 +873,7 @@ class ClusterVisualizationApp:
                 
                 # Right side: Plot area and status
                 dbc.Col([
-                    # Plot area
+                    # Main cluster plot area
                     dbc.Row([
                         dbc.Col([
                             dcc.Loading(
@@ -869,7 +881,7 @@ class ClusterVisualizationApp:
                                 children=[
                                     dcc.Graph(
                                         id='cluster-plot',
-                                        style={'height': '80vh', 'width': '100%', 'min-height': '600px'},
+                                        style={'height': '55vh', 'width': '100%', 'min-height': '400px'},
                                         config={
                                             'displayModeBar': True,
                                             'displaylogo': False,
@@ -882,6 +894,28 @@ class ClusterVisualizationApp:
                             )
                         ])
                     ]),
+                    
+                    # PHZ_PDF plot area
+                    dbc.Row([
+                        dbc.Col([
+                            dcc.Loading(
+                                id="loading-phz",
+                                children=[
+                                    dcc.Graph(
+                                        id='phz-pdf-plot',
+                                        style={'height': '22vh', 'width': '100%', 'min-height': '200px'},
+                                        config={
+                                            'displayModeBar': True,
+                                            'displaylogo': False,
+                                            'modeBarButtonsToRemove': ['lasso2d', 'select2d', 'pan2d', 'zoom2d', 'autoScale2d', 'resetScale2d'],
+                                            'responsive': True
+                                        }
+                                    )
+                                ],
+                                type="circle"
+                            )
+                        ])
+                    ], className="mt-2"),
                     
                     # Status info row
                     dbc.Row([
@@ -936,7 +970,7 @@ class ClusterVisualizationApp:
                 return 0, 100, [0, 100], {0: '0', 100: '100'}, html.Small("SNR data not available", className="text-muted")
         
         @self.app.callback(
-            [Output('cluster-plot', 'figure'), Output('status-info', 'children')],
+            [Output('cluster-plot', 'figure'), Output('phz-pdf-plot', 'figure'), Output('status-info', 'children')],
             [Input('render-button', 'n_clicks'), Input('snr-render-button', 'n_clicks')],
             [State('algorithm-dropdown', 'value'),
              State('snr-range-slider', 'value'),
@@ -989,12 +1023,31 @@ class ClusterVisualizationApp:
                     ]
                 )
                 
+                # Initial empty PHZ_PDF plot
+                initial_phz_fig = go.Figure()
+                initial_phz_fig.update_layout(
+                    title='',
+                    xaxis_title='',
+                    yaxis_title='',
+                    margin=dict(l=40, r=20, t=20, b=40),
+                    showlegend=False,
+                    annotations=[
+                        dict(
+                            text="Click on a MER data point above to view its PHZ_PDF",
+                            xref="paper", yref="paper",
+                            x=0.5, y=0.5, xanchor='center', yanchor='middle',
+                            showarrow=False,
+                            font=dict(size=14, color="gray")
+                        )
+                    ]
+                )
+                
                 initial_status = dbc.Alert([
                     html.H6("Ready to render", className="mb-1"),
                     html.P("Click 'Initial Render' to begin. After that, options will update automatically while preserving your zoom level.", className="mb-0")
                 ], color="secondary", className="mt-2")
                 
-                return initial_fig, initial_status
+                return initial_fig, initial_phz_fig, initial_status
             
             try:
                 # Extract SNR values from range slider
@@ -1109,7 +1162,26 @@ class ClusterVisualizationApp:
                     html.Small(f"Rendered at: {pd.Timestamp.now().strftime('%H:%M:%S')}", className="text-muted")
                 ], color="success", className="mt-2")
                 
-                return fig, status
+                # Create empty PHZ_PDF plot for normal render
+                empty_phz_fig = go.Figure()
+                empty_phz_fig.update_layout(
+                    title='PHZ_PDF Plot',
+                    xaxis_title='Redshift',
+                    yaxis_title='Probability Density',
+                    margin=dict(l=40, r=20, t=40, b=40),
+                    showlegend=False,
+                    annotations=[
+                        dict(
+                            text="Click on a MER data point to view its PHZ_PDF",
+                            xref="paper", yref="paper",
+                            x=0.5, y=0.5, xanchor='center', yanchor='middle',
+                            showarrow=False,
+                            font=dict(size=14, color="gray")
+                        )
+                    ]
+                )
+                
+                return fig, empty_phz_fig, status
                 
             except Exception as e:
                 error_fig = go.Figure()
@@ -1132,7 +1204,24 @@ class ClusterVisualizationApp:
                     color="danger"
                 )
                 
-                return error_fig, error_status
+                # Error PHZ_PDF plot
+                error_phz_fig = go.Figure()
+                error_phz_fig.update_layout(
+                    title='PHZ_PDF Plot',
+                    margin=dict(l=40, r=20, t=40, b=40),
+                    showlegend=False,
+                    annotations=[
+                        dict(
+                            text="Error loading data",
+                            xref="paper", yref="paper",
+                            x=0.5, y=0.5, xanchor='center', yanchor='middle',
+                            showarrow=False,
+                            font=dict(size=14, color="red")
+                        )
+                    ]
+                )
+                
+                return error_fig, error_phz_fig, error_status
 
         # Callback to update button text based on current settings
         @self.app.callback(
@@ -1163,7 +1252,7 @@ class ClusterVisualizationApp:
 
         # Callback for real-time option updates (preserves zoom) - excludes SNR which has its own button
         @self.app.callback(
-            [Output('cluster-plot', 'figure', allow_duplicate=True), Output('status-info', 'children', allow_duplicate=True)],
+            [Output('cluster-plot', 'figure', allow_duplicate=True), Output('phz-pdf-plot', 'figure', allow_duplicate=True), Output('status-info', 'children', allow_duplicate=True)],
             [Input('algorithm-dropdown', 'value'),
              Input('polygon-switch', 'value'),
              Input('mer-switch', 'value'),
@@ -1178,7 +1267,7 @@ class ClusterVisualizationApp:
         def update_plot_options(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, n_clicks, snr_range, relayout_data, current_figure):
             # Only update if render button has been clicked at least once
             if n_clicks == 0:
-                return dash.no_update, dash.no_update
+                return dash.no_update, dash.no_update, dash.no_update
             
             try:
                 # Extract SNR values from range slider
@@ -1321,14 +1410,33 @@ class ClusterVisualizationApp:
                     html.Small(f"Updated at: {pd.Timestamp.now().strftime('%H:%M:%S')}", className="text-muted")
                 ], color="info", className="mt-2")
                 
-                return fig, status
+                # Create empty PHZ_PDF plot for options update
+                empty_phz_fig = go.Figure()
+                empty_phz_fig.update_layout(
+                    title='PHZ_PDF Plot',
+                    xaxis_title='Redshift',
+                    yaxis_title='Probability Density',
+                    margin=dict(l=40, r=20, t=40, b=40),
+                    showlegend=False,
+                    annotations=[
+                        dict(
+                            text="Click on a MER data point to view its PHZ_PDF",
+                            xref="paper", yref="paper",
+                            x=0.5, y=0.5, xanchor='center', yanchor='middle',
+                            showarrow=False,
+                            font=dict(size=14, color="gray")
+                        )
+                    ]
+                )
+                
+                return fig, empty_phz_fig, status
                 
             except Exception as e:
                 error_status = dbc.Alert(
                     f"Error updating: {str(e)}",
                     color="warning"
                 )
-                return dash.no_update, error_status
+                return dash.no_update, dash.no_update, error_status
 
         # Callback to enable/disable MER render button based on zoom level
         @self.app.callback(
@@ -1372,7 +1480,7 @@ class ClusterVisualizationApp:
 
         # Callback for manual MER data rendering
         @self.app.callback(
-            [Output('cluster-plot', 'figure', allow_duplicate=True), Output('status-info', 'children', allow_duplicate=True)],
+            [Output('cluster-plot', 'figure', allow_duplicate=True), Output('phz-pdf-plot', 'figure', allow_duplicate=True), Output('status-info', 'children', allow_duplicate=True)],
             [Input('mer-render-button', 'n_clicks')],
             [State('algorithm-dropdown', 'value'),
              State('snr-range-slider', 'value'),
@@ -1386,7 +1494,7 @@ class ClusterVisualizationApp:
         )
         def manual_render_mer_data(mer_n_clicks, algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data, current_figure):
             if mer_n_clicks == 0:
-                return dash.no_update, dash.no_update
+                return dash.no_update, dash.no_update, dash.no_update
             
             print(f"Debug: Manual MER render button clicked (click #{mer_n_clicks})")
             
@@ -1505,18 +1613,37 @@ class ClusterVisualizationApp:
                     html.Small(f"MER data rendered at: {pd.Timestamp.now().strftime('%H:%M:%S')}", className="text-muted")
                 ], color="success", className="mt-2")
                 
-                return fig, status
+                # Create empty PHZ_PDF plot for MER render
+                empty_phz_fig = go.Figure()
+                empty_phz_fig.update_layout(
+                    title='PHZ_PDF Plot',
+                    xaxis_title='Redshift',
+                    yaxis_title='Probability Density',
+                    margin=dict(l=40, r=20, t=40, b=40),
+                    showlegend=False,
+                    annotations=[
+                        dict(
+                            text="Click on a MER data point to view its PHZ_PDF",
+                            xref="paper", yref="paper",
+                            x=0.5, y=0.5, xanchor='center', yanchor='middle',
+                            showarrow=False,
+                            font=dict(size=14, color="gray")
+                        )
+                    ]
+                )
+                
+                return fig, empty_phz_fig, status
                 
             except Exception as e:
                 error_status = dbc.Alert(
                     f"Error rendering MER data: {str(e)}",
                     color="danger"
                 )
-                return dash.no_update, error_status
+                return dash.no_update, dash.no_update, error_status
 
         # Callback for clearing all MER data
         @self.app.callback(
-            [Output('cluster-plot', 'figure', allow_duplicate=True), Output('status-info', 'children', allow_duplicate=True)],
+            [Output('cluster-plot', 'figure', allow_duplicate=True), Output('phz-pdf-plot', 'figure', allow_duplicate=True), Output('status-info', 'children', allow_duplicate=True)],
             [Input('mer-clear-button', 'n_clicks')],
             [State('algorithm-dropdown', 'value'),
              State('snr-lower-input', 'value'),
@@ -1531,7 +1658,7 @@ class ClusterVisualizationApp:
         )
         def clear_mer_data(clear_n_clicks, algorithm, snr_lower, snr_upper, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data, render_n_clicks):
             if clear_n_clicks == 0 or render_n_clicks == 0:
-                return dash.no_update, dash.no_update
+                return dash.no_update, dash.no_update, dash.no_update
             
             print(f"Debug: Clear MER data button clicked (click #{clear_n_clicks})")
             
@@ -1612,14 +1739,180 @@ class ClusterVisualizationApp:
                     html.Small(f"MER data cleared at: {pd.Timestamp.now().strftime('%H:%M:%S')}", className="text-muted")
                 ], color="warning", className="mt-2")
                 
-                return fig, status
+                # Create empty PHZ_PDF plot for clear action
+                empty_phz_fig = go.Figure()
+                empty_phz_fig.update_layout(
+                    title='PHZ_PDF Plot',
+                    xaxis_title='Redshift',
+                    yaxis_title='Probability Density',
+                    margin=dict(l=40, r=20, t=40, b=40),
+                    showlegend=False,
+                    annotations=[
+                        dict(
+                            text="MER data cleared - Click on a MER data point to view its PHZ_PDF",
+                            xref="paper", yref="paper",
+                            x=0.5, y=0.5, xanchor='center', yanchor='middle',
+                            showarrow=False,
+                            font=dict(size=14, color="gray")
+                        )
+                    ]
+                )
+                
+                return fig, empty_phz_fig, status
                 
             except Exception as e:
                 error_status = dbc.Alert(
                     f"Error clearing MER data: {str(e)}",
                     color="danger"
                 )
-                return dash.no_update, error_status
+                return dash.no_update, dash.no_update, error_status
+
+        # Callback for handling clicks on MER data points to show PHZ_PDF
+        @self.app.callback(
+            Output('phz-pdf-plot', 'figure', allow_duplicate=True),
+            [Input('cluster-plot', 'clickData')],
+            prevent_initial_call=True
+        )
+        def update_phz_pdf_plot(clickData):
+            print(f"Debug: Click callback triggered with clickData: {clickData}")
+            
+            if not clickData:
+                print("Debug: No clickData received")
+                return dash.no_update
+            
+            if not hasattr(self, 'current_mer_data') or not self.current_mer_data:
+                print(f"Debug: No current_mer_data available: {getattr(self, 'current_mer_data', None)}")
+                return dash.no_update
+            
+            try:
+                # Extract click information
+                clicked_point = clickData['points'][0]
+                print(f"Debug: Clicked point: {clicked_point}")
+                
+                # Get trace name from the clicked point - this is key for identifying MER traces
+                curve_number = clicked_point.get('curveNumber', None)
+                trace_name = None
+                
+                # Try to get trace name from the clickData if available
+                if 'data' in clickData:
+                    # This won't work as clickData doesn't contain trace names
+                    pass
+                
+                # Check if this click is on a MER trace by looking at customdata
+                custom_data = clicked_point.get('customdata', None)
+                print(f"Debug: Custom data: {custom_data}")
+                
+                # Get coordinates for matching
+                clicked_x = clicked_point.get('x')
+                clicked_y = clicked_point.get('y')
+                print(f"Debug: Clicked coordinates: ({clicked_x}, {clicked_y})")
+                
+                # Search through stored MER data to find the matching trace
+                found_mer_data = None
+                point_index = None
+                
+                print(f"Debug: Available MER data traces: {list(self.current_mer_data.keys())}")
+                
+                for trace_name, mer_data in self.current_mer_data.items():
+                    print(f"Debug: Checking trace: {trace_name}")
+                    if 'MER High-Res Data' in trace_name:
+                        print(f"Debug: Found MER trace with {len(mer_data['ra'])} points")
+                        
+                        # If we have custom data (point index), use it directly
+                        if custom_data is not None and isinstance(custom_data, int) and custom_data < len(mer_data['ra']):
+                            found_mer_data = mer_data
+                            point_index = custom_data
+                            print(f"Debug: Using custom data index: {point_index}")
+                            break
+                        
+                        # Otherwise, find the point index by matching coordinates (less reliable but fallback)
+                        if clicked_x is not None and clicked_y is not None:
+                            for i, (x, y) in enumerate(zip(mer_data['ra'], mer_data['dec'])):
+                                if abs(x - clicked_x) < 1e-6 and abs(y - clicked_y) < 1e-6:
+                                    found_mer_data = mer_data
+                                    point_index = i
+                                    print(f"Debug: Found matching point by coordinates at index: {point_index}")
+                                    break
+                        
+                        if found_mer_data:
+                            break
+                
+                if found_mer_data and point_index is not None:
+                    print(f"Debug: Successfully found MER data for point index: {point_index}")
+                    
+                    # Get PHZ_PDF data for this point
+                    phz_pdf = found_mer_data['phz_pdf'][point_index]
+                    ra = found_mer_data['ra'][point_index]
+                    dec = found_mer_data['dec'][point_index]
+                    phz_mode_1 = found_mer_data['phz_mode_1'][point_index]
+                    
+                    print(f"Debug: PHZ_PDF length: {len(phz_pdf)}, PHZ_MODE_1: {phz_mode_1}")
+                    
+                    # Create redshift bins (assuming typical range for photometric redshift)
+                    z_bins = np.linspace(0, 3, len(phz_pdf))
+                    
+                    # Create PHZ_PDF plot
+                    phz_fig = go.Figure()
+                    
+                    phz_fig.add_trace(go.Scatter(
+                        x=z_bins,
+                        y=phz_pdf,
+                        mode='lines+markers',
+                        name='PHZ_PDF',
+                        line=dict(color='blue', width=2),
+                        marker=dict(size=4),
+                        fill='tonexty'
+                    ))
+                    
+                    # Add vertical line for PHZ_MODE_1
+                    phz_fig.add_vline(
+                        x=phz_mode_1,
+                        line=dict(color='red', width=2, dash='dash'),
+                        annotation_text=f"PHZ_MODE_1: {phz_mode_1:.3f}",
+                        annotation_position="top"
+                    )
+                    
+                    phz_fig.update_layout(
+                        title=f'PHZ_PDF for MER Point at RA: {ra:.6f}, Dec: {dec:.6f}',
+                        xaxis_title='Redshift (z)',
+                        yaxis_title='Probability Density',
+                        margin=dict(l=40, r=20, t=60, b=40),
+                        showlegend=True,
+                        hovermode='x unified'
+                    )
+                    
+                    print(f"Debug: Created PHZ_PDF plot for point at RA: {ra:.6f}, Dec: {dec:.6f}")
+                    return phz_fig
+                else:
+                    print("Debug: Click was not on a MER data point")
+                
+                # If we get here, the click wasn't on a MER point
+                return dash.no_update
+                
+            except Exception as e:
+                print(f"Debug: Error creating PHZ_PDF plot: {e}")
+                import traceback
+                print(f"Debug: Traceback: {traceback.format_exc()}")
+                
+                # Return error plot
+                error_fig = go.Figure()
+                error_fig.update_layout(
+                    title='PHZ_PDF Plot - Error',
+                    xaxis_title='Redshift',
+                    yaxis_title='Probability Density',
+                    margin=dict(l=40, r=20, t=40, b=40),
+                    showlegend=False,
+                    annotations=[
+                        dict(
+                            text=f"Error loading PHZ_PDF data: {str(e)}",
+                            xref="paper", yref="paper",
+                            x=0.5, y=0.5, xanchor='center', yanchor='middle',
+                            showarrow=False,
+                            font=dict(size=12, color="red")
+                        )
+                    ]
+                )
+                return error_fig
 
     def open_browser(self, port=8050, delay=1.5):
         """Open browser after a short delay"""
