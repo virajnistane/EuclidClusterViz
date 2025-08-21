@@ -56,10 +56,9 @@ get_choice() {
     echo "" >&2
     echo "Available options:" >&2
     echo "1) Dash App with Virtual Env (Recommended)" >&2
-    echo "2) Generate new HTML file" >&2
-    echo "3) Test dependencies" >&2
+    echo "2) Test dependencies" >&2
     echo "" >&2
-    read -p "Choose an option (1-3): " choice >&2
+    read -p "Choose an option (1-2): " choice >&2
     echo "$choice"
 }
 
@@ -71,20 +70,6 @@ launch_dash_venv() {
     echo "The app will automatically open in your browser"
     echo ""
     ./cluster_visualization/scripts/run_dash_app_venv.sh
-}
-
-# Function to generate new HTML
-generate_html() {
-    echo "Generating new HTML visualization..."
-    python cluster_visualization/src/generate_standalone_html.py --algorithm BOTH
-    if [ $? -eq 0 ]; then
-        echo "✓ HTML file generated successfully"
-        echo "File: cluster_visualization/output/current/cluster_visualization_comparison.html"
-        size=$(ls -lh cluster_visualization/output/current/cluster_visualization_comparison.html | awk '{print $5}')
-        echo "Size: $size"
-    else
-        echo "✗ Error generating HTML file"
-    fi
 }
 
 # Function to test all dependencies
@@ -140,9 +125,6 @@ case $choice in
         launch_dash_venv
         ;;
     2)
-        generate_html
-        ;;
-    3)
         test_all
         ;;
     *)

@@ -13,14 +13,14 @@ source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 
 This provides required packages: `astropy`, `plotly`, `pandas`, `numpy`, `shapely`
 
-## 🛠 Current Solution: Standalone HTML Generator
+## 🛠 Current Solution: Interactive Dash Application
 
-The standalone HTML generator creates self-contained, interactive visualizations that work reliably in any web browser without server dependencies.
+The interactive Dash application provides real-time visualizations that work reliably in any web browser with comprehensive controls and features.
 
 ## ✅ Available Solutions
 
 1. **Interactive Dash App** (🆕 **RECOMMENDED**): Real-time interactive web application with algorithm switching
-2. **Standalone HTML Generator** (✅ **RELIABLE**): Creates self-contained interactive HTML files
+2. **Interactive Dash Application** (✅ **RELIABLE**): Provides real-time interactive web interface
 3. **Simple HTTP Server** (✅ **FALLBACK**): Serves HTML files via built-in Python server
 
 ## Features
@@ -41,12 +41,9 @@ The standalone HTML generator creates self-contained, interactive visualizations
 
 ### Main Application
 - `cluster_dash_app.py` - **NEW**: Interactive Dash web application with real-time controls
-- `generate_standalone_html.py` - **RELIABLE**: Standalone HTML generator with algorithm comparison
 
 ### Launch Scripts
 - `launch.sh` - Universal launcher script with dependency testing
-- `generate_html.sh` - Generate standalone HTML visualization
-- `simple_server.py` - Simple HTTP server for serving HTML files
 
 ### Configuration
 - `requirements.txt` - Python dependencies (simplified)
@@ -55,7 +52,7 @@ The standalone HTML generator creates self-contained, interactive visualizations
 
 ### Generated Files
 - `cluster_visualization_comparison.html` - Interactive algorithm comparison visualization (default)
-- `cluster_visualization_*.html` - Various generated HTML files
+- `cluster_visualization/output/` - Directory for any generated output files
 
 ## 🚀 Quick Start
 
@@ -72,35 +69,10 @@ source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 # Automatically sets up virtual environment with required packages
 ```
 
-### 3. Alternative: Generate Comparison Visualization
-```bash
-python generate_standalone_html.py --algorithm BOTH
-# Opens cluster_visualization_comparison.html in browser
-```
-
-### 4. Alternative: Universal Launcher
+### 3. Universal Launcher
 ```bash
 ./launch.sh
-# Interactive menu with all options including Dash app
-```
-
-### 5. Alternative: Simple HTTP Server
-```bash
-python simple_server.py
-# Then open: http://localhost:8000/cluster_visualization_comparison.html
-```
-
-### Command Line Options
-```bash
-# Generate for specific algorithm
-python generate_standalone_html.py --algorithm PZWAV
-python generate_standalone_html.py --algorithm AMICO
-
-# Custom output filename
-python generate_standalone_html.py --algorithm BOTH --output my_visualization.html
-
-# Interactive mode
-python generate_standalone_html.py --interactive
+# Interactive menu with Dash app and dependency testing
 ```
 
 ## Configuration
@@ -172,7 +144,7 @@ Ensure the custom modules are in the expected location:
 - `/pbs/home/v/vnistane/mypackage/colordefinitions.py`
 
 ### Large File Sizes
-Generated HTML files can be large (20-50MB) due to embedded data:
+The Dash application provides interactive visualizations with comprehensive features:
 - Use Simple HTTP Server for better performance
 - Consider using Basic View for faster loading
 - MER tiles add significant size to files
@@ -216,10 +188,10 @@ The visualization displays:
 
 To modify the application:
 
-1. Edit `generate_standalone_html.py` for functionality changes
+1. Edit `cluster_dash_app.py` for functionality changes
 2. Update `requirements.txt` if adding new dependencies  
 3. Modify data paths in the `load_data()` function as needed
-4. Test locally by generating HTML files
+4. Test locally by running the Dash application
 5. Use the launcher script to verify all functionality
 
 The application uses Plotly's Scattergl for better performance with large datasets and supports both algorithm comparison and individual algorithm views.

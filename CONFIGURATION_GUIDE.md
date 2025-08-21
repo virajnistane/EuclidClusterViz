@@ -16,7 +16,7 @@ cd /path/to/ClusterVisualization
 The launcher will:
 - Automatically check and activate the EDEN environment
 - Test dependencies
-- Provide options to run the Dash app or generate HTML files
+- Provide options to run the Dash app or test dependencies
 - Handle all configuration automatically
 
 ### 2. Manual Configuration

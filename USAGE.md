@@ -7,7 +7,7 @@
 source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 ```
 
-## 🎯 Standalone HTML Generator
+## 🎯 Interactive Dash Application
 
 **Solution**: Interactive HTML visualizations with algorithm comparison functionality.
 
@@ -27,34 +27,16 @@ source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 - 🆕 **Automatic virtual environment setup** - handles all dependencies
 - ✅ **Zoom, pan, hover** with real-time updates
 
-### 2. Standalone HTML Generation
-```bash
-source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
-python generate_standalone_html.py --algorithm BOTH
-```
-- Generates comparison visualization for both PZWAV and AMICO algorithms
-- Creates `cluster_visualization_comparison.html` (50+ MB with full data)
-- Includes algorithm switching, polygon fill toggle, and all interactive features
-
-### 3. Universal Launcher
+### 2. Universal Launcher
 ```bash
 ./launch.sh
 ```
 - Interactive menu with all options including new Dash app
 - Tests dependencies automatically
 - Provides fallback options
-- Generates HTML files as needed
+- Provides interactive web interface
 
 ### 4. Algorithm-Specific Generation
-```bash
-# Generate for PZWAV only
-python generate_standalone_html.py --algorithm PZWAV
-
-# Generate for AMICO only  
-python generate_standalone_html.py --algorithm AMICO
-
-# Custom output filename
-python generate_standalone_html.py --algorithm BOTH --output my_viz.html
 ```
 
 ## 🎯 Current Features
@@ -62,7 +44,7 @@ python generate_standalone_html.py --algorithm BOTH --output my_viz.html
 | Feature | Status | Description |
 |---------|--------|-------------|
 | Algorithm Comparison | ✅ **Working** | Switch between PZWAV and AMICO algorithms |
-| Standalone HTML | ✅ **Working** | Self-contained files, no server needed |
+| Interactive Dash App | ✅ **Working** | Real-time controls, no file generation needed |
 | Polygon Fill Toggle | ✅ **Working** | Toggle CORE polygon fill on/off |
 | Interactive Controls | ✅ **Working** | Zoom, pan, aspect ratio, size adjustment |
 | Performance Optimization | ✅ **Working** | Basic vs Detailed view modes |
@@ -71,10 +53,7 @@ python generate_standalone_html.py --algorithm BOTH --output my_viz.html
 
 **Right now, you can use:**
 ```bash
-# Option A: Generate comparison visualization
-python generate_standalone_html.py --algorithm BOTH
-
-# Option B: Use the universal launcher
+# Interactive Dash app via launcher
 ./launch.sh
 ```
 
@@ -88,4 +67,4 @@ All methods provide the same comprehensive visualization with:
 
 ## 🎉 Problem Solved
 
-Your original issue with Jupyter notebook widget display in VS Code is **completely resolved**. The standalone HTML generator provides reliable, shareable, and feature-complete visualizations with algorithm comparison capabilities.
+Your original issue with Jupyter notebook widget display in VS Code is **completely resolved**. The Dash app provides reliable, interactive visualizations with comprehensive algorithm comparison capabilities.
