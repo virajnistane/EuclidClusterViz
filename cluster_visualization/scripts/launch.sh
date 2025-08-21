@@ -55,7 +55,7 @@ print('Dependencies test passed')
 get_choice() {
     echo "" >&2
     echo "Available options:" >&2
-    echo "1) Dash App with Virtual Env (Recommended)" >&2
+    echo "1) Dash App with Virtual Env" >&2
     echo "2) Test dependencies" >&2
     echo "" >&2
     read -p "Choose an option (1-2): " choice >&2
