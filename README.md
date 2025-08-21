@@ -50,10 +50,6 @@ The interactive Dash application provides real-time visualizations that work rel
 - `README.md` - This documentation
 - `USAGE.md` - Detailed usage instructions
 
-### Generated Files
-- `cluster_visualization_comparison.html` - Interactive algorithm comparison visualization (default)
-- `cluster_visualization/output/` - Directory for any generated output files
-
 ## 🚀 Quick Start
 
 ### 1. Activate Environment
