@@ -143,7 +143,7 @@ class ClusterVisualizationApp:
         print(f"Loading data for algorithm: {select_algorithm}")
         
         # Configuration
-        snrthreshold = None
+        snrthreshold_lower = None
         snrthreshold_upper = None
         
         # Validate algorithm choice
@@ -186,18 +186,7 @@ class ClusterVisualizationApp:
         with fits.open(fitsfile) as hdul:
             data_merged = hdul[1].data
         
-        # Apply SNR filtering
-        if snrthreshold is None and snrthreshold_upper is None:
-            datamod_merged = data_merged
-        elif snrthreshold is not None and snrthreshold_upper is not None:
-            datamod_merged = data_merged[(data_merged['SNR_CLUSTER'] > snrthreshold) & 
-                                         (data_merged['SNR_CLUSTER'] < snrthreshold_upper)]
-        elif snrthreshold_upper is not None and snrthreshold is None:
-            datamod_merged = data_merged[data_merged['SNR_CLUSTER'] < snrthreshold_upper]
-        elif snrthreshold is not None:
-            datamod_merged = data_merged[data_merged['SNR_CLUSTER'] > snrthreshold]
-        
-        print(f"Loaded {len(datamod_merged)} merged clusters")
+        print(f"Loaded {len(data_merged)} merged clusters")
         
         # Load individual detection files
         if USE_CONFIG:
@@ -256,11 +245,12 @@ class ClusterVisualizationApp:
             print(f"Warning: catred polygons not found at {catred_polygon_pkl}")
         
         data = {
-            'merged_data': datamod_merged,
+            'merged_data': data_merged,  # Store raw unfiltered data
             'tile_data': data_by_tile,
             'catred_info': catred_fileinfo_df,
             'algorithm': select_algorithm,
-            'snr_threshold': snrthreshold,
+            'snr_threshold_lower': snrthreshold_lower,
+            'snr_threshold_upper': snrthreshold_upper,
             'data_dir': mergedetcat_datadir
         }
         
@@ -400,15 +390,30 @@ class ClusterVisualizationApp:
         print(f"Debug: Total MER scatter points loaded: {len(mer_scatter_x)}")
         return mer_scatter_x, mer_scatter_y
 
-    def create_traces(self, data, show_polygons=True, show_mer_tiles=False, relayout_data=None, show_catred_mertile_data=False, manual_mer_data=None, existing_mer_traces=None):
+    def create_traces(self, data, show_polygons=True, show_mer_tiles=False, relayout_data=None, show_catred_mertile_data=False, manual_mer_data=None, existing_mer_traces=None, snr_threshold_lower=None, snr_threshold_upper=None):
         """Create all Plotly traces
         
         Args:
             manual_mer_data: Tuple of (mer_scatter_x, mer_scatter_y) for manually loaded MER data
             existing_mer_traces: List of existing MER scatter traces to preserve
+            snr_threshold_lower: Lower SNR threshold for filtering
+            snr_threshold_upper: Upper SNR threshold for filtering
         """
         traces = []
         data_traces = []  # Keep data traces separate to add them last (top layer)
+        
+        # Apply SNR filtering to merged data
+        if snr_threshold_lower is None and snr_threshold_upper is None:
+            datamod_merged = data['merged_data']
+        elif snr_threshold_lower is not None and snr_threshold_upper is not None:
+            datamod_merged = data['merged_data'][(data['merged_data']['SNR_CLUSTER'] >= snr_threshold_lower) & 
+                                                 (data['merged_data']['SNR_CLUSTER'] <= snr_threshold_upper)]
+        elif snr_threshold_upper is not None and snr_threshold_lower is None:
+            datamod_merged = data['merged_data'][data['merged_data']['SNR_CLUSTER'] <= snr_threshold_upper]
+        elif snr_threshold_lower is not None:
+            datamod_merged = data['merged_data'][data['merged_data']['SNR_CLUSTER'] >= snr_threshold_lower]
+        else:
+            datamod_merged = data['merged_data']
         
         # Check zoom level for high-resolution MER tiles data
         zoom_threshold_met = False
@@ -483,17 +488,17 @@ class ClusterVisualizationApp:
 
         # 3. MIDDLE LAYER: Merged data trace
         merged_det_trace = go.Scattergl(
-            x=data['merged_data']['RIGHT_ASCENSION_CLUSTER'],
-            y=data['merged_data']['DECLINATION_CLUSTER'],
+            x=datamod_merged['RIGHT_ASCENSION_CLUSTER'],
+            y=datamod_merged['DECLINATION_CLUSTER'],
             mode='markers',
             marker=dict(size=10, symbol='square-open', line=dict(width=2), color='black'),
-            name=f'Merged Data ({data["algorithm"]})',
+            name=f'Merged Data ({data["algorithm"]}) - {len(datamod_merged)} clusters',
             text=[
                 f"merged<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
-                for snr, cz, ra, dec in zip(data['merged_data']['SNR_CLUSTER'], 
-                                          data['merged_data']['Z_CLUSTER'], 
-                                          data['merged_data']['RIGHT_ASCENSION_CLUSTER'], 
-                                          data['merged_data']['DECLINATION_CLUSTER'])
+                for snr, cz, ra, dec in zip(datamod_merged['SNR_CLUSTER'], 
+                                          datamod_merged['Z_CLUSTER'], 
+                                          datamod_merged['RIGHT_ASCENSION_CLUSTER'], 
+                                          datamod_merged['DECLINATION_CLUSTER'])
             ],
             hoverinfo='text'
         )
@@ -507,10 +512,17 @@ class ClusterVisualizationApp:
             tile_data = value['data']
             
             # Apply SNR filtering (same as merged data logic)
-            if data['snr_threshold'] is None:
+            if snr_threshold_lower is None and snr_threshold_upper is None:
                 datamod = tile_data
+            elif snr_threshold_lower is not None and snr_threshold_upper is not None:
+                datamod = tile_data[(tile_data['SNR_CLUSTER'] >= snr_threshold_lower) & 
+                                   (tile_data['SNR_CLUSTER'] <= snr_threshold_upper)]
+            elif snr_threshold_upper is not None and snr_threshold_lower is None:
+                datamod = tile_data[tile_data['SNR_CLUSTER'] <= snr_threshold_upper]
+            elif snr_threshold_lower is not None:
+                datamod = tile_data[tile_data['SNR_CLUSTER'] >= snr_threshold_lower]
             else:
-                datamod = tile_data[tile_data['SNR_CLUSTER'] > data['snr_threshold']]
+                datamod = tile_data
             
             # 4. TOP LAYER: Tile data trace - will be added last for maximum visibility
             tile_trace = go.Scattergl(
@@ -639,14 +651,42 @@ class ClusterVisualizationApp:
                                 ], width=3),
                                 
                                 dbc.Col([
+                                    html.Label("SNR Lower Threshold:"),
+                                    dcc.Input(
+                                        id='snr-lower-input',
+                                        type='number',
+                                        placeholder='Min SNR',
+                                        value=None,
+                                        step=0.1,
+                                        className='form-control'
+                                    ),
+                                    html.Small("(Leave empty for no lower limit)", className="text-muted")
+                                ], width=3),
+                                
+                                dbc.Col([
+                                    html.Label("SNR Upper Threshold:"),
+                                    dcc.Input(
+                                        id='snr-upper-input',
+                                        type='number',
+                                        placeholder='Max SNR',
+                                        value=None,
+                                        step=0.1,
+                                        className='form-control'
+                                    ),
+                                    html.Small("(Leave empty for no upper limit)", className="text-muted")
+                                ], width=3),
+                                
+                                dbc.Col([
                                     html.Label("Polygon Fill:"),
                                     dbc.Switch(
                                         id="polygon-switch",
                                         label="Fill polygons",
                                         value=False,
                                     )
-                                ], width=3),
-                                
+                                ], width=3)
+                            ]),
+                            
+                            dbc.Row([
                                 dbc.Col([
                                     html.Label("Show MER Tiles:"),
                                     dbc.Switch(
@@ -665,10 +705,7 @@ class ClusterVisualizationApp:
                                         value=True,
                                     ),
                                     html.Small("(Default: flexible zoom)", className="text-muted")
-                                ], width=3)
-                            ]),
-                            
-                            dbc.Row([
+                                ], width=3),
                                 dbc.Col([
                                     html.Label("Show CATRED MER Tile Data:"),
                                     dbc.Switch(
@@ -677,8 +714,10 @@ class ClusterVisualizationApp:
                                         value=False,
                                     ),
                                     html.Small("(When zoomed < 2°)", className="text-muted")
-                                ], width=3),
-                                
+                                ], width=3)
+                            ]),
+                            
+                            dbc.Row([
                                 dbc.Col([
                                     html.Label("Manual MER Data Render:"),
                                     dbc.Button(
@@ -706,7 +745,8 @@ class ClusterVisualizationApp:
                                     html.Small("(Remove all MER traces)", className="text-muted")
                                 ], width=3),
                                 
-                                dbc.Col([], width=3)  # Empty column to maintain layout
+                                dbc.Col([], width=3),  # Empty column
+                                dbc.Col([], width=3)   # Empty column
                             ]),
                             
                             html.Hr(),
@@ -765,13 +805,15 @@ class ClusterVisualizationApp:
             [Output('cluster-plot', 'figure'), Output('status-info', 'children')],
             [Input('render-button', 'n_clicks')],
             [State('algorithm-dropdown', 'value'),
+             State('snr-lower-input', 'value'),
+             State('snr-upper-input', 'value'),
              State('polygon-switch', 'value'),
              State('mer-switch', 'value'),
              State('aspect-ratio-switch', 'value'),
              State('catred-mertile-switch', 'value'),
              State('cluster-plot', 'relayoutData')]
         )
-        def update_plot(n_clicks, algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data):
+        def update_plot(n_clicks, algorithm, snr_lower, snr_upper, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data):
             # Only render if button has been clicked at least once
             if n_clicks == 0:
                 # Initial empty figure
@@ -830,7 +872,8 @@ class ClusterVisualizationApp:
                 self.mer_traces_cache = []
                 
                 # Create traces
-                traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data)
+                traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data, 
+                                          snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper)
                 
                 # Create figure
                 fig = go.Figure(traces)
@@ -887,6 +930,19 @@ class ClusterVisualizationApp:
                     if 'yaxis.range' in relayout_data:
                         fig.update_yaxes(range=relayout_data['yaxis.range'])
                 
+                # Calculate filtered cluster counts for status
+                if snr_lower is None and snr_upper is None:
+                    filtered_merged_count = len(data['merged_data'])
+                elif snr_lower is not None and snr_upper is not None:
+                    filtered_merged_count = len(data['merged_data'][(data['merged_data']['SNR_CLUSTER'] >= snr_lower) & 
+                                                                   (data['merged_data']['SNR_CLUSTER'] <= snr_upper)])
+                elif snr_upper is not None and snr_lower is None:
+                    filtered_merged_count = len(data['merged_data'][data['merged_data']['SNR_CLUSTER'] <= snr_upper])
+                elif snr_lower is not None:
+                    filtered_merged_count = len(data['merged_data'][data['merged_data']['SNR_CLUSTER'] >= snr_lower])
+                else:
+                    filtered_merged_count = len(data['merged_data'])
+                
                 # Status info
                 mer_status = ""
                 if show_mer_tiles and not show_polygons:
@@ -898,10 +954,20 @@ class ClusterVisualizationApp:
                 
                 aspect_mode = "Free aspect ratio" if free_aspect_ratio else "Equal aspect ratio"
                 
+                # Format SNR filter status
+                snr_filter_text = "No SNR filtering"
+                if snr_lower is not None and snr_upper is not None:
+                    snr_filter_text = f"SNR: {snr_lower} ≤ SNR ≤ {snr_upper}"
+                elif snr_lower is not None:
+                    snr_filter_text = f"SNR ≥ {snr_lower}"
+                elif snr_upper is not None:
+                    snr_filter_text = f"SNR ≤ {snr_upper}"
+                
                 status = dbc.Alert([
                     html.H6(f"Algorithm: {algorithm}", className="mb-1"),
-                    html.P(f"Merged clusters: {len(data['merged_data'])}", className="mb-1"),
+                    html.P(f"Merged clusters: {filtered_merged_count}/{len(data['merged_data'])} (filtered)", className="mb-1"),
                     html.P(f"Individual tiles: {len(data['tile_data'])}", className="mb-1"),
+                    html.P(f"SNR Filter: {snr_filter_text}", className="mb-1"),
                     html.P(f"Polygon mode: {'Filled' if show_polygons else 'Outline'}{mer_status}", className="mb-1"),
                     html.P(f"Aspect ratio: {aspect_mode}", className="mb-1"),
                     html.Small(f"Rendered at: {pd.Timestamp.now().strftime('%H:%M:%S')}", className="text-muted")
@@ -937,6 +1003,8 @@ class ClusterVisualizationApp:
         @self.app.callback(
             [Output('render-button', 'children'), Output('mer-render-button', 'children')],
             [Input('algorithm-dropdown', 'value'),
+             Input('snr-lower-input', 'value'),
+             Input('snr-upper-input', 'value'),
              Input('polygon-switch', 'value'),
              Input('mer-switch', 'value'),
              Input('aspect-ratio-switch', 'value'),
@@ -944,7 +1012,7 @@ class ClusterVisualizationApp:
              Input('render-button', 'n_clicks'),
              Input('mer-render-button', 'n_clicks')]
         )
-        def update_button_texts(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, n_clicks, mer_n_clicks):
+        def update_button_texts(algorithm, snr_lower, snr_upper, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, n_clicks, mer_n_clicks):
             main_button_text = "🚀 Initial Render" if n_clicks == 0 else "✅ Live Updates Active"
             mer_button_text = f"� Render MER Data ({mer_n_clicks})" if mer_n_clicks > 0 else "🔍 Render MER Data"
             return main_button_text, mer_button_text
@@ -961,6 +1029,8 @@ class ClusterVisualizationApp:
         @self.app.callback(
             [Output('cluster-plot', 'figure', allow_duplicate=True), Output('status-info', 'children', allow_duplicate=True)],
             [Input('algorithm-dropdown', 'value'),
+             Input('snr-lower-input', 'value'),
+             Input('snr-upper-input', 'value'),
              Input('polygon-switch', 'value'),
              Input('mer-switch', 'value'),
              Input('aspect-ratio-switch', 'value'),
@@ -970,7 +1040,7 @@ class ClusterVisualizationApp:
              State('cluster-plot', 'figure')],
             prevent_initial_call=True
         )
-        def update_plot_options(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, n_clicks, relayout_data, current_figure):
+        def update_plot_options(algorithm, snr_lower, snr_upper, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, n_clicks, relayout_data, current_figure):
             # Only update if render button has been clicked at least once
             if n_clicks == 0:
                 return dash.no_update, dash.no_update
@@ -1005,7 +1075,7 @@ class ClusterVisualizationApp:
                 
                 # Create traces with existing MER traces preserved
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data, 
-                                          existing_mer_traces=existing_mer_traces)
+                                          existing_mer_traces=existing_mer_traces, snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper)
                 
                 # Create figure
                 fig = go.Figure(traces)
@@ -1069,6 +1139,19 @@ class ClusterVisualizationApp:
                     if 'yaxis' in current_layout and 'range' in current_layout['yaxis']:
                         fig.update_yaxes(range=current_layout['yaxis']['range'])
                 
+                # Calculate filtered cluster counts for status
+                if snr_lower is None and snr_upper is None:
+                    filtered_merged_count = len(data['merged_data'])
+                elif snr_lower is not None and snr_upper is not None:
+                    filtered_merged_count = len(data['merged_data'][(data['merged_data']['SNR_CLUSTER'] >= snr_lower) & 
+                                                                   (data['merged_data']['SNR_CLUSTER'] <= snr_upper)])
+                elif snr_upper is not None and snr_lower is None:
+                    filtered_merged_count = len(data['merged_data'][data['merged_data']['SNR_CLUSTER'] <= snr_upper])
+                elif snr_lower is not None:
+                    filtered_merged_count = len(data['merged_data'][data['merged_data']['SNR_CLUSTER'] >= snr_lower])
+                else:
+                    filtered_merged_count = len(data['merged_data'])
+                
                 # Status info
                 mer_status = ""
                 if show_mer_tiles and not show_polygons:
@@ -1080,10 +1163,20 @@ class ClusterVisualizationApp:
                 
                 aspect_mode = "Free aspect ratio" if free_aspect_ratio else "Equal aspect ratio"
                 
+                # Format SNR filter status
+                snr_filter_text = "No SNR filtering"
+                if snr_lower is not None and snr_upper is not None:
+                    snr_filter_text = f"SNR: {snr_lower} ≤ SNR ≤ {snr_upper}"
+                elif snr_lower is not None:
+                    snr_filter_text = f"SNR ≥ {snr_lower}"
+                elif snr_upper is not None:
+                    snr_filter_text = f"SNR ≤ {snr_upper}"
+                
                 status = dbc.Alert([
                     html.H6(f"Algorithm: {algorithm}", className="mb-1"),
-                    html.P(f"Merged clusters: {len(data['merged_data'])}", className="mb-1"),
+                    html.P(f"Merged clusters: {filtered_merged_count}/{len(data['merged_data'])} (filtered)", className="mb-1"),
                     html.P(f"Individual tiles: {len(data['tile_data'])}", className="mb-1"),
+                    html.P(f"SNR Filter: {snr_filter_text}", className="mb-1"),
                     html.P(f"Polygon mode: {'Filled' if show_polygons else 'Outline'}{mer_status}", className="mb-1"),
                     html.P(f"Aspect ratio: {aspect_mode}", className="mb-1"),
                     html.Small(f"Updated at: {pd.Timestamp.now().strftime('%H:%M:%S')}", className="text-muted")
@@ -1143,6 +1236,8 @@ class ClusterVisualizationApp:
             [Output('cluster-plot', 'figure', allow_duplicate=True), Output('status-info', 'children', allow_duplicate=True)],
             [Input('mer-render-button', 'n_clicks')],
             [State('algorithm-dropdown', 'value'),
+             State('snr-lower-input', 'value'),
+             State('snr-upper-input', 'value'),
              State('polygon-switch', 'value'),
              State('mer-switch', 'value'),
              State('aspect-ratio-switch', 'value'),
@@ -1151,7 +1246,7 @@ class ClusterVisualizationApp:
              State('cluster-plot', 'figure')],
             prevent_initial_call=True
         )
-        def manual_render_mer_data(mer_n_clicks, algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data, current_figure):
+        def manual_render_mer_data(mer_n_clicks, algorithm, snr_lower, snr_upper, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data, current_figure):
             if mer_n_clicks == 0:
                 return dash.no_update, dash.no_update
             
@@ -1191,7 +1286,8 @@ class ClusterVisualizationApp:
                 
                 # Create traces with the manually loaded MER data and existing traces
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data, 
-                                          manual_mer_data=(mer_scatter_x, mer_scatter_y), existing_mer_traces=existing_mer_traces)
+                                          manual_mer_data=(mer_scatter_x, mer_scatter_y), existing_mer_traces=existing_mer_traces,
+                                          snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper)
                 
                 # Update the MER traces cache with the new trace count
                 if mer_scatter_x and mer_scatter_y:
@@ -1279,6 +1375,8 @@ class ClusterVisualizationApp:
             [Output('cluster-plot', 'figure', allow_duplicate=True), Output('status-info', 'children', allow_duplicate=True)],
             [Input('mer-clear-button', 'n_clicks')],
             [State('algorithm-dropdown', 'value'),
+             State('snr-lower-input', 'value'),
+             State('snr-upper-input', 'value'),
              State('polygon-switch', 'value'),
              State('mer-switch', 'value'),
              State('aspect-ratio-switch', 'value'),
@@ -1287,7 +1385,7 @@ class ClusterVisualizationApp:
              State('render-button', 'n_clicks')],
             prevent_initial_call=True
         )
-        def clear_mer_data(clear_n_clicks, algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data, render_n_clicks):
+        def clear_mer_data(clear_n_clicks, algorithm, snr_lower, snr_upper, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data, render_n_clicks):
             if clear_n_clicks == 0 or render_n_clicks == 0:
                 return dash.no_update, dash.no_update
             
@@ -1301,7 +1399,8 @@ class ClusterVisualizationApp:
                 data = self.load_data(algorithm)
                 
                 # Create traces without any MER data
-                traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data)
+                traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data,
+                                          snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper)
                 
                 # Create figure
                 fig = go.Figure(traces)
