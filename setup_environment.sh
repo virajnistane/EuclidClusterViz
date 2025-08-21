@@ -55,16 +55,14 @@ echo ""
 # Extract current defaults from config.py
 BASE_WORKSPACE=$(python3 -c "from config import config; print(config._base_workspace)" 2>/dev/null || echo "/sps/euclid/OU-LE3/CL/ial_workspace/workdir")
 EDEN_PATH=$(python3 -c "from config import config; print(config._cvmfs_eden_path)" 2>/dev/null || echo "/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1")
-USER_HOME_CONFIG=$(python3 -c "from config import config; print(config._user_home)" 2>/dev/null || echo "$USER_HOME")
 
 # Prompt for each configurable path
 prompt_for_path "BASE_WORKSPACE" "Base Euclid workspace directory" "$BASE_WORKSPACE"
 prompt_for_path "EDEN_PATH" "CVMFS EDEN environment path" "$EDEN_PATH"
-prompt_for_path "USER_HOME_CONFIG" "User home directory" "$USER_HOME_CONFIG"
 
 # Check if any changes were requested
 CHANGES_REQUESTED=false
-if [[ -n "$NEW_BASE_WORKSPACE" ]] || [[ -n "$NEW_EDEN_PATH" ]] || [[ -n "$NEW_USER_HOME_CONFIG" ]]; then
+if [[ -n "$NEW_BASE_WORKSPACE" ]] || [[ -n "$NEW_EDEN_PATH" ]]; then
     CHANGES_REQUESTED=true
 fi
 
@@ -84,11 +82,6 @@ if [[ "$CHANGES_REQUESTED" == "true" ]]; then
     if [[ -n "$NEW_EDEN_PATH" ]]; then
         sed -i "s|self._cvmfs_eden_path = '.*'|self._cvmfs_eden_path = '$NEW_EDEN_PATH'|g" config.py
         echo "✅ Updated EDEN path"
-    fi
-    
-    if [[ -n "$NEW_USER_HOME_CONFIG" ]]; then
-        sed -i "s|self._user_home = '.*'|self._user_home = '$NEW_USER_HOME_CONFIG'|g" config.py
-        echo "✅ Updated user home path"
     fi
     
     echo ""
