@@ -244,6 +244,11 @@ class ClusterVisualizationApp:
         else:
             print(f"Warning: catred polygons not found at {catred_polygon_pkl}")
         
+        # Calculate SNR min/max for slider bounds
+        snr_min = float(data_merged['SNR_CLUSTER'].min())
+        snr_max = float(data_merged['SNR_CLUSTER'].max())
+        print(f"SNR range: {snr_min:.3f} to {snr_max:.3f}")
+        
         data = {
             'merged_data': data_merged,  # Store raw unfiltered data
             'tile_data': data_by_tile,
@@ -251,6 +256,8 @@ class ClusterVisualizationApp:
             'algorithm': select_algorithm,
             'snr_threshold_lower': snrthreshold_lower,
             'snr_threshold_upper': snrthreshold_upper,
+            'snr_min': snr_min,
+            'snr_max': snr_max,
             'data_dir': mergedetcat_datadir
         }
         
@@ -651,30 +658,29 @@ class ClusterVisualizationApp:
                                 ], width=3),
                                 
                                 dbc.Col([
-                                    html.Label("SNR Lower Threshold:"),
-                                    dcc.Input(
-                                        id='snr-lower-input',
-                                        type='number',
-                                        placeholder='Min SNR',
-                                        value=None,
-                                        step=0.1,
-                                        className='form-control'
-                                    ),
-                                    html.Small("(Leave empty for no lower limit)", className="text-muted")
-                                ], width=3),
-                                
-                                dbc.Col([
-                                    html.Label("SNR Upper Threshold:"),
-                                    dcc.Input(
-                                        id='snr-upper-input',
-                                        type='number',
-                                        placeholder='Max SNR',
-                                        value=None,
-                                        step=0.1,
-                                        className='form-control'
-                                    ),
-                                    html.Small("(Leave empty for no upper limit)", className="text-muted")
-                                ], width=3),
+                                    html.Label("SNR Filtering:"),
+                                    html.Div([
+                                        html.Div(id="snr-range-display", className="text-center mb-2"),
+                                        dcc.RangeSlider(
+                                            id='snr-range-slider',
+                                            min=0,  # Will be updated dynamically
+                                            max=100,  # Will be updated dynamically
+                                            step=0.1,
+                                            marks={},  # Will be updated dynamically
+                                            value=[0, 100],  # Will be updated dynamically
+                                            tooltip={"placement": "bottom", "always_visible": True},
+                                            allowCross=False
+                                        ),
+                                        dbc.Button(
+                                            "Apply SNR Filter",
+                                            id="snr-render-button",
+                                            color="secondary",
+                                            size="sm",
+                                            className="w-100 mt-2",
+                                            n_clicks=0
+                                        )
+                                    ])
+                                ], width=6),
                                 
                                 dbc.Col([
                                     html.Label("Polygon Fill:"),
@@ -801,21 +807,59 @@ class ClusterVisualizationApp:
 
     def setup_callbacks(self):
         """Setup Dash callbacks"""
+        
+        # Callback to initialize SNR slider when algorithm changes
+        @self.app.callback(
+            [Output('snr-range-slider', 'min'),
+             Output('snr-range-slider', 'max'),
+             Output('snr-range-slider', 'value'),
+             Output('snr-range-slider', 'marks'),
+             Output('snr-range-display', 'children')],
+            [Input('algorithm-dropdown', 'value')],
+            prevent_initial_call=False
+        )
+        def update_snr_slider(algorithm):
+            try:
+                # Load data to get SNR range
+                data = self.load_data(algorithm)
+                snr_min = data['snr_min']
+                snr_max = data['snr_max']
+                
+                # Create marks at key points
+                marks = {
+                    snr_min: f'{snr_min:.1f}',
+                    snr_max: f'{snr_max:.1f}',
+                    (snr_min + snr_max) / 2: f'{(snr_min + snr_max) / 2:.1f}'
+                }
+                
+                # Default to full range
+                default_value = [snr_min, snr_max]
+                
+                display_text = html.Div([
+                    html.Small(f"SNR Range: {snr_min:.2f} to {snr_max:.2f}", className="text-muted"),
+                    html.Small(" | Move sliders to set filter range", className="text-muted")
+                ])
+                
+                return snr_min, snr_max, default_value, marks, display_text
+                
+            except Exception as e:
+                # Fallback values if data loading fails
+                return 0, 100, [0, 100], {0: '0', 100: '100'}, html.Small("SNR data not available", className="text-muted")
+        
         @self.app.callback(
             [Output('cluster-plot', 'figure'), Output('status-info', 'children')],
-            [Input('render-button', 'n_clicks')],
+            [Input('render-button', 'n_clicks'), Input('snr-render-button', 'n_clicks')],
             [State('algorithm-dropdown', 'value'),
-             State('snr-lower-input', 'value'),
-             State('snr-upper-input', 'value'),
+             State('snr-range-slider', 'value'),
              State('polygon-switch', 'value'),
              State('mer-switch', 'value'),
              State('aspect-ratio-switch', 'value'),
              State('catred-mertile-switch', 'value'),
              State('cluster-plot', 'relayoutData')]
         )
-        def update_plot(n_clicks, algorithm, snr_lower, snr_upper, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data):
+        def update_plot(n_clicks, snr_n_clicks, algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data):
             # Only render if button has been clicked at least once
-            if n_clicks == 0:
+            if n_clicks == 0 and snr_n_clicks == 0:
                 # Initial empty figure
                 initial_fig = go.Figure()
                 
@@ -865,6 +909,10 @@ class ClusterVisualizationApp:
                 return initial_fig, initial_status
             
             try:
+                # Extract SNR values from range slider
+                snr_lower = snr_range[0] if snr_range and len(snr_range) == 2 else None
+                snr_upper = snr_range[1] if snr_range and len(snr_range) == 2 else None
+                
                 # Load data for selected algorithm
                 data = self.load_data(algorithm)
                 
@@ -1001,21 +1049,22 @@ class ClusterVisualizationApp:
 
         # Callback to update button text based on current settings
         @self.app.callback(
-            [Output('render-button', 'children'), Output('mer-render-button', 'children')],
+            [Output('render-button', 'children'), Output('mer-render-button', 'children'), Output('snr-render-button', 'children')],
             [Input('algorithm-dropdown', 'value'),
-             Input('snr-lower-input', 'value'),
-             Input('snr-upper-input', 'value'),
+             Input('snr-range-slider', 'value'),
              Input('polygon-switch', 'value'),
              Input('mer-switch', 'value'),
              Input('aspect-ratio-switch', 'value'),
              Input('catred-mertile-switch', 'value'),
              Input('render-button', 'n_clicks'),
-             Input('mer-render-button', 'n_clicks')]
+             Input('mer-render-button', 'n_clicks'),
+             Input('snr-render-button', 'n_clicks')]
         )
-        def update_button_texts(algorithm, snr_lower, snr_upper, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, n_clicks, mer_n_clicks):
+        def update_button_texts(algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, n_clicks, mer_n_clicks, snr_n_clicks):
             main_button_text = "🚀 Initial Render" if n_clicks == 0 else "✅ Live Updates Active"
-            mer_button_text = f"� Render MER Data ({mer_n_clicks})" if mer_n_clicks > 0 else "🔍 Render MER Data"
-            return main_button_text, mer_button_text
+            mer_button_text = f"🔍 Render MER Data ({mer_n_clicks})" if mer_n_clicks > 0 else "🔍 Render MER Data"
+            snr_button_text = f"Apply SNR Filter ({snr_n_clicks})" if snr_n_clicks > 0 else "Apply SNR Filter"
+            return main_button_text, mer_button_text, snr_button_text
 
         # Callback to update clear button text
         @self.app.callback(
@@ -1025,27 +1074,30 @@ class ClusterVisualizationApp:
         def update_clear_button_text(clear_n_clicks):
             return f"🗑️ Clear All MER ({clear_n_clicks})" if clear_n_clicks > 0 else "🗑️ Clear All MER"
 
-        # Callback for real-time option updates (preserves zoom)
+        # Callback for real-time option updates (preserves zoom) - excludes SNR which has its own button
         @self.app.callback(
             [Output('cluster-plot', 'figure', allow_duplicate=True), Output('status-info', 'children', allow_duplicate=True)],
             [Input('algorithm-dropdown', 'value'),
-             Input('snr-lower-input', 'value'),
-             Input('snr-upper-input', 'value'),
              Input('polygon-switch', 'value'),
              Input('mer-switch', 'value'),
              Input('aspect-ratio-switch', 'value'),
              Input('catred-mertile-switch', 'value')],
             [State('render-button', 'n_clicks'),
+             State('snr-range-slider', 'value'),
              State('cluster-plot', 'relayoutData'),
              State('cluster-plot', 'figure')],
             prevent_initial_call=True
         )
-        def update_plot_options(algorithm, snr_lower, snr_upper, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, n_clicks, relayout_data, current_figure):
+        def update_plot_options(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, n_clicks, snr_range, relayout_data, current_figure):
             # Only update if render button has been clicked at least once
             if n_clicks == 0:
                 return dash.no_update, dash.no_update
             
             try:
+                # Extract SNR values from range slider
+                snr_lower = snr_range[0] if snr_range and len(snr_range) == 2 else None
+                snr_upper = snr_range[1] if snr_range and len(snr_range) == 2 else None
+                
                 # Load data for selected algorithm
                 data = self.load_data(algorithm)
                 
@@ -1236,8 +1288,7 @@ class ClusterVisualizationApp:
             [Output('cluster-plot', 'figure', allow_duplicate=True), Output('status-info', 'children', allow_duplicate=True)],
             [Input('mer-render-button', 'n_clicks')],
             [State('algorithm-dropdown', 'value'),
-             State('snr-lower-input', 'value'),
-             State('snr-upper-input', 'value'),
+             State('snr-range-slider', 'value'),
              State('polygon-switch', 'value'),
              State('mer-switch', 'value'),
              State('aspect-ratio-switch', 'value'),
@@ -1246,13 +1297,17 @@ class ClusterVisualizationApp:
              State('cluster-plot', 'figure')],
             prevent_initial_call=True
         )
-        def manual_render_mer_data(mer_n_clicks, algorithm, snr_lower, snr_upper, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data, current_figure):
+        def manual_render_mer_data(mer_n_clicks, algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data, current_figure):
             if mer_n_clicks == 0:
                 return dash.no_update, dash.no_update
             
             print(f"Debug: Manual MER render button clicked (click #{mer_n_clicks})")
             
             try:
+                # Extract SNR values from range slider
+                snr_lower = snr_range[0] if snr_range and len(snr_range) == 2 else None
+                snr_upper = snr_range[1] if snr_range and len(snr_range) == 2 else None
+                
                 # Load data for selected algorithm
                 data = self.load_data(algorithm)
                 
