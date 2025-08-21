@@ -6,18 +6,18 @@ The Cluster Visualization tools now use a centralized configuration system for i
 
 ## Quick Setup
 
-### 1. Run the Environment Setup Script
+### 1. Run the Launcher
 
 ```bash
 cd /path/to/ClusterVisualization
-./setup_environment.sh
+./launch.sh
 ```
 
-This interactive script will:
-- Check your current configuration
-- Allow you to update paths for your environment
-- Validate that all paths exist
-- Provide next steps
+The launcher will:
+- Automatically check and activate the EDEN environment
+- Test dependencies
+- Provide options to run the Dash app or generate HTML files
+- Handle all configuration automatically
 
 ### 2. Manual Configuration
 
@@ -49,20 +49,13 @@ Main configuration file containing:
 - **Path validation**: checks that critical paths exist
 - **Algorithm-specific paths**: output directories, detection file lists
 
-### `setup_environment.sh`
-Interactive setup script that:
-- Detects current environment
-- Prompts for path customization
-- Updates configuration automatically
-- Validates the setup
-
 ## Using the Configuration
 
 ### In Jupyter Notebooks
 
 ```python
 # Import configuration at the beginning of your notebook
-from config import get_config, validate_environment, setup_environment_paths
+from config import get_config, validate_environment
 
 # Get configuration instance
 config = get_config()
@@ -163,20 +156,24 @@ if not is_valid:
 
 1. **Paths don't exist**:
    ```bash
-   ./setup_environment.sh
-   # Update paths to match your environment
+   # Edit config.py directly to update paths for your environment
+   # The launcher will automatically detect and validate paths
+   ./launch.sh
    ```
 
 2. **Import errors**:
    ```python
-   # Check Python path setup
-   from config import setup_environment_paths
-   setup_environment_paths()
+   # Check Python path and configuration
+   from config import get_config, validate_environment
+   config = get_config()
+   is_valid, issues = validate_environment()
    ```
 
 3. **EDEN environment not found**:
    ```bash
-   # Activate EDEN environment
+   # The launcher will automatically activate EDEN environment
+   ./launch.sh
+   # Or manually activate:
    source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
    ```
 

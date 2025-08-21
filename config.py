@@ -144,13 +144,6 @@ def validate_environment():
     """Validate the current environment and return status"""
     return config.validate_paths()
 
-def setup_environment_paths():
-    """Add necessary paths to Python path"""
-    import sys
-    if config.utils_dir not in sys.path:
-        sys.path.append(config.utils_dir)
-        print(f"Added to Python path: {config.utils_dir}")
-
 # Environment variables fallback
 def from_env(var_name, default_value):
     """Get value from environment variable with fallback to default"""
