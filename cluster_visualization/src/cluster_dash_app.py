@@ -723,7 +723,7 @@ class ClusterVisualizationApp:
         return traces + data_traces
 
     def setup_layout(self):
-        """Setup the Dash app layout optimized for horizontal screens"""
+        """Setup the Dash app layout with side-by-side plots and compact controls"""
         self.app.layout = dbc.Container([
             # Header row
             dbc.Row([
@@ -869,19 +869,20 @@ class ClusterVisualizationApp:
                             ])
                         ])
                     ], className="h-100")
-                ], width=3, className="pe-3"),
+                ], width=2, className="pe-2"),
                 
                 # Right side: Plot area and status
                 dbc.Col([
-                    # Main cluster plot area
+                    # Main plots area - side by side
                     dbc.Row([
+                        # Main cluster plot
                         dbc.Col([
                             dcc.Loading(
                                 id="loading",
                                 children=[
                                     dcc.Graph(
                                         id='cluster-plot',
-                                        style={'height': '55vh', 'width': '100%', 'min-height': '400px'},
+                                        style={'height': '75vh', 'width': '100%', 'min-height': '500px'},
                                         config={
                                             'displayModeBar': True,
                                             'displaylogo': False,
@@ -892,18 +893,16 @@ class ClusterVisualizationApp:
                                 ],
                                 type="circle"
                             )
-                        ])
-                    ]),
-                    
-                    # PHZ_PDF plot area
-                    dbc.Row([
+                        ], width=8),
+                        
+                        # PHZ_PDF plot
                         dbc.Col([
                             dcc.Loading(
                                 id="loading-phz",
                                 children=[
                                     dcc.Graph(
                                         id='phz-pdf-plot',
-                                        style={'height': '22vh', 'width': '100%', 'min-height': '200px'},
+                                        style={'height': '75vh', 'width': '100%', 'min-height': '500px'},
                                         config={
                                             'displayModeBar': True,
                                             'displaylogo': False,
@@ -914,8 +913,8 @@ class ClusterVisualizationApp:
                                 ],
                                 type="circle"
                             )
-                        ])
-                    ], className="mt-2"),
+                        ], width=4)
+                    ]),
                     
                     # Status info row
                     dbc.Row([
@@ -923,7 +922,7 @@ class ClusterVisualizationApp:
                             html.Div(id="status-info", className="mt-2")
                         ])
                     ])
-                ], width=9)
+                ], width=10)
             ], className="g-0")  # Remove gutters for tighter layout
             
         ], fluid=True, className="px-3")
