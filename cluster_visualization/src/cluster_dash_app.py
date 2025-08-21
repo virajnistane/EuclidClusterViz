@@ -711,184 +711,188 @@ class ClusterVisualizationApp:
         return traces + data_traces
 
     def setup_layout(self):
-        """Setup the Dash app layout"""
+        """Setup the Dash app layout optimized for horizontal screens"""
         self.app.layout = dbc.Container([
+            # Header row
             dbc.Row([
                 dbc.Col([
-                    html.H1("Cluster Detection Visualization", className="text-center mb-4"),
-                    html.Hr()
+                    html.H1("Cluster Detection Visualization", className="text-center mb-3"),
                 ])
-            ]),
+            ], className="mb-3"),
             
+            # Main horizontal layout: Controls sidebar + Plot area
             dbc.Row([
+                # Left sidebar with controls
                 dbc.Col([
                     dbc.Card([
+                        dbc.CardHeader([
+                            html.H5("Visualization Controls", className="mb-0 text-center")
+                        ]),
                         dbc.CardBody([
-                            html.H5("Visualization Controls", className="card-title"),
-                            html.P("Options update in real-time while preserving your current zoom level", 
-                                   className="text-muted small mb-3"),
+                            html.P("Options update in real-time while preserving zoom", 
+                                   className="text-muted small mb-3 text-center"),
                             
-                            dbc.Row([
-                                dbc.Col([
-                                    html.Label("Algorithm:"),
-                                    dcc.Dropdown(
-                                        id='algorithm-dropdown',
-                                        options=[
-                                            {'label': 'PZWAV', 'value': 'PZWAV'},
-                                            {'label': 'AMICO', 'value': 'AMICO'}
-                                        ],
-                                        value='PZWAV',
-                                        clearable=False
-                                    )
-                                ], width=3),
+                            # Algorithm selection
+                            html.Div([
+                                html.Label("Algorithm:", className="fw-bold mb-2"),
+                                dcc.Dropdown(
+                                    id='algorithm-dropdown',
+                                    options=[
+                                        {'label': 'PZWAV', 'value': 'PZWAV'},
+                                        {'label': 'AMICO', 'value': 'AMICO'}
+                                    ],
+                                    value='PZWAV',
+                                    clearable=False
+                                )
+                            ], className="mb-4"),
+                            
+                            # SNR Filtering section
+                            html.Div([
+                                html.Label("SNR Filtering:", className="fw-bold mb-2"),
+                                html.Div(id="snr-range-display", className="text-center mb-2"),
+                                dcc.RangeSlider(
+                                    id='snr-range-slider',
+                                    min=0,  # Will be updated dynamically
+                                    max=100,  # Will be updated dynamically
+                                    step=0.1,
+                                    marks={},  # Will be updated dynamically
+                                    value=[0, 100],  # Will be updated dynamically
+                                    tooltip={"placement": "bottom", "always_visible": True},
+                                    allowCross=False
+                                ),
+                                dbc.Button(
+                                    "Apply SNR Filter",
+                                    id="snr-render-button",
+                                    color="secondary",
+                                    size="sm",
+                                    className="w-100 mt-2",
+                                    n_clicks=0
+                                )
+                            ], className="mb-4"),
+                            
+                            # Display options
+                            html.Div([
+                                html.Label("Display Options:", className="fw-bold mb-2"),
                                 
-                                dbc.Col([
-                                    html.Label("SNR Filtering:"),
-                                    html.Div([
-                                        html.Div(id="snr-range-display", className="text-center mb-2"),
-                                        dcc.RangeSlider(
-                                            id='snr-range-slider',
-                                            min=0,  # Will be updated dynamically
-                                            max=100,  # Will be updated dynamically
-                                            step=0.1,
-                                            marks={},  # Will be updated dynamically
-                                            value=[0, 100],  # Will be updated dynamically
-                                            tooltip={"placement": "bottom", "always_visible": True},
-                                            allowCross=False
-                                        ),
-                                        dbc.Button(
-                                            "Apply SNR Filter",
-                                            id="snr-render-button",
-                                            color="secondary",
-                                            size="sm",
-                                            className="w-100 mt-2",
-                                            n_clicks=0
-                                        )
-                                    ])
-                                ], width=6),
-                                
-                                dbc.Col([
-                                    html.Label("Polygon Fill:"),
+                                html.Div([
                                     dbc.Switch(
                                         id="polygon-switch",
                                         label="Fill polygons",
                                         value=False,
                                     )
-                                ], width=3)
-                            ]),
-                            
-                            dbc.Row([
-                                dbc.Col([
-                                    html.Label("Show MER Tiles:"),
+                                ], className="mb-2"),
+                                
+                                html.Div([
                                     dbc.Switch(
                                         id="mer-switch",
                                         label="Show MER tiles",
                                         value=False,
                                     ),
                                     html.Small("(Only with outline polygons)", className="text-muted")
-                                ], width=3),
+                                ], className="mb-2"),
                                 
-                                dbc.Col([
-                                    html.Label("Aspect Ratio:"),
+                                html.Div([
                                     dbc.Switch(
                                         id="aspect-ratio-switch",
                                         label="Free aspect ratio",
-                                        value=True,
+                                        value=False,
                                     ),
-                                    html.Small("(Default: flexible zoom)", className="text-muted")
-                                ], width=3),
-                                dbc.Col([
-                                    html.Label("Show CATRED MER Tile Data:"),
+                                    html.Small("(Default: maintain astronomical aspect)", className="text-muted")
+                                ], className="mb-2"),
+                                
+                                html.Div([
                                     dbc.Switch(
                                         id="catred-mertile-switch",
                                         label="High-res MER data",
                                         value=False,
                                     ),
                                     html.Small("(When zoomed < 2°)", className="text-muted")
-                                ], width=3)
-                            ]),
+                                ], className="mb-3"),
+                            ], className="mb-4"),
                             
-                            dbc.Row([
-                                dbc.Col([
-                                    html.Label("Manual MER Data Render:"),
+                            # MER Data controls
+                            html.Div([
+                                html.Label("MER Data Controls:", className="fw-bold mb-2"),
+                                
+                                html.Div([
                                     dbc.Button(
                                         "🔍 Render MER Data",
                                         id="mer-render-button",
                                         color="info",
                                         size="sm",
-                                        className="w-100",
+                                        className="w-100 mb-2",
                                         n_clicks=0,
                                         disabled=True
                                     ),
-                                    html.Small("(Zoom in first, then click)", className="text-muted")
-                                ], width=3),
+                                    html.Small("(Zoom in first, then click)", className="text-muted d-block text-center mb-3")
+                                ]),
                                 
-                                dbc.Col([
-                                    html.Label("Clear MER Data:"),
+                                html.Div([
                                     dbc.Button(
                                         "🗑️ Clear All MER",
                                         id="mer-clear-button",
                                         color="warning",
                                         size="sm",
-                                        className="w-100",
+                                        className="w-100 mb-2",
                                         n_clicks=0
                                     ),
-                                    html.Small("(Remove all MER traces)", className="text-muted")
-                                ], width=3),
-                                
-                                dbc.Col([], width=3),  # Empty column
-                                dbc.Col([], width=3)   # Empty column
-                            ]),
+                                    html.Small("(Remove all MER traces)", className="text-muted d-block text-center")
+                                ])
+                            ], className="mb-4"),
                             
                             html.Hr(),
                             
-                            dbc.Row([
-                                dbc.Col([
-                                    dbc.Button(
-                                        "� Initial Render",
-                                        id="render-button",
-                                        color="primary",
-                                        size="lg",
-                                        className="w-100 mt-2",
-                                        n_clicks=0
-                                    ),
-                                    html.Small("After initial render, options update automatically", 
-                                              className="text-muted d-block text-center mt-1")
-                                ], width=12)
+                            # Main render button
+                            html.Div([
+                                dbc.Button(
+                                    "🚀 Initial Render",
+                                    id="render-button",
+                                    color="primary",
+                                    size="lg",
+                                    className="w-100 mb-2",
+                                    n_clicks=0
+                                ),
+                                html.Small("After initial render, options update automatically", 
+                                          className="text-muted d-block text-center")
                             ])
                         ])
-                    ])
-                ], width=12)
-            ], className="mb-4"),
-            
-            dbc.Row([
+                    ], className="h-100")
+                ], width=3, className="pe-3"),
+                
+                # Right side: Plot area and status
                 dbc.Col([
-                    dcc.Loading(
-                        id="loading",
-                        children=[
-                            dcc.Graph(
-                                id='cluster-plot',
-                                style={'height': '900px', 'width': '100%'},
-                                config={
-                                    'displayModeBar': True,
-                                    'displaylogo': False,
-                                    'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
-                                    'responsive': True
-                                }
+                    # Plot area
+                    dbc.Row([
+                        dbc.Col([
+                            dcc.Loading(
+                                id="loading",
+                                children=[
+                                    dcc.Graph(
+                                        id='cluster-plot',
+                                        style={'height': '80vh', 'width': '100%', 'min-height': '600px'},
+                                        config={
+                                            'displayModeBar': True,
+                                            'displaylogo': False,
+                                            'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
+                                            'responsive': True
+                                        }
+                                    )
+                                ],
+                                type="circle"
                             )
-                        ],
-                        type="circle"
-                    )
-                ])
-            ]),
+                        ])
+                    ]),
+                    
+                    # Status info row
+                    dbc.Row([
+                        dbc.Col([
+                            html.Div(id="status-info", className="mt-2")
+                        ])
+                    ])
+                ], width=9)
+            ], className="g-0")  # Remove gutters for tighter layout
             
-            dbc.Row([
-                dbc.Col([
-                    html.Div(id="status-info", className="mt-3")
-                ])
-            ])
-            
-        ], fluid=True)
+        ], fluid=True, className="px-3")
 
     def setup_callbacks(self):
         """Setup Dash callbacks"""
@@ -968,16 +972,15 @@ class ClusterVisualizationApp:
                 
                 initial_fig.update_layout(
                     title='',
-                    height=900,
-                    width=1200,
-                    margin=dict(l=60, r=200, t=60, b=60),
+                    
+                    margin=dict(l=40, r=20, t=40, b=40),
                     xaxis=xaxis_config,
                     yaxis=yaxis_config,
                     autosize=True,
                     showlegend=False,
                     annotations=[
                         dict(
-                            text="Select your preferred algorithm and display options above,<br>then click the 'Render Visualization' button to generate the plot.",
+                            text="Select your preferred algorithm and display options from the sidebar,<br>then click the 'Initial Render' button to generate the plot.",
                             xref="paper", yref="paper",
                             x=0.5, y=0.5, xanchor='center', yanchor='middle',
                             showarrow=False,
@@ -1037,14 +1040,14 @@ class ClusterVisualizationApp:
                         title='Legend',
                         orientation='v',
                         xanchor='left',
-                        x=1.02,
+                        x=1.01,
                         yanchor='top',
-                        y=1
+                        y=1,
+                        font=dict(size=10)
                     ),
                     hovermode='closest',
-                    height=900,
-                    width=1200,
-                    margin=dict(l=60, r=200, t=60, b=60),
+                    
+                    margin=dict(l=40, r=120, t=60, b=40),
                     xaxis=xaxis_config,
                     yaxis=yaxis_config,
                     autosize=True
@@ -1119,9 +1122,8 @@ class ClusterVisualizationApp:
                 )
                 error_fig.update_layout(
                     title="Error Loading Visualization",
-                    height=900,
-                    width=1200,
-                    margin=dict(l=60, r=200, t=60, b=60),
+                    
+                    margin=dict(l=40, r=120, t=60, b=40),
                     autosize=True
                 )
                 
@@ -1243,14 +1245,14 @@ class ClusterVisualizationApp:
                         title='Legend',
                         orientation='v',
                         xanchor='left',
-                        x=1.02,
+                        x=1.01,
                         yanchor='top',
-                        y=1
+                        y=1,
+                        font=dict(size=10)
                     ),
                     hovermode='closest',
-                    height=900,
-                    width=1200,
-                    margin=dict(l=60, r=200, t=60, b=60),
+                    
+                    margin=dict(l=40, r=120, t=60, b=40),
                     xaxis=xaxis_config,
                     yaxis=yaxis_config,
                     autosize=True
@@ -1462,14 +1464,15 @@ class ClusterVisualizationApp:
                         title='Legend',
                         orientation='v',
                         xanchor='left',
-                        x=1.02,
+                        x=1.01,
                         yanchor='top',
-                        y=1
+                        y=1,
+                        font=dict(size=10)
                     ),
                     hovermode='closest',
-                    height=900,
-                    width=1200,
-                    margin=dict(l=60, r=200, t=60, b=60),
+                    
+                    
+                    margin=dict(l=40, r=120, t=60, b=40),
                     xaxis=xaxis_config,
                     yaxis=yaxis_config,
                     autosize=True
@@ -1570,14 +1573,15 @@ class ClusterVisualizationApp:
                         title='Legend',
                         orientation='v',
                         xanchor='left',
-                        x=1.02,
+                        x=1.01,
                         yanchor='top',
-                        y=1
+                        y=1,
+                        font=dict(size=10)
                     ),
                     hovermode='closest',
-                    height=900,
-                    width=1200,
-                    margin=dict(l=60, r=200, t=60, b=60),
+                    
+                    
+                    margin=dict(l=40, r=120, t=60, b=40),
                     xaxis=xaxis_config,
                     yaxis=yaxis_config,
                     autosize=True
