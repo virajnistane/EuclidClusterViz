@@ -1,5 +1,6 @@
 *ipynb
 *.backup
+cluster_visualization/src/generate_mer_image.py
 
 venv/
 
