@@ -273,7 +273,8 @@ class ClusterVisualizationApp:
             data: The data dictionary containing catred_info
             
         Returns:
-            tuple: (ra_coords, dec_coords) or ([], []) if unable to load
+            dict: Dictionary with keys 'RIGHT_ASCENSION', 'DECLINATION', 'PHZ_MODE_1', 'PHZ_70_INT', 'PHZ_PDF'
+                  or empty dict {} if unable to load
         """
         try:
             if isinstance(mertileid, str):
@@ -282,11 +283,11 @@ class ClusterVisualizationApp:
             # Check if we have the necessary data
             if 'catred_info' not in data or data['catred_info'].empty:
                 print(f"Debug: No catred_info available for mertile {mertileid}")
-                return [], []
+                return {}
             
             if mertileid not in data['catred_info'].index:
                 print(f"Debug: MerTile {mertileid} not found in catred_info")
-                return [], []
+                return {}
             
             mertile_row = data['catred_info'].loc[mertileid]
             
@@ -297,9 +298,15 @@ class ClusterVisualizationApp:
                 if 'polygon' in mertile_row and mertile_row['polygon'] is not None:
                     poly = mertile_row['polygon']
                     x_coords, y_coords = poly.exterior.xy
-                    return list(x_coords), list(y_coords)
+                    return {
+                        'RIGHT_ASCENSION': list(x_coords),
+                        'DECLINATION': list(y_coords),
+                        'PHZ_MODE_1': [0.0] * len(x_coords),  # Dummy scalar values
+                        'PHZ_70_INT': [[0.0, 0.0]] * len(x_coords),  # Dummy interval pairs
+                        'PHZ_PDF': [[0.0] * 10] * len(x_coords)      # Dummy PDF vectors
+                    }
                 else:
-                    return [], []
+                    return {}
             
             # Try to load actual FITS file
             fits_path = mertile_row['fits_file']
@@ -309,14 +316,60 @@ class ClusterVisualizationApp:
                 if 'polygon' in mertile_row and mertile_row['polygon'] is not None:
                     poly = mertile_row['polygon']
                     x_coords, y_coords = poly.exterior.xy
-                    return list(x_coords), list(y_coords)
+                    return {
+                        'RIGHT_ASCENSION': list(x_coords),
+                        'DECLINATION': list(y_coords),
+                        'PHZ_MODE_1': [0.0] * len(x_coords),  # Dummy scalar values
+                        'PHZ_70_INT': [[0.0, 0.0]] * len(x_coords),  # Dummy interval pairs
+                        'PHZ_PDF': [[0.0] * 10] * len(x_coords)      # Dummy PDF vectors
+                    }
                 else:
-                    return [], []
+                    return {}
             
             # Load actual FITS data
             with fits.open(fits_path) as hdul:
                 fits_data = hdul[1].data
-                return fits_data['RIGHT_ASCENSION'].tolist(), fits_data['DECLINATION'].tolist()
+                
+                # Extract the required columns
+                result = {
+                    'RIGHT_ASCENSION': fits_data['RIGHT_ASCENSION'].tolist(),
+                    'DECLINATION': fits_data['DECLINATION'].tolist()
+                }
+                
+                # Add photometric redshift columns if they exist
+                for col in ['PHZ_MODE_1', 'PHZ_70_INT', 'PHZ_PDF']:
+                    if col in fits_data.columns.names:
+                        col_data = fits_data[col]
+                        # Handle different column types
+                        if col == 'PHZ_PDF':
+                            # Keep PHZ_PDF as raw vectors - don't process
+                            result[col] = [row.tolist() if hasattr(row, 'tolist') else row for row in col_data]
+                        elif col == 'PHZ_70_INT':
+                            # For PHZ_70_INT, store the raw vectors for difference calculation
+                            if col_data.ndim > 1:
+                                result[col] = [row.tolist() if hasattr(row, 'tolist') else row for row in col_data]
+                            else:
+                                # If it's scalar, convert to list format for consistency
+                                result[col] = [[float(val), float(val)] for val in col_data]
+                        else:
+                            # For PHZ_MODE_1 and other scalar columns
+                            if col_data.ndim > 1:
+                                # Take first element if it's a vector
+                                result[col] = [float(row[0]) if len(row) > 0 else 0.0 for row in col_data]
+                            else:
+                                # Scalar column
+                                result[col] = col_data.tolist()
+                    else:
+                        # Provide dummy values if column doesn't exist
+                        print(f"Debug: Column {col} not found in {fits_path}, using dummy values")
+                        if col == 'PHZ_PDF':
+                            result[col] = [[0.0] * 10] * len(result['RIGHT_ASCENSION'])  # Dummy vector
+                        elif col == 'PHZ_70_INT':
+                            result[col] = [[0.0, 0.0]] * len(result['RIGHT_ASCENSION'])  # Dummy interval
+                        else:
+                            result[col] = [0.0] * len(result['RIGHT_ASCENSION'])
+                
+                return result
                 
         except Exception as e:
             print(f"Debug: Error loading MER tile {mertileid}: {e}")
@@ -328,11 +381,17 @@ class ClusterVisualizationApp:
                         poly = mertile_row['polygon']
                         x_coords, y_coords = poly.exterior.xy
                         print(f"Debug: Using polygon vertices for MER tile {mertileid} ({len(x_coords)} points)")
-                        return list(x_coords), list(y_coords)
+                        return {
+                            'RIGHT_ASCENSION': list(x_coords),
+                            'DECLINATION': list(y_coords),
+                            'PHZ_MODE_1': [0.0] * len(x_coords),  # Dummy scalar values
+                            'PHZ_70_INT': [[0.0, 0.0]] * len(x_coords),  # Dummy interval pairs
+                            'PHZ_PDF': [[0.0] * 10] * len(x_coords)      # Dummy PDF vectors
+                        }
             except Exception as fallback_error:
                 print(f"Debug: Fallback also failed for MER tile {mertileid}: {fallback_error}")
             
-            return [], []
+            return {}
 
     def load_mer_scatter_data(self, data, relayout_data):
         """Load MER scatter data for the current zoom window
@@ -342,18 +401,23 @@ class ClusterVisualizationApp:
             relayout_data: Current zoom/pan state
             
         Returns:
-            tuple: (mer_scatter_x, mer_scatter_y) lists of coordinates
+            dict: Dictionary with keys 'ra', 'dec', 'phz_mode_1', 'phz_70_int', 'phz_pdf'
         """
-        mer_scatter_x = []
-        mer_scatter_y = []
-        
+        mer_scatter_data = {
+            'ra': [],
+            'dec': [],
+            'phz_mode_1': [],
+            'phz_70_int': [],
+            'phz_pdf': []
+        }
+
         if 'catred_info' not in data or data['catred_info'].empty or 'polygon' not in data['catred_info'].columns:
             print("Debug: No catred_info data available for MER scatter")
-            return mer_scatter_x, mer_scatter_y
+            return mer_scatter_data
         
         if not relayout_data:
             print("Debug: No relayout data available for MER scatter")
-            return mer_scatter_x, mer_scatter_y
+            return mer_scatter_data
         
         # Get current zoom ranges from relayout_data
         ra_min = ra_max = dec_min = dec_max = None
@@ -388,14 +452,17 @@ class ClusterVisualizationApp:
 
         # Load data for each MER tile in the zoom area
         for mertileid in mertiles_to_load:
-            ra_coords, dec_coords = self.get_radec_mertile(mertileid, data)
-            if ra_coords and dec_coords:
-                mer_scatter_x.extend(ra_coords)
-                mer_scatter_y.extend(dec_coords)
-                print(f"Debug: Added {len(ra_coords)} points from MER tile {mertileid}")
+            tile_data = self.get_radec_mertile(mertileid, data)
+            if tile_data and 'RIGHT_ASCENSION' in tile_data:
+                mer_scatter_data['ra'].extend(tile_data['RIGHT_ASCENSION'])
+                mer_scatter_data['dec'].extend(tile_data['DECLINATION'])
+                mer_scatter_data['phz_mode_1'].extend(tile_data['PHZ_MODE_1'])
+                mer_scatter_data['phz_70_int'].extend(tile_data['PHZ_70_INT'])
+                mer_scatter_data['phz_pdf'].extend(tile_data['PHZ_PDF'])
+                print(f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} points from MER tile {mertileid}")
         
-        print(f"Debug: Total MER scatter points loaded: {len(mer_scatter_x)}")
-        return mer_scatter_x, mer_scatter_y
+        print(f"Debug: Total MER scatter points loaded: {len(mer_scatter_data['ra'])}")
+        return mer_scatter_data
 
     def create_traces(self, data, show_polygons=True, show_mer_tiles=False, relayout_data=None, show_catred_mertile_data=False, manual_mer_data=None, existing_mer_traces=None, snr_threshold_lower=None, snr_threshold_upper=None):
         """Create all Plotly traces
@@ -462,25 +529,43 @@ class ClusterVisualizationApp:
 
         # 2. BOTTOM LAYER: High-resolution MER tiles scatter data (manual render mode)
         if show_mer_tiles and show_catred_mertile_data and manual_mer_data:
-            mer_scatter_x, mer_scatter_y = manual_mer_data
-            print(f"Debug: Using manually loaded MER scatter data with {len(mer_scatter_x)} points")
+            print(f"Debug: Using manually loaded MER scatter data")
             
             # Add the scatter trace if we have data
-            if mer_scatter_x and mer_scatter_y:
-                print(f"Debug: Creating MER scatter trace with {len(mer_scatter_x)} points")
+            if manual_mer_data and 'ra' in manual_mer_data and manual_mer_data['ra']:
+                print(f"Debug: Creating MER scatter trace with {len(manual_mer_data['ra'])} points")
                 
                 # Create unique name for this MER trace based on current number of existing traces
                 trace_number = len(self.mer_traces_cache) + 1
                 trace_name = f'MER High-Res Data #{trace_number}'
                 
+                # def format_hover_text(x, y, p1, p70):
+                #     """Safely format hover text for MER data points, handling potential vector values"""
+                #     try:
+                #         # Ensure PHZ_MODE_1 is scalar
+                #         p1_val = float(p1) if np.isscalar(p1) else float(p1[0]) if hasattr(p1, '__len__') and len(p1) > 0 else 0.0
+                        
+                #         # For PHZ_70_INT, calculate the difference between the two values (confidence interval width)
+                #         if hasattr(p70, '__len__') and len(p70) >= 2:
+                #             p70_diff = abs(float(p70[1]) - float(p70[0]))
+                #         elif np.isscalar(p70):
+                #             p70_diff = 0.0  # No interval if scalar
+                #         else:
+                #             p70_diff = 0.0
+                        
+                #         return f'MER Data Point<br>RA: {x:.6f}<br>Dec: {y:.6f}<br>PHZ_MODE_1: {p1_val:.3f}<br>PHZ_70_INT: {p70_diff:.3f}'
+                #     except Exception as e:
+                #         return f'MER Data Point<br>RA: {x:.6f}<br>Dec: {y:.6f}<br>PHZ Data: Error formatting'
+                
                 mer_catred_trace = go.Scattergl(
-                    x=mer_scatter_x,
-                    y=mer_scatter_y,
+                    x=manual_mer_data['ra'],
+                    y=manual_mer_data['dec'],
                     mode='markers',
                     marker=dict(size=4, symbol='circle', color='black', opacity=0.5),
                     name=trace_name,
-                    text=[f'MER Data Point<br>RA: {x:.6f}<br>Dec: {y:.6f}' 
-                          for x, y in zip(mer_scatter_x, mer_scatter_y)],
+                    text=[f'MER Data Point<br>RA: {x:.6f}<br>Dec: {y:.6f}<br>PHZ_MODE_1: {p1:.3f}<br>PHZ_70_INT: {abs(float(p70[1]) - float(p70[0])):.3f}'
+                          for x, y, p1, p70 in zip(manual_mer_data['ra'], manual_mer_data['dec'], 
+                                                   manual_mer_data['phz_mode_1'], manual_mer_data['phz_70_int'])],
                     hoverinfo='text',
                     showlegend=True
                 )
@@ -1312,7 +1397,7 @@ class ClusterVisualizationApp:
                 data = self.load_data(algorithm)
                 
                 # Load MER scatter data for current zoom window
-                mer_scatter_x, mer_scatter_y = self.load_mer_scatter_data(data, relayout_data)
+                mer_scatter_data = self.load_mer_scatter_data(data, relayout_data)
                 
                 # Extract existing MER traces from current figure to preserve them
                 existing_mer_traces = []
@@ -1341,11 +1426,11 @@ class ClusterVisualizationApp:
                 
                 # Create traces with the manually loaded MER data and existing traces
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data, 
-                                          manual_mer_data=(mer_scatter_x, mer_scatter_y), existing_mer_traces=existing_mer_traces,
+                                          manual_mer_data=mer_scatter_data, existing_mer_traces=existing_mer_traces,
                                           snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper)
                 
                 # Update the MER traces cache with the new trace count
-                if mer_scatter_x and mer_scatter_y:
+                if mer_scatter_data and mer_scatter_data['ra']:
                     self.mer_traces_cache.extend(existing_mer_traces)
                     # Add the new trace placeholder (actual trace is created in create_traces)
                     self.mer_traces_cache.append(None)  # Placeholder for the new trace
@@ -1403,8 +1488,9 @@ class ClusterVisualizationApp:
                         fig.update_yaxes(range=relayout_data['yaxis.range'])
                 
                 # Status info
-                total_mer_traces = len(existing_mer_traces) + (1 if mer_scatter_x and mer_scatter_y else 0)
-                mer_status = f" | MER high-res data: {len(mer_scatter_x)} points in {total_mer_traces} regions"
+                total_mer_traces = len(existing_mer_traces) + (1 if mer_scatter_data and mer_scatter_data['ra'] else 0)
+                mer_points_count = len(mer_scatter_data['ra']) if mer_scatter_data and mer_scatter_data['ra'] else 0
+                mer_status = f" | MER high-res data: {mer_points_count} points in {total_mer_traces} regions"
                 aspect_mode = "Free aspect ratio" if free_aspect_ratio else "Equal aspect ratio"
                 
                 status = dbc.Alert([
