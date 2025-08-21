@@ -45,16 +45,7 @@ python generate_standalone_html.py --algorithm BOTH
 - Provides fallback options
 - Generates HTML files as needed
 
-### 4. Simple HTTP Server
-```bash
-python simple_server.py
-```
-- ✅ **Always works** (uses Python's built-in HTTP server)
-- ✅ Serves HTML files at http://localhost:8000
-- ✅ Auto-detects and serves available visualizations
-- ✅ No external dependencies
-
-### 5. Algorithm-Specific Generation
+### 4. Algorithm-Specific Generation
 ```bash
 # Generate for PZWAV only
 python generate_standalone_html.py --algorithm PZWAV
@@ -72,7 +63,6 @@ python generate_standalone_html.py --algorithm BOTH --output my_viz.html
 |---------|--------|-------------|
 | Algorithm Comparison | ✅ **Working** | Switch between PZWAV and AMICO algorithms |
 | Standalone HTML | ✅ **Working** | Self-contained files, no server needed |
-| Simple HTTP Server | ✅ **Working** | Local web server for better performance |
 | Polygon Fill Toggle | ✅ **Working** | Toggle CORE polygon fill on/off |
 | Interactive Controls | ✅ **Working** | Zoom, pan, aspect ratio, size adjustment |
 | Performance Optimization | ✅ **Working** | Basic vs Detailed view modes |
@@ -84,10 +74,7 @@ python generate_standalone_html.py --algorithm BOTH --output my_viz.html
 # Option A: Generate comparison visualization
 python generate_standalone_html.py --algorithm BOTH
 
-# Option B: Use web server for better performance
-python simple_server.py
-
-# Option C: Use the universal launcher
+# Option B: Use the universal launcher
 ./launch.sh
 ```
 

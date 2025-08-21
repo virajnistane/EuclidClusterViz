@@ -31,7 +31,7 @@ if [ $? -eq 0 ]; then
     echo ""
     echo "To view the visualization:"
     echo "1. Check the output/current/ directory for the HTML file"
-    echo "2. Or run the simple server: python src/simple_server.py"
+    echo "2. Open the HTML file directly in your browser"
     echo ""
     echo "Features:"
     echo "- Interactive zoom and pan"

@@ -57,7 +57,6 @@ show_usage() {
     echo "  $0 help              # Show this help"
     echo ""
     echo "Generated files will be saved to: output/current/"
-    echo "Use 'python src/simple_server.py' to serve the files via HTTP"
 }
 
 # Parse command line arguments
@@ -93,7 +92,6 @@ case "${1,,}" in
             echo "  - $output_amico"
             echo ""
             echo "You can now:"
-            echo "  python src/simple_server.py  # Serve the files"
             echo "  firefox $output_pzwav &  # Open PZWAV directly"
             echo "  firefox $output_amico &  # Open AMICO directly"
         else

@@ -38,16 +38,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 cd "$PROJECT_DIR"
 
-# Test if HTML file exists in output/current
-if [ ! -f "cluster_visualization/output/current/cluster_visualization_comparison.html" ]; then
-    echo "HTML visualization not found. Generating..."
-    python cluster_visualization/src/generate_standalone_html.py --algorithm BOTH
-    if [ $? -ne 0 ]; then
-        echo "Error: Could not generate HTML file"
-        exit 1
-    fi
-fi
-
 # Function to test dependencies
 test_dependencies() {
     echo "Testing Python dependencies..."
@@ -66,12 +56,10 @@ get_choice() {
     echo "" >&2
     echo "Available options:" >&2
     echo "1) Dash App with Virtual Env (Recommended)" >&2
-    echo "2) Simple Server (Always works)" >&2
-    echo "3) Standalone HTML (Open directly in browser)" >&2
-    echo "4) Generate new HTML file" >&2
-    echo "5) Test dependencies" >&2
+    echo "2) Generate new HTML file" >&2
+    echo "3) Test dependencies" >&2
     echo "" >&2
-    read -p "Choose an option (1-5): " choice >&2
+    read -p "Choose an option (1-3): " choice >&2
     echo "$choice"
 }
 
@@ -83,65 +71,6 @@ launch_dash_venv() {
     echo "The app will automatically open in your browser"
     echo ""
     ./cluster_visualization/scripts/run_dash_app_venv.sh
-}
-
-# Function to launch simple server
-launch_simple() {
-    echo "Launching simple HTTP server..."
-    echo "Will try ports 8000, 8001, 8002 if needed..."
-    echo "Press Ctrl+C to stop"
-    
-    # Get the actual script directory (this file's directory)
-    # Handle case where script is called from different locations
-    if [[ "${BASH_SOURCE[0]}" == *"/scripts/launch.sh" ]]; then
-        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-        PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
-    else
-        # Fallback: assume we're in project root and find scripts directory
-        PROJECT_ROOT="$(pwd)"
-        SCRIPT_DIR="$PROJECT_ROOT/cluster_visualization/scripts"
-    fi
-    
-    # Try different ports if 8000 is in use
-    for port in 8000 8001 8002; do
-        echo "Trying port $port..."
-        
-        # Check if port is available first
-        if netstat -ln 2>/dev/null | grep -q ":$port "; then
-            echo "Port $port is already in use, trying next..."
-            continue
-        fi
-        
-        # Use the emergency server from the scripts directory
-        echo "Starting server on port $port..."
-        python "$SCRIPT_DIR/emergency_server.py" "$PROJECT_ROOT/cluster_visualization" $port
-        break
-    done
-}
-
-# Function to open HTML directly
-open_html() {
-    echo "Opening HTML file directly in browser..."
-    if [ -f "cluster_visualization/output/current/cluster_visualization_comparison.html" ]; then
-        html_file="cluster_visualization/output/current/cluster_visualization_comparison.html"
-    else
-        echo "Comparison file not found, generating it first..."
-        python cluster_visualization/src/generate_standalone_html.py --algorithm BOTH
-        html_file="cluster_visualization/output/current/cluster_visualization_comparison.html"
-    fi
-    
-    if command -v firefox >/dev/null 2>&1; then
-        firefox "$html_file" &
-        echo "Opened $html_file in Firefox"
-    elif command -v google-chrome >/dev/null 2>&1; then
-        google-chrome "$html_file" &
-        echo "Opened $html_file in Chrome"
-    elif command -v chromium >/dev/null 2>&1; then
-        chromium "$html_file" &
-        echo "Opened $html_file in Chromium"
-    else
-        echo "No supported browser found. Please open $html_file manually"
-    fi
 }
 
 # Function to generate new HTML
@@ -211,15 +140,9 @@ case $choice in
         launch_dash_venv
         ;;
     2)
-        launch_simple
-        ;;
-    3)
-        open_html
-        ;;
-    4)
         generate_html
         ;;
-    5)
+    3)
         test_all
         ;;
     *)
