@@ -1301,6 +1301,10 @@ class ClusterVisualizationApp:
                 else:
                     self.mer_traces_cache = []
                 
+                # Clear MER data from trace creator to revert marker enhancements
+                if self.trace_creator:
+                    self.trace_creator.clear_mer_data()
+                
                 # Create traces
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data, 
                                           snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper)
@@ -1916,6 +1920,10 @@ class ClusterVisualizationApp:
             try:
                 # Clear MER traces cache
                 self.mer_traces_cache = []
+                
+                # Clear MER data from trace creator to revert marker enhancements
+                if self.trace_creator:
+                    self.trace_creator.clear_mer_data()
                 
                 # Load data for selected algorithm
                 data = self.load_data(algorithm)
