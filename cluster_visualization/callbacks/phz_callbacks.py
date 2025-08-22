@@ -42,7 +42,9 @@ class PHZCallbacks:
             prevent_initial_call=True
         )
         def update_phz_pdf_plot(clickData):
+            print("=== PHZ CALLBACK TRIGGERED ===")
             print(f"Debug: Click callback triggered with clickData: {clickData}")
+            print(f"Debug: clickData type: {type(clickData)}")
             
             if not clickData:
                 print("Debug: No clickData received")
@@ -50,24 +52,41 @@ class PHZCallbacks:
             
             # Get current CATRED data from handler or fallback
             current_catred_data = None
+            data_source = "none"
+            
             if self.catred_handler and hasattr(self.catred_handler, 'current_catred_data') and self.catred_handler.current_catred_data:
                 current_catred_data = self.catred_handler.current_catred_data
+                data_source = "catred_handler"
                 print("Debug: Using current_catred_data from catred_handler")
             elif hasattr(self, 'trace_creator') and self.trace_creator and hasattr(self.trace_creator, 'current_catred_data') and self.trace_creator.current_catred_data:
                 current_catred_data = self.trace_creator.current_catred_data
+                data_source = "trace_creator"
                 print("Debug: Using current_catred_data from trace_creator")
             elif hasattr(self, 'current_catred_data') and self.current_catred_data:
                 current_catred_data = self.current_catred_data
+                data_source = "self"
                 print("Debug: Using current_catred_data from self")
             
+            print(f"Debug: Data source: {data_source}, data available: {current_catred_data is not None}")
+            if current_catred_data:
+                print(f"Debug: Data keys: {list(current_catred_data.keys())}")
+                print(f"Debug: Data memory id: {id(current_catred_data)}")
+            
             if not current_catred_data:
-                print(f"Debug: No current_catred_data available: {current_catred_data}")
+                print(f"Debug: No current_catred_data available from any source")
+                print(f"Debug: catred_handler available: {self.catred_handler is not None}")
+                print(f"Debug: trace_creator available: {hasattr(self, 'trace_creator') and self.trace_creator is not None}")
+                print(f"Debug: self.current_catred_data available: {hasattr(self, 'current_catred_data')}")
                 return dash.no_update
             
             try:
                 # Extract click information
                 clicked_point = clickData['points'][0]
                 print(f"Debug: Clicked point: {clicked_point}")
+                
+                # Get the trace name that was clicked
+                clicked_trace_name = clicked_point.get('traceName', 'Unknown')
+                print(f"Debug: Clicked trace name: '{clicked_trace_name}'")
                 
                 # Get coordinates for matching
                 clicked_x = clicked_point.get('x')
@@ -78,35 +97,74 @@ class PHZCallbacks:
                 custom_data = clicked_point.get('customdata', None)
                 print(f"Debug: Custom data: {custom_data}")
                 
+                # Additional click data debugging
+                print(f"Debug: All click data keys: {list(clicked_point.keys())}")
+                if 'curveNumber' in clicked_point:
+                    print(f"Debug: Curve number: {clicked_point['curveNumber']}")
+                if 'pointNumber' in clicked_point:
+                    print(f"Debug: Point number: {clicked_point['pointNumber']}")
+                
                 # Search through stored CATRED data to find the matching trace
                 found_catred_data = None
                 point_index = None
                 
                 print(f"Debug: Available CATRED data traces: {list(current_catred_data.keys())}")
+                print(f"Debug: Looking for traces containing 'CATRED High-Res Data'")
                 
                 for trace_name, catred_data in current_catred_data.items():
-                    print(f"Debug: Checking trace: {trace_name}")
+                    print(f"Debug: Checking trace: '{trace_name}'")
+                    
+                    # Check if this is a CATRED High-Res Data trace
                     if 'CATRED High-Res Data' in trace_name:
-                        print(f"Debug: Found CATRED trace with {len(catred_data['ra'])} points")
+                        print(f"Debug: Found CATRED trace '{trace_name}' with {len(catred_data['ra'])} points")
                         
-                        # If we have custom data (point index), use it directly
+                        # Method 1: Use custom_data if available (most reliable)
                         if custom_data is not None and isinstance(custom_data, int) and custom_data < len(catred_data['ra']):
                             found_catred_data = catred_data
                             point_index = custom_data
                             print(f"Debug: Using custom data index: {point_index}")
                             break
                         
-                        # Otherwise, find the point index by matching coordinates (less reliable but fallback)
-                        if clicked_x is not None and clicked_y is not None:
+                        # Method 2: Match coordinates with relaxed tolerance (fallback)
+                        elif clicked_x is not None and clicked_y is not None:
+                            print(f"Debug: Attempting coordinate matching for ({clicked_x}, {clicked_y})")
+                            best_match_index = None
+                            best_distance = float('inf')
+                            
                             for i, (x, y) in enumerate(zip(catred_data['ra'], catred_data['dec'])):
-                                if abs(x - clicked_x) < 1e-6 and abs(y - clicked_y) < 1e-6:
-                                    found_catred_data = catred_data
-                                    point_index = i
-                                    print(f"Debug: Found matching point by coordinates at index: {point_index}")
-                                    break
+                                distance = ((x - clicked_x)**2 + (y - clicked_y)**2)**0.5
+                                if distance < 0.001 and distance < best_distance:  # Relaxed tolerance
+                                    best_match_index = i
+                                    best_distance = distance
+                            
+                            if best_match_index is not None:
+                                found_catred_data = catred_data
+                                point_index = best_match_index
+                                print(f"Debug: Found matching point by coordinates at index: {point_index} (distance: {best_distance:.6f})")
+                                break
+                            else:
+                                print(f"Debug: No coordinate match found in trace '{trace_name}' (closest distance: {best_distance:.6f})")
+                        
+                        # Method 3: Try using point index from click data (alternative approach)
+                        elif 'pointIndex' in clicked_point:
+                            point_idx = clicked_point['pointIndex']
+                            if point_idx < len(catred_data['ra']):
+                                found_catred_data = catred_data
+                                point_index = point_idx
+                                print(f"Debug: Using pointIndex from click data: {point_index}")
+                                break
                         
                         if found_catred_data:
                             break
+                    else:
+                        print(f"Debug: Skipping non-CATRED trace: '{trace_name}'")
+                
+                # Additional debugging if no match found
+                if not found_catred_data:
+                    print("Debug: No CATRED trace matched the click")
+                    print(f"Debug: Available trace names: {list(current_catred_data.keys())}")
+                    print(f"Debug: Click data keys: {clicked_point.keys()}")
+                    print(f"Debug: Full clicked point data: {clicked_point}")
                 
                 if found_catred_data and point_index is not None:
                     print(f"Debug: Successfully found CATRED data for point index: {point_index}")

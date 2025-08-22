@@ -2095,8 +2095,8 @@ class ClusterVisualizationApp:
                 
                 for trace_name, mer_data in current_mer_data.items():
                     print(f"Debug: Checking trace: {trace_name}")
-                    if 'MER High-Res Data' in trace_name:
-                        print(f"Debug: Found MER trace with {len(mer_data['ra'])} points")
+                    if 'CATRED High-Res Data' in trace_name:
+                        print(f"Debug: Found CATRED trace with {len(mer_data['ra'])} points")
                         
                         # If we have custom data (point index), use it directly
                         if custom_data is not None and isinstance(custom_data, int) and custom_data < len(mer_data['ra']):
@@ -2118,7 +2118,7 @@ class ClusterVisualizationApp:
                             break
                 
                 if found_mer_data and point_index is not None:
-                    print(f"Debug: Successfully found MER data for point index: {point_index}")
+                    print(f"Debug: Successfully found CATRED data for point index: {point_index}")
                     
                     # Get PHZ_PDF data for this point
                     phz_pdf = found_mer_data['phz_pdf'][point_index]
@@ -2153,7 +2153,7 @@ class ClusterVisualizationApp:
                     )
                     
                     phz_fig.update_layout(
-                        title=f'PHZ_PDF for MER Point at RA: {ra:.6f}, Dec: {dec:.6f}',
+                        title=f'PHZ_PDF for CATRED Point at RA: {ra:.6f}, Dec: {dec:.6f}',
                         xaxis_title='Redshift (z)',
                         yaxis_title='Probability Density',
                         margin=dict(l=40, r=20, t=60, b=40),
@@ -2164,7 +2164,7 @@ class ClusterVisualizationApp:
                     print(f"Debug: Created PHZ_PDF plot for point at RA: {ra:.6f}, Dec: {dec:.6f}")
                     return phz_fig
                 else:
-                    print("Debug: Click was not on a MER data point")
+                    print("Debug: Click was not on a CATRED data point")
                 
                 # If we get here, the click wasn't on a MER point
                 return dash.no_update

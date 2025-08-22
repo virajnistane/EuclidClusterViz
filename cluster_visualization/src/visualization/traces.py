@@ -4,7 +4,7 @@ Trace creation module for cluster visualization.
 This module handles the creation of all Plotly traces including:
 - Cluster detection scatter traces (merged and individual tiles)
 - Polygon traces (LEV1, CORE, MER tiles)
-- MER high-resolution data traces
+- CATRED high-resolution data traces
 - SNR filtering and data layering
 - Trace styling and hover text formatting
 """
@@ -48,9 +48,9 @@ class TraceCreator:
             show_polygons: Whether to fill polygons or show outlines only
             show_mer_tiles: Whether to show MER tile polygons
             relayout_data: Current zoom/pan state for zoom threshold checking
-            show_catred_mertile_data: Whether to show high-res MER data
-            manual_catred_data: Manually loaded MER scatter data
-            existing_catred_traces: Existing MER traces to preserve
+            show_catred_mertile_data: Whether to show high-res CATRED data
+            manual_catred_data: Manually loaded CATRED scatter data
+            existing_catred_traces: Existing CATRED traces to preserve
             snr_threshold_lower: Lower SNR threshold for filtering
             snr_threshold_upper: Upper SNR threshold for filtering
             
@@ -62,58 +62,48 @@ class TraceCreator:
         
         # Apply SNR filtering to merged data
         datamod_merged = self._apply_snr_filtering(data['merged_data'], snr_threshold_lower, snr_threshold_upper)
-        
-        # Check zoom threshold for MER data display
-        zoom_threshold_met = self._check_zoom_threshold(relayout_data, show_mer_tiles)
-        
-        # Get MER data points for proximity-based marker enhancement
+
+        # Check zoom threshold for CATRED data display
+        zoom_threshold_met = self._check_zoom_threshold(relayout_data, show_catred_mertile_data)
+
+        # Get CATRED data points for proximity-based marker enhancement
         catred_points = self._get_catred_data_points(manual_catred_data, existing_catred_traces)
-        
-        # Create data traces in layered order: MER → Merged → Individual tiles
+
+        # Create data traces in layered order: CATRED → Merged → Individual tiles
         self._add_existing_catred_traces(data_traces, existing_catred_traces)
-        print("Debug: Finished adding existing MER traces")
-        
-        self._add_manual_catred_traces(data_traces, show_mer_tiles, show_catred_mertile_data, 
-                                   manual_catred_data, zoom_threshold_met)
-        print("Debug: Finished adding manual MER traces")
-        
+        self._add_manual_catred_traces(data_traces, show_mer_tiles, show_catred_mertile_data,
+                                       manual_catred_data, zoom_threshold_met)
         self._add_merged_cluster_trace(data_traces, datamod_merged, data['algorithm'], catred_points)
-        print("Debug: Finished adding merged cluster traces")
         
         # Create tile traces and polygons
-        print("Debug: Starting tile traces and polygons creation")
         tile_traces = self._create_tile_traces_and_polygons(
             data, traces, show_polygons, show_mer_tiles, snr_threshold_lower, snr_threshold_upper, catred_points
         )
-        print(f"Debug: Finished creating tile traces and polygons - {len(tile_traces)} tile traces created")
         
         # Add tile traces to top layer
         data_traces.extend(tile_traces)
-        print(f"Debug: Final trace count - {len(traces)} polygon traces, {len(data_traces)} data traces")
         
         # Return combined traces: polygons first (bottom), then data traces (top)
-        final_traces = traces + data_traces
-        print(f"Debug: Returning {len(final_traces)} total traces to Dash")
-        return final_traces
+        return traces + data_traces
     
     def _get_catred_data_points(self, manual_catred_data: Optional[Dict], existing_catred_traces: Optional[List]) -> Optional[List]:
-        """Get all MER data points for proximity-based enhancement."""
+        """Get all CATRED data points for proximity-based enhancement."""
         all_points = []
-        
-        # Clear bounds cache when getting new MER data (important for multiple renders)
+
+        # Clear bounds cache when getting new CATRED data (important for multiple renders)
         if hasattr(self, '_catred_bounds_cache'):
             delattr(self, '_catred_bounds_cache')
-            print("Debug: Cleared old MER bounds cache for new data")
-        
-        # Collect coordinates from manual MER data
+            print("Debug: Cleared old CATRED bounds cache for new data")
+
+        # Collect coordinates from manual CATRED data
         if manual_catred_data and manual_catred_data.get('ra'):
             for ra, dec in zip(manual_catred_data['ra'], manual_catred_data['dec']):
                 all_points.append((ra, dec))
-            print(f"Debug: Added {len(manual_catred_data['ra'])} points from manual MER data")
-        
-        # Collect coordinates from existing MER traces (passed from cache)
+            print(f"Debug: Added {len(manual_catred_data['ra'])} points from manual CATRED data")
+
+        # Collect coordinates from existing CATRED traces (passed from cache)
         if existing_catred_traces and len(existing_catred_traces) > 0:
-            # MER traces exist, keep current stored data
+            # CATRED traces exist, keep current stored data
             if hasattr(self, 'current_catred_data') and self.current_catred_data:
                 for trace_name, catred_data in self.current_catred_data.items():
                     if catred_data and catred_data.get('ra'):
@@ -121,42 +111,42 @@ class TraceCreator:
                             all_points.append((ra, dec))
                         print(f"Debug: Added {len(catred_data['ra'])} points from existing trace '{trace_name}'")
         else:
-            # No existing MER traces - clear stored MER data to revert markers
+            # No existing CATRED traces - clear stored CATRED data to revert markers
             if hasattr(self, 'current_catred_data'):
                 self.current_catred_data = None
-                print("Debug: MER data cleared - reverting marker enhancements")
+                print("Debug: CATRED data cleared - reverting marker enhancements")
             # Clear bounds cache as well
             if hasattr(self, '_catred_bounds_cache'):
                 delattr(self, '_catred_bounds_cache')
-        
-        # If no MER data found, return None (no enhancement)
+
+        # If no CATRED data found, return None (no enhancement)
         if not all_points:
-            print("Debug: No MER data points found - no enhancement will be applied")
+            print("Debug: No CATRED data points found - no enhancement will be applied")
             return None
-        
-        print(f"Debug: Found {len(all_points)} total MER data points for proximity-based enhancement")
+
+        print(f"Debug: Found {len(all_points)} total CATRED data points for proximity-based enhancement")
         return all_points
     
     def clear_catred_data(self):
-        """Explicitly clear stored MER data to revert marker enhancements."""
+        """Explicitly clear stored CATRED data to revert marker enhancements."""
         if hasattr(self, 'current_catred_data'):
             self.current_catred_data = None
-            print("Debug: TraceCreator MER data explicitly cleared")
-        
+            print("Debug: TraceCreator CATRED data explicitly cleared")
+
         # Clear bounds cache as well
         if hasattr(self, '_catred_bounds_cache'):
             delattr(self, '_catred_bounds_cache')
-            print("Debug: MER bounds cache cleared")
+            print("Debug: CATRED bounds cache cleared")
         if hasattr(self, '_subsampled_catred_cache'):
             delattr(self, '_subsampled_catred_cache')
-            print("Debug: Subsampled MER cache cleared")
-    
+            print("Debug: Subsampled CATRED cache cleared")
+
     def _get_subsampled_catred_points(self, catred_points: List) -> List:
-        """Get subsampled MER points for proximity detection, with caching."""
+        """Get subsampled CATRED points for proximity detection, with caching."""
         if not catred_points:
             return catred_points
-        
-        # Create a simple hash to detect changes in MER data
+
+        # Create a simple hash to detect changes in CATRED data
         catred_hash = hash(str(len(catred_points)) + str(catred_points[0] if catred_points else ""))
         
         # Check if we have cached subsampled points for this dataset
@@ -164,13 +154,13 @@ class TraceCreator:
             cached_hash, cached_points = self._subsampled_catred_cache
             if cached_hash == catred_hash:
                 return cached_points
-        
-        # For very large datasets, subsample MER points for proximity detection
+
+        # For very large datasets, subsample CATRED points for proximity detection
         if len(catred_points) > 20000:  # Lower threshold for better performance
             import numpy as np
             # Use every 5th point for proximity detection to speed up calculation
             sampled_points = catred_points[::5]
-            print(f"Debug: Subsampled {len(sampled_points)} from {len(catred_points)} MER points for proximity")
+            print(f"Debug: Subsampled {len(sampled_points)} from {len(catred_points)} CATRED points for proximity")
         else:
             sampled_points = catred_points
             
@@ -179,7 +169,7 @@ class TraceCreator:
         return sampled_points
     
     def _is_point_near_catred_region(self, ra: float, dec: float, catred_points: List, proximity_threshold: float = 0.01) -> bool:
-        """Check if a point is within proximity threshold of any MER data point."""
+        """Check if a point is within proximity threshold of any CATRED data point."""
         if not catred_points:
             return False
         
@@ -189,8 +179,8 @@ class TraceCreator:
         # Create a simple hash of the sampled points to detect changes
         points_to_hash = sampled_points[:100] if len(sampled_points) > 100 else sampled_points
         catred_points_hash = hash(tuple(points_to_hash))
-        
-        # Pre-compute MER bounds for quick rejection (with validation)
+
+        # Pre-compute CATRED bounds for quick rejection (with validation)
         if not hasattr(self, '_catred_bounds_cache') or self._catred_bounds_cache.get('hash') != catred_points_hash:
             import numpy as np
             catred_array = np.array(sampled_points)
@@ -201,8 +191,8 @@ class TraceCreator:
                 'dec_max': np.max(catred_array[:, 1]) + proximity_threshold,
                 'hash': catred_points_hash
             }
-            print(f"Debug: MER bounds cache created/updated - {len(sampled_points)} sampled points, hash: {catred_points_hash}")
-        
+            print(f"Debug: CATRED bounds cache created/updated - {len(sampled_points)} sampled points, hash: {catred_points_hash}")
+
         # Quick bounding box rejection
         bounds = self._catred_bounds_cache
         if not (bounds['ra_min'] <= ra <= bounds['ra_max'] and 
@@ -233,7 +223,7 @@ class TraceCreator:
             return merged_data
     
     def _check_zoom_threshold(self, relayout_data: Optional[Dict], show_mer_tiles: bool) -> bool:
-        """Check if zoom level meets threshold for MER data display (< 2 degrees)."""
+        """Check if zoom level meets threshold for CATRED data display (< 2 degrees)."""
         if not relayout_data or not show_mer_tiles:
             print(f"Debug: Zoom check skipped - relayout_data: {relayout_data is not None}, show_mer_tiles: {show_mer_tiles}")
             return False
@@ -264,35 +254,35 @@ class TraceCreator:
             return False
     
     def _add_existing_catred_traces(self, data_traces: List, existing_catred_traces: Optional[List]) -> None:
-        """Add existing MER traces to preserve them across renders."""
+        """Add existing CATRED traces to preserve them across renders."""
         if existing_catred_traces:
-            print(f"Debug: Adding {len(existing_catred_traces)} existing MER traces to bottom layer")
+            print(f"Debug: Adding {len(existing_catred_traces)} existing CATRED traces to bottom layer")
             data_traces.extend(existing_catred_traces)
     
     def _add_manual_catred_traces(self, data_traces: List, show_mer_tiles: bool, 
                               show_catred_mertile_data: bool, manual_catred_data: Optional[Dict],
                               zoom_threshold_met: bool) -> None:
-        """Add manually loaded MER high-resolution data traces."""
+        """Add manually loaded CATRED high-resolution data traces."""
         if not (show_mer_tiles and show_catred_mertile_data and manual_catred_data):
             if show_mer_tiles and show_catred_mertile_data and zoom_threshold_met:
-                print(f"Debug: MER scatter conditions met but no manual data provided - use render button")
+                print(f"Debug: CATRED scatter conditions met but no manual data provided - use render button")
             else:
-                print(f"Debug: MER scatter data conditions not met - show_mer_tiles: {show_mer_tiles}, "
+                print(f"Debug: CATRED scatter data conditions not met - show_mer_tiles: {show_mer_tiles}, "
                       f"show_catred_mertile_data: {show_catred_mertile_data}, manual_data: {manual_catred_data is not None}")
             return
         
         if not manual_catred_data.get('ra'):
-            print("Debug: No MER scatter data available to display")
+            print("Debug: No CATRED scatter data available to display")
             return
-        
-        print(f"Debug: Using manually loaded MER scatter data")
-        print(f"Debug: Creating MER scatter trace with {len(manual_catred_data['ra'])} points")
-        
+
+        print(f"Debug: Using manually loaded CATRED scatter data")
+        print(f"Debug: Creating CATRED scatter trace with {len(manual_catred_data['ra'])} points")
+
         # Generate unique trace name
         trace_count = self.catred_handler.get_traces_count() if self.catred_handler else 1
-        trace_name = f'MER High-Res Data #{trace_count + 1}'
-        
-        # Create MER scatter trace
+        trace_name = f'CATRED High-Res Data #{trace_count + 1}'
+
+        # Create CATRED scatter trace
         catred_trace = go.Scattergl(
             x=manual_catred_data['ra'],
             y=manual_catred_data['dec'],
@@ -305,23 +295,31 @@ class TraceCreator:
             customdata=list(range(len(manual_catred_data['ra'])))  # Add index for click tracking
         )
         data_traces.append(catred_trace)
-        
-        # Store MER data for click callbacks
+
+        # Store CATRED data for click callbacks in multiple locations for better access
         if not hasattr(self, 'current_catred_data') or self.current_catred_data is None:
             self.current_catred_data = {}
         self.current_catred_data[trace_name] = manual_catred_data
         
-        print(f"Debug: Stored MER data for trace '{trace_name}' with {len(manual_catred_data['ra'])} points")
+        # Also store in CATRED handler if available
+        if self.catred_handler:
+            if not hasattr(self.catred_handler, 'current_catred_data') or self.catred_handler.current_catred_data is None:
+                self.catred_handler.current_catred_data = {}
+            self.catred_handler.current_catred_data[trace_name] = manual_catred_data
+            print(f"Debug: Also stored CATRED data in catred_handler")
+
+        print(f"Debug: Stored CATRED data for trace '{trace_name}' with {len(manual_catred_data['ra'])} points")
         print(f"Debug: PHZ_PDF sample length: {len(manual_catred_data['phz_pdf'][0]) if manual_catred_data['phz_pdf'] else 'No PHZ_PDF data'}")
-        print(f"Debug: Current MER data keys: {list(self.current_catred_data.keys())}")
+        print(f"Debug: Current CATRED data keys: {list(self.current_catred_data.keys())}")
         print(f"Debug: TraceCreator.current_catred_data id: {id(self.current_catred_data)}")
-        print("Debug: MER CATRED trace added to bottom layer")
+        print(f"Debug: Trace name: '{trace_name}'")
+        print("Debug: CATRED trace added to TOP LAYER (should be clickable)")
         print("Debug: About to return from _add_manual_catred_traces method")
     
     def _format_catred_hover_text(self, catred_data: Dict[str, List]) -> List[str]:
-        """Format hover text for MER data points."""
+        """Format hover text for CATRED data points."""
         return [
-            f'MER Data Point<br>RA: {x:.6f}<br>Dec: {y:.6f}<br>PHZ_MODE_1: {p1:.3f}<br>'
+            f'CATRED Data Point<br>RA: {x:.6f}<br>Dec: {y:.6f}<br>PHZ_MODE_1: {p1:.3f}<br>'
             f'PHZ_70_INT: {abs(float(p70[1]) - float(p70[0])):.3f}'
             for x, y, p1, p70 in zip(catred_data['ra'], catred_data['dec'], 
                                    catred_data['phz_mode_1'], catred_data['phz_70_int'])
@@ -348,7 +346,7 @@ class TraceCreator:
     def _add_merged_cluster_trace(self, data_traces: List, datamod_merged: np.ndarray, algorithm: str, catred_points: Optional[List] = None) -> None:
         """Add merged cluster detection trace with proximity-based enhancement."""
         if catred_points is None:
-            # No MER data - create single trace with normal markers
+            # No CATRED data - create single trace with normal markers
             merged_trace = go.Scattergl(
                 x=datamod_merged['RIGHT_ASCENSION_CLUSTER'],
                 y=datamod_merged['DECLINATION_CLUSTER'],
@@ -366,7 +364,7 @@ class TraceCreator:
             )
             data_traces.append(merged_trace)
         else:
-            # MER data present - create separate traces based on proximity to MER points
+            # CATRED data present - create separate traces based on proximity to CATRED points
             near_catred_mask = np.array([
                 self._is_point_near_catred_region(ra, dec, catred_points) 
                 for ra, dec in zip(datamod_merged['RIGHT_ASCENSION_CLUSTER'], 
@@ -375,8 +373,8 @@ class TraceCreator:
             
             away_from_catred_data = datamod_merged[~near_catred_mask]
             near_catred_data = datamod_merged[near_catred_mask]
-            
-            # Create trace for markers away from MER region (normal size)
+
+            # Create trace for markers away from CATRED region (normal size)
             if len(away_from_catred_data) > 0:
                 normal_trace = go.Scattergl(
                     x=away_from_catred_data['RIGHT_ASCENSION_CLUSTER'],
@@ -394,8 +392,8 @@ class TraceCreator:
                     hoverinfo='text'
                 )
                 data_traces.append(normal_trace)
-            
-            # Create trace for markers near MER region (enhanced size with highlight)
+
+            # Create trace for markers near CATRED region (enhanced size with highlight)
             if len(near_catred_data) > 0:
                 # Add glow effect trace first (background)
                 glow_trace = self._create_glow_trace(
@@ -446,7 +444,7 @@ class TraceCreator:
             datamod = self._apply_snr_filtering(tile_data, snr_threshold_lower, snr_threshold_upper)
             
             if catred_points is None:
-                # No MER data - create single trace with normal markers
+                # No CATRED data - create single trace with normal markers
                 tile_trace = go.Scattergl(
                     x=datamod['RIGHT_ASCENSION_CLUSTER'],
                     y=datamod['DECLINATION_CLUSTER'],
@@ -462,7 +460,7 @@ class TraceCreator:
                 )
                 tile_traces.append(tile_trace)
             else:
-                # MER data present - create separate traces based on proximity to MER points
+                # CATRED data present - create separate traces based on proximity to CATRED points
                 near_catred_mask = np.array([
                     self._is_point_near_catred_region(ra, dec, catred_points) 
                     for ra, dec in zip(datamod['RIGHT_ASCENSION_CLUSTER'], 
@@ -471,8 +469,8 @@ class TraceCreator:
                 
                 away_from_catred_data = datamod[~near_catred_mask]
                 near_catred_data = datamod[near_catred_mask]
-                
-                # Create trace for markers away from MER region (normal size)
+
+                # Create trace for markers away from CATRED region (normal size)
                 if len(away_from_catred_data) > 0:
                     normal_trace = go.Scattergl(
                         x=away_from_catred_data['RIGHT_ASCENSION_CLUSTER'],
@@ -488,8 +486,8 @@ class TraceCreator:
                         hoverinfo='text'
                     )
                     tile_traces.append(normal_trace)
-                
-                # Create trace for markers near MER region (enhanced size with highlight)
+
+                # Create trace for markers near CATRED region (enhanced size with highlight)
                 if len(near_catred_data) > 0:
                     # Add glow effect trace first (background)
                     glow_trace = self._create_glow_trace(
@@ -520,9 +518,9 @@ class TraceCreator:
                         hoverinfo='text'
                     )
                     tile_traces.append(enhanced_trace)
-                    
-                    print(f"Debug: Tile {tileid} - Enhanced {len(near_catred_data)} markers near MER data, {len(away_from_catred_data)} normal")
-            
+
+                    print(f"Debug: Tile {tileid} - Enhanced {len(near_catred_data)} markers near CATRED data, {len(away_from_catred_data)} normal")
+
             # Create polygon traces for this tile
             
             # Create polygon traces for this tile

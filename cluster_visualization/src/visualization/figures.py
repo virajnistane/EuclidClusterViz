@@ -114,7 +114,7 @@ class FigureManager:
             showlegend=False,
             annotations=[
                 dict(
-                    text="Click on a MER data point above to view its PHZ_PDF",
+                    text="Click on a CATRED data point above to view its PHZ_PDF",
                     xref="paper", yref="paper",
                     x=0.5, y=0.5, xanchor='center', yanchor='middle',
                     showarrow=False,

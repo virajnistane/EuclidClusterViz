@@ -172,7 +172,7 @@ class AppLayout:
                 dbc.Switch(
                     id="mer-switch",
                     label="Show MER tiles (up to LEV2 in CL-tiles)",
-                    value=False,
+                    value=True,
                 ),
                 html.Small("(Only with unfilled cluster-tile polygons)", className="text-muted")
             ], className="mb-2"),
@@ -190,7 +190,7 @@ class AppLayout:
                 dbc.Switch(
                     id="catred-mertile-switch",
                     label="High-res CATRED data",
-                    value=False,
+                    value=True,
                 ),
                 html.Small("(When zoomed < 2°)", className="text-muted")
             ], className="mb-3"),
