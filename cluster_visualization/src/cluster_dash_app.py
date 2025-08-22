@@ -180,12 +180,14 @@ except ImportError:
 
 # Import UI and core modules
 try:
-    from .ui.layout import AppLayout
+    from ..ui.layout import AppLayout
     print("✓ UI layout module loaded successfully")
 except ImportError:
     # Try alternative import path
     try:
-        sys.path.append(os.path.dirname(__file__))
+        # Add parent directory to path to access ui module
+        parent_dir = os.path.dirname(os.path.dirname(__file__))
+        sys.path.append(parent_dir)
         from ui.layout import AppLayout
         print("✓ UI layout module loaded successfully (alternative path)")
     except ImportError as e:
@@ -194,10 +196,21 @@ except ImportError:
         AppLayout = None
 
 try:
-    from .core.app import ClusterVisualizationCore
+    from ..core.app import ClusterVisualizationCore
     print("✓ Core module loaded successfully")
 except ImportError:
     # Try alternative import path
+    try:
+        # Add parent directory to path to access core module
+        parent_dir = os.path.dirname(os.path.dirname(__file__))
+        if parent_dir not in sys.path:
+            sys.path.append(parent_dir)
+        from core.app import ClusterVisualizationCore
+        print("✓ Core module loaded successfully (alternative path)")
+    except ImportError as e:
+        print(f"⚠️  Error importing core module: {e}")
+        print("   Falling back to inline core functionality")
+        ClusterVisualizationCore = None
     try:
         sys.path.append(os.path.dirname(__file__))
         from core.app import ClusterVisualizationCore
@@ -1466,7 +1479,7 @@ class ClusterVisualizationApp:
         )
         def update_button_texts(algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, n_clicks, mer_n_clicks, snr_n_clicks):
             main_button_text = "🚀 Initial Render" if n_clicks == 0 else "✅ Live Updates Active"
-            mer_button_text = f"🔍 Render MER Data ({mer_n_clicks})" if mer_n_clicks > 0 else "🔍 Render MER Data"
+            mer_button_text = f"🔍 Render MER (CATRED) Data ({mer_n_clicks})" if mer_n_clicks > 0 else "🔍 Render MER (CATRED) Data"
             snr_button_text = f"Apply SNR Filter ({snr_n_clicks})" if snr_n_clicks > 0 else "Apply SNR Filter"
             return main_button_text, mer_button_text, snr_button_text
 
@@ -1486,7 +1499,7 @@ class ClusterVisualizationApp:
             [Input('mer-clear-button', 'n_clicks')]
         )
         def update_clear_button_text(clear_n_clicks):
-            return f"🗑️ Clear All MER ({clear_n_clicks})" if clear_n_clicks > 0 else "🗑️ Clear All MER"
+            return f"🗑️ Clear All MER (CATRED) Data ({clear_n_clicks})" if clear_n_clicks > 0 else "🗑️ Clear All MER (CATRED) Data"
 
         # Callback for real-time option updates (preserves zoom) - excludes SNR which has its own button
         @self.app.callback(

@@ -163,7 +163,7 @@ class AppLayout:
             html.Div([
                 dbc.Switch(
                     id="polygon-switch",
-                    label="Fill polygons",
+                    label="Fill CL-tiles (CORE) polygons",
                     value=False,
                 )
             ], className="mb-2"),
@@ -171,10 +171,10 @@ class AppLayout:
             html.Div([
                 dbc.Switch(
                     id="mer-switch",
-                    label="Show MER tiles",
+                    label="Show MER tiles (up to LEV2 in CL-tiles)",
                     value=False,
                 ),
-                html.Small("(Only with outline polygons)", className="text-muted")
+                html.Small("(Only with unfilled cluster-tile polygons)", className="text-muted")
             ], className="mb-2"),
             
             html.Div([
@@ -189,7 +189,7 @@ class AppLayout:
             html.Div([
                 dbc.Switch(
                     id="catred-mertile-switch",
-                    label="High-res MER data",
+                    label="High-res MER (CATRED) data",
                     value=False,
                 ),
                 html.Small("(When zoomed < 2°)", className="text-muted")
@@ -200,11 +200,11 @@ class AppLayout:
     def _create_mer_controls_section():
         """Create MER data controls section"""
         return html.Div([
-            html.Label("MER Data Controls:", className="fw-bold mb-2"),
+            html.Label("CATRED Data Controls:", className="fw-bold mb-2"),
             
             html.Div([
                 dbc.Button(
-                    "🔍 Render MER Data",
+                    "🔍 Render MER (CATRED) Data",
                     id="mer-render-button",
                     color="info",
                     size="sm",
@@ -217,7 +217,7 @@ class AppLayout:
             
             html.Div([
                 dbc.Button(
-                    "🗑️ Clear All MER",
+                    "🗑️ Clear All MER (CATRED) Data",
                     id="mer-clear-button",
                     color="warning",
                     size="sm",
