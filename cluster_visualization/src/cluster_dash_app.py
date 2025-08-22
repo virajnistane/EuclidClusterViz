@@ -97,14 +97,115 @@ if project_root not in sys.path:
 
 # Import configuration
 try:
-    from config import get_config
+    from .config import get_config
     config = get_config()
     print("✓ Configuration loaded successfully")
     USE_CONFIG = True
-except ImportError as e:
-    print(f"⚠️  Configuration not found: {e}")
-    print("   Using fallback hardcoded paths")
-    USE_CONFIG = False
+except ImportError:
+    # Try direct import if relative import fails
+    try:
+        from config import get_config
+        config = get_config()
+        print("✓ Configuration loaded successfully")
+        USE_CONFIG = True
+    except ImportError as e:
+        print(f"⚠️  Configuration not found: {e}")
+        print("   Using fallback hardcoded paths")
+        USE_CONFIG = False
+
+# Add local data modules path
+data_modules_path = os.path.join(os.path.dirname(__file__), 'data')
+if data_modules_path not in sys.path:
+    sys.path.append(data_modules_path)
+
+# Import data handling modules
+try:
+    from .data.loader import DataLoader
+    from .data.mer_handler import MERHandler
+    print("✓ Data modules loaded successfully")
+except ImportError:
+    # Try alternative import path
+    try:
+        sys.path.append(os.path.dirname(__file__))
+        from data.loader import DataLoader
+        from data.mer_handler import MERHandler
+        print("✓ Data modules loaded successfully (alternative path)")
+    except ImportError as e:
+        print(f"⚠️  Error importing data modules: {e}")
+        print("   Falling back to inline data handling")
+        DataLoader = None
+        MERHandler = None
+
+# Import visualization modules
+try:
+    from .visualization.traces import TraceCreator
+    from .visualization.figures import FigureManager
+    print("✓ Visualization modules loaded successfully")
+except ImportError:
+    # Try alternative import path
+    try:
+        sys.path.append(os.path.dirname(__file__))
+        from visualization.traces import TraceCreator
+        from visualization.figures import FigureManager
+        print("✓ Visualization modules loaded successfully (alternative path)")
+    except ImportError as e:
+        print(f"⚠️  Error importing visualization modules: {e}")
+        print("   Falling back to inline visualization handling")
+        TraceCreator = None
+        FigureManager = None
+
+# Import callback modules
+try:
+    from .callbacks.main_plot import MainPlotCallbacks
+    from .callbacks.mer_callbacks import MERCallbacks
+    from .callbacks.ui_callbacks import UICallbacks
+    from .callbacks.phz_callbacks import PHZCallbacks
+    print("✓ Callback modules loaded successfully")
+except ImportError:
+    # Try alternative import path
+    try:
+        sys.path.append(os.path.dirname(__file__))
+        from callbacks.main_plot import MainPlotCallbacks
+        from callbacks.mer_callbacks import MERCallbacks
+        from callbacks.ui_callbacks import UICallbacks
+        from callbacks.phz_callbacks import PHZCallbacks
+        print("✓ Callback modules loaded successfully (alternative path)")
+    except ImportError as e:
+        print(f"⚠️  Error importing callback modules: {e}")
+        print("   Falling back to inline callback handling")
+        MainPlotCallbacks = None
+        MERCallbacks = None
+        UICallbacks = None
+        PHZCallbacks = None
+
+# Import UI and core modules
+try:
+    from .ui.layout import AppLayout
+    print("✓ UI layout module loaded successfully")
+except ImportError:
+    # Try alternative import path
+    try:
+        sys.path.append(os.path.dirname(__file__))
+        from ui.layout import AppLayout
+        print("✓ UI layout module loaded successfully (alternative path)")
+    except ImportError as e:
+        print(f"⚠️  Error importing UI layout module: {e}")
+        print("   Falling back to inline layout handling")
+        AppLayout = None
+
+try:
+    from .core.app import ClusterVisualizationCore
+    print("✓ Core module loaded successfully")
+except ImportError:
+    # Try alternative import path
+    try:
+        sys.path.append(os.path.dirname(__file__))
+        from core.app import ClusterVisualizationCore
+        print("✓ Core module loaded successfully (alternative path)")
+    except ImportError as e:
+        print(f"⚠️  Error importing core module: {e}")
+        print("   Falling back to inline core functionality")
+        ClusterVisualizationCore = None
 
 # Add local utils path
 if USE_CONFIG:
@@ -130,13 +231,81 @@ except ImportError as e:
 class ClusterVisualizationApp:
     def __init__(self):
         self.app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+        
+        # Always initialize fallback attributes since we're using fallback callbacks
         self.data_cache = {}
-        self.mer_traces_cache = []  # Store accumulated MER scatter traces
-        self.current_mer_data = None  # Store current MER data for click callbacks
-        self.setup_layout()
+        self.mer_traces_cache = []
+        self.current_mer_data = None
+        
+        # Initialize data handling modules
+        if USE_CONFIG and DataLoader and MERHandler:
+            self.data_loader = DataLoader(config, USE_CONFIG)
+            self.mer_handler = MERHandler()
+            print("✓ Using modular data handlers")
+        else:
+            # Fallback to inline data handling
+            self.data_loader = None
+            self.mer_handler = None
+            print("⚠️  Using fallback inline data handling")
+        
+        # Initialize visualization modules
+        if TraceCreator and FigureManager:
+            self.trace_creator = TraceCreator(colors_list, colors_list_transparent, self.mer_handler)
+            self.figure_manager = FigureManager()
+            print("✓ Using modular visualization handlers")
+        else:
+            # Fallback to inline visualization handling
+            self.trace_creator = None
+            self.figure_manager = None
+            print("⚠️  Using fallback inline visualization handling")
+        
+        # Initialize UI layout
+        if AppLayout:
+            self.app.layout = AppLayout.create_layout()
+            print("✓ Using modular UI layout")
+        else:
+            self.setup_layout()
+            print("⚠️  Using fallback inline layout")
+        
+        # Initialize callbacks
         self.setup_callbacks()
         
+        # Initialize core application manager
+        if ClusterVisualizationCore:
+            self.core = ClusterVisualizationCore(self.app)
+            print("✓ Using modular core manager")
+        else:
+            self.core = None
+            print("⚠️  Using fallback core functionality")
+        
     def load_data(self, select_algorithm='PZWAV'):
+        """Load and prepare all data for visualization"""
+        if self.data_loader:
+            # Use modular data loader
+            return self.data_loader.load_data(select_algorithm)
+        else:
+            # Fallback to original inline implementation
+            return self._load_data_fallback(select_algorithm)
+    
+    def create_traces(self, data, show_polygons=True, show_mer_tiles=False, relayout_data=None, 
+                     show_catred_mertile_data=False, manual_mer_data=None, existing_mer_traces=None, 
+                     snr_threshold_lower=None, snr_threshold_upper=None):
+        """Create all Plotly traces - delegates to trace creator"""
+        if self.trace_creator:
+            return self.trace_creator.create_traces(
+                data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data,
+                manual_mer_data, existing_mer_traces, snr_threshold_lower, snr_threshold_upper
+            )
+        else:
+            # Fallback to original implementation
+            return self._create_traces_fallback(
+                data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data,
+                manual_mer_data, existing_mer_traces, snr_threshold_lower, snr_threshold_upper
+            )
+    
+    def _create_traces_fallback(self, data, show_polygons=True, show_mer_tiles=False, relayout_data=None, 
+                               show_catred_mertile_data=False, manual_mer_data=None, existing_mer_traces=None, 
+                               snr_threshold_lower=None, snr_threshold_upper=None):
         """Load and prepare all data for visualization"""
         if select_algorithm in self.data_cache:
             return self.data_cache[select_algorithm]
@@ -267,6 +436,22 @@ class ClusterVisualizationApp:
         return data
 
     def get_radec_mertile(self, mertileid, data):
+        """Load CATRED data for a specific MER tile - delegates to MER handler"""
+        if self.mer_handler:
+            return self.mer_handler.get_radec_mertile(mertileid, data)
+        else:
+            # Fallback to original implementation
+            return self._get_radec_mertile_fallback(mertileid, data)
+    
+    def load_mer_scatter_data(self, data, relayout_data):
+        """Load MER scatter data for the current zoom window - delegates to MER handler"""
+        if self.mer_handler:
+            return self.mer_handler.load_mer_scatter_data(data, relayout_data)
+        else:
+            # Fallback to original implementation
+            return self._load_mer_scatter_data_fallback(data, relayout_data)
+    
+    def _get_radec_mertile_fallback(self, mertileid, data):
         """Load CATRED data for a specific MER tile
         
         Args:
@@ -470,8 +655,8 @@ class ClusterVisualizationApp:
         print(f"Debug: Total MER scatter points loaded: {len(mer_scatter_data['ra'])}")
         return mer_scatter_data
 
-    def create_traces(self, data, show_polygons=True, show_mer_tiles=False, relayout_data=None, show_catred_mertile_data=False, manual_mer_data=None, existing_mer_traces=None, snr_threshold_lower=None, snr_threshold_upper=None):
-        """Create all Plotly traces
+    def _create_traces_fallback(self, data, show_polygons=True, show_mer_tiles=False, relayout_data=None, show_catred_mertile_data=False, manual_mer_data=None, existing_mer_traces=None, snr_threshold_lower=None, snr_threshold_upper=None):
+        """Create all Plotly traces - fallback implementation
         
         Args:
             manual_mer_data: Tuple of (mer_scatter_x, mer_scatter_y) for manually loaded MER data
@@ -934,7 +1119,42 @@ class ClusterVisualizationApp:
         ], fluid=True, className="px-3")
 
     def setup_callbacks(self):
-        """Setup Dash callbacks"""
+        """Setup Dash callbacks using modular or fallback approach"""
+        # Force fallback callbacks temporarily to use the working PHZ implementation
+        print("⚠️  Using fallback inline callbacks (forced for PHZ fix)")
+        self._setup_fallback_callbacks()
+        
+        # Original modular approach - commented out temporarily
+        # if MainPlotCallbacks and MERCallbacks and UICallbacks and PHZCallbacks:
+        #     # Use modular callback setup
+        #     print("✓ Setting up modular callbacks")
+        #     
+        #     # Initialize callback handlers
+        #     self.main_plot_callbacks = MainPlotCallbacks(
+        #         self.app, self.data_loader, self.mer_handler, 
+        #         self.trace_creator, self.figure_manager
+        #     )
+        #     
+        #     self.mer_callbacks = MERCallbacks(
+        #         self.app, self.data_loader, self.mer_handler, 
+        #         self.trace_creator, self.figure_manager
+        #     )
+        #     
+        #     self.ui_callbacks = UICallbacks(self.app)
+        #     
+        #     self.phz_callbacks = PHZCallbacks(self.app, self.mer_handler, self, self.trace_creator)
+        #     
+        #     print("✓ All modular callbacks initialized")
+        #     
+        # else:
+        #     # Fallback to inline callback setup
+        #     print("⚠️  Using fallback inline callbacks")
+        #     self._setup_fallback_callbacks()
+    
+    def _setup_fallback_callbacks(self):
+        """Fallback callback setup - contains the original inline callbacks"""
+        print("⚠️  Setting up fallback callbacks (original implementation)")
+        # This contains all the original callback code for backward compatibility
         
         # Callback to initialize SNR slider when algorithm changes
         @self.app.callback(
@@ -1063,7 +1283,10 @@ class ClusterVisualizationApp:
                 data = self.load_data(algorithm)
                 
                 # Reset MER traces cache for fresh render
-                self.mer_traces_cache = []
+                if self.mer_handler:
+                    self.mer_handler.clear_traces_cache()
+                else:
+                    self.mer_traces_cache = []
                 
                 # Create traces
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data, 
@@ -1795,8 +2018,29 @@ class ClusterVisualizationApp:
                 print("Debug: No clickData received")
                 return dash.no_update
             
-            if not hasattr(self, 'current_mer_data') or not self.current_mer_data:
-                print(f"Debug: No current_mer_data available: {getattr(self, 'current_mer_data', None)}")
+            # Try to get current MER data from multiple sources
+            current_mer_data = None
+            
+            # First try the main app's stored data
+            if hasattr(self, 'current_mer_data') and self.current_mer_data:
+                current_mer_data = self.current_mer_data
+                print("Debug: Using current_mer_data from main app")
+            
+            # If not found, try the trace_creator's stored data
+            elif hasattr(self, 'trace_creator') and self.trace_creator and hasattr(self.trace_creator, 'current_mer_data') and self.trace_creator.current_mer_data:
+                current_mer_data = self.trace_creator.current_mer_data
+                print("Debug: Using current_mer_data from trace_creator")
+            
+            # If not found, try the mer_handler's stored data
+            elif hasattr(self, 'mer_handler') and self.mer_handler and hasattr(self.mer_handler, 'current_mer_data') and self.mer_handler.current_mer_data:
+                current_mer_data = self.mer_handler.current_mer_data
+                print("Debug: Using current_mer_data from mer_handler")
+            
+            if not current_mer_data:
+                print(f"Debug: No current_mer_data available from any source")
+                print(f"  - self.current_mer_data: {getattr(self, 'current_mer_data', None)}")
+                print(f"  - trace_creator.current_mer_data: {getattr(self.trace_creator, 'current_mer_data', None) if hasattr(self, 'trace_creator') and self.trace_creator else 'No trace_creator'}")
+                print(f"  - mer_handler.current_mer_data: {getattr(self.mer_handler, 'current_mer_data', None) if hasattr(self, 'mer_handler') and self.mer_handler else 'No mer_handler'}")
                 return dash.no_update
             
             try:
@@ -1826,9 +2070,9 @@ class ClusterVisualizationApp:
                 found_mer_data = None
                 point_index = None
                 
-                print(f"Debug: Available MER data traces: {list(self.current_mer_data.keys())}")
+                print(f"Debug: Available MER data traces: {list(current_mer_data.keys())}")
                 
-                for trace_name, mer_data in self.current_mer_data.items():
+                for trace_name, mer_data in current_mer_data.items():
                     print(f"Debug: Checking trace: {trace_name}")
                     if 'MER High-Res Data' in trace_name:
                         print(f"Debug: Found MER trace with {len(mer_data['ra'])} points")
@@ -1940,7 +2184,16 @@ class ClusterVisualizationApp:
         browser_thread.start()
 
     def run(self, host='localhost', port=8050, debug=False, auto_open=True, external_access=False):
-        """Run the Dash app"""
+        """Run the Dash app using modular or fallback core"""
+        if self.core:
+            # Use modular core
+            return self.core.run(host, port, debug, auto_open, external_access)
+        else:
+            # Fallback to inline implementation
+            return self._run_fallback(host, port, debug, auto_open, external_access)
+    
+    def _run_fallback(self, host='localhost', port=8050, debug=False, auto_open=True, external_access=False):
+        """Fallback run implementation"""
         # If external_access is True, bind to all interfaces and don't auto-open browser
         if external_access:
             host = '0.0.0.0'
@@ -1975,29 +2228,29 @@ def main():
     """Main function to run the app"""
     import sys
     
-    # Check for external access flag
-    external_access = '--external' in sys.argv or '--remote' in sys.argv
+    # Check for external access flag using modular core if available
+    if ClusterVisualizationCore:
+        external_access = ClusterVisualizationCore.check_command_line_args()
+    else:
+        external_access = '--external' in sys.argv or '--remote' in sys.argv
     
     app = ClusterVisualizationApp()
     
-    # Example: Set high-resolution MER tiles scatter data
-    # You can call this method with your x,y coordinates like this:
-    # app.set_mer_tiles_scatter_data(
-    #     x_coords=[12.345, 12.346, 12.347],  # RIGHT_ASCENSION coordinates
-    #     y_coords=[0.123, 0.124, 0.125]     # DECLINATION coordinates
-    # )
-    
-    # Try different ports if default is busy
-    for port in [8050, 8051, 8052]:
-        try:
-            app.run(port=port, debug=False, auto_open=False, external_access=external_access)
-            break
-        except OSError as e:
-            if "Address already in use" in str(e):
-                print(f"Port {port} is busy, trying next port...")
-                continue
-            else:
-                raise e
+    # Try different ports if default is busy using modular core if available
+    if app.core:
+        app.core.try_multiple_ports(ports=[8050, 8051, 8052], debug=False, auto_open=False, external_access=external_access)
+    else:
+        # Fallback implementation
+        for port in [8050, 8051, 8052]:
+            try:
+                app.run(port=port, debug=False, auto_open=False, external_access=external_access)
+                break
+            except OSError as e:
+                if "Address already in use" in str(e):
+                    print(f"Port {port} is busy, trying next port...")
+                    continue
+                else:
+                    raise e
 
 if __name__ == '__main__':
     main()
