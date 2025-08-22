@@ -31,7 +31,7 @@ def check_module_availability():
     
     modules_to_check = [
         ('data.loader', 'DataLoader'),
-        ('data.mer_handler', 'MERHandler'),
+        ('data.catred_handler', 'CATREDHandler'),
         ('visualization.traces', 'TraceCreator'),
         ('visualization.figures', 'FigureManager'),
         ('callbacks.main_plot', 'MainPlotCallbacks'),

@@ -15,20 +15,20 @@ import dash_bootstrap_components as dbc
 class MERCallbacks:
     """Handles MER data-related callbacks"""
     
-    def __init__(self, app, data_loader, mer_handler, trace_creator, figure_manager):
+    def __init__(self, app, data_loader, catred_handler, trace_creator, figure_manager):
         """
         Initialize MER callbacks.
         
         Args:
             app: Dash application instance
             data_loader: DataLoader instance for data operations
-            mer_handler: MERHandler instance for MER operations
+            catred_handler: CATREDHandler instance for MER operations
             trace_creator: TraceCreator instance for trace creation
             figure_manager: FigureManager instance for figure layout
         """
         self.app = app
         self.data_loader = data_loader
-        self.mer_handler = mer_handler
+        self.catred_handler = catred_handler
         self.trace_creator = trace_creator
         self.figure_manager = figure_manager
         
@@ -182,8 +182,8 @@ class MERCallbacks:
             
             try:
                 # Clear MER traces cache
-                if self.mer_handler:
-                    self.mer_handler.clear_traces_cache()
+                if self.catred_handler:
+                    self.catred_handler.clear_traces_cache()
                 else:
                     self.mer_traces_cache = []
                 
@@ -235,8 +235,8 @@ class MERCallbacks:
     
     def load_mer_scatter_data(self, data, relayout_data):
         """Load MER scatter data using modular or fallback method"""
-        if self.mer_handler:
-            return self.mer_handler.load_mer_scatter_data(data, relayout_data)
+        if self.catred_handler:
+            return self.catred_handler.load_catred_scatter_data(data, relayout_data)
         else:
             # Fallback to inline MER data loading
             return self._load_mer_scatter_data_fallback(data, relayout_data)

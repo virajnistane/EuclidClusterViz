@@ -1,5 +1,5 @@
 """
-MER (Multi-Epoch Reconstruction) data handling module.
+CATRED (MER Multi-Epoch Reconstruction) data handling module.
 
 This module handles loading and processing of MER tile data including:
 - Individual MER tile FITS data loading
@@ -16,13 +16,13 @@ from shapely.geometry import box
 from typing import Dict, List, Any, Optional, Tuple
 
 
-class MERHandler:
+class CATREDHandler:
     """Handles MER tile data loading and spatial operations."""
     
     def __init__(self):
-        """Initialize MER handler."""
+        """Initialize CATRED handler."""
         self.traces_cache = []  # Store accumulated MER scatter traces
-        self.current_mer_data = None  # Store current MER data for click callbacks
+        self.current_catred_data = None  # Store current MER data for click callbacks
     
     def get_radec_mertile(self, mertileid: int, data: Dict[str, Any]) -> Dict[str, List]:
         """
@@ -149,7 +149,7 @@ class MERHandler:
         else:
             return [0.0] * num_points
     
-    def load_mer_scatter_data(self, data: Dict[str, Any], relayout_data: Optional[Dict]) -> Dict[str, List]:
+    def load_catred_scatter_data(self, data: Dict[str, Any], relayout_data: Optional[Dict]) -> Dict[str, List]:
         """
         Load MER scatter data for the current zoom window.
         
@@ -160,7 +160,7 @@ class MERHandler:
         Returns:
             Dictionary with keys 'ra', 'dec', 'phz_mode_1', 'phz_70_int', 'phz_pdf'
         """
-        mer_scatter_data = {
+        catred_scatter_data = {
             'ra': [],
             'dec': [],
             'phz_mode_1': [],
@@ -169,16 +169,16 @@ class MERHandler:
         }
 
         if not self._validate_catred_data(data):
-            return mer_scatter_data
+            return catred_scatter_data
         
         if not relayout_data:
             print("Debug: No relayout data available for MER scatter")
-            return mer_scatter_data
+            return catred_scatter_data
         
         # Extract zoom ranges from relayout data
         zoom_ranges = self._extract_zoom_ranges(relayout_data)
         if not zoom_ranges:
-            return mer_scatter_data
+            return catred_scatter_data
         
         ra_min, ra_max, dec_min, dec_max = zoom_ranges
         print(f"Debug: Loading MER data for zoom box - RA: [{ra_min}, {ra_max}], Dec: [{dec_min}, {dec_max}]")
@@ -187,10 +187,10 @@ class MERHandler:
         mertiles_to_load = self._find_intersecting_tiles(data, ra_min, ra_max, dec_min, dec_max)
         
         # Load data for each intersecting MER tile
-        self._load_tile_data(mertiles_to_load, data, mer_scatter_data)
+        self._load_tile_data(mertiles_to_load, data, catred_scatter_data)
         
-        print(f"Debug: Total MER scatter points loaded: {len(mer_scatter_data['ra'])}")
-        return mer_scatter_data
+        print(f"Debug: Total MER scatter points loaded: {len(catred_scatter_data['ra'])}")
+        return catred_scatter_data
     
     def _validate_catred_data(self, data: Dict[str, Any]) -> bool:
         """Validate that required CATRED data is available."""
@@ -244,16 +244,16 @@ class MERHandler:
         return mertiles_to_load
     
     def _load_tile_data(self, mertiles_to_load: List[int], data: Dict[str, Any], 
-                       mer_scatter_data: Dict[str, List]) -> None:
+                       catred_scatter_data: Dict[str, List]) -> None:
         """Load data for each MER tile and accumulate in scatter data."""
         for mertileid in mertiles_to_load:
             tile_data = self.get_radec_mertile(mertileid, data)
             if tile_data and 'RIGHT_ASCENSION' in tile_data:
-                mer_scatter_data['ra'].extend(tile_data['RIGHT_ASCENSION'])
-                mer_scatter_data['dec'].extend(tile_data['DECLINATION'])
-                mer_scatter_data['phz_mode_1'].extend(tile_data['PHZ_MODE_1'])
-                mer_scatter_data['phz_70_int'].extend(tile_data['PHZ_70_INT'])
-                mer_scatter_data['phz_pdf'].extend(tile_data['PHZ_PDF'])
+                catred_scatter_data['ra'].extend(tile_data['RIGHT_ASCENSION'])
+                catred_scatter_data['dec'].extend(tile_data['DECLINATION'])
+                catred_scatter_data['phz_mode_1'].extend(tile_data['PHZ_MODE_1'])
+                catred_scatter_data['phz_70_int'].extend(tile_data['PHZ_70_INT'])
+                catred_scatter_data['phz_pdf'].extend(tile_data['PHZ_PDF'])
                 print(f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} points from MER tile {mertileid}")
     
     def clear_traces_cache(self) -> None:

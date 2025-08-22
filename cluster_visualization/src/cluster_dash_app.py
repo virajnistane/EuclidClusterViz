@@ -121,20 +121,20 @@ if data_modules_path not in sys.path:
 # Import data handling modules
 try:
     from .data.loader import DataLoader
-    from .data.mer_handler import MERHandler
+    from .data.catred_handler import CATREDHandler
     print("✓ Data modules loaded successfully")
 except ImportError:
     # Try alternative import path
     try:
         sys.path.append(os.path.dirname(__file__))
         from data.loader import DataLoader
-        from data.mer_handler import MERHandler
+        from data.catred_handler import CATREDHandler
         print("✓ Data modules loaded successfully (alternative path)")
     except ImportError as e:
         print(f"⚠️  Error importing data modules: {e}")
         print("   Falling back to inline data handling")
         DataLoader = None
-        MERHandler = None
+        CATREDHandler = None
 
 # Import visualization modules
 try:
@@ -248,22 +248,22 @@ class ClusterVisualizationApp:
         # Always initialize fallback attributes since we're using fallback callbacks
         self.data_cache = {}
         self.mer_traces_cache = []
-        self.current_mer_data = None
+        self.current_catred_data = None
         
         # Initialize data handling modules
-        if USE_CONFIG and DataLoader and MERHandler:
+        if USE_CONFIG and DataLoader and CATREDHandler:
             self.data_loader = DataLoader(config, USE_CONFIG)
-            self.mer_handler = MERHandler()
+            self.catred_handler = CATREDHandler()
             print("✓ Using modular data handlers")
         else:
             # Fallback to inline data handling
             self.data_loader = None
-            self.mer_handler = None
+            self.catred_handler = None
             print("⚠️  Using fallback inline data handling")
         
         # Initialize visualization modules
         if TraceCreator and FigureManager:
-            self.trace_creator = TraceCreator(colors_list, colors_list_transparent, self.mer_handler)
+            self.trace_creator = TraceCreator(colors_list, colors_list_transparent, self.catred_handler)
             self.figure_manager = FigureManager()
             print("✓ Using modular visualization handlers")
         else:
@@ -450,16 +450,16 @@ class ClusterVisualizationApp:
 
     def get_radec_mertile(self, mertileid, data):
         """Load CATRED data for a specific MER tile - delegates to MER handler"""
-        if self.mer_handler:
-            return self.mer_handler.get_radec_mertile(mertileid, data)
+        if self.catred_handler:
+            return self.catred_handler.get_radec_mertile(mertileid, data)
         else:
             # Fallback to original implementation
             return self._get_radec_mertile_fallback(mertileid, data)
     
-    def load_mer_scatter_data(self, data, relayout_data):
+    def load_catred_scatter_data(self, data, relayout_data):
         """Load MER scatter data for the current zoom window - delegates to MER handler"""
-        if self.mer_handler:
-            return self.mer_handler.load_mer_scatter_data(data, relayout_data)
+        if self.catred_handler:
+            return self.catred_handler.load_catred_scatter_data(data, relayout_data)
         else:
             # Fallback to original implementation
             return self._load_mer_scatter_data_fallback(data, relayout_data)
@@ -777,13 +777,13 @@ class ClusterVisualizationApp:
                 data_traces.append(mer_catred_trace)
                 
                 # Store MER data for click callbacks
-                if not hasattr(self, 'current_mer_data') or self.current_mer_data is None:
-                    self.current_mer_data = {}
-                self.current_mer_data[trace_name] = manual_mer_data
+                if not hasattr(self, 'current_catred_data') or self.current_catred_data is None:
+                    self.current_catred_data = {}
+                self.current_catred_data[trace_name] = manual_mer_data
                 
                 print(f"Debug: Stored MER data for trace '{trace_name}' with {len(manual_mer_data['ra'])} points")
                 print(f"Debug: PHZ_PDF sample length: {len(manual_mer_data['phz_pdf'][0]) if manual_mer_data['phz_pdf'] else 'No PHZ_PDF data'}")
-                print(f"Debug: Current MER data keys: {list(self.current_mer_data.keys())}")
+                print(f"Debug: Current MER data keys: {list(self.current_catred_data.keys())}")
                 
                 print("Debug: MER CATRED trace added to bottom layer")
             else:
@@ -1296,14 +1296,14 @@ class ClusterVisualizationApp:
                 data = self.load_data(algorithm)
                 
                 # Reset MER traces cache for fresh render
-                if self.mer_handler:
-                    self.mer_handler.clear_traces_cache()
+                if self.catred_handler:
+                    self.catred_handler.clear_traces_cache()
                 else:
                     self.mer_traces_cache = []
                 
                 # Clear MER data from trace creator to revert marker enhancements
                 if self.trace_creator:
-                    self.trace_creator.clear_mer_data()
+                    self.trace_creator.clear_catred_data()
                 
                 # Create traces
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data, 
@@ -1762,7 +1762,7 @@ class ClusterVisualizationApp:
                 data = self.load_data(algorithm)
                 
                 # Load MER scatter data for current zoom window
-                mer_scatter_data = self.load_mer_scatter_data(data, relayout_data)
+                catred_scatter_data = self.load_catred_scatter_data(data, relayout_data)
                 
                 # Extract existing MER traces from current figure to preserve them
                 existing_mer_traces = []
@@ -1791,11 +1791,11 @@ class ClusterVisualizationApp:
                 
                 # Create traces with the manually loaded MER data and existing traces
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data, 
-                                          manual_mer_data=mer_scatter_data, existing_mer_traces=existing_mer_traces,
+                                          manual_mer_data=catred_scatter_data, existing_mer_traces=existing_mer_traces,
                                           snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper)
                 
                 # Update the MER traces cache with the new trace count
-                if mer_scatter_data and mer_scatter_data['ra']:
+                if catred_scatter_data and catred_scatter_data['ra']:
                     self.mer_traces_cache.extend(existing_mer_traces)
                     # Add the new trace placeholder (actual trace is created in create_traces)
                     self.mer_traces_cache.append(None)  # Placeholder for the new trace
@@ -1854,8 +1854,8 @@ class ClusterVisualizationApp:
                         fig.update_yaxes(range=relayout_data['yaxis.range'])
                 
                 # Status info
-                total_mer_traces = len(existing_mer_traces) + (1 if mer_scatter_data and mer_scatter_data['ra'] else 0)
-                mer_points_count = len(mer_scatter_data['ra']) if mer_scatter_data and mer_scatter_data['ra'] else 0
+                total_mer_traces = len(existing_mer_traces) + (1 if catred_scatter_data and catred_scatter_data['ra'] else 0)
+                mer_points_count = len(catred_scatter_data['ra']) if catred_scatter_data and catred_scatter_data['ra'] else 0
                 mer_status = f" | MER high-res data: {mer_points_count} points in {total_mer_traces} regions"
                 aspect_mode = "Free aspect ratio" if free_aspect_ratio else "Equal aspect ratio"
                 
@@ -1923,7 +1923,7 @@ class ClusterVisualizationApp:
                 
                 # Clear MER data from trace creator to revert marker enhancements
                 if self.trace_creator:
-                    self.trace_creator.clear_mer_data()
+                    self.trace_creator.clear_catred_data()
                 
                 # Load data for selected algorithm
                 data = self.load_data(algorithm)
@@ -2043,25 +2043,25 @@ class ClusterVisualizationApp:
             current_mer_data = None
             
             # First try the main app's stored data
-            if hasattr(self, 'current_mer_data') and self.current_mer_data:
-                current_mer_data = self.current_mer_data
-                print("Debug: Using current_mer_data from main app")
+            if hasattr(self, 'current_catred_data') and self.current_catred_data:
+                current_mer_data = self.current_catred_data
+                print("Debug: Using current_catred_data from main app")
             
             # If not found, try the trace_creator's stored data
-            elif hasattr(self, 'trace_creator') and self.trace_creator and hasattr(self.trace_creator, 'current_mer_data') and self.trace_creator.current_mer_data:
-                current_mer_data = self.trace_creator.current_mer_data
-                print("Debug: Using current_mer_data from trace_creator")
+            elif hasattr(self, 'trace_creator') and self.trace_creator and hasattr(self.trace_creator, 'current_catred_data') and self.trace_creator.current_catred_data:
+                current_mer_data = self.trace_creator.current_catred_data
+                print("Debug: Using current_catred_data from trace_creator")
             
-            # If not found, try the mer_handler's stored data
-            elif hasattr(self, 'mer_handler') and self.mer_handler and hasattr(self.mer_handler, 'current_mer_data') and self.mer_handler.current_mer_data:
-                current_mer_data = self.mer_handler.current_mer_data
-                print("Debug: Using current_mer_data from mer_handler")
+            # If not found, try the catred_handler's stored data
+            elif hasattr(self, 'catred_handler') and self.catred_handler and hasattr(self.catred_handler, 'current_catred_data') and self.catred_handler.current_catred_data:
+                current_mer_data = self.catred_handler.current_catred_data
+                print("Debug: Using current_catred_data from catred_handler")
             
             if not current_mer_data:
-                print(f"Debug: No current_mer_data available from any source")
-                print(f"  - self.current_mer_data: {getattr(self, 'current_mer_data', None)}")
-                print(f"  - trace_creator.current_mer_data: {getattr(self.trace_creator, 'current_mer_data', None) if hasattr(self, 'trace_creator') and self.trace_creator else 'No trace_creator'}")
-                print(f"  - mer_handler.current_mer_data: {getattr(self.mer_handler, 'current_mer_data', None) if hasattr(self, 'mer_handler') and self.mer_handler else 'No mer_handler'}")
+                print(f"Debug: No current_catred_data available from any source")
+                print(f"  - self.current_catred_data: {getattr(self, 'current_catred_data', None)}")
+                print(f"  - trace_creator.current_catred_data: {getattr(self.trace_creator, 'current_catred_data', None) if hasattr(self, 'trace_creator') and self.trace_creator else 'No trace_creator'}")
+                print(f"  - catred_handler.current_catred_data: {getattr(self.catred_handler, 'current_catred_data', None) if hasattr(self, 'catred_handler') and self.catred_handler else 'No catred_handler'}")
                 return dash.no_update
             
             try:

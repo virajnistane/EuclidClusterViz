@@ -14,19 +14,19 @@ import numpy as np
 class PHZCallbacks:
     """Handles PHZ_PDF plot callbacks"""
     
-    def __init__(self, app, mer_handler=None):
+    def __init__(self, app, catred_handler=None):
         """
         Initialize PHZ callbacks.
         
         Args:
             app: Dash application instance
-            mer_handler: MERHandler instance for MER data operations (optional)
+            catred_handler: CATREDHandler instance for MER data operations (optional)
         """
         self.app = app
-        self.mer_handler = mer_handler
+        self.catred_handler = catred_handler
         
         # Fallback attributes for backward compatibility
-        self.current_mer_data = None
+        self.current_catred_data = None
         
         self.setup_callbacks()
     
@@ -50,13 +50,18 @@ class PHZCallbacks:
             
             # Get current MER data from handler or fallback
             current_mer_data = None
-            if self.mer_handler and hasattr(self.mer_handler, 'current_mer_data'):
-                current_mer_data = self.mer_handler.current_mer_data
-            elif hasattr(self, 'current_mer_data'):
-                current_mer_data = self.current_mer_data
+            if self.catred_handler and hasattr(self.catred_handler, 'current_catred_data') and self.catred_handler.current_catred_data:
+                current_mer_data = self.catred_handler.current_catred_data
+                print("Debug: Using current_catred_data from catred_handler")
+            elif hasattr(self, 'trace_creator') and self.trace_creator and hasattr(self.trace_creator, 'current_catred_data') and self.trace_creator.current_catred_data:
+                current_mer_data = self.trace_creator.current_catred_data
+                print("Debug: Using current_catred_data from trace_creator")
+            elif hasattr(self, 'current_catred_data') and self.current_catred_data:
+                current_mer_data = self.current_catred_data
+                print("Debug: Using current_catred_data from self")
             
             if not current_mer_data:
-                print(f"Debug: No current_mer_data available: {current_mer_data}")
+                print(f"Debug: No current_catred_data available: {current_mer_data}")
                 return dash.no_update
             
             try:
@@ -130,41 +135,61 @@ class PHZCallbacks:
     
     def _create_phz_pdf_plot(self, phz_pdf, ra, dec, phz_mode_1):
         """Create PHZ_PDF plot for a given MER point"""
-        # Create redshift bins (assuming typical range for photometric redshift)
-        z_bins = np.linspace(0, 3, len(phz_pdf))
-        
-        # Create PHZ_PDF plot
-        phz_fig = go.Figure()
-        
-        phz_fig.add_trace(go.Scatter(
-            x=z_bins,
-            y=phz_pdf,
-            mode='lines+markers',
-            name='PHZ_PDF',
-            line=dict(color='blue', width=2),
-            marker=dict(size=4),
-            fill='tonexty'
-        ))
-        
-        # Add vertical line for PHZ_MODE_1
-        phz_fig.add_vline(
-            x=phz_mode_1,
-            line=dict(color='red', width=2, dash='dash'),
-            annotation_text=f"PHZ_MODE_1: {phz_mode_1:.3f}",
-            annotation_position="top"
-        )
-        
-        phz_fig.update_layout(
-            title=f'PHZ_PDF for MER Point at RA: {ra:.6f}, Dec: {dec:.6f}',
-            xaxis_title='Redshift (z)',
-            yaxis_title='Probability Density',
-            margin=dict(l=40, r=20, t=60, b=40),
-            showlegend=True,
-            hovermode='x unified'
-        )
-        
-        print(f"Debug: Created PHZ_PDF plot for point at RA: {ra:.6f}, Dec: {dec:.6f}")
-        return phz_fig
+        try:
+            # Validate PHZ_PDF data
+            if not phz_pdf or len(phz_pdf) == 0:
+                print(f"Debug: Empty PHZ_PDF data")
+                return self._create_error_phz_plot("Empty PHZ_PDF data")
+            
+            # Convert to numpy array for safety
+            phz_pdf_array = np.array(phz_pdf)
+            
+            # Check for NaN or infinite values
+            if np.any(np.isnan(phz_pdf_array)) or np.any(np.isinf(phz_pdf_array)):
+                print(f"Debug: PHZ_PDF contains NaN or infinite values")
+                return self._create_error_phz_plot("PHZ_PDF contains invalid values")
+            
+            # Create redshift bins (assuming typical range for photometric redshift)
+            z_bins = np.linspace(0, 3, len(phz_pdf_array))
+            
+            # Create PHZ_PDF plot
+            phz_fig = go.Figure()
+            
+            phz_fig.add_trace(go.Scatter(
+                x=z_bins,
+                y=phz_pdf_array,
+                mode='lines+markers',
+                name='PHZ_PDF',
+                line=dict(color='blue', width=2),
+                marker=dict(size=4),
+                fill='tozeroy'  # Fill to zero y-axis instead of previous trace
+            ))
+            
+            # Add vertical line for PHZ_MODE_1
+            phz_fig.add_vline(
+                x=phz_mode_1,
+                line=dict(color='red', width=2, dash='dash'),
+                annotation_text=f"PHZ_MODE_1: {phz_mode_1:.3f}",
+                annotation_position="top"
+            )
+            
+            phz_fig.update_layout(
+                title=f'PHZ_PDF for MER Point at RA: {ra:.6f}, Dec: {dec:.6f}',
+                xaxis_title='Redshift (z)',
+                yaxis_title='Probability Density',
+                margin=dict(l=40, r=20, t=60, b=40),
+                showlegend=True,
+                hovermode='x unified'
+            )
+            
+            print(f"Debug: Created PHZ_PDF plot for point at RA: {ra:.6f}, Dec: {dec:.6f}")
+            return phz_fig
+            
+        except Exception as e:
+            print(f"Debug: Error in _create_phz_pdf_plot: {e}")
+            import traceback
+            print(f"Debug: Traceback: {traceback.format_exc()}")
+            return self._create_error_phz_plot(f"Error creating plot: {str(e)}")
     
     def _create_error_phz_plot(self, error_message):
         """Create error PHZ_PDF plot"""

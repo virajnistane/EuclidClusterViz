@@ -189,7 +189,7 @@ class AppLayout:
             html.Div([
                 dbc.Switch(
                     id="catred-mertile-switch",
-                    label="High-res MER (CATRED) data",
+                    label="High-res CATRED data",
                     value=False,
                 ),
                 html.Small("(When zoomed < 2°)", className="text-muted")
@@ -204,7 +204,7 @@ class AppLayout:
             
             html.Div([
                 dbc.Button(
-                    "🔍 Render MER (CATRED) Data",
+                    "🔍 Render CATRED Data",
                     id="mer-render-button",
                     color="info",
                     size="sm",
@@ -217,7 +217,7 @@ class AppLayout:
             
             html.Div([
                 dbc.Button(
-                    "🗑️ Clear All MER (CATRED) Data",
+                    "🗑️ Clear All CATRED Data",
                     id="mer-clear-button",
                     color="warning",
                     size="sm",
