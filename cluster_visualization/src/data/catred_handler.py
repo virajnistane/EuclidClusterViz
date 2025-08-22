@@ -12,10 +12,101 @@ import os
 import pandas as pd
 import numpy as np
 from astropy.io import fits
+from astropy.table import Table
+import healpy as hp
 from shapely.geometry import box
 from typing import Dict, List, Any, Optional, Tuple
 
 
+class Mask:
+    """
+    HEALPix mask class for effective coverage operations.
+    
+    This class handles loading and operations on effective coverage masks
+    stored as HEALPix maps in FITS files.
+    """
+    
+    def __init__(self, in_file: str):
+        """
+        Initialize mask from FITS file.
+        
+        Args:
+            in_file: Path to the effective coverage mask FITS file
+        """
+        self.in_file = in_file
+        self.read_msk()
+    
+    def read_msk(self):
+        """Read the sparse HEALPix mask from FITS file."""
+        with fits.open(self.in_file) as hpfile:
+            self.hdr = hpfile[1].header
+            
+            # Get NSIDE from header (sparse HEALPix format)
+            self.nside = self.hdr['NSIDE']
+            
+            # Get the ordering scheme
+            self.ordering = self.hdr.get('ORDERING', 'NESTED').upper()
+            self.nested = (self.ordering == 'NESTED')
+            
+            # Read sparse data (PIXEL indices and WEIGHT values)
+            pixel_indices = hpfile[1].data['PIXEL']
+            weight_values = hpfile[1].data['WEIGHT']
+            
+            # Create full HEALPix map (filled with zeros, then populate sparse values)
+            npix = 12 * self.nside**2
+            self.hpdata = np.zeros(npix, dtype=np.float32)
+            self.hpdata[pixel_indices] = weight_values
+            
+            print(f"Debug: Loaded sparse HEALPix mask: nside={self.nside}, ordering={self.ordering}, "
+                  f"sparse_pixels={len(pixel_indices)}, total_pixels={npix}")
+            
+    def radec_to_hpcell(self, ra: np.ndarray, dec: np.ndarray) -> np.ndarray:
+        """
+        Convert RA/Dec coordinates to HEALPix cell indices.
+        
+        Args:
+            ra: Right Ascension array in degrees
+            dec: Declination array in degrees
+            
+        Returns:
+            HEALPix cell indices
+        """
+        return hp.ang2pix(self.nside, ra, dec, lonlat=True, nest=self.nested)
+
+
+def get_masked_catred(tile_id, effcovmask_info, catred_info, threshold=0.8):
+    """Get masked CATRED data for a tile using effective coverage mask."""
+    try:
+        # Load mask for the tile
+        mask_file = effcovmask_info.loc[tile_id]['fits_file']
+        msk = Mask(mask_file)  # Pass file path to constructor
+        
+        # Load CATRED data
+        catred_file = catred_info.loc[tile_id]['fits_file']
+        with fits.open(catred_file) as catred_hdu:
+            src = Table(catred_hdu[1].data)
+            
+        # Get HEALPix cells for each source (using proper column names)
+        hp_cells = msk.radec_to_hpcell(src['RIGHT_ASCENSION'], src['DECLINATION'])
+        
+        # Get effective coverage for each source position
+        eff_cov = msk.hpdata[hp_cells]
+        
+        # Apply threshold filter
+        mask = eff_cov >= threshold
+        filtered_src = src[mask]
+        
+        # Add columns to match expected format for plotting
+        if 'RA' not in filtered_src.colnames:
+            filtered_src['RA'] = filtered_src['RIGHT_ASCENSION']
+        if 'DEC' not in filtered_src.colnames:
+            filtered_src['DEC'] = filtered_src['DECLINATION']
+            
+        return filtered_src
+        
+    except Exception as e:
+        print(f"Error in get_masked_catred: {e}")
+        raise
 class CATREDHandler:
     """Handles MER tile data loading and spatial operations."""
     
@@ -255,6 +346,214 @@ class CATREDHandler:
                 catred_scatter_data['phz_70_int'].extend(tile_data['PHZ_70_INT'])
                 catred_scatter_data['phz_pdf'].extend(tile_data['PHZ_PDF'])
                 print(f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} points from MER tile {mertileid}")
+    
+    def get_radec_mertile_masked(self, mertileid: int, data: Dict[str, Any], 
+                                threshold: float = 0.8) -> Dict[str, List]:
+        """
+        Load masked CATRED data for a specific MER tile based on effective coverage.
+        
+        Args:
+            mertileid: The MER tile ID
+            data: The data dictionary containing catred_info and effcovmask_info
+            threshold: Effective coverage threshold for filtering (default 0.8)
+            
+        Returns:
+            Dictionary with keys 'RIGHT_ASCENSION', 'DECLINATION', 'PHZ_MODE_1', 
+            'PHZ_70_INT', 'PHZ_PDF' for sources above threshold or empty dict {} if unable to load
+        """
+        try:
+            if isinstance(mertileid, str):
+                mertileid = int(mertileid)
+            
+            # Check if we have the necessary data
+            if ('catred_info' not in data or data['catred_info'].empty or
+                'effcovmask_info' not in data or data['effcovmask_info'].empty):
+                print(f"Debug: Missing catred_info or effcovmask_info for masked processing of mertile {mertileid}")
+                return {}
+            
+            if (mertileid not in data['catred_info'].index or 
+                mertileid not in data['effcovmask_info'].index):
+                print(f"Debug: MerTile {mertileid} not found in catred_info or effcovmask_info")
+                return {}
+            
+            # Get masked CATRED data
+            filtered_src = get_masked_catred(mertileid, data['effcovmask_info'], 
+                                           data['catred_info'], threshold)
+            
+            if len(filtered_src) == 0:
+                print(f"Debug: No sources above threshold {threshold} for mertile {mertileid}")
+                return {}
+            
+            # Convert to format expected by plotting functions
+            result = {
+                'RIGHT_ASCENSION': filtered_src['RA'].tolist(),
+                'DECLINATION': filtered_src['DEC'].tolist(),
+                'PHZ_MODE_1': filtered_src['PHZ_MODE_1'].tolist() if 'PHZ_MODE_1' in filtered_src.colnames else [0.5] * len(filtered_src),
+                'PHZ_70_INT': filtered_src['PHZ_70_INT'].tolist() if 'PHZ_70_INT' in filtered_src.colnames else [[0.1, 0.9]] * len(filtered_src),
+                'PHZ_PDF': filtered_src['PHZ_PDF'].tolist() if 'PHZ_PDF' in filtered_src.colnames else [None] * len(filtered_src)
+            }
+            
+            print(f"Debug: Loaded {len(result['RIGHT_ASCENSION'])} masked sources from MER tile {mertileid} (threshold={threshold})")
+            return result
+                
+        except Exception as e:
+            print(f"Debug: Error loading masked MER tile {mertileid}: {e}")
+            return {}
+
+    def _load_tile_data_unmasked(self, mertiles_to_load: List[int], data: Dict[str, Any], 
+                                catred_scatter_data: Dict[str, List]) -> None:
+        """Load unmasked data for each MER tile and accumulate in scatter data."""
+        for mertileid in mertiles_to_load:
+            tile_data = self.get_radec_mertile(mertileid, data)
+            if tile_data and 'RIGHT_ASCENSION' in tile_data:
+                catred_scatter_data['ra'].extend(tile_data['RIGHT_ASCENSION'])
+                catred_scatter_data['dec'].extend(tile_data['DECLINATION'])
+                catred_scatter_data['phz_mode_1'].extend(tile_data['PHZ_MODE_1'])
+                catred_scatter_data['phz_70_int'].extend(tile_data['PHZ_70_INT'])
+                catred_scatter_data['phz_pdf'].extend(tile_data['PHZ_PDF'])
+                print(f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} unmasked points from MER tile {mertileid}")
+
+    def _load_tile_data_masked(self, mertiles_to_load: List[int], data: Dict[str, Any],
+                              catred_scatter_data: Dict[str, List], threshold: float = 0.8) -> None:
+        """Load masked data for each MER tile and accumulate in scatter data."""
+        for mertileid in mertiles_to_load:
+            tile_data = self.get_radec_mertile_masked(mertileid, data, threshold)
+            if tile_data and 'RIGHT_ASCENSION' in tile_data:
+                catred_scatter_data['ra'].extend(tile_data['RIGHT_ASCENSION'])
+                catred_scatter_data['dec'].extend(tile_data['DECLINATION'])
+                catred_scatter_data['phz_mode_1'].extend(tile_data['PHZ_MODE_1'])
+                catred_scatter_data['phz_70_int'].extend(tile_data['PHZ_70_INT'])
+                catred_scatter_data['phz_pdf'].extend(tile_data['PHZ_PDF'])
+                print(f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} masked points from MER tile {mertileid}")
+    
+    def update_catred_data_masked(self, zoom_data: Dict[str, Any], data: Dict[str, Any],
+                                 threshold: float = 0.8) -> Dict[str, List]:
+        """
+        Update masked CATRED data for the given zoom window.
+        
+        Args:
+            zoom_data: Dictionary containing zoom window parameters
+            data: Main data dictionary containing MER tile information
+            threshold: Effective coverage threshold for filtering (default 0.8)
+            
+        Returns:
+            Dictionary with scatter plot data for masked CATRED points
+        """
+        # Find MER tiles that intersect with zoom area
+        if not zoom_data or not all(k in zoom_data for k in ['ra_min', 'ra_max', 'dec_min', 'dec_max']):
+            print("Debug: No valid zoom data for masked CATRED")
+            return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_70_int': [], 'phz_pdf': []}
+            
+        mertiles_to_load = self._find_intersecting_tiles(data, zoom_data['ra_min'], zoom_data['ra_max'], 
+                                                        zoom_data['dec_min'], zoom_data['dec_max'])
+        
+        if not mertiles_to_load:
+            print("Debug: No MER tiles found in zoom area for masked processing")
+            return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_70_int': [], 'phz_pdf': []}
+        
+        # Initialize masked scatter data
+        catred_scatter_data = {
+            'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_70_int': [], 'phz_pdf': []
+        }
+        
+        # Load masked data for each tile
+        self._load_tile_data_masked(mertiles_to_load, data, catred_scatter_data, threshold)
+        
+        # Store current data for click callbacks
+        self.current_catred_data = catred_scatter_data
+        
+        print(f"Debug: Total masked CATRED points loaded: {len(catred_scatter_data['ra'])} (threshold={threshold})")
+        return catred_scatter_data
+    
+    def update_catred_data_unmasked(self, zoom_data: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, List]:
+        """
+        Update unmasked CATRED data for the given zoom window.
+        
+        Args:
+            zoom_data: Dictionary containing zoom window parameters
+            data: Main data dictionary containing MER tile information
+            
+        Returns:
+            Dictionary with scatter plot data for unmasked CATRED points
+        """
+        # Find MER tiles that intersect with zoom area
+        if not zoom_data or not all(k in zoom_data for k in ['ra_min', 'ra_max', 'dec_min', 'dec_max']):
+            print("Debug: No valid zoom data for unmasked CATRED")
+            return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_70_int': [], 'phz_pdf': []}
+            
+        mertiles_to_load = self._find_intersecting_tiles(data, zoom_data['ra_min'], zoom_data['ra_max'], 
+                                                        zoom_data['dec_min'], zoom_data['dec_max'])
+        
+        if not mertiles_to_load:
+            print("Debug: No intersecting MER tiles found for unmasked CATRED")
+            return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_70_int': [], 'phz_pdf': []}
+        
+        print(f"Debug: Loading unmasked CATRED for {len(mertiles_to_load)} MER tiles")
+        
+        # Initialize scatter data container
+        catred_scatter_data = {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_70_int': [], 'phz_pdf': []}
+        
+        # Load data for each intersecting tile using unmasked method
+        self._load_tile_data_unmasked(mertiles_to_load, data, catred_scatter_data)
+        
+        # Store current data for click callbacks
+        self.current_catred_data = catred_scatter_data
+        
+        print(f"Debug: Total unmasked CATRED points loaded: {len(catred_scatter_data['ra'])}")
+        return catred_scatter_data
+
+    def load_catred_scatter_data(self, data: Dict[str, Any], relayout_data: Dict[str, Any],
+                                catred_mode: str = "unmasked") -> Dict[str, List]:
+        """
+        Load CATRED scatter data based on the specified mode.
+        
+        Args:
+            data: Main data dictionary containing MER tile information
+            relayout_data: Current zoom/pan state for determining zoom window
+            catred_mode: Mode for CATRED data ("none", "unmasked", "masked")
+            
+        Returns:
+            Dictionary with scatter plot data for CATRED points
+        """
+        if catred_mode == "none":
+            print("Debug: CATRED mode is 'none', returning empty data")
+            return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_70_int': [], 'phz_pdf': []}
+        
+        # Extract zoom data from relayout_data
+        zoom_data = self._extract_zoom_data_from_relayout(relayout_data)
+        
+        if catred_mode == "masked":
+            print("Debug: Loading masked CATRED data")
+            return self.update_catred_data_masked(zoom_data, data)
+        else:  # unmasked
+            print("Debug: Loading unmasked CATRED data")
+            return self.update_catred_data_unmasked(zoom_data, data)
+    
+    def _extract_zoom_data_from_relayout(self, relayout_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Extract zoom window parameters from relayout data.
+        
+        Args:
+            relayout_data: Plotly relayout data containing zoom state
+            
+        Returns:
+            Dictionary with zoom window parameters
+        """
+        if not relayout_data:
+            return {}
+        
+        zoom_data = {}
+        
+        # Extract zoom ranges
+        if 'xaxis.range[0]' in relayout_data and 'xaxis.range[1]' in relayout_data:
+            zoom_data['ra_min'] = relayout_data['xaxis.range[0]']
+            zoom_data['ra_max'] = relayout_data['xaxis.range[1]']
+        
+        if 'yaxis.range[0]' in relayout_data and 'yaxis.range[1]' in relayout_data:
+            zoom_data['dec_min'] = relayout_data['yaxis.range[0]']
+            zoom_data['dec_max'] = relayout_data['yaxis.range[1]']
+        
+        return zoom_data
     
     def clear_traces_cache(self) -> None:
         """Clear the MER traces cache."""

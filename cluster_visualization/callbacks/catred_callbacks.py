@@ -49,16 +49,16 @@ class CATREDCallbacks:
             Output('mer-render-button', 'disabled'),
             [Input('cluster-plot', 'relayoutData'),
              Input('mer-switch', 'value'),
-             Input('catred-mertile-switch', 'value')],
+             Input('catred-mode-radio', 'value')],
             [State('render-button', 'n_clicks')],
             prevent_initial_call=True
         )
-        def update_mer_button_state(relayout_data, show_mer_tiles, show_catred_mertile_data, n_clicks):
+        def update_mer_button_state(relayout_data, show_mer_tiles, catred_mode, n_clicks):
             # Only enable if main app has been rendered and conditions are met
             if n_clicks == 0:
                 return True  # Disabled
             
-            if not show_mer_tiles or not show_catred_mertile_data:
+            if not show_mer_tiles or catred_mode == "none":
                 return True  # Disabled - switches not turned on
             
             if not relayout_data:
@@ -85,12 +85,12 @@ class CATREDCallbacks:
              State('polygon-switch', 'value'),
              State('mer-switch', 'value'),
              State('aspect-ratio-switch', 'value'),
-             State('catred-mertile-switch', 'value'),
+             State('catred-mode-radio', 'value'),
              State('cluster-plot', 'relayoutData'),
              State('cluster-plot', 'figure')],
             prevent_initial_call=True
         )
-        def manual_render_catred_data(catred_n_clicks, algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data, current_figure):
+        def manual_render_catred_data(catred_n_clicks, algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, catred_mode, relayout_data, current_figure):
             if catred_n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update
             
@@ -105,7 +105,7 @@ class CATREDCallbacks:
                 data = self.load_data(algorithm)
                 
                 # Load CATRED scatter data for current zoom window
-                catred_scatter_data = self.load_catred_scatter_data(data, relayout_data)
+                catred_scatter_data = self.load_catred_scatter_data(data, relayout_data, catred_mode)
                 
                 # Extract existing CATRED traces from current figure to preserve them
                 existing_catred_traces = self._extract_existing_catred_traces(current_figure)
@@ -113,7 +113,7 @@ class CATREDCallbacks:
                 print(f"Debug: Found {len(existing_catred_traces)} existing CATRED traces to preserve")
                 
                 # Create traces with the manually loaded CATRED data and existing traces
-                traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data, 
+                traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
                                           manual_catred_data=catred_scatter_data, existing_catred_traces=existing_catred_traces,
                                           snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper)
                 
@@ -233,26 +233,26 @@ class CATREDCallbacks:
             # Fallback to inline data loading
             return self._load_data_fallback(algorithm)
     
-    def load_catred_scatter_data(self, data, relayout_data):
+    def load_catred_scatter_data(self, data, relayout_data, catred_mode="unmasked"):
         """Load CATRED scatter data using modular or fallback method"""
         if self.catred_handler:
-            return self.catred_handler.load_catred_scatter_data(data, relayout_data)
+            return self.catred_handler.load_catred_scatter_data(data, relayout_data, catred_mode)
         else:
             # Fallback to inline CATRED data loading
             return self._load_catred_scatter_data_fallback(data, relayout_data)
     
-    def create_traces(self, data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data, 
+    def create_traces(self, data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
                      existing_catred_traces=None, manual_catred_data=None, snr_threshold_lower=None, snr_threshold_upper=None):
         """Create traces using modular or fallback method"""
         if self.trace_creator:
             return self.trace_creator.create_traces(
-                data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data,
+                data, show_polygons, show_mer_tiles, relayout_data, catred_mode,
                 existing_catred_traces=existing_catred_traces, manual_catred_data=manual_catred_data,
                 snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper
             )
         else:
             # Fallback to inline trace creation
-            return self._create_traces_fallback(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data,
+            return self._create_traces_fallback(data, show_polygons, show_mer_tiles, relayout_data, catred_mode,
                                               existing_catred_traces=existing_catred_traces, manual_catred_data=manual_catred_data,
                                               snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper)
     

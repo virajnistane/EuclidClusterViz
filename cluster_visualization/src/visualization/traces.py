@@ -37,7 +37,7 @@ class TraceCreator:
     
     def create_traces(self, data: Dict[str, Any], show_polygons: bool = True, 
                      show_mer_tiles: bool = False, relayout_data: Optional[Dict] = None,
-                     show_catred_mertile_data: bool = False, manual_catred_data: Optional[Dict] = None,
+                     catred_mode: str = "none", manual_catred_data: Optional[Dict] = None,
                      existing_catred_traces: Optional[List] = None, snr_threshold_lower: Optional[float] = None,
                      snr_threshold_upper: Optional[float] = None) -> List:
         """
@@ -64,14 +64,14 @@ class TraceCreator:
         datamod_merged = self._apply_snr_filtering(data['merged_data'], snr_threshold_lower, snr_threshold_upper)
 
         # Check zoom threshold for CATRED data display
-        zoom_threshold_met = self._check_zoom_threshold(relayout_data, show_catred_mertile_data)
+        zoom_threshold_met = self._check_zoom_threshold(relayout_data, catred_mode != "none")
 
         # Get CATRED data points for proximity-based marker enhancement
         catred_points = self._get_catred_data_points(manual_catred_data, existing_catred_traces)
 
         # Create data traces in layered order: CATRED → Merged → Individual tiles
         self._add_existing_catred_traces(data_traces, existing_catred_traces)
-        self._add_manual_catred_traces(data_traces, show_mer_tiles, show_catred_mertile_data,
+        self._add_manual_catred_traces(data_traces, show_mer_tiles, catred_mode,
                                        manual_catred_data, zoom_threshold_met)
         self._add_merged_cluster_trace(data_traces, datamod_merged, data['algorithm'], catred_points)
         
@@ -260,15 +260,15 @@ class TraceCreator:
             data_traces.extend(existing_catred_traces)
     
     def _add_manual_catred_traces(self, data_traces: List, show_mer_tiles: bool, 
-                              show_catred_mertile_data: bool, manual_catred_data: Optional[Dict],
+                              catred_mode: str, manual_catred_data: Optional[Dict],
                               zoom_threshold_met: bool) -> None:
         """Add manually loaded CATRED high-resolution data traces."""
-        if not (show_mer_tiles and show_catred_mertile_data and manual_catred_data):
-            if show_mer_tiles and show_catred_mertile_data and zoom_threshold_met:
+        if not (show_mer_tiles and catred_mode != "none" and manual_catred_data):
+            if show_mer_tiles and catred_mode != "none" and zoom_threshold_met:
                 print(f"Debug: CATRED scatter conditions met but no manual data provided - use render button")
             else:
                 print(f"Debug: CATRED scatter data conditions not met - show_mer_tiles: {show_mer_tiles}, "
-                      f"show_catred_mertile_data: {show_catred_mertile_data}, manual_data: {manual_catred_data is not None}")
+                      f"catred_mode: {catred_mode}, manual_data: {manual_catred_data is not None}")
             return
         
         if not manual_catred_data.get('ra'):
@@ -280,7 +280,8 @@ class TraceCreator:
 
         # Generate unique trace name
         trace_count = self.catred_handler.get_traces_count() if self.catred_handler else 1
-        trace_name = f'CATRED High-Res Data #{trace_count + 1}'
+        mode_label = "Masked" if catred_mode == "masked" else "Unmasked"
+        trace_name = f'CATRED {mode_label} Data #{trace_count + 1}'
 
         # Create CATRED scatter trace
         catred_trace = go.Scattergl(

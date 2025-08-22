@@ -187,10 +187,16 @@ class AppLayout:
             ], className="mb-2"),
             
             html.Div([
-                dbc.Switch(
-                    id="catred-mertile-switch",
-                    label="High-res CATRED data",
-                    value=True,
+                html.Label("High-res CATRED data:", className="fw-bold mb-2"),
+                dbc.RadioItems(
+                    id="catred-mode-radio",
+                    options=[
+                        {"label": "No CATRED data", "value": "none"},
+                        {"label": "Unmasked CATRED data", "value": "unmasked"},
+                        {"label": "Masked CATRED data", "value": "masked"},
+                    ],
+                    value="unmasked",
+                    inline=True,
                 ),
                 html.Small("(When zoomed < 2°)", className="text-muted")
             ], className="mb-3"),
