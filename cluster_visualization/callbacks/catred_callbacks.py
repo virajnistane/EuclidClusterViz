@@ -245,7 +245,7 @@ class CATREDCallbacks:
                      existing_catred_traces=None, manual_catred_data=None, snr_threshold_lower=None, snr_threshold_upper=None):
         """Create traces using modular or fallback method"""
         if self.trace_creator:
-            return self.trace_creator.create_all_traces(
+            return self.trace_creator.create_traces(
                 data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data,
                 existing_catred_traces=existing_catred_traces, manual_catred_data=manual_catred_data,
                 snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper

@@ -156,17 +156,17 @@ except ImportError:
 
 # Import callback modules
 try:
-    from .callbacks.main_plot import MainPlotCallbacks
-    from .callbacks.mer_callbacks import MERCallbacks
-    from .callbacks.ui_callbacks import UICallbacks
-    from .callbacks.phz_callbacks import PHZCallbacks
+    from ..callbacks.main_plot import MainPlotCallbacks
+    from ..callbacks.catred_callbacks import CATREDCallbacks
+    from ..callbacks.ui_callbacks import UICallbacks
+    from ..callbacks.phz_callbacks import PHZCallbacks
     print("✓ Callback modules loaded successfully")
 except ImportError:
     # Try alternative import path
     try:
-        sys.path.append(os.path.dirname(__file__))
+        sys.path.append(os.path.dirname(os.path.dirname(__file__)))
         from callbacks.main_plot import MainPlotCallbacks
-        from callbacks.mer_callbacks import MERCallbacks
+        from callbacks.catred_callbacks import CATREDCallbacks
         from callbacks.ui_callbacks import UICallbacks
         from callbacks.phz_callbacks import PHZCallbacks
         print("✓ Callback modules loaded successfully (alternative path)")
@@ -174,7 +174,7 @@ except ImportError:
         print(f"⚠️  Error importing callback modules: {e}")
         print("   Falling back to inline callback handling")
         MainPlotCallbacks = None
-        MERCallbacks = None
+        CATREDCallbacks = None
         UICallbacks = None
         PHZCallbacks = None
 
@@ -1133,36 +1133,32 @@ class ClusterVisualizationApp:
 
     def setup_callbacks(self):
         """Setup Dash callbacks using modular or fallback approach"""
-        # Force fallback callbacks temporarily to use the working PHZ implementation
-        print("⚠️  Using fallback inline callbacks (forced for PHZ fix)")
-        self._setup_fallback_callbacks()
-        
-        # Original modular approach - commented out temporarily
-        # if MainPlotCallbacks and MERCallbacks and UICallbacks and PHZCallbacks:
-        #     # Use modular callback setup
-        #     print("✓ Setting up modular callbacks")
-        #     
-        #     # Initialize callback handlers
-        #     self.main_plot_callbacks = MainPlotCallbacks(
-        #         self.app, self.data_loader, self.mer_handler, 
-        #         self.trace_creator, self.figure_manager
-        #     )
-        #     
-        #     self.mer_callbacks = MERCallbacks(
-        #         self.app, self.data_loader, self.mer_handler, 
-        #         self.trace_creator, self.figure_manager
-        #     )
-        #     
-        #     self.ui_callbacks = UICallbacks(self.app)
-        #     
-        #     self.phz_callbacks = PHZCallbacks(self.app, self.mer_handler, self, self.trace_creator)
-        #     
-        #     print("✓ All modular callbacks initialized")
-        #     
-        # else:
-        #     # Fallback to inline callback setup
-        #     print("⚠️  Using fallback inline callbacks")
-        #     self._setup_fallback_callbacks()
+        # Use modular callbacks now that imports are working
+        if MainPlotCallbacks and CATREDCallbacks and UICallbacks and PHZCallbacks:
+            # Use modular callback setup
+            print("✓ Setting up modular callbacks")
+            
+            # Initialize callback handlers
+            self.main_plot_callbacks = MainPlotCallbacks(
+                self.app, self.data_loader, self.catred_handler, 
+                self.trace_creator, self.figure_manager
+            )
+            
+            self.catred_callbacks = CATREDCallbacks(
+                self.app, self.data_loader, self.catred_handler, 
+                self.trace_creator, self.figure_manager
+            )
+            
+            self.ui_callbacks = UICallbacks(self.app)
+            
+            self.phz_callbacks = PHZCallbacks(self.app, self.catred_handler)
+            
+            print("✓ All modular callbacks initialized")
+            
+        else:
+            # Fallback to inline callback setup
+            print("⚠️  Using fallback inline callbacks")
+            self._setup_fallback_callbacks()
     
     def _setup_fallback_callbacks(self):
         """Fallback callback setup - contains the original inline callbacks"""
@@ -1271,7 +1267,7 @@ class ClusterVisualizationApp:
                     showlegend=False,
                     annotations=[
                         dict(
-                            text="Click on a MER data point above to view its PHZ_PDF",
+                            text="Click on a CATRED data point above to view its PHZ_PDF",
                             xref="paper", yref="paper",
                             x=0.5, y=0.5, xanchor='center', yanchor='middle',
                             showarrow=False,
