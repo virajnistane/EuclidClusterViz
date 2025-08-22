@@ -6,17 +6,13 @@ This package contains all Dash callback implementations organized by functionali
 
 try:
     from .main_plot import MainPlotCallbacks
-    from .mer_callbacks import MERCallbacks  
+    from .catred_callbacks import CATREDCallbacks  
     from .ui_callbacks import UICallbacks
     from .phz_callbacks import PHZCallbacks
     
-    __all__ = ['MainPlotCallbacks', 'MERCallbacks', 'UICallbacks', 'PHZCallbacks']
+    __all__ = ['MainPlotCallbacks', 'CATREDCallbacks', 'UICallbacks', 'PHZCallbacks']
     
 except ImportError as e:
-    # Graceful fallback if modules not available
-    print(f"⚠️  Warning: Callbacks modules not fully available: {e}")
+    print(f"Warning: Could not import all callback modules: {e}")
     MainPlotCallbacks = None
-    MERCallbacks = None
-    UICallbacks = None
-    PHZCallbacks = None
-    __all__ = []
+    CATREDCallbacks = None

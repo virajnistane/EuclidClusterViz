@@ -1,8 +1,8 @@
 """
 PHZ (Photometric Redshift) callbacks for cluster visualization.
 
-Handles PHZ_PDF plot updates when clicking on MER data points,
-including redshift distribution visualization and mode highlighting.
+Handles PHZ_PDF plot updates when clicking on CATRED data points,
+including redshift probability distribution visualization and related UI interactions.
 """
 
 import dash
@@ -20,7 +20,7 @@ class PHZCallbacks:
         
         Args:
             app: Dash application instance
-            catred_handler: CATREDHandler instance for MER data operations (optional)
+            catred_handler: CATREDHandler instance for CATRED data operations (optional)
         """
         self.app = app
         self.catred_handler = catred_handler
@@ -35,7 +35,7 @@ class PHZCallbacks:
         self._setup_phz_pdf_callback()
     
     def _setup_phz_pdf_callback(self):
-        """Setup callback for handling clicks on MER data points to show PHZ_PDF"""
+        """Setup callback for handling clicks on CATRED data points to show PHZ_PDF"""
         @self.app.callback(
             Output('phz-pdf-plot', 'figure', allow_duplicate=True),
             [Input('cluster-plot', 'clickData')],
@@ -48,20 +48,20 @@ class PHZCallbacks:
                 print("Debug: No clickData received")
                 return dash.no_update
             
-            # Get current MER data from handler or fallback
-            current_mer_data = None
+            # Get current CATRED data from handler or fallback
+            current_catred_data = None
             if self.catred_handler and hasattr(self.catred_handler, 'current_catred_data') and self.catred_handler.current_catred_data:
-                current_mer_data = self.catred_handler.current_catred_data
+                current_catred_data = self.catred_handler.current_catred_data
                 print("Debug: Using current_catred_data from catred_handler")
             elif hasattr(self, 'trace_creator') and self.trace_creator and hasattr(self.trace_creator, 'current_catred_data') and self.trace_creator.current_catred_data:
-                current_mer_data = self.trace_creator.current_catred_data
+                current_catred_data = self.trace_creator.current_catred_data
                 print("Debug: Using current_catred_data from trace_creator")
             elif hasattr(self, 'current_catred_data') and self.current_catred_data:
-                current_mer_data = self.current_catred_data
+                current_catred_data = self.current_catred_data
                 print("Debug: Using current_catred_data from self")
             
-            if not current_mer_data:
-                print(f"Debug: No current_catred_data available: {current_mer_data}")
+            if not current_catred_data:
+                print(f"Debug: No current_catred_data available: {current_catred_data}")
                 return dash.no_update
             
             try:
@@ -78,52 +78,52 @@ class PHZCallbacks:
                 custom_data = clicked_point.get('customdata', None)
                 print(f"Debug: Custom data: {custom_data}")
                 
-                # Search through stored MER data to find the matching trace
-                found_mer_data = None
+                # Search through stored CATRED data to find the matching trace
+                found_catred_data = None
                 point_index = None
                 
-                print(f"Debug: Available MER data traces: {list(current_mer_data.keys())}")
+                print(f"Debug: Available CATRED data traces: {list(current_catred_data.keys())}")
                 
-                for trace_name, mer_data in current_mer_data.items():
+                for trace_name, catred_data in current_catred_data.items():
                     print(f"Debug: Checking trace: {trace_name}")
-                    if 'MER High-Res Data' in trace_name:
-                        print(f"Debug: Found MER trace with {len(mer_data['ra'])} points")
+                    if 'CATRED High-Res Data' in trace_name:
+                        print(f"Debug: Found CATRED trace with {len(catred_data['ra'])} points")
                         
                         # If we have custom data (point index), use it directly
-                        if custom_data is not None and isinstance(custom_data, int) and custom_data < len(mer_data['ra']):
-                            found_mer_data = mer_data
+                        if custom_data is not None and isinstance(custom_data, int) and custom_data < len(catred_data['ra']):
+                            found_catred_data = catred_data
                             point_index = custom_data
                             print(f"Debug: Using custom data index: {point_index}")
                             break
                         
                         # Otherwise, find the point index by matching coordinates (less reliable but fallback)
                         if clicked_x is not None and clicked_y is not None:
-                            for i, (x, y) in enumerate(zip(mer_data['ra'], mer_data['dec'])):
+                            for i, (x, y) in enumerate(zip(catred_data['ra'], catred_data['dec'])):
                                 if abs(x - clicked_x) < 1e-6 and abs(y - clicked_y) < 1e-6:
-                                    found_mer_data = mer_data
+                                    found_catred_data = catred_data
                                     point_index = i
                                     print(f"Debug: Found matching point by coordinates at index: {point_index}")
                                     break
                         
-                        if found_mer_data:
+                        if found_catred_data:
                             break
                 
-                if found_mer_data and point_index is not None:
-                    print(f"Debug: Successfully found MER data for point index: {point_index}")
+                if found_catred_data and point_index is not None:
+                    print(f"Debug: Successfully found CATRED data for point index: {point_index}")
                     
                     # Get PHZ_PDF data for this point
-                    phz_pdf = found_mer_data['phz_pdf'][point_index]
-                    ra = found_mer_data['ra'][point_index]
-                    dec = found_mer_data['dec'][point_index]
-                    phz_mode_1 = found_mer_data['phz_mode_1'][point_index]
+                    phz_pdf = found_catred_data['phz_pdf'][point_index]
+                    ra = found_catred_data['ra'][point_index]
+                    dec = found_catred_data['dec'][point_index]
+                    phz_mode_1 = found_catred_data['phz_mode_1'][point_index]
                     
                     print(f"Debug: PHZ_PDF length: {len(phz_pdf)}, PHZ_MODE_1: {phz_mode_1}")
                     
                     return self._create_phz_pdf_plot(phz_pdf, ra, dec, phz_mode_1)
                 else:
-                    print("Debug: Click was not on a MER data point")
+                    print("Debug: Click was not on a CATRED data point")
                 
-                # If we get here, the click wasn't on a MER point
+                # If we get here, the click wasn't on a CATRED point
                 return dash.no_update
                 
             except Exception as e:
@@ -134,7 +134,7 @@ class PHZCallbacks:
                 return self._create_error_phz_plot(str(e))
     
     def _create_phz_pdf_plot(self, phz_pdf, ra, dec, phz_mode_1):
-        """Create PHZ_PDF plot for a given MER point"""
+        """Create PHZ_PDF plot for a given CATRED point"""
         try:
             # Validate PHZ_PDF data
             if not phz_pdf or len(phz_pdf) == 0:
@@ -174,7 +174,7 @@ class PHZCallbacks:
             )
             
             phz_fig.update_layout(
-                title=f'PHZ_PDF for MER Point at RA: {ra:.6f}, Dec: {dec:.6f}',
+                title=f'PHZ_PDF for CATRED Point at RA: {ra:.6f}, Dec: {dec:.6f}',
                 xaxis_title='Redshift (z)',
                 yaxis_title='Probability Density',
                 margin=dict(l=40, r=20, t=60, b=40),

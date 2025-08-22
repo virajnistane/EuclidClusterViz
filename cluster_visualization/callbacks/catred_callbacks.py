@@ -1,8 +1,8 @@
 """
-MER (Multi-Epoch Reconstruction) callbacks for cluster visualization.
+CATRED (Reduced Catalog) callbacks for cluster visualization.
 
-Handles MER data rendering, clearing, and related UI interactions.
-Includes zoom-dependent MER button state management.
+Handles CATRED data rendering, clearing, and related UI interactions.
+Includes zoom-dependent CATRED button state management.
 """
 
 import dash
@@ -12,17 +12,17 @@ import pandas as pd
 import dash_bootstrap_components as dbc
 
 
-class MERCallbacks:
-    """Handles MER data-related callbacks"""
+class CATREDCallbacks:
+    """Handles CATRED data-related callbacks"""
     
     def __init__(self, app, data_loader, catred_handler, trace_creator, figure_manager):
         """
-        Initialize MER callbacks.
+        Initialize CATRED callbacks.
         
         Args:
             app: Dash application instance
             data_loader: DataLoader instance for data operations
-            catred_handler: CATREDHandler instance for MER operations
+            catred_handler: CATREDHandler instance for CATRED operations
             trace_creator: TraceCreator instance for trace creation
             figure_manager: FigureManager instance for figure layout
         """
@@ -33,18 +33,18 @@ class MERCallbacks:
         self.figure_manager = figure_manager
         
         # Fallback attributes for backward compatibility
-        self.mer_traces_cache = []
+        self.catred_traces_cache = []
         
         self.setup_callbacks()
     
     def setup_callbacks(self):
-        """Setup all MER-related callbacks"""
-        self._setup_mer_button_state_callback()
-        self._setup_manual_mer_render_callback()
-        self._setup_clear_mer_callback()
+        """Setup all CATRED-related callbacks"""
+        self._setup_catred_button_state_callback()
+        self._setup_manual_catred_render_callback()
+        self._setup_clear_catred_callback()
     
-    def _setup_mer_button_state_callback(self):
-        """Setup callback to enable/disable MER render button based on zoom level"""
+    def _setup_catred_button_state_callback(self):
+        """Setup callback to enable/disable CATRED render button based on zoom level"""
         @self.app.callback(
             Output('mer-render-button', 'disabled'),
             [Input('cluster-plot', 'relayoutData'),
@@ -73,8 +73,8 @@ class MERCallbacks:
             else:
                 return True   # Disabled - not zoomed in enough
     
-    def _setup_manual_mer_render_callback(self):
-        """Setup callback for manual MER data rendering"""
+    def _setup_manual_catred_render_callback(self):
+        """Setup callback for manual CATRED data rendering"""
         @self.app.callback(
             [Output('cluster-plot', 'figure', allow_duplicate=True), 
              Output('phz-pdf-plot', 'figure', allow_duplicate=True), 
@@ -90,11 +90,11 @@ class MERCallbacks:
              State('cluster-plot', 'figure')],
             prevent_initial_call=True
         )
-        def manual_render_mer_data(mer_n_clicks, algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data, current_figure):
-            if mer_n_clicks == 0:
+        def manual_render_catred_data(catred_n_clicks, algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data, current_figure):
+            if catred_n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update
             
-            print(f"Debug: Manual MER render button clicked (click #{mer_n_clicks})")
+            print(f"Debug: Manual CATRED render button clicked (click #{catred_n_clicks})")
             
             try:
                 # Extract SNR values from range slider
@@ -104,24 +104,24 @@ class MERCallbacks:
                 # Load data for selected algorithm
                 data = self.load_data(algorithm)
                 
-                # Load MER scatter data for current zoom window
-                mer_scatter_data = self.load_mer_scatter_data(data, relayout_data)
+                # Load CATRED scatter data for current zoom window
+                catred_scatter_data = self.load_catred_scatter_data(data, relayout_data)
                 
-                # Extract existing MER traces from current figure to preserve them
-                existing_mer_traces = self._extract_existing_mer_traces(current_figure)
+                # Extract existing CATRED traces from current figure to preserve them
+                existing_catred_traces = self._extract_existing_catred_traces(current_figure)
                 
-                print(f"Debug: Found {len(existing_mer_traces)} existing MER traces to preserve")
+                print(f"Debug: Found {len(existing_catred_traces)} existing CATRED traces to preserve")
                 
-                # Create traces with the manually loaded MER data and existing traces
+                # Create traces with the manually loaded CATRED data and existing traces
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data, 
-                                          manual_mer_data=mer_scatter_data, existing_mer_traces=existing_mer_traces,
+                                          manual_catred_data=catred_scatter_data, existing_catred_traces=existing_catred_traces,
                                           snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper)
                 
-                # Update the MER traces cache with the new trace count
-                if mer_scatter_data and mer_scatter_data['ra']:
-                    self.mer_traces_cache.extend(existing_mer_traces)
+                # Update the CATRED traces cache with the new trace count
+                if catred_scatter_data and catred_scatter_data['ra']:
+                    self.catred_traces_cache.extend(existing_catred_traces)
                     # Add the new trace placeholder (actual trace is created in create_traces)
-                    self.mer_traces_cache.append(None)  # Placeholder for the new trace
+                    self.catred_traces_cache.append(None)  # Placeholder for the new trace
                 
                 # Create figure
                 fig = self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio) if self.figure_manager else self._create_fallback_figure(traces, algorithm, free_aspect_ratio)
@@ -133,31 +133,31 @@ class MERCallbacks:
                     self._preserve_zoom_state_fallback(fig, relayout_data)
                 
                 # Status info
-                total_mer_traces = len(existing_mer_traces) + (1 if mer_scatter_data and mer_scatter_data['ra'] else 0)
-                mer_points_count = len(mer_scatter_data['ra']) if mer_scatter_data and mer_scatter_data['ra'] else 0
-                mer_status = f" | MER high-res data: {mer_points_count} points in {total_mer_traces} regions"
+                total_catred_traces = len(existing_catred_traces) + (1 if catred_scatter_data and catred_scatter_data['ra'] else 0)
+                catred_points_count = len(catred_scatter_data['ra']) if catred_scatter_data and catred_scatter_data['ra'] else 0
+                catred_status = f" | CATRED high-res data: {catred_points_count} points in {total_catred_traces} regions"
                 aspect_mode = "Free aspect ratio" if free_aspect_ratio else "Equal aspect ratio"
                 
                 status = dbc.Alert([
                     html.H6(f"Algorithm: {algorithm}", className="mb-1"),
                     html.P(f"Merged clusters: {len(data['merged_data'])}", className="mb-1"),
                     html.P(f"Individual tiles: {len(data['tile_data'])}", className="mb-1"),
-                    html.P(f"Polygon mode: {'Filled' if show_polygons else 'Outline'}{mer_status}", className="mb-1"),
+                    html.P(f"Polygon mode: {'Filled' if show_polygons else 'Outline'}{catred_status}", className="mb-1"),
                     html.P(f"Aspect ratio: {aspect_mode}", className="mb-1"),
-                    html.Small(f"MER data rendered at: {pd.Timestamp.now().strftime('%H:%M:%S')}", className="text-muted")
+                    html.Small(f"CATRED data rendered at: {pd.Timestamp.now().strftime('%H:%M:%S')}", className="text-muted")
                 ], color="success", className="mt-2")
                 
-                # Create empty PHZ_PDF plot for MER render
+                # Create empty PHZ_PDF plot for CATRED render
                 empty_phz_fig = self._create_empty_phz_plot()
                 
                 return fig, empty_phz_fig, status
                 
             except Exception as e:
-                error_status = dbc.Alert(f"Error rendering MER data: {str(e)}", color="danger")
+                error_status = dbc.Alert(f"Error rendering CATRED data: {str(e)}", color="danger")
                 return dash.no_update, dash.no_update, error_status
     
-    def _setup_clear_mer_callback(self):
-        """Setup callback for clearing all MER data"""
+    def _setup_clear_catred_callback(self):
+        """Setup callback for clearing all CATRED data"""
         @self.app.callback(
             [Output('cluster-plot', 'figure', allow_duplicate=True), 
              Output('phz-pdf-plot', 'figure', allow_duplicate=True), 
@@ -174,23 +174,23 @@ class MERCallbacks:
              State('render-button', 'n_clicks')],
             prevent_initial_call=True
         )
-        def clear_mer_data(clear_n_clicks, algorithm, snr_lower, snr_upper, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data, render_n_clicks):
+        def clear_catred_data(clear_n_clicks, algorithm, snr_lower, snr_upper, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data, render_n_clicks):
             if clear_n_clicks == 0 or render_n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update
             
-            print(f"Debug: Clear MER data button clicked (click #{clear_n_clicks})")
+            print(f"Debug: Clear CATRED data button clicked (click #{clear_n_clicks})")
             
             try:
-                # Clear MER traces cache
+                # Clear CATRED traces cache
                 if self.catred_handler:
                     self.catred_handler.clear_traces_cache()
                 else:
-                    self.mer_traces_cache = []
+                    self.catred_traces_cache = []
                 
                 # Load data for selected algorithm
                 data = self.load_data(algorithm)
                 
-                # Create traces without any MER data
+                # Create traces without any CATRED data
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data,
                                           snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper)
                 
@@ -204,25 +204,25 @@ class MERCallbacks:
                     self._preserve_zoom_state_fallback(fig, relayout_data)
                 
                 # Status info
-                mer_status = " | MER high-res data: cleared"
+                catred_status = " | CATRED high-res data: cleared"
                 aspect_mode = "Free aspect ratio" if free_aspect_ratio else "Equal aspect ratio"
                 
                 status = dbc.Alert([
                     html.H6(f"Algorithm: {algorithm}", className="mb-1"),
                     html.P(f"Merged clusters: {len(data['merged_data'])}", className="mb-1"),
                     html.P(f"Individual tiles: {len(data['tile_data'])}", className="mb-1"),
-                    html.P(f"Polygon mode: {'Filled' if show_polygons else 'Outline'}{mer_status}", className="mb-1"),
+                    html.P(f"Polygon mode: {'Filled' if show_polygons else 'Outline'}{catred_status}", className="mb-1"),
                     html.P(f"Aspect ratio: {aspect_mode}", className="mb-1"),
-                    html.Small(f"MER data cleared at: {pd.Timestamp.now().strftime('%H:%M:%S')}", className="text-muted")
+                    html.Small(f"CATRED data cleared at: {pd.Timestamp.now().strftime('%H:%M:%S')}", className="text-muted")
                 ], color="warning", className="mt-2")
                 
                 # Create empty PHZ_PDF plot for clear action
-                empty_phz_fig = self._create_empty_phz_plot("MER data cleared - Click on a MER data point to view its PHZ_PDF")
+                empty_phz_fig = self._create_empty_phz_plot("CATRED data cleared - Click on a CATRED data point to view its PHZ_PDF")
                 
                 return fig, empty_phz_fig, status
                 
             except Exception as e:
-                error_status = dbc.Alert(f"Error clearing MER data: {str(e)}", color="danger")
+                error_status = dbc.Alert(f"Error clearing CATRED data: {str(e)}", color="danger")
                 return dash.no_update, dash.no_update, error_status
     
     def load_data(self, algorithm):
@@ -233,27 +233,27 @@ class MERCallbacks:
             # Fallback to inline data loading
             return self._load_data_fallback(algorithm)
     
-    def load_mer_scatter_data(self, data, relayout_data):
-        """Load MER scatter data using modular or fallback method"""
+    def load_catred_scatter_data(self, data, relayout_data):
+        """Load CATRED scatter data using modular or fallback method"""
         if self.catred_handler:
             return self.catred_handler.load_catred_scatter_data(data, relayout_data)
         else:
-            # Fallback to inline MER data loading
-            return self._load_mer_scatter_data_fallback(data, relayout_data)
+            # Fallback to inline CATRED data loading
+            return self._load_catred_scatter_data_fallback(data, relayout_data)
     
     def create_traces(self, data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data, 
-                     existing_mer_traces=None, manual_mer_data=None, snr_threshold_lower=None, snr_threshold_upper=None):
+                     existing_catred_traces=None, manual_catred_data=None, snr_threshold_lower=None, snr_threshold_upper=None):
         """Create traces using modular or fallback method"""
         if self.trace_creator:
             return self.trace_creator.create_all_traces(
                 data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data,
-                existing_mer_traces=existing_mer_traces, manual_mer_data=manual_mer_data,
+                existing_catred_traces=existing_catred_traces, manual_catred_data=manual_catred_data,
                 snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper
             )
         else:
             # Fallback to inline trace creation
             return self._create_traces_fallback(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data,
-                                              existing_mer_traces=existing_mer_traces, manual_mer_data=manual_mer_data,
+                                              existing_catred_traces=existing_catred_traces, manual_catred_data=manual_catred_data,
                                               snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper)
     
     # Helper methods
@@ -274,31 +274,31 @@ class MERCallbacks:
         
         return ra_range, dec_range
     
-    def _extract_existing_mer_traces(self, current_figure):
-        """Extract existing MER traces from current figure"""
-        existing_mer_traces = []
+    def _extract_existing_catred_traces(self, current_figure):
+        """Extract existing CATRED traces from current figure"""
+        existing_catred_traces = []
         if current_figure and 'data' in current_figure:
             for trace in current_figure['data']:
                 if (isinstance(trace, dict) and 
                     'name' in trace and 
                     trace['name'] and 
-                    ('MER High-Res Data' in trace['name'] or 'MER Tiles High-Res Data' in trace['name'])):
+                    ('CATRED High-Res Data' in trace['name'] or 'CATRED Tiles High-Res Data' in trace['name'])):
                     # Convert dict to Scattergl object for consistency
                     existing_trace = go.Scattergl(
                         x=trace.get('x', []),
                         y=trace.get('y', []),
                         mode=trace.get('mode', 'markers'),
                         marker=trace.get('marker', {}),
-                        name=trace.get('name', 'MER Data'),
+                        name=trace.get('name', 'CATRED Data'),
                         text=trace.get('text', []),
                         hoverinfo=trace.get('hoverinfo', 'text'),
                         showlegend=trace.get('showlegend', True)
                     )
-                    existing_mer_traces.append(existing_trace)
-                    print(f"Debug: Preserved existing MER trace: {trace['name']}")
-        return existing_mer_traces
+                    existing_catred_traces.append(existing_trace)
+                    print(f"Debug: Preserved existing CATRED trace: {trace['name']}")
+        return existing_catred_traces
     
-    def _create_empty_phz_plot(self, message="Click on a MER data point to view its PHZ_PDF"):
+    def _create_empty_phz_plot(self, message="Click on a CATRED data point to view its PHZ_PDF"):
         """Create empty PHZ_PDF plot with message"""
         empty_phz_fig = go.Figure()
         empty_phz_fig.update_layout(
@@ -331,14 +331,14 @@ class MERCallbacks:
             'snr_max': 100
         }
     
-    def _load_mer_scatter_data_fallback(self, data, relayout_data):
-        """Fallback MER scatter data loading method"""
-        # This would contain the original inline MER data loading logic
+    def _load_catred_scatter_data_fallback(self, data, relayout_data):
+        """Fallback CATRED scatter data loading method"""
+        # This would contain the original inline CATRED data loading logic
         # For now, return empty structure to prevent errors
         return {'ra': [], 'dec': [], 'phz_pdf': [], 'phz_mode_1': []}
     
     def _create_traces_fallback(self, data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data,
-                               existing_mer_traces=None, manual_mer_data=None, snr_threshold_lower=None, snr_threshold_upper=None):
+                               existing_catred_traces=None, manual_catred_data=None, snr_threshold_lower=None, snr_threshold_upper=None):
         """Fallback trace creation method"""
         # This would contain the original inline trace creation logic
         # For now, return empty traces to prevent errors

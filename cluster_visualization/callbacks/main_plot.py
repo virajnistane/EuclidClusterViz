@@ -22,7 +22,7 @@ class MainPlotCallbacks:
         Args:
             app: Dash application instance
             data_loader: DataLoader instance for data operations
-            catred_handler: CATREDHandler instance for MER operations
+            catred_handler: CATREDHandler instance for CATRED operations
             trace_creator: TraceCreator instance for trace creation
             figure_manager: FigureManager instance for figure layout
         """
@@ -34,8 +34,8 @@ class MainPlotCallbacks:
         
         # Fallback attributes for backward compatibility
         self.data_cache = {}
-        self.mer_traces_cache = []
-        self.current_mer_data = None
+        self.catred_traces_cache = []
+        self.current_catred_data = None
         
         self.setup_callbacks()
     
@@ -110,11 +110,11 @@ class MainPlotCallbacks:
                 # Load data for selected algorithm
                 data = self.load_data(algorithm)
                 
-                # Reset MER traces cache for fresh render
+                # Reset CATRED traces cache for fresh render
                 if self.catred_handler:
                     self.catred_handler.clear_traces_cache()
                 else:
-                    self.mer_traces_cache = []
+                    self.catred_traces_cache = []
                 
                 # Create traces
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data, 
@@ -174,14 +174,14 @@ class MainPlotCallbacks:
                 # Load data for selected algorithm
                 data = self.load_data(algorithm)
                 
-                # Extract existing MER traces from current figure to preserve them
-                existing_mer_traces = self._extract_existing_mer_traces(current_figure)
+                # Extract existing CATRED traces from current figure to preserve them
+                existing_catred_traces = self._extract_existing_catred_traces(current_figure)
                 
-                print(f"Debug: Options update - preserving {len(existing_mer_traces)} MER traces")
+                print(f"Debug: Options update - preserving {len(existing_catred_traces)} CATRED traces")
                 
-                # Create traces with existing MER traces preserved
+                # Create traces with existing CATRED traces preserved
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data, 
-                                          existing_mer_traces=existing_mer_traces, snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper)
+                                          existing_catred_traces=existing_catred_traces, snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper)
                 
                 # Create figure
                 fig = self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio) if self.figure_manager else self._create_fallback_figure(traces, algorithm, free_aspect_ratio)
@@ -323,28 +323,28 @@ class MainPlotCallbacks:
         
         return error_fig, error_phz_fig, error_status
     
-    def _extract_existing_mer_traces(self, current_figure):
-        """Extract existing MER traces from current figure"""
-        existing_mer_traces = []
+    def _extract_existing_catred_traces(self, current_figure):
+        """Extract existing CATRED traces from current figure"""
+        existing_catred_traces = []
         if current_figure and 'data' in current_figure:
             for trace in current_figure['data']:
                 if (isinstance(trace, dict) and 
                     'name' in trace and 
                     trace['name'] and 
-                    ('MER High-Res Data' in trace['name'] or 'MER Tiles High-Res Data' in trace['name'])):
+                    ('CATRED High-Res Data' in trace['name'] or 'CATRED Tiles High-Res Data' in trace['name'])):
                     # Convert dict to Scattergl object for consistency
                     existing_trace = go.Scattergl(
                         x=trace.get('x', []),
                         y=trace.get('y', []),
                         mode=trace.get('mode', 'markers'),
                         marker=trace.get('marker', {}),
-                        name=trace.get('name', 'MER Data'),
+                        name=trace.get('name', 'CATRED Data'),
                         text=trace.get('text', []),
                         hoverinfo=trace.get('hoverinfo', 'text'),
                         showlegend=trace.get('showlegend', True)
                     )
-                    existing_mer_traces.append(existing_trace)
-        return existing_mer_traces
+                    existing_catred_traces.append(existing_trace)
+        return existing_catred_traces
     
     def _calculate_filtered_count(self, merged_data, snr_lower, snr_upper):
         """Calculate filtered cluster count based on SNR range"""
