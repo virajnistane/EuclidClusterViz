@@ -4,10 +4,13 @@ Configuration file for Cluster Visualization tools
 
 This file contains all user-specific paths and settings that need to be
 configured for different users or environments.
+
+The configuration is read from config.ini (or config_local.ini if it exists).
 """
 
 import os
 import subprocess
+import configparser
 from pathlib import Path
 
 def get_git_repo_root():
@@ -31,29 +34,77 @@ def get_git_repo_root():
 class Config:
     """Configuration class for cluster visualization paths and settings"""
     
-    def __init__(self):
-        # Base configuration - modify these paths for your environment
-        self._base_workspace = '/sps/euclid/OU-LE3/CL/ial_workspace/workdir'
-        self._cvmfs_eden_path = '/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1'
-        
+    def __init__(self, config_file=None):
         # Auto-detect project root from git repository
         self._detected_project_root = get_git_repo_root()
+        
+        # Load configuration from INI file
+        self._load_config(config_file)
         
         # Validate and set up paths
         self._setup_paths()
     
+    def _load_config(self, config_file=None):
+        """Load configuration from INI file"""
+        self.config_parser = configparser.ConfigParser(
+            interpolation=configparser.ExtendedInterpolation()
+        )
+        
+        if config_file is None:
+            # Try config_local.ini first (gitignored), then config.ini
+            config_files = [
+                os.path.join(self._detected_project_root, 'config_local.ini'),
+                os.path.join(self._detected_project_root, 'config.ini')
+            ]
+            
+            for config_file in config_files:
+                if os.path.exists(config_file):
+                    print(f"📋 Loading configuration from: {config_file}")
+                    self.config_parser.read(config_file)
+                    self._config_file_used = config_file
+                    break
+            else:
+                raise FileNotFoundError(
+                    f"No configuration file found. Expected one of: {config_files}\n"
+                    f"Please create config_local.ini or ensure config.ini exists."
+                )
+        else:
+            if not os.path.exists(config_file):
+                raise FileNotFoundError(f"Configuration file not found: {config_file}")
+            self.config_parser.read(config_file)
+            self._config_file_used = config_file
+    
+    def _expand_path(self, path_str):
+        """Expand environment variables and resolve paths"""
+        if path_str:
+            return os.path.expandvars(os.path.expanduser(path_str))
+        return path_str
+    
     def _setup_paths(self):
-        """Set up all derived paths and validate they exist"""
+        """Set up all derived paths from configuration"""
+        
+        # Read paths from configuration
+        self._base_workspace = self._expand_path(self.config_parser.get('paths', 'base_workspace'))
+        self._cvmfs_eden_path = self._expand_path(self.config_parser.get('paths', 'eden_path'))
         
         # Main data directories
-        self.mergedetcat_dir = os.path.join(self._base_workspace, 'MergeDetCat/RR2_south')
+        self.mergedetcat_dir = self._expand_path(self.config_parser.get('paths', 'mergedetcat_dir'))
         self.mergedetcat_data_dir = os.path.join(self.mergedetcat_dir, 'data')
         self.mergedetcat_inputs_dir = os.path.join(self.mergedetcat_dir, 'inputs')
         
-        # Downloads and catalog directories
-        self.rr2_downloads_dir = os.path.join(self._base_workspace, 'RR2_downloads')
-        self.catred_dir = os.path.join(self.rr2_downloads_dir, 'DpdLE3clFullInputCat')
-        self.effcov_mask_dir = os.path.join(self.rr2_downloads_dir, 'DpdHealpixEffectiveCoverageVMPZ')
+        # Downloads directory
+        self.rr2_downloads_dir = self._expand_path(self.config_parser.get('paths', 'rr2_downloads_dir'))
+        
+        # Catalog and mask directories (check if they're defined in files section first)
+        if self.config_parser.has_option('files', 'catred_dir'):
+            self.catred_dir = self._expand_path(self.config_parser.get('files', 'catred_dir'))
+        else:
+            self.catred_dir = os.path.join(self.rr2_downloads_dir, 'DpdLE3clFullInputCat')
+            
+        if self.config_parser.has_option('files', 'effcov_mask_dir'):
+            self.effcov_mask_dir = self._expand_path(self.config_parser.get('files', 'effcov_mask_dir'))
+        else:
+            self.effcov_mask_dir = os.path.join(self.rr2_downloads_dir, 'DpdHealpixEffectiveCoverageVMPZ')
         
         # Environment paths
         self.eden_path = self._cvmfs_eden_path
@@ -64,19 +115,57 @@ class Config:
     
     def get_output_dir(self, algorithm):
         """Get algorithm-specific output directory"""
-        return os.path.join(self.mergedetcat_dir, f'outvn_mergedetcat_rr2south_{algorithm}_3')
+        algorithm_lower = algorithm.lower()
+        if algorithm_lower == 'pzwav':
+            dirname = self.config_parser.get('files', 'pzwav_output_dir')
+        elif algorithm_lower == 'amico':
+            dirname = self.config_parser.get('files', 'amico_output_dir')
+        else:
+            raise ValueError(f"Unknown algorithm: {algorithm}. Supported: PZWAV, AMICO")
+        
+        # Check if it's an absolute path
+        expanded_path = self._expand_path(dirname)
+        if os.path.isabs(expanded_path):
+            return expanded_path
+        else:
+            return os.path.join(self.mergedetcat_dir, dirname)
     
     def get_detfiles_list(self, algorithm):
         """Get path to detection files list for given algorithm"""
-        return os.path.join(self.mergedetcat_dir, f'detfiles_input_{algorithm.lower()}_3.json')
+        algorithm_lower = algorithm.lower()
+        if algorithm_lower == 'pzwav':
+            filename = self.config_parser.get('files', 'pzwav_detfiles_list')
+        elif algorithm_lower == 'amico':
+            filename = self.config_parser.get('files', 'amico_detfiles_list')
+        else:
+            raise ValueError(f"Unknown algorithm: {algorithm}. Supported: PZWAV, AMICO")
+        
+        # Check if it's an absolute path
+        expanded_path = self._expand_path(filename)
+        if os.path.isabs(expanded_path):
+            return expanded_path
+        else:
+            return os.path.join(self.mergedetcat_dir, filename)
     
     def get_catred_fileinfo_csv(self):
         """Get path to catred file info CSV"""
-        return os.path.join(self.rr2_downloads_dir, 'catred_fileinfo.csv')
+        filename = self.config_parser.get('files', 'catred_fileinfo_csv')
+        # Check if it's an absolute path
+        expanded_path = self._expand_path(filename)
+        if os.path.isabs(expanded_path):
+            return expanded_path
+        else:
+            return os.path.join(self.rr2_downloads_dir, filename)
     
     def get_catred_polygons_pkl(self):
         """Get path to catred polygons pickle file"""
-        return os.path.join(self.rr2_downloads_dir, 'catred_polygons_by_tileid.pkl')
+        filename = self.config_parser.get('files', 'catred_polygons_pkl')
+        # Check if it's an absolute path
+        expanded_path = self._expand_path(filename)
+        if os.path.isabs(expanded_path):
+            return expanded_path
+        else:
+            return os.path.join(self.rr2_downloads_dir, filename)
     
     def validate_paths(self):
         """Validate that critical paths exist and return status"""
@@ -123,6 +212,7 @@ class Config:
     def print_config_summary(self):
         """Print a summary of current configuration"""
         print("=== Cluster Visualization Configuration ===")
+        print(f"Configuration file: {self._config_file_used}")
         print(f"Base workspace: {self._base_workspace}")
         print(f"EDEN path: {self.eden_path}")
         print(f"Project root (auto-detected): {self.project_root}")
@@ -151,17 +241,25 @@ def from_env(var_name, default_value):
 
 # Alternative configuration for different environments
 class ConfigFromEnv(Config):
-    """Configuration class that reads from environment variables"""
+    """Configuration class that reads from environment variables with INI fallback"""
     
-    def __init__(self):
-        # Read from environment with fallbacks
-        self._base_workspace = from_env('EUCLID_WORKSPACE', '/sps/euclid/OU-LE3/CL/ial_workspace/workdir')
-        self._cvmfs_eden_path = from_env('EDEN_PATH', '/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1')
+    def __init__(self, config_file=None):
+        super().__init__(config_file)
         
-        # Auto-detect project root from git repository
-        self._detected_project_root = get_git_repo_root()
+        # Override with environment variables if they exist
+        env_workspace = os.environ.get('EUCLID_WORKSPACE')
+        if env_workspace:
+            self._base_workspace = env_workspace
+            print(f"🌍 Using EUCLID_WORKSPACE from environment: {env_workspace}")
         
-        super()._setup_paths()
+        env_eden = os.environ.get('EDEN_PATH')  
+        if env_eden:
+            self._cvmfs_eden_path = env_eden
+            self.eden_path = env_eden
+            print(f"🌍 Using EDEN_PATH from environment: {env_eden}")
+        
+        # Re-setup paths with environment overrides
+        self._setup_paths()
 
 if __name__ == "__main__":
     # Test configuration when run directly

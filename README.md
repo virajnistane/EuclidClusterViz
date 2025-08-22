@@ -73,7 +73,37 @@ source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 
 ## Configuration
 
-The application requires minimal configuration. All necessary dependencies are listed in `requirements.txt`:
+The application uses an INI-based configuration system for easy customization. The configuration specifies all data paths and settings.
+
+### Quick Setup
+
+1. **Automatic setup** (recommended):
+   ```bash
+   ./setup_config.sh
+   ```
+   This script will detect common paths and create a personalized `config_local.ini` file.
+
+2. **Manual setup**:
+   ```bash
+   cp config_example.ini config_local.ini
+   # Edit config_local.ini with your specific paths
+   ```
+
+3. **Test configuration**:
+   ```bash
+   python config.py
+   ```
+
+### Configuration Files
+
+- `config.ini` - Default configuration (tracked in git)
+- `config_local.ini` - Your personal configuration (gitignored, takes precedence)
+- `config_example.ini` - Example with common configuration patterns
+
+### Key Configuration Sections
+
+- **`[paths]`** - All data directories and file locations
+- **`[files]`** - Specific file and directory names for each algorithm
 
 ```bash
 pip install -r requirements.txt

@@ -2,52 +2,109 @@
 
 ## Overview
 
-The Cluster Visualization tools now use a centralized configuration system for improved portability across different users and environments. This eliminates hardcoded paths and makes it easy to adapt the tools to different computing environments.
+The Cluster Visualization tools use an INI-based configuration system that makes it easy to adapt the tools to different computing environments. The configuration system supports user-specific settings, environment variables, and automatic path detection.
 
 ## Quick Setup
 
-### 1. Run the Launcher
+### 1. Automatic Configuration Setup
 
 ```bash
 cd /path/to/ClusterVisualization
+./setup_config.sh
+```
+
+This interactive script will:
+- Detect common Euclid data paths automatically
+- Prompt you for any missing paths
+- Create a personalized `config_local.ini` file
+- Test the configuration to ensure it works
+
+### 2. Run the Application
+
+```bash
 ./launch.sh
 ```
 
 The launcher will:
-- Automatically check and activate the EDEN environment
-- Test dependencies
+- Automatically load your configuration
+- Check and activate the EDEN environment  
 - Provide options to run the Dash app or test dependencies
-- Handle all configuration automatically
+- Handle all environment setup automatically
 
-### 2. Manual Configuration
+### 3. Manual Configuration (Advanced)
 
-If you prefer to configure manually, edit `config.py`:
+If you prefer to configure manually:
 
-```python
-# Base configuration - modify these paths for your environment
-self._base_workspace = '/your/euclid/workspace/path'
-self._cvmfs_eden_path = '/your/cvmfs/eden/path'
+```bash
+# Copy the example configuration
+cp config_example.ini config_local.ini
+
+# Edit with your specific paths
+nano config_local.ini
+
+# Test the configuration
+python config.py
 ```
 
-### 3. Environment Variables (Alternative)
+## Configuration File Structure
 
-You can also use environment variables:
+### Configuration Files
+
+The system uses three configuration files:
+
+- **`config.ini`** - Default configuration (version controlled)
+- **`config_local.ini`** - Your personal configuration (gitignored, highest priority)
+- **`config_example.ini`** - Example configurations for reference
+
+### Configuration Sections
+
+#### `[paths]` - Data Locations
+```ini
+base_workspace = /sps/euclid/OU-LE3/CL/ial_workspace/workdir
+eden_path = /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1
+mergedetcat_dir = ${paths:base_workspace}/MergeDetCat/RR2_south
+rr2_downloads_dir = ${paths:base_workspace}/RR2_downloads
+```
+
+#### `[files]` - File and Directory Names
+```ini
+# PZWAV algorithm files
+pzwav_detfiles_list = detfiles_input_pzwav_3.json
+pzwav_output_dir = outvn_mergedetcat_rr2south_PZWAV_3
+
+# AMICO algorithm files  
+amico_detfiles_list = detfiles_input_amico_3.json
+amico_output_dir = outvn_mergedetcat_rr2south_AMICO_3
+
+# Common files
+catred_fileinfo_csv = catred_fileinfo.csv
+catred_polygons_pkl = catred_polygons_by_tileid.pkl
+```
+
+### Variable Interpolation
+
+The configuration system supports variable interpolation:
+```ini
+base_workspace = /data/euclid
+mergedetcat_dir = ${paths:base_workspace}/MergeDetCat/RR2_south
+```
+
+Environment variables are also supported:
+```ini
+base_workspace = ${HOME}/euclid_data
+eden_path = ${EDEN_PATH}
+```
+
+### Environment Variables (Alternative)
+
+You can also use environment variables to override configuration:
 
 ```bash
 export EUCLID_WORKSPACE="/your/workspace/path"
 export EDEN_PATH="/your/eden/path"
 ```
 
-Then use `ConfigFromEnv` in your scripts.
-
-## Configuration Files
-
-### `config.py`
-Main configuration file containing:
-- **Base paths**: workspace, EDEN environment, user home
-- **Derived paths**: data directories, output directories
-- **Path validation**: checks that critical paths exist
-- **Algorithm-specific paths**: output directories, detection file lists
+Then use `ConfigFromEnv` in your scripts for environment variable priority.
 
 ## Using the Configuration
 

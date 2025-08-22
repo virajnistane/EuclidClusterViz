@@ -2,6 +2,9 @@
 *.backup
 cluster_visualization/src/generate_mer_image.py
 
+# Local configuration file (user-specific paths)
+config_local.ini
+
 venv/
 
 # Byte-compiled / optimized / DLL files
