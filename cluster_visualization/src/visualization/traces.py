@@ -100,19 +100,26 @@ class TraceCreator:
         """Get all MER data points for proximity-based enhancement."""
         all_points = []
         
+        # Clear bounds cache when getting new MER data (important for multiple renders)
+        if hasattr(self, '_mer_bounds_cache'):
+            delattr(self, '_mer_bounds_cache')
+            print("Debug: Cleared old MER bounds cache for new data")
+        
         # Collect coordinates from manual MER data
         if manual_mer_data and manual_mer_data.get('ra'):
             for ra, dec in zip(manual_mer_data['ra'], manual_mer_data['dec']):
                 all_points.append((ra, dec))
+            print(f"Debug: Added {len(manual_mer_data['ra'])} points from manual MER data")
         
         # Collect coordinates from existing MER traces (passed from cache)
         if existing_mer_traces and len(existing_mer_traces) > 0:
             # MER traces exist, keep current stored data
             if hasattr(self, 'current_mer_data') and self.current_mer_data:
-                for mer_data in self.current_mer_data.values():
+                for trace_name, mer_data in self.current_mer_data.items():
                     if mer_data and mer_data.get('ra'):
                         for ra, dec in zip(mer_data['ra'], mer_data['dec']):
                             all_points.append((ra, dec))
+                        print(f"Debug: Added {len(mer_data['ra'])} points from existing trace '{trace_name}'")
         else:
             # No existing MER traces - clear stored MER data to revert markers
             if hasattr(self, 'current_mer_data'):
@@ -124,9 +131,10 @@ class TraceCreator:
         
         # If no MER data found, return None (no enhancement)
         if not all_points:
+            print("Debug: No MER data points found - no enhancement will be applied")
             return None
         
-        print(f"Debug: Found {len(all_points)} MER data points for proximity-based enhancement")
+        print(f"Debug: Found {len(all_points)} total MER data points for proximity-based enhancement")
         return all_points
     
     def clear_mer_data(self):
@@ -139,23 +147,61 @@ class TraceCreator:
         if hasattr(self, '_mer_bounds_cache'):
             delattr(self, '_mer_bounds_cache')
             print("Debug: MER bounds cache cleared")
+        if hasattr(self, '_subsampled_mer_cache'):
+            delattr(self, '_subsampled_mer_cache')
+            print("Debug: Subsampled MER cache cleared")
+    
+    def _get_subsampled_mer_points(self, mer_points: List) -> List:
+        """Get subsampled MER points for proximity detection, with caching."""
+        if not mer_points:
+            return mer_points
+        
+        # Create a simple hash to detect changes in MER data
+        mer_hash = hash(str(len(mer_points)) + str(mer_points[0] if mer_points else ""))
+        
+        # Check if we have cached subsampled points for this dataset
+        if hasattr(self, '_subsampled_mer_cache'):
+            cached_hash, cached_points = self._subsampled_mer_cache
+            if cached_hash == mer_hash:
+                return cached_points
+        
+        # For very large datasets, subsample MER points for proximity detection
+        if len(mer_points) > 20000:  # Lower threshold for better performance
+            import numpy as np
+            # Use every 5th point for proximity detection to speed up calculation
+            sampled_points = mer_points[::5]
+            print(f"Debug: Subsampled {len(sampled_points)} from {len(mer_points)} MER points for proximity")
+        else:
+            sampled_points = mer_points
+            
+        # Cache the result
+        self._subsampled_mer_cache = (mer_hash, sampled_points)
+        return sampled_points
     
     def _is_point_near_mer_region(self, ra: float, dec: float, mer_points: List, proximity_threshold: float = 0.01) -> bool:
         """Check if a point is within proximity threshold of any MER data point."""
         if not mer_points:
             return False
         
-        # Pre-compute MER bounds for quick rejection
-        if not hasattr(self, '_mer_bounds_cache'):
+        # Get cached subsampled points
+        sampled_points = self._get_subsampled_mer_points(mer_points)
+        
+        # Create a simple hash of the sampled points to detect changes
+        points_to_hash = sampled_points[:100] if len(sampled_points) > 100 else sampled_points
+        mer_points_hash = hash(tuple(points_to_hash))
+        
+        # Pre-compute MER bounds for quick rejection (with validation)
+        if not hasattr(self, '_mer_bounds_cache') or self._mer_bounds_cache.get('hash') != mer_points_hash:
             import numpy as np
-            mer_array = np.array(mer_points)
+            mer_array = np.array(sampled_points)
             self._mer_bounds_cache = {
                 'ra_min': np.min(mer_array[:, 0]) - proximity_threshold,
                 'ra_max': np.max(mer_array[:, 0]) + proximity_threshold,
                 'dec_min': np.min(mer_array[:, 1]) - proximity_threshold,
-                'dec_max': np.max(mer_array[:, 1]) + proximity_threshold
+                'dec_max': np.max(mer_array[:, 1]) + proximity_threshold,
+                'hash': mer_points_hash
             }
-            print(f"Debug: MER bounds cache created - {len(mer_points)} points")
+            print(f"Debug: MER bounds cache created/updated - {len(sampled_points)} sampled points, hash: {mer_points_hash}")
         
         # Quick bounding box rejection
         bounds = self._mer_bounds_cache
@@ -163,8 +209,8 @@ class TraceCreator:
                 bounds['dec_min'] <= dec <= bounds['dec_max']):
             return False
         
-        # Only do expensive distance calculation if within bounding box
-        for mer_ra, mer_dec in mer_points:
+        # Only do expensive distance calculation if within bounding box (use sampled points)
+        for mer_ra, mer_dec in sampled_points:
             distance_sq = (ra - mer_ra) ** 2 + (dec - mer_dec) ** 2
             if distance_sq <= proximity_threshold ** 2:  # Avoid sqrt
                 return True
