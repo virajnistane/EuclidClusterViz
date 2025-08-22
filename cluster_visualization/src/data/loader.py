@@ -93,6 +93,7 @@ class DataLoader:
         data_merged = self._load_merged_catalog(paths)
         data_by_tile = self._load_tile_data(paths)
         catred_fileinfo_df = self._load_catred_info(paths)
+        effcovmask_fileinfo_df = self._load_effcovmask_info(paths)
         
         # Calculate SNR range for UI slider
         snr_min = float(data_merged['SNR_CLUSTER'].min())
@@ -104,6 +105,7 @@ class DataLoader:
             'merged_data': data_merged,
             'tile_data': data_by_tile,
             'catred_info': catred_fileinfo_df,
+            'effcovmask_info': effcovmask_fileinfo_df,
             'algorithm': select_algorithm,
             'snr_threshold_lower': None,  # Will be set by UI
             'snr_threshold_upper': None,  # Will be set by UI
@@ -127,6 +129,7 @@ class DataLoader:
                 'rr2_downloads_dir': self.config.rr2_downloads_dir,
                 'catred_fileinfo_csv': self.config.get_catred_fileinfo_csv(),
                 'catred_polygon_pkl': self.config.get_catred_polygons_pkl(),
+                'effcovmask_fileinfo_csv': self.config.get_effcovmask_fileinfo_csv(),
                 'detfiles_list': self.config.get_detfiles_list(algorithm)
             }
             print("✓ Using configuration-based paths")
@@ -134,6 +137,8 @@ class DataLoader:
             # Fallback to hardcoded paths
             base_dir = '/sps/euclid/OU-LE3/CL/ial_workspace/workdir/MergeDetCat/RR2_south/'
             rr2_downloads = '/sps/euclid/OU-LE3/CL/ial_workspace/workdir/RR2_downloads'
+            catred_dir = os.path.join(rr2_downloads, 'DpdLE3clFullInputCat')
+            effcov_mask_dir = os.path.join(rr2_downloads, 'DpdHealpixEffectiveCoverageVMPZ')
             
             paths = {
                 'mergedetcat_dir': base_dir,
@@ -141,8 +146,9 @@ class DataLoader:
                 'inputs_dir': os.path.join(base_dir, 'inputs'),
                 'output_dir': os.path.join(base_dir, f'outvn_mergedetcat_rr2south_{algorithm}_3'),
                 'rr2_downloads_dir': rr2_downloads,
-                'catred_fileinfo_csv': os.path.join(rr2_downloads, 'catred_fileinfo.csv'),
-                'catred_polygon_pkl': os.path.join(rr2_downloads, 'catred_polygons_by_tileid.pkl'),
+                'catred_fileinfo_csv': os.path.join(catred_dir, 'catred_fileinfo.csv'),
+                'catred_polygon_pkl': os.path.join(catred_dir, 'catred_polygons_by_tileid.pkl'),
+                'effcovmask_fileinfo_csv': os.path.join(effcov_mask_dir, 'effcovmask_fileinfo.csv'),
                 'detfiles_list': os.path.join(base_dir, f'detfiles_input_{algorithm.lower()}_3.json')
             }
             print("⚠️  Using fallback hardcoded paths")
@@ -212,25 +218,287 @@ class DataLoader:
         catred_fileinfo_csv = paths['catred_fileinfo_csv']
         catred_polygon_pkl = paths['catred_polygon_pkl']
         
-        # Load CSV file info
+        # Load CSV file info or generate it if it doesn't exist
         catred_fileinfo_df = pd.DataFrame()
         if os.path.exists(catred_fileinfo_csv):
+            print(f'catred_fileinfo.csv already exists in {os.path.dirname(catred_fileinfo_csv)}')
             catred_fileinfo_df = pd.read_csv(catred_fileinfo_csv)
             catred_fileinfo_df.set_index('tileid', inplace=True)
             print("Loaded catred file info")
         else:
-            print(f"Warning: catred_fileinfo.csv not found at {catred_fileinfo_csv}")
+            print(f'catred_fileinfo.csv does not exist in {os.path.dirname(catred_fileinfo_csv)}')
+            catred_fileinfo_df = self._generate_catred_fileinfo(paths)
+
         
-        # Load polygon data
+        # Load polygon data or generate it if it doesn't exist
         if os.path.exists(catred_polygon_pkl) and not catred_fileinfo_df.empty:
             with open(catred_polygon_pkl, 'rb') as f:
                 catred_fileinfo_dict = pickle.load(f)
             catred_fileinfo_df['polygon'] = pd.Series(catred_fileinfo_dict)
             print("Loaded catred polygons")
+        elif not catred_fileinfo_df.empty:
+            print(f"catred polygons not found at {catred_polygon_pkl}")
+            catred_fileinfo_df = self._generate_catred_polygons(catred_fileinfo_df, paths)
         else:
-            print(f"Warning: catred polygons not found at {catred_polygon_pkl}")
+            print("Warning: Cannot generate polygons - catred_fileinfo_df is empty")
         
         return catred_fileinfo_df
+    
+    def _generate_catred_fileinfo(self, paths: Dict[str, str]) -> pd.DataFrame:
+        """Generate catred_fileinfo.csv from XML files (based on notebook cell 23)."""
+        print('Processing catred XML files to create catred_fileinfo dictionary')
+        
+        # Get catred directory from config
+        if self.config and hasattr(self.config, 'catred_dir'):
+            catred_dir = self.config.catred_dir
+        else:
+            # Fallback to rr2_downloads/DpdLE3clFullInputCat
+            catred_dir = os.path.join(os.path.dirname(paths['catred_fileinfo_csv']), 'DpdLE3clFullInputCat')
+        
+        if not os.path.exists(catred_dir):
+            print(f"Warning: CATRED directory not found at {catred_dir}")
+            return pd.DataFrame()
+        
+        # Get list of XML files
+        catredxmlfiles = [i for i in os.listdir(catred_dir) if i.endswith('.xml')]
+        
+        if not catredxmlfiles:
+            print(f"Warning: No XML files found in {catred_dir}")
+            return pd.DataFrame()
+        
+        print(f"Found {len(catredxmlfiles)} CATRED XML files")
+        
+        catred_fileinfo = {}
+        for catredxmlfile in catredxmlfiles:
+            try:
+                # Extract tile ID from XML
+                mertileid = self.get_xml_element(
+                    os.path.join(catred_dir, catredxmlfile), 
+                    'Data/TileIndex'
+                ).text
+                
+                catred_fileinfo[mertileid] = {}
+                catred_fileinfo[mertileid]['xml_file'] = os.path.join(catred_dir, catredxmlfile)
+
+                # Extract FITS file name from XML
+                catred_fitsfile = self.get_xml_element(
+                    os.path.join(catred_dir, catredxmlfile), 
+                    'Data/Catalog/DataContainer/FileName'
+                ).text
+                catred_fileinfo[mertileid]['fits_file'] = os.path.join(catred_dir, catred_fitsfile)
+                
+            except Exception as e:
+                print(f"Warning: Failed to process {catredxmlfile}: {e}")
+                continue
+
+        if not catred_fileinfo:
+            print("Warning: No valid CATRED file information could be extracted")
+            return pd.DataFrame()
+
+        # Create DataFrame
+        catred_fileinfo_df = pd.DataFrame.from_dict(catred_fileinfo, orient='index')
+        catred_fileinfo_df.index.name = 'tileid'
+        catred_fileinfo_df.index = catred_fileinfo_df.index.astype(int)
+        catred_fileinfo_df = catred_fileinfo_df[['xml_file', 'fits_file']]
+        
+        print(f"Generated catred_fileinfo for {len(catred_fileinfo_df)} tiles")
+        
+        # Save the DataFrame to a CSV file
+        output_csv = paths['catred_fileinfo_csv']
+        os.makedirs(os.path.dirname(output_csv), exist_ok=True)
+        catred_fileinfo_df.to_csv(output_csv, index=True)
+        print(f"Saved catred_fileinfo.csv to {output_csv}")
+        
+        return catred_fileinfo_df
+    
+    def _generate_catred_polygons(self, catred_fileinfo_df: pd.DataFrame, paths: Dict[str, str]) -> pd.DataFrame:
+        """Generate catred_polygons_by_tileid.pkl from XML files (based on notebook cells 25-26)."""
+        print('Extracting polygons from XML files and saving to catred_fileinfo_df')
+        
+        # Import shapely here to avoid import issues if not needed
+        try:
+            from shapely.geometry import Polygon as ShapelyPolygon
+        except ImportError:
+            print("Warning: Shapely not available - cannot generate polygon data")
+            return catred_fileinfo_df
+        
+        def extract_polygon_from_xml(xml_file):
+            """Extract polygon from CATRED XML file."""
+            try:
+                merpolygon = self.get_xml_element(xml_file, 'Data/SpatialCoverage/Polygon')
+                catred_vertices = []
+                vertices = merpolygon.findall('Vertex')
+                for vertex in vertices:
+                    coords = (float(vertex.find('C1').text), float(vertex.find('C2').text))
+                    catred_vertices.append(coords)
+                return ShapelyPolygon(catred_vertices)
+            except Exception as e:
+                print(f"Warning: Failed to extract polygon from {xml_file}: {e}")
+                return None
+        
+        # Make sure the 'polygon' column exists in the DataFrame
+        if 'polygon' not in catred_fileinfo_df.columns:
+            catred_fileinfo_df['polygon'] = None
+            
+        # Apply the function to each row in the DataFrame to populate the 'polygon' column
+        catred_fileinfo_df['polygon'] = catred_fileinfo_df['xml_file'].apply(extract_polygon_from_xml)
+        
+        # Remove rows where polygon extraction failed
+        initial_count = len(catred_fileinfo_df)
+        catred_fileinfo_df = catred_fileinfo_df.dropna(subset=['polygon'])
+        final_count = len(catred_fileinfo_df)
+        
+        if final_count < initial_count:
+            print(f"Warning: {initial_count - final_count} polygons could not be extracted")
+        
+        if final_count == 0:
+            print("Error: No valid polygons could be extracted")
+            return catred_fileinfo_df
+        
+        # Make a dict of polygon values and save it to a pickle file
+        catred_fileinfo_dict = catred_fileinfo_df[['polygon']].to_dict(orient='index')
+        for key, val in catred_fileinfo_dict.items():
+            catred_fileinfo_dict[key] = val['polygon']  # Extract the ShapelyPolygon object from the dict
+            
+        output_pickle = paths['catred_polygon_pkl']
+        os.makedirs(os.path.dirname(output_pickle), exist_ok=True)
+        
+        with open(output_pickle, 'wb') as f:
+            pickle.dump(catred_fileinfo_dict, f)
+            
+        print(f"Generated and saved {final_count} catred polygons to {output_pickle}")
+        
+        return catred_fileinfo_df
+    
+    def _load_effcovmask_info(self, paths: Dict[str, str]) -> pd.DataFrame:
+        """Load effective coverage mask file info, generating if not exists (based on notebook cell 29)."""
+        effcovmask_fileinfo_csv = paths['effcovmask_fileinfo_csv']
+        
+        # Check if CSV file exists
+        if os.path.exists(effcovmask_fileinfo_csv):
+            print(f"effcovmask_fileinfo.csv already exists in {os.path.dirname(effcovmask_fileinfo_csv)}")
+            effcovmask_fileinfo_df = pd.read_csv(effcovmask_fileinfo_csv)
+            effcovmask_fileinfo_df.set_index('tileid', inplace=True)
+            print('effcovmask_fileinfo loaded from CSV file')
+            return effcovmask_fileinfo_df
+        else:
+            print(f"effcovmask_fileinfo.csv not found at {effcovmask_fileinfo_csv}")
+            return self._generate_effcovmask_fileinfo(paths)
+    
+    def _generate_effcovmask_fileinfo(self, paths: Dict[str, str]) -> pd.DataFrame:
+        """Generate effcovmask_fileinfo.csv from XML files (based on notebook cell 29)."""
+        print('Processing effective coverage mask XML files to create effcovmask_fileinfo dictionary')
+        
+        # Get effcov_mask_dir from config
+        if self.config and hasattr(self.config, 'effcov_mask_dir'):
+            effcov_mask_dir = self.config.effcov_mask_dir
+        else:
+            # Fallback to rr2_downloads/DpdHealpixEffectiveCoverageVMPZ
+            effcov_mask_dir = os.path.join(os.path.dirname(paths['effcovmask_fileinfo_csv']), 'DpdHealpixEffectiveCoverageVMPZ')
+        
+        if not os.path.exists(effcov_mask_dir):
+            print(f"Warning: Effective coverage mask directory not found at {effcov_mask_dir}")
+            return pd.DataFrame()
+        
+        # Get list of XML files (based on notebook: files with 'DpdHealpixEffectiveCoverageVMPZ' in name)
+        effcovxmlfiles = [i for i in os.listdir(effcov_mask_dir) if i.endswith('.xml') and 'DpdHealpixEffectiveCoverageVMPZ' in i]
+        
+        if not effcovxmlfiles:
+            print(f"Warning: No effective coverage XML files found in {effcov_mask_dir}")
+            return pd.DataFrame()
+        
+        print(f"Found {len(effcovxmlfiles)} effective coverage XML files")
+        
+        effcov_fileinfo = {}
+        for effcovxmlfile in effcovxmlfiles:
+            try:
+                # Extract tile ID from XML (different path than catred)
+                mertileid = self.get_xml_element(
+                    os.path.join(effcov_mask_dir, effcovxmlfile), 
+                    'Data/EffectiveCoverageMaskHealpixParams/PatchTileList/TileIndexList'
+                ).text
+                
+                effcov_fileinfo[mertileid] = {}
+                effcov_fileinfo[mertileid]['xml_file'] = os.path.join(effcov_mask_dir, effcovxmlfile)
+
+                # Extract FITS file name from XML (different path than catred)
+                effcov_fitsfile = self.get_xml_element(
+                    os.path.join(effcov_mask_dir, effcovxmlfile), 
+                    'Data/EffectiveCoverageMaskHealpix/DataContainer/FileName'
+                ).text
+                effcov_fileinfo[mertileid]['fits_file'] = os.path.join(effcov_mask_dir, effcov_fitsfile)
+                
+            except Exception as e:
+                print(f"Warning: Failed to process {effcovxmlfile}: {e}")
+                continue
+
+        if not effcov_fileinfo:
+            print("Warning: No valid effective coverage file information could be extracted")
+            return pd.DataFrame()
+
+        # Create DataFrame
+        effcov_fileinfo_df = pd.DataFrame.from_dict(effcov_fileinfo, orient='index')
+        effcov_fileinfo_df.index.name = 'tileid'
+        effcov_fileinfo_df.index = effcov_fileinfo_df.index.astype(int)
+        effcov_fileinfo_df = effcov_fileinfo_df[['xml_file', 'fits_file']]
+        
+        print(f"Generated effcovmask_fileinfo for {len(effcov_fileinfo_df)} tiles")
+        
+        # Save the DataFrame to a CSV file
+        output_csv = paths['effcovmask_fileinfo_csv']
+        os.makedirs(os.path.dirname(output_csv), exist_ok=True)
+        effcov_fileinfo_df.to_csv(output_csv, index=True)
+        print(f"Saved effcovmask_fileinfo.csv to {output_csv}")
+        
+        return effcov_fileinfo_df
+    
+    def regenerate_catred_fileinfo(self, algorithm: str = 'PZWAV', force: bool = False) -> pd.DataFrame:
+        """
+        Manually regenerate catred_fileinfo.csv file.
+        
+        Args:
+            algorithm: Algorithm choice ('PZWAV' or 'AMICO')
+            force: If True, regenerate even if file already exists
+            
+        Returns:
+            Generated catred_fileinfo DataFrame
+        """
+        paths = self._get_paths(algorithm)
+        catred_fileinfo_csv = paths['catred_fileinfo_csv']
+        
+        if os.path.exists(catred_fileinfo_csv) and not force:
+            print(f"catred_fileinfo.csv already exists at {catred_fileinfo_csv}")
+            print("Use force=True to regenerate anyway")
+            return pd.read_csv(catred_fileinfo_csv).set_index('tileid')
+        
+        if force and os.path.exists(catred_fileinfo_csv):
+            print(f"Force regenerating catred_fileinfo.csv (overwriting existing file)")
+        
+        return self._generate_catred_fileinfo(paths)
+    
+    def regenerate_effcovmask_fileinfo(self, algorithm: str = 'PZWAV', force: bool = False) -> pd.DataFrame:
+        """
+        Manually regenerate effcovmask_fileinfo.csv file.
+        
+        Args:
+            algorithm: Algorithm choice ('PZWAV' or 'AMICO')
+            force: If True, regenerate even if file already exists
+            
+        Returns:
+            Generated effcovmask_fileinfo DataFrame
+        """
+        paths = self._get_paths(algorithm)
+        effcovmask_fileinfo_csv = paths['effcovmask_fileinfo_csv']
+        
+        if os.path.exists(effcovmask_fileinfo_csv) and not force:
+            print(f"effcovmask_fileinfo.csv already exists at {effcovmask_fileinfo_csv}")
+            print("Use force=True to regenerate anyway")
+            return pd.read_csv(effcovmask_fileinfo_csv).set_index('tileid')
+        
+        if force and os.path.exists(effcovmask_fileinfo_csv):
+            print(f"Force regenerating effcovmask_fileinfo.csv (overwriting existing file)")
+        
+        return self._generate_effcovmask_fileinfo(paths)
     
     def clear_cache(self) -> None:
         """Clear the data cache to free memory."""

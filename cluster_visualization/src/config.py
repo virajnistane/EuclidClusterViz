@@ -95,14 +95,14 @@ class Config:
         # Downloads directory
         self.rr2_downloads_dir = self._expand_path(self.config_parser.get('paths', 'rr2_downloads_dir'))
         
-        # Catalog and mask directories (check if they're defined in files section first)
-        if self.config_parser.has_option('files', 'catred_dir'):
-            self.catred_dir = self._expand_path(self.config_parser.get('files', 'catred_dir'))
+        # Catalog and mask directories (check paths section first, then files section for backward compatibility)
+        if self.config_parser.has_option('paths', 'catred_dir'):
+            self.catred_dir = self._expand_path(self.config_parser.get('paths', 'catred_dir'))
         else:
             self.catred_dir = os.path.join(self.rr2_downloads_dir, 'DpdLE3clFullInputCat')
             
-        if self.config_parser.has_option('files', 'effcov_mask_dir'):
-            self.effcov_mask_dir = self._expand_path(self.config_parser.get('files', 'effcov_mask_dir'))
+        if self.config_parser.has_option('paths', 'effcov_mask_dir'):
+            self.effcov_mask_dir = self._expand_path(self.config_parser.get('paths', 'effcov_mask_dir'))
         else:
             self.effcov_mask_dir = os.path.join(self.rr2_downloads_dir, 'DpdHealpixEffectiveCoverageVMPZ')
         
@@ -148,24 +148,19 @@ class Config:
             return os.path.join(self.mergedetcat_dir, filename)
     
     def get_catred_fileinfo_csv(self):
-        """Get path to catred file info CSV"""
-        filename = self.config_parser.get('files', 'catred_fileinfo_csv')
-        # Check if it's an absolute path
-        expanded_path = self._expand_path(filename)
-        if os.path.isabs(expanded_path):
-            return expanded_path
-        else:
-            return os.path.join(self.rr2_downloads_dir, filename)
+        """Get path to catred file info CSV (hardcoded filename in catred_dir)"""
+        filename = 'catred_fileinfo.csv'
+        return os.path.join(self.catred_dir, filename)
     
     def get_catred_polygons_pkl(self):
-        """Get path to catred polygons pickle file"""
-        filename = self.config_parser.get('files', 'catred_polygons_pkl')
-        # Check if it's an absolute path
-        expanded_path = self._expand_path(filename)
-        if os.path.isabs(expanded_path):
-            return expanded_path
-        else:
-            return os.path.join(self.rr2_downloads_dir, filename)
+        """Get path to catred polygons pickle file (hardcoded filename in catred_dir)"""
+        filename = 'catred_polygons_by_tileid.pkl'
+        return os.path.join(self.catred_dir, filename)
+    
+    def get_effcovmask_fileinfo_csv(self):
+        """Get path to effective coverage mask file info CSV (hardcoded filename in effcov_mask_dir)"""
+        filename = 'effcovmask_fileinfo.csv'
+        return os.path.join(self.effcov_mask_dir, filename)
     
     def validate_paths(self):
         """Validate that critical paths exist and return status"""
