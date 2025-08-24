@@ -230,7 +230,7 @@ class AppLayout:
                     className="w-100 mb-2",
                     n_clicks=0
                 ),
-                html.Small("(Remove all MER traces)", className="text-muted d-block text-center")
+                html.Small("(Remove all CATRED traces)", className="text-muted d-block text-center")
             ])
         ], className="mb-4")
     
