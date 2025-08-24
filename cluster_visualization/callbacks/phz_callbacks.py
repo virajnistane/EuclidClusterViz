@@ -109,55 +109,77 @@ class PHZCallbacks:
                 point_index = None
                 
                 print(f"Debug: Available CATRED data traces: {list(current_catred_data.keys())}")
-                print(f"Debug: Looking for traces containing 'CATRED High-Res Data'")
+                print(f"Debug: Looking for traces containing 'CATRED'")
                 
-                for trace_name, catred_data in current_catred_data.items():
-                    print(f"Debug: Checking trace: '{trace_name}'")
+                # First, try to match the exact clicked trace name if it's a CATRED trace
+                if clicked_trace_name != 'Unknown' and 'CATRED' in clicked_trace_name and clicked_trace_name in current_catred_data:
+                    catred_data = current_catred_data[clicked_trace_name]
+                    print(f"Debug: Direct match found for clicked trace '{clicked_trace_name}' with {len(catred_data['ra'])} points")
                     
-                    # Check if this is a CATRED High-Res Data trace
-                    if 'CATRED High-Res Data' in trace_name:
-                        print(f"Debug: Found CATRED trace '{trace_name}' with {len(catred_data['ra'])} points")
-                        
-                        # Method 1: Use custom_data if available (most reliable)
-                        if custom_data is not None and isinstance(custom_data, int) and custom_data < len(catred_data['ra']):
-                            found_catred_data = catred_data
-                            point_index = custom_data
-                            print(f"Debug: Using custom data index: {point_index}")
-                            break
-                        
-                        # Method 2: Match coordinates with relaxed tolerance (fallback)
-                        elif clicked_x is not None and clicked_y is not None:
-                            print(f"Debug: Attempting coordinate matching for ({clicked_x}, {clicked_y})")
-                            best_match_index = None
-                            best_distance = float('inf')
-                            
-                            for i, (x, y) in enumerate(zip(catred_data['ra'], catred_data['dec'])):
-                                distance = ((x - clicked_x)**2 + (y - clicked_y)**2)**0.5
-                                if distance < 0.001 and distance < best_distance:  # Relaxed tolerance
-                                    best_match_index = i
-                                    best_distance = distance
-                            
-                            if best_match_index is not None:
+                    # Use custom_data if available (most reliable)
+                    if custom_data is not None and isinstance(custom_data, int) and custom_data < len(catred_data['ra']):
+                        found_catred_data = catred_data
+                        point_index = custom_data
+                        print(f"Debug: Using custom data index: {point_index}")
+                    # Fallback to coordinate matching
+                    elif clicked_x is not None and clicked_y is not None:
+                        print(f"Debug: Attempting coordinate matching for ({clicked_x}, {clicked_y})")
+                        for i, (x, y) in enumerate(zip(catred_data['ra'], catred_data['dec'])):
+                            distance = ((x - clicked_x)**2 + (y - clicked_y)**2)**0.5
+                            if distance < 0.001:  # Tight tolerance for direct match
                                 found_catred_data = catred_data
-                                point_index = best_match_index
-                                print(f"Debug: Found matching point by coordinates at index: {point_index} (distance: {best_distance:.6f})")
+                                point_index = i
+                                print(f"Debug: Found matching point by coordinates at index: {point_index}")
                                 break
-                            else:
-                                print(f"Debug: No coordinate match found in trace '{trace_name}' (closest distance: {best_distance:.6f})")
+                
+                # If direct match failed, search through all CATRED traces
+                if not found_catred_data:
+                    print(f"Debug: No direct match, searching all CATRED traces...")
+                    
+                    for trace_name, catred_data in current_catred_data.items():
+                        print(f"Debug: Checking trace: '{trace_name}'")
                         
-                        # Method 3: Try using point index from click data (alternative approach)
-                        elif 'pointIndex' in clicked_point:
-                            point_idx = clicked_point['pointIndex']
-                            if point_idx < len(catred_data['ra']):
+                        # Check if this is a CATRED trace (updated for new naming scheme)
+                        if 'CATRED' in trace_name and ('Data' in trace_name or 'High-Res' in trace_name):
+                            print(f"Debug: Found CATRED trace '{trace_name}' with {len(catred_data['ra'])} points")
+                            
+                            # Method 1: Use custom_data if available (most reliable)
+                            if custom_data is not None and isinstance(custom_data, int) and custom_data < len(catred_data['ra']):
                                 found_catred_data = catred_data
-                                point_index = point_idx
-                                print(f"Debug: Using pointIndex from click data: {point_index}")
+                                point_index = custom_data
+                                print(f"Debug: Using custom data index: {point_index}")
                                 break
-                        
-                        if found_catred_data:
-                            break
-                    else:
-                        print(f"Debug: Skipping non-CATRED trace: '{trace_name}'")
+                            
+                            # Method 2: Match coordinates with relaxed tolerance (fallback)
+                            elif clicked_x is not None and clicked_y is not None:
+                                print(f"Debug: Attempting coordinate matching for ({clicked_x}, {clicked_y})")
+                                best_match_index = None
+                                best_distance = float('inf')
+                                
+                                for i, (x, y) in enumerate(zip(catred_data['ra'], catred_data['dec'])):
+                                    distance = ((x - clicked_x)**2 + (y - clicked_y)**2)**0.5
+                                    if distance < 0.001 and distance < best_distance:  # Relaxed tolerance
+                                        best_match_index = i
+                                        best_distance = distance
+                                
+                                if best_match_index is not None:
+                                    found_catred_data = catred_data
+                                    point_index = best_match_index
+                                    print(f"Debug: Found matching point by coordinates at index: {point_index} (distance: {best_distance:.6f})")
+                                    break
+                                else:
+                                    print(f"Debug: No coordinate match found in trace '{trace_name}'")
+                            
+                            # Method 3: Try using point index from click data (alternative approach)
+                            elif 'pointIndex' in clicked_point:
+                                point_idx = clicked_point['pointIndex']
+                                if point_idx < len(catred_data['ra']):
+                                    found_catred_data = catred_data
+                                    point_index = point_idx
+                                    print(f"Debug: Using pointIndex from click data: {point_index}")
+                                    break
+                        else:
+                            print(f"Debug: Skipping non-CATRED trace: '{trace_name}'")
                 
                 # Additional debugging if no match found
                 if not found_catred_data:
