@@ -195,7 +195,7 @@ class AppLayout:
                         {"label": "Unmasked CATRED data", "value": "unmasked"},
                         {"label": "Masked CATRED data", "value": "masked"},
                     ],
-                    value="unmasked",
+                    value="masked",
                     inline=True,
                 ),
                 html.Small("(When zoomed < 2°)", className="text-muted")
