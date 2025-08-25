@@ -396,6 +396,7 @@ class TraceCreator:
                                               datamod_merged['RIGHT_ASCENSION_CLUSTER'], 
                                               datamod_merged['DECLINATION_CLUSTER'])
                 ],
+                customdata=[[snr, z] for snr, z in zip(datamod_merged['SNR_CLUSTER'], datamod_merged['Z_CLUSTER'])],
                 hoverinfo='text'
             )
             data_traces.append(merged_trace)
@@ -425,6 +426,7 @@ class TraceCreator:
                                                   away_from_catred_data['RIGHT_ASCENSION_CLUSTER'], 
                                                   away_from_catred_data['DECLINATION_CLUSTER'])
                     ],
+                    customdata=[[snr, z] for snr, z in zip(away_from_catred_data['SNR_CLUSTER'], away_from_catred_data['Z_CLUSTER'])],
                     hoverinfo='text'
                 )
                 data_traces.append(normal_trace)
@@ -459,6 +461,7 @@ class TraceCreator:
                                                   near_catred_data['RIGHT_ASCENSION_CLUSTER'], 
                                                   near_catred_data['DECLINATION_CLUSTER'])
                     ],
+                    customdata=[[snr, z] for snr, z in zip(near_catred_data['SNR_CLUSTER'], near_catred_data['Z_CLUSTER'])],
                     hoverinfo='text'
                 )
                 data_traces.append(enhanced_trace)
@@ -495,6 +498,7 @@ class TraceCreator:
                         for snr, cz, ra, dec in zip(datamod['SNR_CLUSTER'], datamod['Z_CLUSTER'], 
                                                   datamod['RIGHT_ASCENSION_CLUSTER'], datamod['DECLINATION_CLUSTER'])
                     ],
+                    customdata=[[snr, z] for snr, z in zip(datamod['SNR_CLUSTER'], datamod['Z_CLUSTER'])],
                     hoverinfo='text'
                 )
                 tile_traces.append(tile_trace)
@@ -522,6 +526,7 @@ class TraceCreator:
                             for snr, cz, ra, dec in zip(away_from_catred_data['SNR_CLUSTER'], away_from_catred_data['Z_CLUSTER'], 
                                                       away_from_catred_data['RIGHT_ASCENSION_CLUSTER'], away_from_catred_data['DECLINATION_CLUSTER'])
                         ],
+                        customdata=[[snr, z] for snr, z in zip(away_from_catred_data['SNR_CLUSTER'], away_from_catred_data['Z_CLUSTER'])],
                         hoverinfo='text'
                     )
                     tile_traces.append(normal_trace)
@@ -554,6 +559,7 @@ class TraceCreator:
                             for snr, cz, ra, dec in zip(near_catred_data['SNR_CLUSTER'], near_catred_data['Z_CLUSTER'], 
                                                       near_catred_data['RIGHT_ASCENSION_CLUSTER'], near_catred_data['DECLINATION_CLUSTER'])
                         ],
+                        customdata=[[snr, z] for snr, z in zip(near_catred_data['SNR_CLUSTER'], near_catred_data['Z_CLUSTER'])],
                         hoverinfo='text'
                     )
                     tile_traces.append(enhanced_trace)

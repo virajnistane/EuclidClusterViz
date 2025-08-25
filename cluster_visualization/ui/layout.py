@@ -171,7 +171,7 @@ class AppLayout:
                 marks={},  # Will be updated dynamically
                 value=[0, 10],  # Will be updated dynamically
                 tooltip={"placement": "bottom", "always_visible": True},
-                allowCross=False
+                allowCross=False,
             ),
             dbc.Button(
                 "Apply redshift Filter",

@@ -46,6 +46,8 @@ class MainPlotCallbacks:
         self._setup_main_render_callback()
         self._setup_options_update_callback()
         self._setup_threshold_clientside_callback()
+        self._setup_snr_clientside_callback()
+        self._setup_redshift_clientside_callback()
     
     def _setup_snr_slider_callback(self):
         """Setup SNR slider initialization callback"""
@@ -164,11 +166,9 @@ class MainPlotCallbacks:
                 # Load data for selected algorithm
                 data = self.load_data(algorithm)
                 
-                # Reset CATRED traces cache for fresh render
-                if self.catred_handler:
-                    self.catred_handler.clear_traces_cache()
-                else:
-                    self.catred_traces_cache = []
+                # Only reset CATRED traces cache if algorithm changed, not for SNR/redshift filtering
+                # CATRED data doesn't have SNR and shouldn't be affected by cluster-level filtering
+                # Note: This preserves CATRED data when only SNR/redshift filters change
                 
                 # Create traces
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
@@ -367,6 +367,160 @@ class MainPlotCallbacks:
             """,
             Output('cluster-plot', 'figure', allow_duplicate=True),
             [Input('catred-threshold-slider', 'value')],
+            [State('cluster-plot', 'figure')],
+            prevent_initial_call=True
+        )
+    
+    def _setup_snr_clientside_callback(self):
+        """Setup client-side SNR filtering callback"""
+        self.app.clientside_callback(
+            """
+            function(snrRange, figure) {
+                if (!figure || !figure.data || !snrRange || snrRange.length !== 2) {
+                    return figure;
+                }
+                
+                let snrLower = snrRange[0];
+                let snrUpper = snrRange[1];
+                let newFigure = JSON.parse(JSON.stringify(figure));
+                
+                for (let i = 0; i < newFigure.data.length; i++) {
+                    let trace = newFigure.data[i];
+                    
+                    // Only filter cluster traces (merged and tiles), preserve CATRED traces
+                    if (trace.name && (trace.name.includes('Merged') || trace.name.includes('Tile'))) {
+                        // Store original data if not already stored
+                        if (!trace._originalData) {
+                            trace._originalData = {
+                                x: [...trace.x],
+                                y: [...trace.y],
+                                text: trace.text ? [...trace.text] : [],
+                                customdata: trace.customdata ? [...trace.customdata] : []
+                            };
+                        }
+                        
+                        // Always filter from original data
+                        let originalData = trace._originalData;
+                        let filteredX = [];
+                        let filteredY = [];
+                        let filteredText = [];
+                        let filteredCustomdata = [];
+                        
+                        for (let j = 0; j < originalData.x.length; j++) {
+                            // Assume SNR is first element in customdata array for cluster traces
+                            let snrValue = originalData.customdata[j] ? originalData.customdata[j][0] : null;
+                            
+                            // Include point if SNR is within range
+                            if (snrValue !== null && snrValue !== undefined && 
+                                snrValue >= snrLower && snrValue <= snrUpper) {
+                                filteredX.push(originalData.x[j]);
+                                filteredY.push(originalData.y[j]);
+                                if (originalData.text && originalData.text[j]) {
+                                    filteredText.push(originalData.text[j]);
+                                }
+                                if (originalData.customdata && originalData.customdata[j]) {
+                                    filteredCustomdata.push(originalData.customdata[j]);
+                                }
+                            }
+                        }
+                        
+                        // Update trace data with filtered results
+                        newFigure.data[i].x = filteredX;
+                        newFigure.data[i].y = filteredY;
+                        if (originalData.text && originalData.text.length > 0) {
+                            newFigure.data[i].text = filteredText;
+                        }
+                        if (originalData.customdata && originalData.customdata.length > 0) {
+                            newFigure.data[i].customdata = filteredCustomdata;
+                        }
+                        
+                        // Preserve original data reference
+                        newFigure.data[i]._originalData = originalData;
+                    }
+                }
+                
+                return newFigure;
+            }
+            """,
+            Output('cluster-plot', 'figure', allow_duplicate=True),
+            [Input('snr-range-slider', 'value')],
+            [State('cluster-plot', 'figure')],
+            prevent_initial_call=True
+        )
+    
+    def _setup_redshift_clientside_callback(self):
+        """Setup client-side redshift filtering callback"""
+        self.app.clientside_callback(
+            """
+            function(redshiftRange, figure) {
+                if (!figure || !figure.data || !redshiftRange || redshiftRange.length !== 2) {
+                    return figure;
+                }
+                
+                let zLower = redshiftRange[0];
+                let zUpper = redshiftRange[1];
+                let newFigure = JSON.parse(JSON.stringify(figure));
+                
+                for (let i = 0; i < newFigure.data.length; i++) {
+                    let trace = newFigure.data[i];
+                    
+                    // Only filter cluster traces (merged and tiles), preserve CATRED traces
+                    if (trace.name && (trace.name.includes('Merged') || trace.name.includes('Tile'))) {
+                        // Store original data if not already stored
+                        if (!trace._originalData) {
+                            trace._originalData = {
+                                x: [...trace.x],
+                                y: [...trace.y],
+                                text: trace.text ? [...trace.text] : [],
+                                customdata: trace.customdata ? [...trace.customdata] : []
+                            };
+                        }
+                        
+                        // Always filter from original data
+                        let originalData = trace._originalData;
+                        let filteredX = [];
+                        let filteredY = [];
+                        let filteredText = [];
+                        let filteredCustomdata = [];
+                        
+                        for (let j = 0; j < originalData.x.length; j++) {
+                            // Assume redshift is second element in customdata array for cluster traces
+                            let redshiftValue = originalData.customdata[j] ? originalData.customdata[j][1] : null;
+                            
+                            // Include point if redshift is within range
+                            if (redshiftValue !== null && redshiftValue !== undefined && 
+                                redshiftValue >= zLower && redshiftValue <= zUpper) {
+                                filteredX.push(originalData.x[j]);
+                                filteredY.push(originalData.y[j]);
+                                if (originalData.text && originalData.text[j]) {
+                                    filteredText.push(originalData.text[j]);
+                                }
+                                if (originalData.customdata && originalData.customdata[j]) {
+                                    filteredCustomdata.push(originalData.customdata[j]);
+                                }
+                            }
+                        }
+                        
+                        // Update trace data with filtered results
+                        newFigure.data[i].x = filteredX;
+                        newFigure.data[i].y = filteredY;
+                        if (originalData.text && originalData.text.length > 0) {
+                            newFigure.data[i].text = filteredText;
+                        }
+                        if (originalData.customdata && originalData.customdata.length > 0) {
+                            newFigure.data[i].customdata = filteredCustomdata;
+                        }
+                        
+                        // Preserve original data reference
+                        newFigure.data[i]._originalData = originalData;
+                    }
+                }
+                
+                return newFigure;
+            }
+            """,
+            Output('cluster-plot', 'figure', allow_duplicate=True),
+            [Input('redshift-range-slider', 'value')],
             [State('cluster-plot', 'figure')],
             prevent_initial_call=True
         )
