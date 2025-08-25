@@ -304,6 +304,13 @@ class TraceCreator:
         trace_name = f'CATRED {mode_label} Data #{trace_count + 1}'
 
         # Create CATRED scatter trace
+        # For masked mode, include effective coverage in customdata for client-side filtering
+        if catred_mode == "masked" and 'effective_coverage' in manual_catred_data:
+            customdata = manual_catred_data['effective_coverage']
+            print(f"Debug: Including effective coverage data for client-side filtering, values range: {min(customdata):.3f} to {max(customdata):.3f}")
+        else:
+            customdata = list(range(len(manual_catred_data['ra'])))  # Fallback to index for click tracking
+            
         catred_trace = go.Scattergl(
             x=manual_catred_data['ra'],
             y=manual_catred_data['dec'],
@@ -313,7 +320,7 @@ class TraceCreator:
             text=self._format_catred_hover_text(manual_catred_data),
             hoverinfo='text',
             showlegend=True,
-            customdata=list(range(len(manual_catred_data['ra'])))  # Add index for click tracking
+            customdata=customdata  # Use coverage data for masked mode, indices for others
         )
         data_traces.append(catred_trace)
 
@@ -339,12 +346,20 @@ class TraceCreator:
     
     def _format_catred_hover_text(self, catred_data: Dict[str, List]) -> List[str]:
         """Format hover text for CATRED data points."""
-        return [
-            f'CATRED Data Point<br>RA: {x:.6f}<br>Dec: {y:.6f}<br>PHZ_MODE_1: {p1:.3f}<br>'
-            f'PHZ_70_INT: {abs(float(p70[1]) - float(p70[0])):.3f}'
-            for x, y, p1, p70 in zip(catred_data['ra'], catred_data['dec'], 
-                                   catred_data['phz_mode_1'], catred_data['phz_70_int'])
-        ]
+        hover_texts = []
+        for i, (x, y, p1, p70) in enumerate(zip(catred_data['ra'], catred_data['dec'], 
+                                               catred_data['phz_mode_1'], catred_data['phz_70_int'])):
+            text = f'CATRED Data Point<br>RA: {x:.6f}<br>Dec: {y:.6f}<br>PHZ_MODE_1: {p1:.3f}<br>' \
+                   f'PHZ_70_INT: {abs(float(p70[1]) - float(p70[0])):.3f}'
+            
+            # Add effective coverage if available
+            if 'effective_coverage' in catred_data and i < len(catred_data['effective_coverage']):
+                coverage = catred_data['effective_coverage'][i]
+                text += f'<br>Effective Coverage: {coverage:.3f}'
+            
+            hover_texts.append(text)
+        
+        return hover_texts
     
     def _create_glow_trace(self, x_coords, y_coords, size: int) -> go.Scattergl:
         """Create a glow effect trace for enhanced markers."""

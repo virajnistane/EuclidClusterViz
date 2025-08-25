@@ -45,6 +45,7 @@ class MainPlotCallbacks:
         self._setup_redshift_slider_callback()
         self._setup_main_render_callback()
         self._setup_options_update_callback()
+        self._setup_threshold_clientside_callback()
     
     def _setup_snr_slider_callback(self):
         """Setup SNR slider initialization callback"""
@@ -209,16 +210,16 @@ class MainPlotCallbacks:
              Input('polygon-switch', 'value'),
              Input('mer-switch', 'value'),
              Input('aspect-ratio-switch', 'value'),
-             Input('catred-mode-radio', 'value'),
-             Input('catred-threshold-slider', 'value')],
+             Input('catred-mode-radio', 'value')],
             [State('render-button', 'n_clicks'),
              State('snr-range-slider', 'value'),
              State('redshift-range-slider', 'value'),
+             State('catred-threshold-slider', 'value'),
              State('cluster-plot', 'relayoutData'),
              State('cluster-plot', 'figure')],
             prevent_initial_call=True
         )
-        def update_plot_options(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, catred_mode, threshold, n_clicks, snr_range, redshift_range, relayout_data, current_figure):
+        def update_plot_options(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, catred_mode, n_clicks, snr_range, redshift_range, threshold, relayout_data, current_figure):
             # Only update if render button has been clicked at least once
             if n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update
@@ -271,6 +272,104 @@ class MainPlotCallbacks:
             except Exception as e:
                 error_status = dbc.Alert(f"Error updating: {str(e)}", color="warning")
                 return dash.no_update, dash.no_update, error_status
+    
+    def _setup_threshold_clientside_callback(self):
+        """Setup client-side callback for real-time threshold filtering of CATRED data"""
+        self.app.clientside_callback(
+            """
+            function(threshold, figure) {
+                // If no figure or threshold is null, return the figure as is
+                if (!figure || threshold === null || threshold === undefined) {
+                    return window.dash_clientside.no_update;
+                }
+                
+                // If figure has no data, return as is
+                if (!figure.data || figure.data.length === 0) {
+                    return window.dash_clientside.no_update;
+                }
+                
+                // Check if any CATRED traces exist
+                let hasCATREDTraces = false;
+                for (let i = 0; i < figure.data.length; i++) {
+                    if (figure.data[i].name && figure.data[i].name.includes('CATRED')) {
+                        hasCATREDTraces = true;
+                        break;
+                    }
+                }
+                
+                // If no CATRED traces, don't update
+                if (!hasCATREDTraces) {
+                    return window.dash_clientside.no_update;
+                }
+                
+                // Clone the figure to avoid mutating the original
+                let newFigure = JSON.parse(JSON.stringify(figure));
+                
+                // Filter CATRED traces based on threshold
+                for (let i = 0; i < newFigure.data.length; i++) {
+                    let trace = newFigure.data[i];
+                    
+                    // Check if this is a CATRED trace (has effective coverage data)
+                    if (trace.name && trace.name.includes('CATRED') && 
+                        trace.customdata && trace.customdata.length > 0) {
+                        
+                        // Store original data if not already stored
+                        if (!trace._originalData) {
+                            trace._originalData = {
+                                x: [...trace.x],
+                                y: [...trace.y],
+                                text: trace.text ? [...trace.text] : [],
+                                customdata: [...trace.customdata]
+                            };
+                        }
+                        
+                        // Always filter from original data, not current filtered data
+                        let originalData = trace._originalData;
+                        let filteredX = [];
+                        let filteredY = [];
+                        let filteredText = [];
+                        let filteredCustomdata = [];
+                        
+                        for (let j = 0; j < originalData.x.length; j++) {
+                            let effectiveCoverage = originalData.customdata[j];
+                            
+                            // Include point if effective coverage >= threshold
+                            if (effectiveCoverage !== null && effectiveCoverage !== undefined && 
+                                effectiveCoverage >= threshold) {
+                                filteredX.push(originalData.x[j]);
+                                filteredY.push(originalData.y[j]);
+                                if (originalData.text && originalData.text[j]) {
+                                    filteredText.push(originalData.text[j]);
+                                }
+                                filteredCustomdata.push(effectiveCoverage);
+                            }
+                        }
+                        
+                        // Update trace data with filtered results
+                        newFigure.data[i].x = filteredX;
+                        newFigure.data[i].y = filteredY;
+                        if (originalData.text && originalData.text.length > 0) {
+                            newFigure.data[i].text = filteredText;
+                        }
+                        newFigure.data[i].customdata = filteredCustomdata;
+                        
+                        // Preserve original data for next filtering operation
+                        newFigure.data[i]._originalData = originalData;
+                        
+                        // Update trace name to show filtered count
+                        let originalName = trace.name.split(' (')[0]; // Remove existing count
+                        newFigure.data[i].name = originalName + ` (${filteredX.length} points, threshold=${threshold})`;
+                    }
+                }
+                
+                return newFigure;
+            }
+            """,
+            Output('cluster-plot', 'figure', allow_duplicate=True),
+            [Input('catred-threshold-slider', 'value')],
+            [State('cluster-plot', 'figure')],
+            prevent_initial_call=True
+        )
     
     def load_data(self, algorithm):
         """Load data using modular or fallback method"""

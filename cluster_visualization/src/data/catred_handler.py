@@ -101,6 +101,9 @@ def get_masked_catred(tile_id, effcovmask_info, catred_info, threshold=0.8):
             filtered_src['RA'] = filtered_src['RIGHT_ASCENSION']
         if 'DEC' not in filtered_src.colnames:
             filtered_src['DEC'] = filtered_src['DECLINATION']
+        
+        # Add effective coverage column for client-side filtering
+        filtered_src['EFFECTIVE_COVERAGE'] = eff_cov[mask]
             
         return filtered_src
         
@@ -350,6 +353,58 @@ class CATREDHandler:
                 catred_scatter_data['phz_pdf'].extend(tile_data['PHZ_PDF'])
                 print(f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} points from MER tile {mertileid}")
     
+    def get_radec_mertile_with_coverage(self, mertileid: int, data: Dict[str, Any]) -> Dict[str, List]:
+        """
+        Load full CATRED data for a specific MER tile with effective coverage values for client-side filtering.
+        
+        Args:
+            mertileid: The MER tile ID
+            data: The data dictionary containing catred_info and effcovmask_info
+            
+        Returns:
+            Dictionary with keys 'RIGHT_ASCENSION', 'DECLINATION', 'PHZ_MODE_1', 
+            'PHZ_70_INT', 'PHZ_PDF', 'EFFECTIVE_COVERAGE' for all sources or empty dict {} if unable to load
+        """
+        try:
+            if isinstance(mertileid, str):
+                mertileid = int(mertileid)
+            
+            # Check if we have the necessary data
+            if ('catred_info' not in data or data['catred_info'].empty or
+                'effcovmask_info' not in data or data['effcovmask_info'].empty):
+                print(f"Debug: Missing catred_info or effcovmask_info for coverage processing of mertile {mertileid}")
+                return {}
+            
+            if (mertileid not in data['catred_info'].index or 
+                mertileid not in data['effcovmask_info'].index):
+                print(f"Debug: MerTile {mertileid} not found in catred_info or effcovmask_info")
+                return {}
+            
+            # Get full CATRED data with coverage values (no threshold filtering)
+            full_src_with_coverage = get_masked_catred(mertileid, data['effcovmask_info'], 
+                                                     data['catred_info'], threshold=0.0)  # Load all data
+            
+            if len(full_src_with_coverage) == 0:
+                print(f"Debug: No CATRED sources found for mertile {mertileid}")
+                return {}
+            
+            # Convert to format expected by plotting functions, including effective coverage
+            result = {
+                'RIGHT_ASCENSION': full_src_with_coverage['RA'].tolist(),
+                'DECLINATION': full_src_with_coverage['DEC'].tolist(),
+                'PHZ_MODE_1': full_src_with_coverage['PHZ_MODE_1'].tolist() if 'PHZ_MODE_1' in full_src_with_coverage.colnames else [0.5] * len(full_src_with_coverage),
+                'PHZ_70_INT': full_src_with_coverage['PHZ_70_INT'].tolist() if 'PHZ_70_INT' in full_src_with_coverage.colnames else [[0.1, 0.9]] * len(full_src_with_coverage),
+                'PHZ_PDF': full_src_with_coverage['PHZ_PDF'].tolist() if 'PHZ_PDF' in full_src_with_coverage.colnames else [None] * len(full_src_with_coverage),
+                'EFFECTIVE_COVERAGE': full_src_with_coverage['EFFECTIVE_COVERAGE'].tolist() if 'EFFECTIVE_COVERAGE' in full_src_with_coverage.colnames else [1.0] * len(full_src_with_coverage)
+            }
+            
+            print(f"Debug: Loaded {len(result['RIGHT_ASCENSION'])} sources with coverage from MER tile {mertileid}")
+            return result
+            
+        except Exception as e:
+            print(f"Debug: Error loading CATRED data with coverage for mertile {mertileid}: {e}")
+            return {}
+
     def get_radec_mertile_masked(self, mertileid: int, data: Dict[str, Any], 
                                 threshold: float = 0.8) -> Dict[str, List]:
         """
@@ -468,6 +523,58 @@ class CATREDHandler:
         print(f"Debug: Total masked CATRED points loaded: {len(catred_scatter_data['ra'])} (threshold={threshold})")
         return catred_scatter_data
     
+    def update_catred_data_with_coverage(self, zoom_data: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, List]:
+        """
+        Update CATRED data with effective coverage values for client-side threshold filtering.
+        
+        Args:
+            zoom_data: Dictionary containing zoom window parameters
+            data: Main data dictionary containing MER tile information
+            
+        Returns:
+            Dictionary with scatter plot data including effective coverage values
+        """
+        catred_scatter_data = {
+            'ra': [],
+            'dec': [],
+            'phz_mode_1': [],
+            'phz_70_int': [],
+            'phz_pdf': [],
+            'effective_coverage': []  # Add coverage data for client-side filtering
+        }
+
+        if 'catred_info' not in data or data['catred_info'].empty or 'polygon' not in data['catred_info'].columns:
+            print("Debug: No catred_info data available for coverage-based CATRED loading")
+            return catred_scatter_data
+
+        # Find mertileids whose polygons intersect with the current zoom box
+        mertiles_to_load = self._find_intersecting_tiles(data, zoom_data['ra_min'], zoom_data['ra_max'], 
+                                                        zoom_data['dec_min'], zoom_data['dec_max'])
+        print(f"Debug: Found {len(mertiles_to_load)} MER tiles in zoom area for coverage loading")
+
+        # Load data with coverage for each MER tile
+        self._load_tile_data_with_coverage(mertiles_to_load, data, catred_scatter_data)
+        
+        # Store current data for click callbacks
+        self.current_catred_data = catred_scatter_data
+        
+        print(f"Debug: Total CATRED points with coverage loaded: {len(catred_scatter_data['ra'])}")
+        return catred_scatter_data
+
+    def _load_tile_data_with_coverage(self, mertiles_to_load: List[int], data: Dict[str, Any],
+                                    catred_scatter_data: Dict[str, List]) -> None:
+        """Load data with coverage for each MER tile and accumulate in scatter data."""
+        for mertileid in mertiles_to_load:
+            tile_data = self.get_radec_mertile_with_coverage(mertileid, data)
+            if tile_data and 'RIGHT_ASCENSION' in tile_data:
+                catred_scatter_data['ra'].extend(tile_data['RIGHT_ASCENSION'])
+                catred_scatter_data['dec'].extend(tile_data['DECLINATION'])
+                catred_scatter_data['phz_mode_1'].extend(tile_data['PHZ_MODE_1'])
+                catred_scatter_data['phz_70_int'].extend(tile_data['PHZ_70_INT'])
+                catred_scatter_data['phz_pdf'].extend(tile_data['PHZ_PDF'])
+                catred_scatter_data['effective_coverage'].extend(tile_data['EFFECTIVE_COVERAGE'])
+                print(f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} sources with coverage from MER tile {mertileid}")
+
     def update_catred_data_unmasked(self, zoom_data: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, List]:
         """
         Update unmasked CATRED data for the given zoom window.
@@ -527,8 +634,8 @@ class CATREDHandler:
         zoom_data = self._extract_zoom_data_from_relayout(relayout_data)
         
         if catred_mode == "masked":
-            print(f"Debug: Loading masked CATRED data with threshold={threshold}")
-            return self.update_catred_data_masked(zoom_data, data, threshold)
+            print(f"Debug: Loading masked CATRED data with coverage for client-side filtering")
+            return self.update_catred_data_with_coverage(zoom_data, data)
         else:  # unmasked
             print("Debug: Loading unmasked CATRED data")
             return self.update_catred_data_unmasked(zoom_data, data)
