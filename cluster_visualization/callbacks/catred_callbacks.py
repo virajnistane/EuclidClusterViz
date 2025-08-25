@@ -86,15 +86,16 @@ class CATREDCallbacks:
              State('mer-switch', 'value'),
              State('aspect-ratio-switch', 'value'),
              State('catred-mode-radio', 'value'),
+             State('catred-threshold-slider', 'value'),
              State('cluster-plot', 'relayoutData'),
              State('cluster-plot', 'figure')],
             prevent_initial_call=True
         )
-        def manual_render_catred_data(catred_n_clicks, algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, catred_mode, relayout_data, current_figure):
+        def manual_render_catred_data(catred_n_clicks, algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, catred_mode, threshold, relayout_data, current_figure):
             if catred_n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update
             
-            print(f"Debug: Manual CATRED render button clicked (click #{catred_n_clicks})")
+            print(f"Debug: Manual CATRED render button clicked (click #{catred_n_clicks}) with threshold={threshold}")
             
             try:
                 # Extract SNR values from range slider
@@ -104,8 +105,8 @@ class CATREDCallbacks:
                 # Load data for selected algorithm
                 data = self.load_data(algorithm)
                 
-                # Load CATRED scatter data for current zoom window
-                catred_scatter_data = self.load_catred_scatter_data(data, relayout_data, catred_mode)
+                # Load CATRED scatter data for current zoom window with threshold
+                catred_scatter_data = self.load_catred_scatter_data(data, relayout_data, catred_mode, threshold)
                 
                 # Extract existing CATRED traces from current figure to preserve them
                 existing_catred_traces = self._extract_existing_catred_traces(current_figure)
@@ -115,7 +116,7 @@ class CATREDCallbacks:
                 # Create traces with the manually loaded CATRED data and existing traces
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
                                           manual_catred_data=catred_scatter_data, existing_catred_traces=existing_catred_traces,
-                                          snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper)
+                                          snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, threshold=threshold)
                 
                 # Update the CATRED traces cache with the new trace count
                 if catred_scatter_data and catred_scatter_data['ra']:
@@ -233,28 +234,28 @@ class CATREDCallbacks:
             # Fallback to inline data loading
             return self._load_data_fallback(algorithm)
     
-    def load_catred_scatter_data(self, data, relayout_data, catred_mode="unmasked"):
+    def load_catred_scatter_data(self, data, relayout_data, catred_mode="unmasked", threshold=0.8):
         """Load CATRED scatter data using modular or fallback method"""
         if self.catred_handler:
-            return self.catred_handler.load_catred_scatter_data(data, relayout_data, catred_mode)
+            return self.catred_handler.load_catred_scatter_data(data, relayout_data, catred_mode, threshold)
         else:
             # Fallback to inline CATRED data loading
             return self._load_catred_scatter_data_fallback(data, relayout_data)
     
     def create_traces(self, data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
-                     existing_catred_traces=None, manual_catred_data=None, snr_threshold_lower=None, snr_threshold_upper=None):
+                     existing_catred_traces=None, manual_catred_data=None, snr_threshold_lower=None, snr_threshold_upper=None, threshold=0.8):
         """Create traces using modular or fallback method"""
         if self.trace_creator:
             return self.trace_creator.create_traces(
                 data, show_polygons, show_mer_tiles, relayout_data, catred_mode,
                 existing_catred_traces=existing_catred_traces, manual_catred_data=manual_catred_data,
-                snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper
+                snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, threshold=threshold
             )
         else:
             # Fallback to inline trace creation
             return self._create_traces_fallback(data, show_polygons, show_mer_tiles, relayout_data, catred_mode,
                                               existing_catred_traces=existing_catred_traces, manual_catred_data=manual_catred_data,
-                                              snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper)
+                                              snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, threshold=threshold)
     
     # Helper methods
     def _extract_zoom_ranges(self, relayout_data):

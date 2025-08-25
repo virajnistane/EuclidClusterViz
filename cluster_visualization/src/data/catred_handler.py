@@ -503,7 +503,7 @@ class CATREDHandler:
         return catred_scatter_data
 
     def load_catred_scatter_data(self, data: Dict[str, Any], relayout_data: Dict[str, Any],
-                                catred_mode: str = "unmasked") -> Dict[str, List]:
+                                catred_mode: str = "unmasked", threshold: float = 0.8) -> Dict[str, List]:
         """
         Load CATRED scatter data based on the specified mode.
         
@@ -511,6 +511,7 @@ class CATREDHandler:
             data: Main data dictionary containing MER tile information
             relayout_data: Current zoom/pan state for determining zoom window
             catred_mode: Mode for CATRED data ("none", "unmasked", "masked")
+            threshold: Effective coverage threshold for masked data (default 0.8)
             
         Returns:
             Dictionary with scatter plot data for CATRED points
@@ -523,8 +524,8 @@ class CATREDHandler:
         zoom_data = self._extract_zoom_data_from_relayout(relayout_data)
         
         if catred_mode == "masked":
-            print("Debug: Loading masked CATRED data")
-            return self.update_catred_data_masked(zoom_data, data)
+            print(f"Debug: Loading masked CATRED data with threshold={threshold}")
+            return self.update_catred_data_masked(zoom_data, data, threshold)
         else:  # unmasked
             print("Debug: Loading unmasked CATRED data")
             return self.update_catred_data_unmasked(zoom_data, data)

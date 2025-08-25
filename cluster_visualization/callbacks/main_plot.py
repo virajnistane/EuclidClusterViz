@@ -95,9 +95,10 @@ class MainPlotCallbacks:
              State('mer-switch', 'value'),
              State('aspect-ratio-switch', 'value'),
              State('catred-mode-radio', 'value'),
+             State('catred-threshold-slider', 'value'),
              State('cluster-plot', 'relayoutData')]
         )
-        def update_plot(n_clicks, snr_n_clicks, algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, catred_mode, relayout_data):
+        def update_plot(n_clicks, snr_n_clicks, algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, catred_mode, threshold, relayout_data):
             # Only render if button has been clicked at least once
             if n_clicks == 0 and snr_n_clicks == 0:
                 return self._create_initial_empty_plots(free_aspect_ratio)
@@ -118,7 +119,7 @@ class MainPlotCallbacks:
                 
                 # Create traces
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
-                                          snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper)
+                                          snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, threshold=threshold)
                 
                 # Create figure
                 fig = self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio) if self.figure_manager else self._create_fallback_figure(traces, algorithm, free_aspect_ratio)
@@ -154,14 +155,15 @@ class MainPlotCallbacks:
              Input('polygon-switch', 'value'),
              Input('mer-switch', 'value'),
              Input('aspect-ratio-switch', 'value'),
-             Input('catred-mode-radio', 'value')],
+             Input('catred-mode-radio', 'value'),
+             Input('catred-threshold-slider', 'value')],
             [State('render-button', 'n_clicks'),
              State('snr-range-slider', 'value'),
              State('cluster-plot', 'relayoutData'),
              State('cluster-plot', 'figure')],
             prevent_initial_call=True
         )
-        def update_plot_options(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, catred_mode, n_clicks, snr_range, relayout_data, current_figure):
+        def update_plot_options(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, catred_mode, threshold, n_clicks, snr_range, relayout_data, current_figure):
             # Only update if render button has been clicked at least once
             if n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update
@@ -181,7 +183,7 @@ class MainPlotCallbacks:
                 
                 # Create traces with existing CATRED traces preserved
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
-                                          existing_catred_traces=existing_catred_traces, snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper)
+                                          existing_catred_traces=existing_catred_traces, snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, threshold=threshold)
                 
                 # Create figure
                 fig = self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio) if self.figure_manager else self._create_fallback_figure(traces, algorithm, free_aspect_ratio)
@@ -217,19 +219,19 @@ class MainPlotCallbacks:
             return self._load_data_fallback(algorithm)
     
     def create_traces(self, data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
-                     existing_catred_traces=None, manual_catred_data=None, snr_threshold_lower=None, snr_threshold_upper=None):
+                     existing_catred_traces=None, manual_catred_data=None, snr_threshold_lower=None, snr_threshold_upper=None, threshold=0.8):
         """Create traces using modular or fallback method"""
         if self.trace_creator:
             return self.trace_creator.create_traces(
                 data, show_polygons, show_mer_tiles, relayout_data, catred_mode,
                 existing_catred_traces=existing_catred_traces, manual_catred_data=manual_catred_data,
-                snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper
+                snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, threshold=threshold
             )
         else:
             # Fallback to inline trace creation
             return self._create_traces_fallback(data, show_polygons, show_mer_tiles, relayout_data, catred_mode,
                                               existing_mer_traces=existing_catred_traces, manual_mer_data=manual_catred_data,
-                                              snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper)
+                                              snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, threshold=threshold)
     
     # Helper methods for fallback and utility functions
     def _create_initial_empty_plots(self, free_aspect_ratio):
@@ -410,7 +412,7 @@ class MainPlotCallbacks:
         }
     
     def _create_traces_fallback(self, data, show_polygons, show_mer_tiles, relayout_data, catred_mode,
-                               existing_mer_traces=None, manual_mer_data=None, snr_threshold_lower=None, snr_threshold_upper=None):
+                               existing_mer_traces=None, manual_mer_data=None, snr_threshold_lower=None, snr_threshold_upper=None, threshold=0.8):
         """Fallback trace creation method"""
         # This would contain the original inline trace creation logic
         # For now, return empty traces to prevent errors

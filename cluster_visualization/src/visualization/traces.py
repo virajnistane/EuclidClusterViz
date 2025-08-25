@@ -39,7 +39,7 @@ class TraceCreator:
                      show_mer_tiles: bool = False, relayout_data: Optional[Dict] = None,
                      catred_mode: str = "none", manual_catred_data: Optional[Dict] = None,
                      existing_catred_traces: Optional[List] = None, snr_threshold_lower: Optional[float] = None,
-                     snr_threshold_upper: Optional[float] = None) -> List:
+                     snr_threshold_upper: Optional[float] = None, threshold: float = 0.8) -> List:
         """
         Create all Plotly traces for the visualization.
         
@@ -48,11 +48,12 @@ class TraceCreator:
             show_polygons: Whether to fill polygons or show outlines only
             show_mer_tiles: Whether to show MER tile polygons
             relayout_data: Current zoom/pan state for zoom threshold checking
-            show_catred_mertile_data: Whether to show high-res CATRED data
+            catred_mode: Mode for CATRED data ("none", "unmasked", "masked")
             manual_catred_data: Manually loaded CATRED scatter data
             existing_catred_traces: Existing CATRED traces to preserve
             snr_threshold_lower: Lower SNR threshold for filtering
             snr_threshold_upper: Upper SNR threshold for filtering
+            threshold: Effective coverage threshold for masked CATRED data (default 0.8)
             
         Returns:
             List of Plotly traces ordered for proper layering

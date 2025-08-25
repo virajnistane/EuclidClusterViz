@@ -19,7 +19,7 @@ class AppLayout:
             # Header row
             dbc.Row([
                 dbc.Col([
-                    html.H1("Cluster Detection Visualization", className="text-center mb-3"),
+                    html.H1("ESA Euclid Mission: Cluster Detection Visualization", className="text-center mb-3"),
                 ])
             ], className="mb-3"),
             
@@ -199,6 +199,28 @@ class AppLayout:
                     inline=True,
                 ),
                 html.Small("(When zoomed < 2°)", className="text-muted")
+            ], className="mb-3"),
+            
+            # Threshold slider for masked CATRED data
+            html.Div([
+                html.Label("Effective Coverage Threshold:", className="fw-bold mb-2"),
+                dcc.Slider(
+                    id="catred-threshold-slider",
+                    min=0.0,
+                    max=0.99,
+                    step=0.01,
+                    value=0.8,
+                    marks={
+                        0.0: "0.0",
+                        0.2: "0.2",
+                        0.4: "0.4", 
+                        0.6: "0.6",
+                        0.8: "0.8",
+                        0.99: "0.99"
+                    },
+                    tooltip={"placement": "bottom", "always_visible": True}
+                ),
+                html.Small("(For masked CATRED data filtering)", className="text-muted")
             ], className="mb-3"),
         ], className="mb-4")
     
