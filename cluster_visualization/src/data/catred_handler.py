@@ -107,6 +107,9 @@ def get_masked_catred(tile_id, effcovmask_info, catred_info, threshold=0.8):
     except Exception as e:
         print(f"Error in get_masked_catred: {e}")
         raise
+
+
+
 class CATREDHandler:
     """Handles MER tile data loading and spatial operations."""
     
