@@ -126,7 +126,7 @@ class PHZCallbacks:
                         print(f"Debug: Attempting coordinate matching for ({clicked_x}, {clicked_y})")
                         for i, (x, y) in enumerate(zip(catred_data['ra'], catred_data['dec'])):
                             distance = ((x - clicked_x)**2 + (y - clicked_y)**2)**0.5
-                            if distance < 0.001:  # Tight tolerance for direct match
+                            if distance < 1e-6:  # Tight tolerance for direct match
                                 found_catred_data = catred_data
                                 point_index = i
                                 print(f"Debug: Found matching point by coordinates at index: {point_index}")
