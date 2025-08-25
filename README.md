@@ -1,6 +1,6 @@
 # Cluster Visualization
 
-This directory contains an interactive web-based visualization solution for cluster detection data, providing a reliable replacement for Jupyter notebook FigureWidget functionality.
+This directory contains an interactive web-based visualization solution for cluster detection data, providing a reliable replacement for Jupyter notebook FigureWidget functionality with advanced remote access capabilities.
 
 ## 🔧 Environment Requirements
 
@@ -15,16 +15,32 @@ This provides required packages: `astropy`, `plotly`, `pandas`, `numpy`, `shapel
 
 ## 🛠 Current Solution: Interactive Dash Application
 
-The interactive Dash application provides real-time visualizations that work reliably in any web browser with comprehensive controls and features.
+The interactive Dash application provides real-time visualizations that work reliably in any web browser with comprehensive controls and features. Now includes **SSH tunnel connection monitoring** for seamless remote access.
 
 ## ✅ Available Solutions
 
-1. **Interactive Dash App** (🆕 **RECOMMENDED**): Real-time interactive web application with algorithm switching
+1. **Interactive Dash App** (🆕 **RECOMMENDED**): Real-time interactive web application with algorithm switching and SSH tunnel monitoring
 2. **Interactive Dash Application** (✅ **RELIABLE**): Provides real-time interactive web interface
 3. **Simple HTTP Server** (✅ **FALLBACK**): Serves HTML files via built-in Python server
 
+## 🆕 New Features
+
+### SSH Tunnel Connection Monitoring
+- **Automatic connection detection**: Monitors if users have properly connected via SSH tunnel
+- **Smart warnings**: Alerts users if no connections detected within 2 minutes
+- **Step-by-step guidance**: Provides exact SSH tunnel commands with actual hostname
+- **Connection validation**: Confirms when SSH tunnel is working correctly
+
+### Enhanced CATRED Data Support
+- **Masked CATRED data**: Advanced sparse HEALPix mask handling (NSIDE=16384)
+- **Comparison modes**: Switch between unmasked, masked, and comparison views
+- **PHZ PDF plots**: Interactive photometric redshift probability plots from CATRED clicks
+
 ## Features
 
+- **🆕 SSH Tunnel Monitoring**: Automatic detection and guidance for remote access setup
+- **🆕 Masked CATRED Integration**: Advanced sparse HEALPix data handling with comparison modes
+- **🆕 PHZ PDF Plotting**: Interactive photometric redshift visualization
 - **🆕 Render Button Control**: Manual rendering trigger for better performance control
 - **Algorithm Comparison**: Switch between PZWAV and AMICO detection algorithms  
 - **Interactive scatter plots** of merged detection catalog data
@@ -40,14 +56,26 @@ The interactive Dash application provides real-time visualizations that work rel
 ## Files
 
 ### Main Application
-- `cluster_dash_app.py` - **NEW**: Interactive Dash web application with real-time controls
+- `cluster_visualization/src/cluster_dash_app.py` - **MAIN**: Interactive Dash web application with SSH monitoring
+- `cluster_visualization/core/app.py` - Core application management with connection monitoring
+
+### Modular Components
+- `cluster_visualization/src/data/` - Data loading and CATRED handling modules
+- `cluster_visualization/src/visualization/` - Plotting and figure management
+- `cluster_visualization/callbacks/` - Dash callback handlers
+- `cluster_visualization/ui/` - User interface layout components
+- `cluster_visualization/utils/` - Utility functions and color definitions
 
 ### Launch Scripts
 - `launch.sh` - Universal launcher script with dependency testing
+- `cluster_visualization/scripts/` - Various launch and setup scripts
 
 ### Configuration
-- `requirements.txt` - Python dependencies (simplified)
+- `config.ini` - Default configuration
+- `config_local.ini` - Personal configuration (gitignored)
+- `requirements.txt` - Python dependencies
 - `README.md` - This documentation
+- `docs/SSH_TUNNEL_MONITORING.md` - Detailed SSH tunnel monitoring documentation
 - `USAGE.md` - Detailed usage instructions
 
 ## 🚀 Quick Start
@@ -59,16 +87,34 @@ source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 
 ### 2. **NEW: Interactive Dash App** (Recommended)
 ```bash
-./cluster_visualization/scripts/run_dash_app_venv.sh
+./launch.sh
+# Universal launcher with dependency testing and virtual environment setup
 # Launches web app at http://localhost:8050 with browser auto-open
-# Features: Real-time algorithm switching, interactive controls
-# Automatically sets up virtual environment with required packages
+# Features: Real-time algorithm switching, SSH tunnel monitoring, CATRED data
 ```
 
-### 3. Universal Launcher
+### 3. **Remote Access Setup**
+When running on a remote server, the app automatically provides SSH tunnel guidance:
+
 ```bash
-./launch.sh
-# Interactive menu with Dash app and dependency testing
+# The app will display these instructions:
+🔗 SSH TUNNEL REQUIRED:
+   This app runs on a remote server. To access it:
+   1. Open a NEW terminal on your LOCAL machine
+   2. Run: ssh -L 8050:localhost:8050 username@hostname
+   3. Keep that SSH connection alive
+   4. Open browser to: http://localhost:8050
+```
+
+**Connection Monitoring**: The app automatically detects if you've connected properly and warns if SSH tunnel setup is needed.
+
+### 4. Alternative Launch Methods
+```bash
+# Direct script execution
+./cluster_visualization/scripts/run_dash_app_venv.sh
+
+# Manual Python execution (after EDEN activation)
+python cluster_visualization/src/cluster_dash_app.py
 ```
 
 ## Configuration
@@ -115,6 +161,53 @@ pip install -r requirements.txt
 - `numpy` - Numerical computations
 - `astropy` - FITS file handling
 - `shapely` - Geometric operations
+- `healpy` - HEALPix operations for masked CATRED data
+- `dash` - Web application framework
+- `dash-bootstrap-components` - Enhanced UI components
+
+## Remote Access & SSH Tunneling
+
+### Automatic SSH Tunnel Detection
+The application includes built-in monitoring to help users set up SSH tunneling correctly:
+
+#### ✅ **What you'll see when starting the app:**
+```
+🔗 SSH TUNNEL REQUIRED:
+   This app runs on a remote server. To access it:
+   1. Open a NEW terminal on your LOCAL machine
+   2. Run: ssh -L 8050:localhost:8050 username@hostname
+   3. Keep that SSH connection alive
+   4. Open browser to: http://localhost:8050
+```
+
+#### ✅ **Successful connection confirmation:**
+```
+✓ User successfully connected at 09:02:31
+  ✓ SSH tunnel appears to be working correctly
+  Browser: Mozilla/5.0 (...)
+  Connection from: 127.0.0.1
+```
+
+#### ⚠️ **Automatic warnings (after 1 minute with no connections):**
+```
+⚠️  WARNING: No users have connected yet!
+   App has been running for 1.0 minute
+
+🔗 REQUIRED: SSH Tunnel Setup
+   This app runs on a remote server and requires SSH tunneling.
+   
+   1. Open a NEW terminal on your LOCAL machine
+   2. Run this command:
+      ssh -L 8050:localhost:8050 username@hostname
+   3. Keep that SSH connection alive
+   4. Open your browser to: http://localhost:8050
+```
+
+### Benefits
+- **Reduces support requests**: Clear instructions prevent common SSH setup errors
+- **Faster troubleshooting**: Immediate feedback if connection setup is incorrect  
+- **Better user experience**: Step-by-step guidance for remote access
+- **Automatic detection**: No manual intervention required
 
 ## Data Requirements
 
@@ -128,6 +221,18 @@ The application expects the following data structure:
 Make sure all data paths in the code match your local file structure.
 
 ## Interactive Features
+
+### SSH Tunnel Connection Monitoring
+- **Real-time detection**: Monitors if users have properly connected via SSH tunnel
+- **Automatic warnings**: Alerts users after 1 minute if no connections detected
+- **Connection validation**: Confirms when SSH tunnel is working correctly
+- **Hostname detection**: Provides exact SSH commands with actual server hostname
+
+### CATRED Data Integration
+- **Masked vs Unmasked**: Compare masked and unmasked CATRED data
+- **Sparse HEALPix Support**: Advanced handling of NSIDE=16384 sparse format
+- **PHZ PDF Plots**: Click on CATRED points to view photometric redshift probability distributions
+- **Interactive Comparison**: Switch between different CATRED data modes
 
 ### Algorithm Comparison
 - **PZWAV vs AMICO**: Switch between detection algorithms using the algorithm buttons
@@ -153,10 +258,29 @@ Make sure all data paths in the code match your local file structure.
 
 ## Troubleshooting
 
+### SSH Tunnel Issues
+If you can't connect to the app:
+1. **Check the SSH tunnel command**: The app displays the exact command needed
+2. **Verify the tunnel is active**: Make sure your SSH connection is still alive
+3. **Check for port conflicts**: Try a different port if 8050 is busy
+4. **Browser connection**: Ensure you're accessing `http://localhost:8050` (not the server IP)
+
+### Connection Monitoring Messages
+- **No warnings**: SSH tunnel is working correctly
+- **Warning after 2 minutes**: Follow the displayed SSH tunnel setup instructions
+- **Connection confirmed**: You should see "✓ User successfully connected" message
+
 ### Dependency Issues
 If you see import errors, install the requirements:
 ```bash
 pip install -r requirements.txt
+```
+
+### CATRED Data Issues
+If CATRED data features don't work:
+```bash
+# Install HEALPix support
+pip install healpy
 ```
 
 ### Data File Errors
@@ -166,8 +290,8 @@ Check that all data files exist in the expected locations:
 
 ### Custom Module Errors
 Ensure the custom modules are in the expected location:
-- `/pbs/home/v/vnistane/mypackage/myutils.py`
-- `/pbs/home/v/vnistane/mypackage/colordefinitions.py`
+- Check the `cluster_visualization/utils/` directory for utility modules
+- Verify configuration paths in `config.ini`
 
 ### Large File Sizes
 The Dash application provides interactive visualizations with comprehensive features:
@@ -185,6 +309,30 @@ The Dash application provides interactive visualizations with comprehensive feat
 6. **Better interactivity**: More responsive zoom and pan operations
 7. **Algorithm comparison**: Easy switching between PZWAV and AMICO
 8. **Production ready**: Can be deployed as a web service
+9. **🆕 Remote access support**: Built-in SSH tunnel monitoring and guidance
+10. **🆕 Advanced data integration**: CATRED masked data support with PHZ plotting
+11. **🆕 Connection monitoring**: Automatic detection of user connectivity issues
+12. **🆕 User guidance**: Step-by-step instructions for remote access setup
+
+## Recent Improvements
+
+### SSH Tunnel Connection Monitoring (August 2025)
+- Automatic detection of user connections via SSH tunnel
+- Real-time warnings if no connections detected within 2 minutes
+- Exact SSH tunnel commands with actual hostname detection
+- Connection validation and success confirmation
+
+### CATRED Data Enhancement (August 2025)
+- Masked CATRED data support with sparse HEALPix format (NSIDE=16384)
+- Interactive PHZ PDF plots from CATRED point clicks
+- Comparison modes between masked and unmasked data
+- Advanced data handling with healpy integration
+
+### Infrastructure Improvements (August 2025)
+- Simplified configuration system without utils_dir dependencies
+- Enhanced modular architecture with fallback support
+- Improved error handling and user feedback
+- Better path resolution and dependency management
 
 ## Visualization Features
 
@@ -214,10 +362,27 @@ The visualization displays:
 
 To modify the application:
 
-1. Edit `cluster_dash_app.py` for functionality changes
-2. Update `requirements.txt` if adding new dependencies  
-3. Modify data paths in the `load_data()` function as needed
-4. Test locally by running the Dash application
-5. Use the launcher script to verify all functionality
+1. **Main functionality**: Edit `cluster_visualization/src/cluster_dash_app.py` for core application changes
+2. **SSH monitoring**: Modify `cluster_visualization/core/app.py` for connection monitoring features
+3. **Data handling**: Update modules in `cluster_visualization/src/data/` for CATRED and loading logic
+4. **Visualization**: Modify `cluster_visualization/src/visualization/` for plotting and figure management
+5. **UI components**: Edit `cluster_visualization/ui/` for layout and interface changes
+6. **Dependencies**: Update `requirements.txt` if adding new packages
+7. **Configuration**: Modify `config.ini` for data paths and settings
+8. **Testing**: Use `./launch.sh` to verify all functionality
 
-The application uses Plotly's Scattergl for better performance with large datasets and supports both algorithm comparison and individual algorithm views.
+### Architecture Overview
+- **Modular design**: Separated concerns with dedicated modules for data, visualization, UI, and callbacks
+- **Fallback support**: Robust fallback mechanisms when modular components aren't available
+- **Configuration-driven**: Easy path management through INI-based configuration
+- **Connection monitoring**: Built-in SSH tunnel detection and user guidance
+- **Performance optimized**: Uses Plotly's Scattergl for large datasets
+
+### Key Technologies
+- **Dash + Plotly**: Interactive web application framework with high-performance plotting
+- **HEALPix**: Advanced sparse format support for astronomical data (NSIDE=16384)
+- **Flask middleware**: Custom connection tracking and SSH tunnel validation
+- **Background monitoring**: Non-intrusive connection status checking
+- **Modular callbacks**: Organized callback system for maintainable code
+
+The application supports both algorithm comparison and individual algorithm views with comprehensive CATRED data integration and remote access monitoring.
