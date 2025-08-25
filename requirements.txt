@@ -2,6 +2,7 @@ plotly==5.17.0
 pandas==2.1.4
 numpy==1.24.3
 astropy
+healpy>=1.16.0
 shapely==2.0.2
 dash==2.14.1
 dash-bootstrap-components==1.5.0

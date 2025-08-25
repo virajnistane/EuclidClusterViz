@@ -65,6 +65,7 @@ packages=(
     "plotly==5.17.0"
     "pandas==2.1.4"
     "numpy==1.24.3"
+    "healpy>=1.16.0"
 )
 
 # Note: astropy and shapely should be available from EDEN
@@ -108,7 +109,8 @@ modules = [
     ('pandas', 'pandas'),
     ('numpy', 'numpy'),
     ('astropy.io.fits', 'astropy'),
-    ('shapely.geometry', 'shapely')
+    ('shapely.geometry', 'shapely'),
+    ('healpy', 'healpy')
 ]
 
 for module, name in modules:
