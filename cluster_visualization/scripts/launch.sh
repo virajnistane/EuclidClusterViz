@@ -100,12 +100,23 @@ print('✓ Custom modules OK')
 " 2>/dev/null || echo "✗ Custom modules issues"
     
     echo ""
-    echo "5. Data files:"
-    if [ -f "cluster_visualization/output/current/cluster_visualization_comparison.html" ]; then
-        size=$(ls -lh "cluster_visualization/output/current/cluster_visualization_comparison.html" | awk '{print $5}')
-        echo "✓ HTML visualization exists ($size)"
+    echo "5. Project structure:"
+    if [ -f "config.ini" ]; then
+        echo "✓ Configuration file exists"
     else
-        echo "✗ HTML visualization missing"
+        echo "✗ Configuration file missing (config.ini)"
+    fi
+    
+    if [ -d "cluster_visualization/src" ]; then
+        echo "✓ Source code directory exists"
+    else
+        echo "✗ Source code directory missing"
+    fi
+    
+    if [ -f "cluster_visualization/src/cluster_dash_app.py" ]; then
+        echo "✓ Main Dash application exists"
+    else
+        echo "✗ Main Dash application missing"
     fi
     
     echo ""
