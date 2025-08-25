@@ -13,7 +13,15 @@ import pandas as pd
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table
-import healpy as hp
+
+try:
+    import healpy as hp
+except ImportError:
+    raise ImportError(
+        "healpy is required for CATRED data processing. "
+        "Please install it with: pip install healpy>=1.16.0"
+    )
+
 from shapely.geometry import box
 from typing import Dict, List, Any, Optional, Tuple
 

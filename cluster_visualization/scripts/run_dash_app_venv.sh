@@ -67,6 +67,53 @@ else
     exit 1
 fi
 
+# Check for critical dependencies and install if missing
+echo ""
+echo "Checking critical dependencies..."
+
+# Check healpy specifically since it's often missing
+python -c "import healpy" 2>/dev/null
+if [ $? -ne 0 ]; then
+    echo "⚠️  healpy not found, installing..."
+    pip install "healpy>=1.16.0"
+    if [ $? -eq 0 ]; then
+        echo "✓ healpy installed successfully"
+    else
+        echo "✗ Failed to install healpy"
+        echo "   You may need to install it manually: pip install healpy"
+        exit 1
+    fi
+else
+    echo "✓ healpy available"
+fi
+
+# Check other critical modules
+python -c "
+try:
+    import plotly
+    import pandas
+    import numpy
+    import astropy
+    import shapely
+    import dash
+    print('✓ All core dependencies available')
+except ImportError as e:
+    print(f'✗ Missing dependency: {e}')
+    print('   Installing missing dependencies...')
+    exit(1)
+" 2>/dev/null
+
+if [ $? -ne 0 ]; then
+    echo "Installing missing dependencies from requirements.txt..."
+    pip install -r "$PROJECT_DIR/requirements.txt"
+    if [ $? -ne 0 ]; then
+        echo "✗ Failed to install dependencies"
+        echo "   Please run: pip install -r requirements.txt"
+        exit 1
+    fi
+    echo "✓ Dependencies installed"
+fi
+
 echo ""
 echo "Starting Dash app server..."
 echo "The app will automatically open in your browser"

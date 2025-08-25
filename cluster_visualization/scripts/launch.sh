@@ -84,9 +84,11 @@ test_all() {
     python -c "import pandas, numpy; print('✓ pandas/numpy OK')" 2>/dev/null || echo "✗ pandas/numpy issues"
     python -c "from astropy.io import fits; print('✓ astropy OK')" 2>/dev/null || echo "✗ astropy issues"
     python -c "from shapely.geometry import Polygon; print('✓ shapely OK')" 2>/dev/null || echo "✗ shapely issues"
+    python -c "import healpy; print('✓ healpy OK')" 2>/dev/null || echo "✗ healpy missing (required for CATRED data)"
     
     echo "3. Plotting libraries:"
     python -c "import plotly.graph_objs as go; print('✓ plotly OK')" 2>/dev/null || echo "✗ plotly issues"
+    python -c "import dash; print('✓ dash OK')" 2>/dev/null || echo "✗ dash issues"
     
     echo "4. Custom modules:"
     python -c "
