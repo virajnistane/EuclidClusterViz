@@ -34,18 +34,8 @@ class DataLoader:
         self.use_config = use_config
         self.data_cache = {}
         
-        # Import utilities - handle import path resolution
+        # Import utilities from package structure
         try:
-            if use_config and config:
-                utils_path = config.utils_dir
-                if utils_path not in sys.path:
-                    sys.path.append(utils_path)
-            else:
-                # Fallback: look for utilities in user's home directory
-                utils_path = os.path.join(os.path.expanduser('~'), 'mypackage')
-                if utils_path not in sys.path:
-                    sys.path.append(utils_path)
-            
             from myutils import get_xml_element
             self.get_xml_element = get_xml_element
             

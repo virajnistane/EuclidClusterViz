@@ -221,11 +221,8 @@ except ImportError:
         ClusterVisualizationCore = None
 
 # Add local utils path
-if USE_CONFIG:
-    utils_path = config.utils_dir
-else:
-    # Fallback: look for mypackage in the user's home directory
-    utils_path = os.path.join(os.path.expanduser('~'), 'mypackage')
+parent_dir = os.path.dirname(os.path.dirname(__file__))
+utils_path = os.path.join(parent_dir, 'utils')
 
 if utils_path not in sys.path:
     sys.path.append(utils_path)

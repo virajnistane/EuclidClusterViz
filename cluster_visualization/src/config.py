@@ -111,7 +111,6 @@ class Config:
         
         # Project paths - use auto-detected git repository root
         self.project_root = self._detected_project_root
-        self.utils_dir = os.path.join(self.project_root, 'cluster_visualization', 'utils')
     
     def get_output_dir(self, algorithm):
         """Get algorithm-specific output directory"""
@@ -172,8 +171,7 @@ class Config:
             ('MergeDetCat directory', self.mergedetcat_dir),
             ('Data directory', self.mergedetcat_data_dir),
             ('Inputs directory', self.mergedetcat_inputs_dir),
-            ('RR2 downloads directory', self.rr2_downloads_dir),
-            ('Utils directory', self.utils_dir)
+            ('RR2 downloads directory', self.rr2_downloads_dir)
         ]
         
         for name, path in critical_dirs:
