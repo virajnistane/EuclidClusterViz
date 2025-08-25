@@ -387,11 +387,16 @@ class MainPlotCallbacks:
                 for (let i = 0; i < newFigure.data.length; i++) {
                     let trace = newFigure.data[i];
                     
-                    // Only filter cluster traces (merged and tiles), preserve CATRED traces
-                    if (trace.name && (trace.name.includes('Merged') || trace.name.includes('Tile'))) {
+                    // Only filter cluster traces with actual cluster data (have customdata with SNR/Z)
+                    // Skip polygon traces like "Tile X LEV1", "Tile X CORE", "MerTile X"
+                    if (trace.name && (trace.name.includes('Merged') || 
+                        (trace.name.includes('Tile') && !trace.name.includes('LEV1') && 
+                         !trace.name.includes('CORE') && !trace.name.includes('MerTile'))) &&
+                        trace.customdata && trace.customdata.length > 0) {
+                        
                         // Store original data if not already stored
-                        if (!trace._originalData) {
-                            trace._originalData = {
+                        if (!trace._originalClusterData) {
+                            trace._originalClusterData = {
                                 x: [...trace.x],
                                 y: [...trace.y],
                                 text: trace.text ? [...trace.text] : [],
@@ -400,19 +405,28 @@ class MainPlotCallbacks:
                         }
                         
                         // Always filter from original data
-                        let originalData = trace._originalData;
+                        let originalData = trace._originalClusterData;
                         let filteredX = [];
                         let filteredY = [];
                         let filteredText = [];
                         let filteredCustomdata = [];
                         
+                        // Get current redshift filter from trace if it exists
+                        let currentZRange = trace._currentZRange || [0, 999]; // Default wide range
+                        
                         for (let j = 0; j < originalData.x.length; j++) {
-                            // Assume SNR is first element in customdata array for cluster traces
+                            // Get SNR and redshift values
                             let snrValue = originalData.customdata[j] ? originalData.customdata[j][0] : null;
+                            let zValue = originalData.customdata[j] ? originalData.customdata[j][1] : null;
                             
-                            // Include point if SNR is within range
-                            if (snrValue !== null && snrValue !== undefined && 
-                                snrValue >= snrLower && snrValue <= snrUpper) {
+                            // Apply both SNR and redshift filters together
+                            let passesSnrFilter = (snrValue !== null && snrValue !== undefined && 
+                                                 snrValue >= snrLower && snrValue <= snrUpper);
+                            let passesZFilter = (zValue !== null && zValue !== undefined &&
+                                               zValue >= currentZRange[0] && zValue <= currentZRange[1]);
+                            
+                            // Include point only if it passes both filters
+                            if (passesSnrFilter && passesZFilter) {
                                 filteredX.push(originalData.x[j]);
                                 filteredY.push(originalData.y[j]);
                                 if (originalData.text && originalData.text[j]) {
@@ -434,8 +448,12 @@ class MainPlotCallbacks:
                             newFigure.data[i].customdata = filteredCustomdata;
                         }
                         
-                        // Preserve original data reference
-                        newFigure.data[i]._originalData = originalData;
+                        // Store current SNR range and preserve original data references
+                        newFigure.data[i]._currentSnrRange = [snrLower, snrUpper];
+                        newFigure.data[i]._originalClusterData = originalData;
+                        if (trace._currentZRange) {
+                            newFigure.data[i]._currentZRange = trace._currentZRange;
+                        }
                     }
                 }
                 
@@ -464,11 +482,16 @@ class MainPlotCallbacks:
                 for (let i = 0; i < newFigure.data.length; i++) {
                     let trace = newFigure.data[i];
                     
-                    // Only filter cluster traces (merged and tiles), preserve CATRED traces
-                    if (trace.name && (trace.name.includes('Merged') || trace.name.includes('Tile'))) {
+                    // Only filter cluster traces with actual cluster data (have customdata with SNR/Z)
+                    // Skip polygon traces like "Tile X LEV1", "Tile X CORE", "MerTile X"
+                    if (trace.name && (trace.name.includes('Merged') || 
+                        (trace.name.includes('Tile') && !trace.name.includes('LEV1') && 
+                         !trace.name.includes('CORE') && !trace.name.includes('MerTile'))) &&
+                        trace.customdata && trace.customdata.length > 0) {
+                        
                         // Store original data if not already stored
-                        if (!trace._originalData) {
-                            trace._originalData = {
+                        if (!trace._originalClusterData) {
+                            trace._originalClusterData = {
                                 x: [...trace.x],
                                 y: [...trace.y],
                                 text: trace.text ? [...trace.text] : [],
@@ -477,19 +500,28 @@ class MainPlotCallbacks:
                         }
                         
                         // Always filter from original data
-                        let originalData = trace._originalData;
+                        let originalData = trace._originalClusterData;
                         let filteredX = [];
                         let filteredY = [];
                         let filteredText = [];
                         let filteredCustomdata = [];
                         
+                        // Get current SNR filter from trace if it exists
+                        let currentSnrRange = trace._currentSnrRange || [0, 999]; // Default wide range
+                        
                         for (let j = 0; j < originalData.x.length; j++) {
-                            // Assume redshift is second element in customdata array for cluster traces
-                            let redshiftValue = originalData.customdata[j] ? originalData.customdata[j][1] : null;
+                            // Get SNR and redshift values
+                            let snrValue = originalData.customdata[j] ? originalData.customdata[j][0] : null;
+                            let zValue = originalData.customdata[j] ? originalData.customdata[j][1] : null;
                             
-                            // Include point if redshift is within range
-                            if (redshiftValue !== null && redshiftValue !== undefined && 
-                                redshiftValue >= zLower && redshiftValue <= zUpper) {
+                            // Apply both SNR and redshift filters together
+                            let passesSnrFilter = (snrValue !== null && snrValue !== undefined && 
+                                                 snrValue >= currentSnrRange[0] && snrValue <= currentSnrRange[1]);
+                            let passesZFilter = (zValue !== null && zValue !== undefined &&
+                                               zValue >= zLower && zValue <= zUpper);
+                            
+                            // Include point only if it passes both filters
+                            if (passesSnrFilter && passesZFilter) {
                                 filteredX.push(originalData.x[j]);
                                 filteredY.push(originalData.y[j]);
                                 if (originalData.text && originalData.text[j]) {
@@ -511,8 +543,12 @@ class MainPlotCallbacks:
                             newFigure.data[i].customdata = filteredCustomdata;
                         }
                         
-                        // Preserve original data reference
-                        newFigure.data[i]._originalData = originalData;
+                        // Store current redshift range and preserve original data references
+                        newFigure.data[i]._currentZRange = [zLower, zUpper];
+                        newFigure.data[i]._originalClusterData = originalData;
+                        if (trace._currentSnrRange) {
+                            newFigure.data[i]._currentSnrRange = trace._currentSnrRange;
+                        }
                     }
                 }
                 
