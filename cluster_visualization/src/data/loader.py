@@ -89,7 +89,12 @@ class DataLoader:
         snr_min = float(data_merged['SNR_CLUSTER'].min())
         snr_max = float(data_merged['SNR_CLUSTER'].max())
         print(f"SNR range: {snr_min:.3f} to {snr_max:.3f}")
-        
+
+        # Calculate redshift range for UI slider
+        z_min = float(data_merged['Z_CLUSTER'].min())
+        z_max = float(data_merged['Z_CLUSTER'].max())
+        print(f"Redshift range: {z_min:.3f} to {z_max:.3f}")
+
         # Assemble final data structure
         data = {
             'merged_data': data_merged,
@@ -101,6 +106,8 @@ class DataLoader:
             'snr_threshold_upper': None,  # Will be set by UI
             'snr_min': snr_min,
             'snr_max': snr_max,
+            'z_min': z_min,
+            'z_max': z_max,
             'data_dir': paths['data_dir']
         }
         

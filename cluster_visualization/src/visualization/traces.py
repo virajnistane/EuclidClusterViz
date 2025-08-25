@@ -38,8 +38,10 @@ class TraceCreator:
     def create_traces(self, data: Dict[str, Any], show_polygons: bool = True, 
                      show_mer_tiles: bool = False, relayout_data: Optional[Dict] = None,
                      catred_mode: str = "none", manual_catred_data: Optional[Dict] = None,
-                     existing_catred_traces: Optional[List] = None, snr_threshold_lower: Optional[float] = None,
-                     snr_threshold_upper: Optional[float] = None, threshold: float = 0.8) -> List:
+                     existing_catred_traces: Optional[List] = None, 
+                     snr_threshold_lower: Optional[float] = None, snr_threshold_upper: Optional[float] = None, 
+                     z_threshold_lower: Optional[float] = None, z_threshold_upper: Optional[float] = None,
+                     threshold: float = 0.8) -> List:
         """
         Create all Plotly traces for the visualization.
         
@@ -63,6 +65,7 @@ class TraceCreator:
         
         # Apply SNR filtering to merged data
         datamod_merged = self._apply_snr_filtering(data['merged_data'], snr_threshold_lower, snr_threshold_upper)
+        datamod_merged = self._apply_redshift_filtering(datamod_merged, z_threshold_lower, z_threshold_upper)
 
         # Check zoom threshold for CATRED data display
         zoom_threshold_met = self._check_zoom_threshold(relayout_data, catred_mode != "none")
@@ -78,7 +81,8 @@ class TraceCreator:
         
         # Create tile traces and polygons
         tile_traces = self._create_tile_traces_and_polygons(
-            data, traces, show_polygons, show_mer_tiles, snr_threshold_lower, snr_threshold_upper, catred_points
+            data, traces, show_polygons, show_mer_tiles, 
+            snr_threshold_lower, snr_threshold_upper, z_threshold_lower, z_threshold_upper, catred_points
         )
         
         # Add tile traces to top layer
@@ -222,7 +226,22 @@ class TraceCreator:
             return merged_data[merged_data['SNR_CLUSTER'] >= snr_lower]
         else:
             return merged_data
-    
+
+    def _apply_redshift_filtering(self, merged_data: np.ndarray, z_threshold_lower: Optional[float],
+                                  z_threshold_upper: Optional[float]) -> np.ndarray:
+        """Apply redshift filtering to merged cluster data."""
+        if z_threshold_lower is None and z_threshold_upper is None:
+            return merged_data
+        elif z_threshold_lower is not None and z_threshold_upper is not None:
+            return merged_data[(merged_data['Z_CLUSTER'] >= z_threshold_lower) & 
+                              (merged_data['Z_CLUSTER'] <= z_threshold_upper)]
+        elif z_threshold_upper is not None and z_threshold_lower is None:
+            return merged_data[merged_data['Z_CLUSTER'] <= z_threshold_upper]
+        elif z_threshold_lower is not None:
+            return merged_data[merged_data['Z_CLUSTER'] >= z_threshold_lower]
+        else:
+            return merged_data
+
     def _check_zoom_threshold(self, relayout_data: Optional[Dict], show_mer_tiles: bool) -> bool:
         """Check if zoom level meets threshold for CATRED data display (< 2 degrees)."""
         if not relayout_data or not show_mer_tiles:
@@ -435,6 +454,8 @@ class TraceCreator:
                                         show_polygons: bool, show_mer_tiles: bool,
                                         snr_threshold_lower: Optional[float], 
                                         snr_threshold_upper: Optional[float],
+                                        z_threshold_lower: Optional[float],
+                                        z_threshold_upper: Optional[float],
                                         catred_points: Optional[List] = None) -> List:
         """Create individual tile traces with proximity-based enhancement."""
         tile_traces = []
@@ -444,7 +465,8 @@ class TraceCreator:
             
             # Apply SNR filtering to tile data
             datamod = self._apply_snr_filtering(tile_data, snr_threshold_lower, snr_threshold_upper)
-            
+            datamod = self._apply_redshift_filtering(datamod, z_threshold_lower, z_threshold_upper)
+
             if catred_points is None:
                 # No CATRED data - create single trace with normal markers
                 tile_trace = go.Scattergl(

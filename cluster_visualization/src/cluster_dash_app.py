@@ -399,10 +399,8 @@ class ClusterVisualizationApp:
                 manual_mer_data, existing_mer_traces, snr_threshold_lower, snr_threshold_upper
             )
     
-    def _create_traces_fallback(self, data, show_polygons=True, show_mer_tiles=False, relayout_data=None, 
-                               show_catred_mertile_data=False, manual_mer_data=None, existing_mer_traces=None, 
-                               snr_threshold_lower=None, snr_threshold_upper=None):
-        """Load and prepare all data for visualization"""
+    def _load_data_fallback(self, select_algorithm='PZWAV'):
+        """Load and prepare all data for visualization - fallback implementation"""
         if select_algorithm in self.data_cache:
             return self.data_cache[select_algorithm]
             
@@ -515,6 +513,11 @@ class ClusterVisualizationApp:
         snr_max = float(data_merged['SNR_CLUSTER'].max())
         print(f"SNR range: {snr_min:.3f} to {snr_max:.3f}")
         
+        # Calculate redshift min/max for slider bounds
+        z_min = float(data_merged['Z_CLUSTER'].min())
+        z_max = float(data_merged['Z_CLUSTER'].max())
+        print(f"Redshift range: {z_min:.3f} to {z_max:.3f}")
+        
         data = {
             'merged_data': data_merged,  # Store raw unfiltered data
             'tile_data': data_by_tile,
@@ -524,12 +527,55 @@ class ClusterVisualizationApp:
             'snr_threshold_upper': snrthreshold_upper,
             'snr_min': snr_min,
             'snr_max': snr_max,
+            'z_min': z_min,
+            'z_max': z_max,
             'data_dir': mergedetcat_datadir
         }
         
         # Cache the data
         self.data_cache[select_algorithm] = data
         return data
+
+    def _create_traces_fallback(self, data, show_polygons=True, show_mer_tiles=False, relayout_data=None, 
+                               show_catred_mertile_data=False, manual_mer_data=None, existing_mer_traces=None, 
+                               snr_threshold_lower=None, snr_threshold_upper=None):
+        """Create all Plotly traces - fallback implementation"""
+        traces = []
+        data_traces = []  # Keep data traces separate to add them last (top layer)
+        
+        # Apply SNR filtering to merged data
+        if snr_threshold_lower is None and snr_threshold_upper is None:
+            datamod_merged = data['merged_data']
+        elif snr_threshold_lower is not None and snr_threshold_upper is not None:
+            datamod_merged = data['merged_data'][(data['merged_data']['SNR_CLUSTER'] >= snr_threshold_lower) & 
+                                                 (data['merged_data']['SNR_CLUSTER'] <= snr_threshold_upper)]
+        elif snr_threshold_upper is not None and snr_threshold_lower is None:
+            datamod_merged = data['merged_data'][data['merged_data']['SNR_CLUSTER'] <= snr_threshold_upper]
+        elif snr_threshold_lower is not None:
+            datamod_merged = data['merged_data'][data['merged_data']['SNR_CLUSTER'] >= snr_threshold_lower]
+        else:
+            datamod_merged = data['merged_data']
+        
+        # Create a basic merged data trace
+        merged_det_trace = go.Scattergl(
+            x=datamod_merged['RIGHT_ASCENSION_CLUSTER'],
+            y=datamod_merged['DECLINATION_CLUSTER'],
+            mode='markers',
+            marker=dict(size=10, symbol='square-open', line=dict(width=2), color='black'),
+            name=f'Merged Data ({data["algorithm"]}) - {len(datamod_merged)} clusters',
+            text=[
+                f"merged<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                for snr, cz, ra, dec in zip(datamod_merged['SNR_CLUSTER'], 
+                                          datamod_merged['Z_CLUSTER'], 
+                                          datamod_merged['RIGHT_ASCENSION_CLUSTER'], 
+                                          datamod_merged['DECLINATION_CLUSTER'])
+            ],
+            hoverinfo='text'
+        )
+        data_traces.append(merged_det_trace)
+        
+        # Combine traces
+        return traces + data_traces
 
     def get_radec_mertile(self, mertileid, data):
         """Load CATRED data for a specific MER tile - delegates to MER handler"""
@@ -1069,6 +1115,31 @@ class ClusterVisualizationApp:
                                 )
                             ], className="mb-4"),
                             
+                            # Redshift Filtering section
+                            html.Div([
+                                html.Label("Redshift Filtering:", className="fw-bold mb-2"),
+                                html.Div(id="redshift-range-display", className="text-center mb-2"),
+                                dcc.RangeSlider(
+                                    id='redshift-range-slider',
+                                    min=0,  # Will be updated dynamically
+                                    max=100,  # Will be updated dynamically
+                                    step=0.1,
+                                    marks={},  # Will be updated dynamically
+                                    value=[0, 100],  # Will be updated dynamically
+                                    tooltip={"placement": "bottom", "always_visible": True},
+                                    allowCross=False
+                                ),
+                                dbc.Button(
+                                    "Apply Redshift Filter",
+                                    id="redshift-render-button",
+                                    color="secondary",
+                                    size="sm",
+                                    className="w-100 mt-2",
+                                    n_clicks=0,
+                                    disabled=True
+                                )
+                            ], className="mb-4"),
+
                             # Display options
                             html.Div([
                                 html.Label("Display Options:", className="fw-bold mb-2"),
@@ -1286,20 +1357,58 @@ class ClusterVisualizationApp:
                 # Fallback values if data loading fails
                 return 0, 100, [0, 100], {0: '0', 100: '100'}, html.Small("SNR data not available", className="text-muted")
         
+        # Callback to initialize Redshift slider when algorithm changes
+        @self.app.callback(
+            [Output('redshift-range-slider', 'min'),
+             Output('redshift-range-slider', 'max'),
+             Output('redshift-range-slider', 'value'),
+             Output('redshift-range-slider', 'marks'),
+             Output('redshift-range-display', 'children')],
+            [Input('algorithm-dropdown', 'value')],
+            prevent_initial_call=False
+        )
+        def update_redshift_slider(algorithm):
+            try:
+                # Load data to get redshift range
+                data = self.load_data(algorithm)
+                z_min = data['z_min']
+                z_max = data['z_max']
+                
+                # Create marks at key points
+                marks = {
+                    z_min: f'{z_min:.1f}',
+                    z_max: f'{z_max:.1f}'
+                }
+                
+                # Default to full range
+                default_value = [z_min, z_max]
+                
+                display_text = html.Div([
+                    html.Small(f"Redshift Range: {z_min:.2f} to {z_max:.2f}", className="text-muted"),
+                    html.Small(" | Move sliders to set filter range", className="text-muted")
+                ])
+                
+                return z_min, z_max, default_value, marks, display_text
+                
+            except Exception as e:
+                # Fallback values if data loading fails
+                return 0, 10, [0, 10], {0: '0', 10: '10'}, html.Small("Redshift data not available", className="text-muted")
+        
         @self.app.callback(
             [Output('cluster-plot', 'figure'), Output('phz-pdf-plot', 'figure'), Output('status-info', 'children')],
-            [Input('render-button', 'n_clicks'), Input('snr-render-button', 'n_clicks')],
+            [Input('render-button', 'n_clicks'), Input('snr-render-button', 'n_clicks'), Input('redshift-render-button', 'n_clicks')],
             [State('algorithm-dropdown', 'value'),
              State('snr-range-slider', 'value'),
+             State('redshift-range-slider', 'value'),
              State('polygon-switch', 'value'),
              State('mer-switch', 'value'),
              State('aspect-ratio-switch', 'value'),
              State('catred-mertile-switch', 'value'),
              State('cluster-plot', 'relayoutData')]
         )
-        def update_plot(n_clicks, snr_n_clicks, algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data):
+        def update_plot(n_clicks, snr_n_clicks, redshift_n_clicks, algorithm, snr_range, redshift_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data):
             # Only render if button has been clicked at least once
-            if n_clicks == 0 and snr_n_clicks == 0:
+            if n_clicks == 0 and snr_n_clicks == 0 and redshift_n_clicks == 0:
                 # Initial empty figure
                 initial_fig = go.Figure()
                 
@@ -1549,32 +1658,38 @@ class ClusterVisualizationApp:
 
         # Callback to update button text based on current settings
         @self.app.callback(
-            [Output('render-button', 'children'), Output('mer-render-button', 'children'), Output('snr-render-button', 'children')],
+            [Output('render-button', 'children'), Output('mer-render-button', 'children'), 
+             Output('snr-render-button', 'children'), Output('redshift-render-button', 'children')],
             [Input('algorithm-dropdown', 'value'),
              Input('snr-range-slider', 'value'),
+             Input('redshift-range-slider', 'value'),
              Input('polygon-switch', 'value'),
              Input('mer-switch', 'value'),
              Input('aspect-ratio-switch', 'value'),
              Input('catred-mertile-switch', 'value'),
              Input('render-button', 'n_clicks'),
              Input('mer-render-button', 'n_clicks'),
-             Input('snr-render-button', 'n_clicks')]
+             Input('snr-render-button', 'n_clicks'),
+             Input('redshift-render-button', 'n_clicks')]
         )
-        def update_button_texts(algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, n_clicks, mer_n_clicks, snr_n_clicks):
+        def update_button_texts(algorithm, snr_range, redshift_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, n_clicks, mer_n_clicks, snr_n_clicks, redshift_n_clicks):
             main_button_text = "🚀 Initial Render" if n_clicks == 0 else "✅ Live Updates Active"
             mer_button_text = f"🔍 Render MER (CATRED) Data ({mer_n_clicks})" if mer_n_clicks > 0 else "🔍 Render MER (CATRED) Data"
             snr_button_text = f"Apply SNR Filter ({snr_n_clicks})" if snr_n_clicks > 0 else "Apply SNR Filter"
-            return main_button_text, mer_button_text, snr_button_text
+            redshift_button_text = f"Apply Redshift Filter ({redshift_n_clicks})" if redshift_n_clicks > 0 else "Apply Redshift Filter"
+            return main_button_text, mer_button_text, snr_button_text, redshift_button_text
 
-        # Callback to enable SNR render button after initial render
-        @self.app.callback(
-            Output('snr-render-button', 'disabled'),
-            [Input('render-button', 'n_clicks')],
-            prevent_initial_call=False
-        )
-        def enable_snr_button(n_clicks):
-            # Disable SNR button until initial render is clicked
-            return n_clicks == 0
+        # Callback to enable SNR render button after initial render - handled by UICallbacks in modular mode
+        # @self.app.callback(
+        #     [Output('snr-render-button', 'disabled'),
+        #      Output('redshift-render-button', 'disabled')],
+        #     [Input('render-button', 'n_clicks')],
+        #     prevent_initial_call=False
+        # )
+        # def enable_snr_and_redshift_buttons(n_clicks):
+        #     # Disable both buttons until initial render is clicked
+        #     disabled = n_clicks == 0
+        #     return disabled, disabled
 
         # Callback to update clear button text
         @self.app.callback(
@@ -1594,11 +1709,12 @@ class ClusterVisualizationApp:
              Input('catred-mertile-switch', 'value')],
             [State('render-button', 'n_clicks'),
              State('snr-range-slider', 'value'),
+             State('redshift-range-slider', 'value'),
              State('cluster-plot', 'relayoutData'),
              State('cluster-plot', 'figure')],
             prevent_initial_call=True
         )
-        def update_plot_options(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, n_clicks, snr_range, relayout_data, current_figure):
+        def update_plot_options(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, n_clicks, snr_range, redshift_range, relayout_data, current_figure):
             # Only update if render button has been clicked at least once
             if n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update
@@ -1607,7 +1723,11 @@ class ClusterVisualizationApp:
                 # Extract SNR values from range slider
                 snr_lower = snr_range[0] if snr_range and len(snr_range) == 2 else None
                 snr_upper = snr_range[1] if snr_range and len(snr_range) == 2 else None
-                
+
+                # Extract redshift values from range slider
+                z_lower = redshift_range[0] if redshift_range and len(redshift_range) == 2 else None
+                z_upper = redshift_range[1] if redshift_range and len(redshift_range) == 2 else None
+
                 # Load data for selected algorithm
                 data = self.load_data(algorithm)
                 
@@ -1637,7 +1757,8 @@ class ClusterVisualizationApp:
                 
                 # Create traces with existing MER traces preserved
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data, 
-                                          existing_mer_traces=existing_mer_traces, snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper)
+                                          existing_mer_traces=existing_mer_traces, 
+                                          snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper)
                 
                 # Create figure
                 fig = go.Figure(traces)
@@ -1818,6 +1939,7 @@ class ClusterVisualizationApp:
             [Input('mer-render-button', 'n_clicks')],
             [State('algorithm-dropdown', 'value'),
              State('snr-range-slider', 'value'),
+             State('redshift-range-slider', 'value'),
              State('polygon-switch', 'value'),
              State('mer-switch', 'value'),
              State('aspect-ratio-switch', 'value'),
@@ -1980,8 +2102,8 @@ class ClusterVisualizationApp:
             [Output('cluster-plot', 'figure', allow_duplicate=True), Output('phz-pdf-plot', 'figure', allow_duplicate=True), Output('status-info', 'children', allow_duplicate=True)],
             [Input('mer-clear-button', 'n_clicks')],
             [State('algorithm-dropdown', 'value'),
-             State('snr-lower-input', 'value'),
-             State('snr-upper-input', 'value'),
+             State('snr-range-slider', 'value'),
+             State('redshift-range-slider', 'value'),
              State('polygon-switch', 'value'),
              State('mer-switch', 'value'),
              State('aspect-ratio-switch', 'value'),
@@ -1990,13 +2112,17 @@ class ClusterVisualizationApp:
              State('render-button', 'n_clicks')],
             prevent_initial_call=True
         )
-        def clear_mer_data(clear_n_clicks, algorithm, snr_lower, snr_upper, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data, render_n_clicks):
+        def clear_mer_data(clear_n_clicks, algorithm, snr_range, redshift_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data, render_n_clicks):
             if clear_n_clicks == 0 or render_n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update
             
             print(f"Debug: Clear MER data button clicked (click #{clear_n_clicks})")
             
             try:
+                # Extract SNR values from range slider
+                snr_lower = snr_range[0] if snr_range and len(snr_range) == 2 else None
+                snr_upper = snr_range[1] if snr_range and len(snr_range) == 2 else None
+                
                 # Clear MER traces cache
                 self.mer_traces_cache = []
                 

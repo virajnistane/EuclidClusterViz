@@ -41,6 +41,9 @@ class AppLayout:
                             # SNR Filtering section
                             AppLayout._create_snr_section(),
                             
+                            # Redshift Filtering section
+                            AppLayout._create_redshift_section(),
+                            
                             # Display options
                             AppLayout._create_display_options_section(),
                             
@@ -146,6 +149,33 @@ class AppLayout:
             dbc.Button(
                 "Apply SNR Filter",
                 id="snr-render-button",
+                color="secondary",
+                size="sm",
+                className="w-100 mt-2",
+                n_clicks=0,
+                disabled=True
+            )
+        ], className="mb-4")
+    
+    @staticmethod
+    def _create_redshift_section():
+        """Create redshift filtering section"""
+        return html.Div([
+            html.Label("Redshift Filtering:", className="fw-bold mb-2"),
+            html.Div(id="redshift-range-display", className="text-center mb-2"),
+            dcc.RangeSlider(
+                id='redshift-range-slider',
+                min=0,  # Will be updated dynamically
+                max=10,  # Will be updated dynamically
+                step=0.1,
+                marks={},  # Will be updated dynamically
+                value=[0, 10],  # Will be updated dynamically
+                tooltip={"placement": "bottom", "always_visible": True},
+                allowCross=False
+            ),
+            dbc.Button(
+                "Apply redshift Filter",
+                id="redshift-render-button",
                 color="secondary",
                 size="sm",
                 className="w-100 mt-2",

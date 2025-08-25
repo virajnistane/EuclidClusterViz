@@ -42,6 +42,7 @@ class MainPlotCallbacks:
     def setup_callbacks(self):
         """Setup all main plot callbacks"""
         self._setup_snr_slider_callback()
+        self._setup_redshift_slider_callback()
         self._setup_main_render_callback()
         self._setup_options_update_callback()
     
@@ -66,8 +67,7 @@ class MainPlotCallbacks:
                 # Create marks at key points
                 marks = {
                     snr_min: f'{snr_min:.1f}',
-                    snr_max: f'{snr_max:.1f}',
-                    (snr_min + snr_max) / 2: f'{(snr_min + snr_max) / 2:.1f}'
+                    snr_max: f'{snr_max:.1f}'
                 }
                 
                 # Default to full range
@@ -84,23 +84,71 @@ class MainPlotCallbacks:
                 # Fallback values if data loading fails
                 return 0, 100, [0, 100], {0: '0', 100: '100'}, html.Small("SNR data not available", className="text-muted")
     
+    def _setup_redshift_slider_callback(self):
+        """Setup redshift slider initialization callback"""
+        @self.app.callback(
+            [Output('redshift-range-slider', 'min'),
+             Output('redshift-range-slider', 'max'),
+             Output('redshift-range-slider', 'value'),
+             Output('redshift-range-slider', 'marks'),
+             Output('redshift-range-display', 'children')],
+            [Input('algorithm-dropdown', 'value')],
+            prevent_initial_call=False
+        )
+        def update_redshift_slider(algorithm):
+            try:
+                # Load data to get redshift range
+                data = self.load_data(algorithm)
+                z_min = data['z_min']
+                z_max = data['z_max']
+
+                # Create marks at key points
+                marks = {
+                    z_min: f'{z_min:.1f}',
+                    z_max: f'{z_max:.1f}'
+                }
+                
+                # Default to full range
+                default_value = [z_min, z_max]
+
+                display_text = html.Div([
+                    html.Small(f"Redshift Range: {z_min:.2f} to {z_max:.2f}", className="text-muted"),
+                    html.Small(" | Move sliders to set filter range", className="text-muted")
+                ])
+
+                return z_min, z_max, default_value, marks, display_text
+
+            except Exception as e:
+                # Fallback values if data loading fails
+                return 0, 10, [0, 10], {0: '0', 10: '10'}, html.Small("Redshift data not available", className="text-muted")
+
     def _setup_main_render_callback(self):
         """Setup main rendering callback for initial and SNR-filtered renders"""
         @self.app.callback(
-            [Output('cluster-plot', 'figure'), Output('phz-pdf-plot', 'figure'), Output('status-info', 'children')],
-            [Input('render-button', 'n_clicks'), Input('snr-render-button', 'n_clicks')],
+            [Output('cluster-plot', 'figure'), 
+             Output('phz-pdf-plot', 'figure'), 
+             Output('status-info', 'children')
+             ],
+            [Input('render-button', 'n_clicks'), 
+             Input('snr-render-button', 'n_clicks'), 
+             Input('redshift-render-button', 'n_clicks')
+             ],
             [State('algorithm-dropdown', 'value'),
              State('snr-range-slider', 'value'),
+             State('redshift-range-slider', 'value'),
              State('polygon-switch', 'value'),
              State('mer-switch', 'value'),
              State('aspect-ratio-switch', 'value'),
              State('catred-mode-radio', 'value'),
              State('catred-threshold-slider', 'value'),
-             State('cluster-plot', 'relayoutData')]
+             State('cluster-plot', 'relayoutData')
+             ]
         )
-        def update_plot(n_clicks, snr_n_clicks, algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, catred_mode, threshold, relayout_data):
+        def update_plot(n_clicks, snr_n_clicks, redshift_n_clicks, algorithm, 
+                        snr_range, redshift_range, show_polygons, show_mer_tiles, 
+                        free_aspect_ratio, catred_mode, threshold, relayout_data):
             # Only render if button has been clicked at least once
-            if n_clicks == 0 and snr_n_clicks == 0:
+            if n_clicks == 0 and snr_n_clicks == 0 and redshift_n_clicks == 0:
                 return self._create_initial_empty_plots(free_aspect_ratio)
             
             try:
@@ -108,6 +156,10 @@ class MainPlotCallbacks:
                 snr_lower = snr_range[0] if snr_range and len(snr_range) == 2 else None
                 snr_upper = snr_range[1] if snr_range and len(snr_range) == 2 else None
                 
+                # Extract redshift values from range slider
+                z_lower = redshift_range[0] if redshift_range and len(redshift_range) == 2 else None
+                z_upper = redshift_range[1] if redshift_range and len(redshift_range) == 2 else None
+
                 # Load data for selected algorithm
                 data = self.load_data(algorithm)
                 
@@ -119,8 +171,10 @@ class MainPlotCallbacks:
                 
                 # Create traces
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
-                                          snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, threshold=threshold)
-                
+                                            snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, 
+                                            z_threshold_lower=z_lower, z_threshold_upper=z_upper, 
+                                            threshold=threshold)
+
                 # Create figure
                 fig = self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio) if self.figure_manager else self._create_fallback_figure(traces, algorithm, free_aspect_ratio)
                 
@@ -131,11 +185,11 @@ class MainPlotCallbacks:
                     self._preserve_zoom_state_fallback(fig, relayout_data)
                 
                 # Calculate filtered cluster counts for status
-                filtered_merged_count = self._calculate_filtered_count(data['merged_data'], snr_lower, snr_upper)
+                filtered_merged_count = self._calculate_filtered_count(data['merged_data'], snr_lower, snr_upper, z_lower, z_upper)
                 
                 # Create status info
                 status = self._create_status_info(algorithm, data, filtered_merged_count, snr_lower, snr_upper, 
-                                                show_polygons, show_mer_tiles, free_aspect_ratio, "success")
+                                                z_lower, z_upper, show_polygons, show_mer_tiles, free_aspect_ratio, "success")
                 
                 # Create empty PHZ_PDF plot
                 empty_phz_fig = self._create_empty_phz_plot()
@@ -159,11 +213,12 @@ class MainPlotCallbacks:
              Input('catred-threshold-slider', 'value')],
             [State('render-button', 'n_clicks'),
              State('snr-range-slider', 'value'),
+             State('redshift-range-slider', 'value'),
              State('cluster-plot', 'relayoutData'),
              State('cluster-plot', 'figure')],
             prevent_initial_call=True
         )
-        def update_plot_options(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, catred_mode, threshold, n_clicks, snr_range, relayout_data, current_figure):
+        def update_plot_options(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, catred_mode, threshold, n_clicks, snr_range, redshift_range, relayout_data, current_figure):
             # Only update if render button has been clicked at least once
             if n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update
@@ -173,6 +228,10 @@ class MainPlotCallbacks:
                 snr_lower = snr_range[0] if snr_range and len(snr_range) == 2 else None
                 snr_upper = snr_range[1] if snr_range and len(snr_range) == 2 else None
                 
+                # Extract redshift values from range slider
+                z_lower = redshift_range[0] if redshift_range and len(redshift_range) == 2 else None
+                z_upper = redshift_range[1] if redshift_range and len(redshift_range) == 2 else None
+
                 # Load data for selected algorithm
                 data = self.load_data(algorithm)
                 
@@ -183,7 +242,10 @@ class MainPlotCallbacks:
                 
                 # Create traces with existing CATRED traces preserved
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
-                                          existing_catred_traces=existing_catred_traces, snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, threshold=threshold)
+                                            existing_catred_traces=existing_catred_traces, 
+                                            snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, 
+                                            z_threshold_lower=z_lower, z_threshold_upper=z_upper,
+                                            threshold=threshold)
                 
                 # Create figure
                 fig = self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio) if self.figure_manager else self._create_fallback_figure(traces, algorithm, free_aspect_ratio)
@@ -195,11 +257,11 @@ class MainPlotCallbacks:
                     self._preserve_zoom_state_fallback(fig, relayout_data, current_figure)
                 
                 # Calculate filtered cluster counts for status
-                filtered_merged_count = self._calculate_filtered_count(data['merged_data'], snr_lower, snr_upper)
-                
+                filtered_merged_count = self._calculate_filtered_count(data['merged_data'], snr_lower, snr_upper, z_lower, z_upper)
+
                 # Create status info
                 status = self._create_status_info(algorithm, data, filtered_merged_count, snr_lower, snr_upper, 
-                                                show_polygons, show_mer_tiles, free_aspect_ratio, "info", is_update=True)
+                                                z_lower, z_upper, show_polygons, show_mer_tiles, free_aspect_ratio, "info", is_update=True)
                 
                 # Create empty PHZ_PDF plot
                 empty_phz_fig = self._create_empty_phz_plot()
@@ -219,20 +281,27 @@ class MainPlotCallbacks:
             return self._load_data_fallback(algorithm)
     
     def create_traces(self, data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
-                     existing_catred_traces=None, manual_catred_data=None, snr_threshold_lower=None, snr_threshold_upper=None, threshold=0.8):
+                     existing_catred_traces=None, manual_catred_data=None, 
+                     snr_threshold_lower=None, snr_threshold_upper=None, 
+                     z_threshold_lower=None, z_threshold_upper=None, 
+                     threshold=0.8):
         """Create traces using modular or fallback method"""
         if self.trace_creator:
             return self.trace_creator.create_traces(
                 data, show_polygons, show_mer_tiles, relayout_data, catred_mode,
                 existing_catred_traces=existing_catred_traces, manual_catred_data=manual_catred_data,
-                snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, threshold=threshold
+                snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, 
+                z_threshold_lower=z_threshold_lower, z_threshold_upper=z_threshold_upper, 
+                threshold=threshold
             )
         else:
             # Fallback to inline trace creation
             return self._create_traces_fallback(data, show_polygons, show_mer_tiles, relayout_data, catred_mode,
                                               existing_mer_traces=existing_catred_traces, manual_mer_data=manual_catred_data,
-                                              snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, threshold=threshold)
-    
+                                              snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, 
+                                              z_threshold_lower=z_threshold_lower, z_threshold_upper=z_threshold_upper, 
+                                              threshold=threshold)
+
     # Helper methods for fallback and utility functions
     def _create_initial_empty_plots(self, free_aspect_ratio):
         """Create initial empty plots"""
@@ -348,22 +417,35 @@ class MainPlotCallbacks:
                     existing_catred_traces.append(existing_trace)
         return existing_catred_traces
     
-    def _calculate_filtered_count(self, merged_data, snr_lower, snr_upper):
+    def _calculate_filtered_count(self, merged_data, snr_lower, snr_upper, z_lower, z_upper):
         """Calculate filtered cluster count based on SNR range"""
         if snr_lower is None and snr_upper is None:
-            return len(merged_data)
+            merged_data_1 = merged_data
         elif snr_lower is not None and snr_upper is not None:
-            return len(merged_data[(merged_data['SNR_CLUSTER'] >= snr_lower) & 
-                                 (merged_data['SNR_CLUSTER'] <= snr_upper)])
+            merged_data_1 = merged_data[
+                (merged_data['SNR_CLUSTER'] >= snr_lower) & 
+                (merged_data['SNR_CLUSTER'] <= snr_upper)
+                ]
         elif snr_upper is not None and snr_lower is None:
-            return len(merged_data[merged_data['SNR_CLUSTER'] <= snr_upper])
-        elif snr_lower is not None:
-            return len(merged_data[merged_data['SNR_CLUSTER'] >= snr_lower])
-        else:
-            return len(merged_data)
-    
+            merged_data_1 = merged_data[merged_data['SNR_CLUSTER'] <= snr_upper]
+        elif snr_lower is not None and snr_upper is None:
+            merged_data_1 = merged_data[merged_data['SNR_CLUSTER'] >= snr_lower]
+
+        if z_lower is None and z_upper is None:
+            return len(merged_data_1)
+        elif z_lower is not None and z_upper is not None:
+            return len(merged_data_1[
+                (merged_data_1['Z_CLUSTER'] >= z_lower) & 
+                (merged_data_1['Z_CLUSTER'] <= z_upper)
+                ])
+        elif z_upper is not None and z_lower is None:
+            return len(merged_data_1[merged_data_1['Z_CLUSTER'] <= z_upper])
+        elif z_lower is not None and z_upper is None:
+            return len(merged_data_1[merged_data_1['Z_CLUSTER'] >= z_lower])
+
+
     def _create_status_info(self, algorithm, data, filtered_merged_count, snr_lower, snr_upper, 
-                           show_polygons, show_mer_tiles, free_aspect_ratio, alert_color, is_update=False):
+                           z_lower, z_upper, show_polygons, show_mer_tiles, free_aspect_ratio, alert_color, is_update=False):
         """Create status information display"""
         # Status info
         mer_status = ""
@@ -384,6 +466,16 @@ class MainPlotCallbacks:
             snr_filter_text = f"SNR ≥ {snr_lower}"
         elif snr_upper is not None:
             snr_filter_text = f"SNR ≤ {snr_upper}"
+
+        # Format Redshift filter status
+        z_filter_text = "No redshift filtering"
+        if z_lower is not None and z_upper is not None:
+            z_filter_text = f"Redshift: {z_lower} ≤ Redshift ≤ {z_upper}"
+        elif z_lower is not None:
+            z_filter_text = f"Redshift ≥ {z_lower}"
+        elif z_upper is not None:
+            z_filter_text = f"Redshift ≤ {z_upper}"
+
         
         timestamp_text = "Updated at" if is_update else "Rendered at"
         
@@ -392,6 +484,7 @@ class MainPlotCallbacks:
             html.P(f"Merged clusters: {filtered_merged_count}/{len(data['merged_data'])} (filtered)", className="mb-1"),
             html.P(f"Individual tiles: {len(data['tile_data'])}", className="mb-1"),
             html.P(f"SNR Filter: {snr_filter_text}", className="mb-1"),
+            html.P(f"Redshift Filter: {z_filter_text}", className="mb-1"),
             html.P(f"Polygon mode: {'Filled' if show_polygons else 'Outline'}{mer_status}", className="mb-1"),
             html.P(f"Aspect ratio: {aspect_mode}", className="mb-1"),
             html.Small(f"{timestamp_text}: {pd.Timestamp.now().strftime('%H:%M:%S')}", className="text-muted")
@@ -408,7 +501,9 @@ class MainPlotCallbacks:
             'merged_data': pd.DataFrame(),
             'tile_data': pd.DataFrame(),
             'snr_min': 0,
-            'snr_max': 100
+            'snr_max': 100,
+            'z_min': 0,
+            'z_max': 10
         }
     
     def _create_traces_fallback(self, data, show_polygons, show_mer_tiles, relayout_data, catred_mode,
