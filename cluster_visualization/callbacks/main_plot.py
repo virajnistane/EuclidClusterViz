@@ -560,20 +560,20 @@ class MainPlotCallbacks:
         # Format SNR filter status
         snr_filter_text = "No SNR filtering"
         if snr_lower is not None and snr_upper is not None:
-            snr_filter_text = f"SNR: {snr_lower} ≤ SNR ≤ {snr_upper}"
+            snr_filter_text = f"{snr_lower:.3f} ≤ SNR ≤ {snr_upper:.3f}"
         elif snr_lower is not None:
-            snr_filter_text = f"SNR ≥ {snr_lower}"
+            snr_filter_text = f"SNR ≥ {snr_lower:.3f}"
         elif snr_upper is not None:
-            snr_filter_text = f"SNR ≤ {snr_upper}"
+            snr_filter_text = f"SNR ≤ {snr_upper:.3f}"
 
         # Format Redshift filter status
-        z_filter_text = "No redshift filtering"
+        z_filter_text = "No z filtering"
         if z_lower is not None and z_upper is not None:
-            z_filter_text = f"Redshift: {z_lower} ≤ Redshift ≤ {z_upper}"
+            z_filter_text = f"{z_lower:.3f} ≤ z ≤ {z_upper:.3f}"
         elif z_lower is not None:
-            z_filter_text = f"Redshift ≥ {z_lower}"
+            z_filter_text = f"z ≥ {z_lower:.3f}"
         elif z_upper is not None:
-            z_filter_text = f"Redshift ≤ {z_upper}"
+            z_filter_text = f"z ≤ {z_upper:.3f}"
 
         
         timestamp_text = "Updated at" if is_update else "Rendered at"
