@@ -29,11 +29,15 @@ from shapely.geometry import Polygon as ShapelyPolygon, box
 import webbrowser
 import threading
 import time
+import getpass
+import socket
+from datetime import datetime, timedelta
 
 import dash
 from dash import dcc, html, Input, Output, State, callback
 import plotly.graph_objs as go
 import dash_bootstrap_components as dbc
+from flask import request
 
 def check_environment():
     """Check if EDEN environment is activated and required modules are available"""
@@ -238,9 +242,80 @@ except ImportError as e:
     print("   Please ensure myutils.py and colordefinitions.py are available")
     sys.exit(1)
 
+class ConnectionMonitor:
+    """Monitor user connections to detect if anyone has connected to the app"""
+    
+    def __init__(self):
+        self.connections = set()
+        self.start_time = datetime.now()
+        self.warning_sent = False
+        self.monitoring_active = True
+        
+    def record_connection(self, user_agent=None, ip=None):
+        """Record a new connection"""
+        connection_id = f"{ip or 'unknown'}:{user_agent or 'unknown'}"
+        is_first_connection = len(self.connections) == 0
+        self.connections.add(connection_id)
+        
+        if is_first_connection:
+            print(f"✓ User successfully connected at {datetime.now().strftime('%H:%M:%S')}")
+            if ip == '127.0.0.1' or ip == 'localhost':
+                print("  ✓ SSH tunnel appears to be working correctly")
+            print(f"  Browser: {user_agent or 'unknown'}")
+            print(f"  Connection from: {ip or 'unknown'}")
+            print("")
+
+    def check_connections(self, warn_after_minutes=1):  # Back to 1 minute for production
+        """Check if any connections have been made and warn if not"""
+        if self.warning_sent or not self.monitoring_active:
+            return
+            
+        elapsed = datetime.now() - self.start_time
+        if elapsed > timedelta(minutes=warn_after_minutes) and not self.connections:
+            self.warning_sent = True
+            elapsed_seconds = elapsed.total_seconds()
+            
+            # Get the actual hostname
+            try:
+                hostname = socket.gethostbyaddr(socket.gethostname())[0]
+            except:
+                hostname = "remotehost"
+            
+            print("\n" + "="*70)
+            print("⚠️  WARNING: No users have connected yet!")
+            print(f"   App has been running for {elapsed_seconds/60:.1f} minutes")
+            print("")
+            print("🔗 REQUIRED: SSH Tunnel Setup")
+            print("   This app runs on a remote server and requires SSH tunneling.")
+            print("   ")
+            print("   1. Open a NEW terminal on your LOCAL machine")
+            print("   2. Run this command:")
+            print(f"      ssh -L 8050:localhost:8050 {getpass.getuser()}@{hostname}")
+            print("   3. Keep that SSH connection alive")
+            print("   4. Open your browser to: http://localhost:8050")
+            print("")
+            print("="*70 + "\n")
+    
+    def start_monitoring(self, check_interval=30):
+        """Start background monitoring thread"""
+        def monitor():
+            while self.monitoring_active:
+                self.check_connections()
+                time.sleep(check_interval)
+        
+        thread = threading.Thread(target=monitor, daemon=True)
+        thread.start()
+    
+    def stop_monitoring(self):
+        """Stop the monitoring"""
+        self.monitoring_active = False
+
 class ClusterVisualizationApp:
     def __init__(self):
         self.app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+        
+        # Initialize connection monitoring only if using fallback mode
+        self.connection_monitor = None
         
         # Always initialize fallback attributes since we're using fallback callbacks
         self.data_cache = {}
@@ -287,6 +362,17 @@ class ClusterVisualizationApp:
         else:
             self.core = None
             print("⚠️  Using fallback core functionality")
+            
+            # Set up connection monitoring for fallback mode
+            self.connection_monitor = ConnectionMonitor()
+            
+            @self.app.server.before_request
+            def track_connections():
+                user_agent = request.headers.get('User-Agent', '')
+                ip = request.environ.get('REMOTE_ADDR', 'unknown')
+                # Only track browser connections (not internal Dash requests)
+                if 'Mozilla' in user_agent or 'Chrome' in user_agent or 'Safari' in user_agent or 'Firefox' in user_agent:
+                    self.connection_monitor.record_connection(user_agent, ip)
         
     def load_data(self, select_algorithm='PZWAV'):
         """Load and prepare all data for visualization"""
@@ -2216,27 +2302,45 @@ class ClusterVisualizationApp:
         if auto_open:
             self.open_browser(port)
         
+        # Get the actual hostname for SSH instructions
+        try:
+            hostname = socket.gethostbyaddr(socket.gethostname())[0]
+        except:
+            hostname = "remotehost"
+            
         print("=== Cluster Visualization Dash App ===")
-        if external_access:
-            print(f"Starting server for external access on port {port}")
-            print("Access from your local machine using:")
-            print(f"  - SSH tunnel: ssh -L {port}:localhost:{port} username@this-server")
-            print(f"  - Then open: http://localhost:{port} in your local browser")
-            print("NOTE: Keep the SSH connection alive while using the app")
-        else:
-            print(f"Starting server at: http://{host}:{port}")
+        print(f"Server starting on: http://localhost:{port}")
+        print("")
+        print("🔗 SSH TUNNEL REQUIRED:")
+        print("   This app runs on a remote server. To access it:")
+        print("   1. Open a NEW terminal on your LOCAL machine")
+        print(f"   2. Run: ssh -L 8050:localhost:8050 {getpass.getuser()}@{hostname}")
+        print("   3. Keep that SSH connection alive")
+        print("   4. Open browser to: http://localhost:8050")
+        print("")
         print("Loading data and setting up visualization...")
         print("Press Ctrl+C to stop the server")
         print("")
         
-        self.app.run_server(
-            host=host,
-            port=port,
-            debug=debug,
-            dev_tools_hot_reload=False,
-            dev_tools_ui=False,
-            dev_tools_props_check=False
-        )
+        # Start connection monitoring
+        if hasattr(self, 'connection_monitor') and self.connection_monitor:
+            self.connection_monitor.start_monitoring()
+            print("Connection monitoring started - will warn if no users connect within 1 minute")
+            print("")
+        
+        try:
+            self.app.run_server(
+                host=host,
+                port=port,
+                debug=debug,
+                dev_tools_hot_reload=False,
+                dev_tools_ui=False,
+                dev_tools_props_check=False
+            )
+        finally:
+            # Stop monitoring when server shuts down
+            if hasattr(self, 'connection_monitor') and self.connection_monitor:
+                self.connection_monitor.stop_monitoring()
 
 def main():
     """Main function to run the app"""
