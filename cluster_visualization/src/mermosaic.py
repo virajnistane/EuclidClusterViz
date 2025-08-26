@@ -36,8 +36,8 @@ class MOSAICHandler:
         self.mosaic_wcs = None
 
         # Image processing parameters
-        self.img_width = 3840
-        self.img_height = 3840
+        self.img_width = 1920   # Reduced from 3840 for faster processing
+        self.img_height = 1920  # Reduced from 3840 for faster processing
         self.img_scale = 5.0
         self.n_sigma = 1.0  # Number of standard deviations for clipping
 
@@ -51,6 +51,8 @@ class MOSAICHandler:
             return None
             
         fits_file = fits_files[0]  # Take the first match
+        file_size_gb = os.path.getsize(fits_file) / (1024**3)
+        print(f"Loading mosaic file ({file_size_gb:.2f} GB): {os.path.basename(fits_file)}")
         
         try:
             # Use memmap=False to avoid memory mapping issues with compressed files
@@ -124,7 +126,7 @@ class MOSAICHandler:
 
     def _process_mosaic_image(self, mosaic_data: np.ndarray, target_width: int = None, 
                              target_height: int = None) -> np.ndarray:
-        """Process mosaic image data for visualization."""
+        """Process mosaic image data for visualization using the scaling approach from the notebook."""
         if target_width is None:
             target_width = self.img_width
         if target_height is None:
@@ -136,140 +138,275 @@ class MOSAICHandler:
                 print(f"Warning: mosaic_data is not ndarray, type: {type(mosaic_data)}")
                 return np.zeros((target_height, target_width))
             
-            # Handle NaN values
-            valid_mask = np.isfinite(mosaic_data)
-            valid_data = mosaic_data[valid_mask]
+            print(f"Debug: Original mosaic dimensions: {mosaic_data.shape[1]} x {mosaic_data.shape[0]} pixels")
+            print(f"Debug: Target dimensions: {target_width} x {target_height} pixels")
             
-            if len(valid_data) == 0:
+            # Handle NaN values - similar to notebook approach
+            valid_mask = np.isfinite(mosaic_data)
+            if not np.any(valid_mask):
                 print("Warning: No valid data found in mosaic image")
                 return np.zeros((target_height, target_width))
             
-            # Calculate statistics on valid data only
-            mean = np.mean(valid_data)
-            std = np.std(valid_data)
+            print("Debug: Computing statistics...")
             
-            # Clip the data to the range [0, mean + n_sigma * std]
+            # Apply sigma clipping and normalization as in notebook cell 59
+            # Use ravel to flatten the array for mean and std calculations
+            # For large arrays, sample a subset for statistics to speed up processing
+            if mosaic_data.size > 10_000_000:  # If larger than 10M pixels
+                print("Debug: Large image detected, sampling for statistics...")
+                # Sample every 10th pixel for statistics
+                sample_data = mosaic_data[::10, ::10].ravel()
+                mean = np.mean(sample_data)
+                std = np.std(sample_data)
+            else:
+                mean = np.mean(mosaic_data.ravel())
+                std = np.std(mosaic_data.ravel())
+            
+            print(f"Debug: Mosaic data statistics - mean: {mean:.3f}, std: {std:.3f}")
+            
+            # Clip the data to the range [0, mean + N * std] where N = n_sigma
             max_val = mean + self.n_sigma * std
-            if max_val <= 0:
-                max_val = np.max(valid_data)
+            print(f"Debug: Clipping data to range [0, {max_val:.3f}]")
             
-            clipped = np.clip(mosaic_data, 0.0, max_val)
+            mer_image = np.clip(mosaic_data, 0.0, max_val)
             
-            # Normalize to [0, 1]
-            normalized = clipped / max_val
+            # Normalize the image as in the notebook
+            mer_image = mer_image / max_val
             
-            # Replace any remaining NaN/inf values with 0
-            normalized = np.where(np.isfinite(normalized), normalized, 0.0)
+            print(f"Debug: After clipping and normalization - range: [{np.min(mer_image):.3f}, {np.max(mer_image):.3f}]")
             
-            # Resize image using PIL for high quality
-            pil_image = Image.fromarray(normalized)
-            resized_pil = pil_image.resize((target_width, target_height), Image.Resampling.LANCZOS)
+            print("Debug: Starting image resize...")
             
-            # Convert back to numpy array and flip for proper orientation
-            resized_array = np.array(resized_pil.transpose(Image.FLIP_TOP_BOTTOM))
+            # Resize the image to match target dimensions using the same approach as notebook
+            # Convert to PIL Image, resize with LANCZOS, and transpose with FLIP_TOP_BOTTOM
+            mer_array = np.array(
+                Image.fromarray(mer_image)
+                .resize((target_width, target_height), Image.Resampling.LANCZOS)
+                .transpose(Image.FLIP_TOP_BOTTOM)
+            )
             
-            return resized_array
+            print(f"Debug: Final processed image shape: {mer_array.shape}")
+            
+            # Clean up large arrays to free memory
+            del mer_image
+            if 'sample_data' in locals():
+                del sample_data
+            
+            return mer_array
             
         except Exception as e:
             print(f"Error processing mosaic image: {e}")
+            import traceback
+            traceback.print_exc()
             return np.zeros((target_height, target_width))
 
+    def _create_scaled_wcs(self, original_header: fits.Header, original_shape: Tuple[int, int],
+                          target_width: int, target_height: int) -> wcs.WCS:
+        """Create a scaled WCS header similar to the notebook's header_binned approach."""
+        try:
+            # Calculate scaling factors based on the original and target dimensions
+            orig_height, orig_width = original_shape
+            scale_x = orig_width / target_width
+            scale_y = orig_height / target_height
+            
+            print(f"Debug: WCS scaling factors - scale_x: {scale_x:.3f}, scale_y: {scale_y:.3f}")
+            
+            # Create a modified header (binned header) similar to notebook
+            header_binned = original_header.copy()
+            header_binned['NAXIS1'] = target_width
+            header_binned['NAXIS2'] = target_height
+            
+            # Adjust WCS parameters for the scaling
+            if 'CRPIX1' in header_binned:
+                header_binned['CRPIX1'] /= scale_x
+            if 'CRPIX2' in header_binned:
+                header_binned['CRPIX2'] /= scale_y
+                
+            # Scale the CD matrix elements
+            if 'CD1_1' in header_binned:
+                header_binned['CD1_1'] *= scale_x
+            if 'CD1_2' in header_binned:
+                header_binned['CD1_2'] *= scale_x
+            if 'CD2_1' in header_binned:
+                header_binned['CD2_1'] *= scale_y
+            if 'CD2_2' in header_binned:
+                header_binned['CD2_2'] *= scale_y
+                
+            # Alternative: if using CDELT instead of CD matrix
+            if 'CDELT1' in header_binned and 'CD1_1' not in header_binned:
+                header_binned['CDELT1'] *= scale_x
+            if 'CDELT2' in header_binned and 'CD2_2' not in header_binned:
+                header_binned['CDELT2'] *= scale_y
+            
+            # Create the scaled WCS
+            wcs_binned = wcs.WCS(header_binned)
+            
+            print(f"Debug: Created scaled WCS for {target_width}x{target_height} image")
+            
+            return wcs_binned
+            
+        except Exception as e:
+            print(f"Warning: Failed to create scaled WCS, using original: {e}")
+            # Fallback to original WCS
+            return wcs.WCS(original_header)
     def _calculate_image_bounds(self, mosaic_wcs: wcs.WCS, header: fits.Header, 
                                target_width: int, target_height: int) -> Dict[str, float]:
-        """Calculate coordinate bounds for the processed image."""
-        # Calculate scaling factors
-        scale_x = header['NAXIS1'] / target_width
-        scale_y = header['NAXIS2'] / target_height
-        
-        # Create binned header for resized image
-        header_binned = header.copy()
-        header_binned['NAXIS1'] = target_width
-        header_binned['NAXIS2'] = target_height
-        
-        # Update WCS parameters for binning
-        if 'CRPIX1' in header_binned:
-            header_binned['CRPIX1'] /= scale_x
-        if 'CRPIX2' in header_binned:
-            header_binned['CRPIX2'] /= scale_y
-        
-        # Update CD matrix elements
-        for key in ['CD1_1', 'CD1_2', 'CD2_1', 'CD2_2']:
-            if key in header_binned:
-                if '1_' in key:
-                    header_binned[key] *= scale_x
-                else:
-                    header_binned[key] *= scale_y
-        
-        # Create WCS for binned image
-        wcs_binned = wcs.WCS(header_binned)
-        
-        # Define corner pixels
-        corners_pix = np.array([
-            [0, 0],                    # Bottom-left
-            [target_width, 0],         # Bottom-right
-            [target_width, target_height],  # Top-right
-            [0, target_height]         # Top-left
-        ])
-        
+        """Calculate coordinate bounds for the processed image using scaled WCS approach from notebook."""
         try:
-            # Convert to world coordinates
-            corners_world = wcs_binned.pixel_to_world_values(corners_pix)
+            # Get the original image dimensions
+            naxis1 = header['NAXIS1']  # Width in pixels
+            naxis2 = header['NAXIS2']  # Height in pixels
+            
+            print(f"Debug: Original mosaic dimensions: {naxis1} x {naxis2} pixels")
+            
+            # Create scaled WCS similar to notebook's header_binned approach
+            original_shape = (naxis2, naxis1)  # (height, width)
+            scaled_wcs = self._create_scaled_wcs(header, original_shape, target_width, target_height)
+            
+            # Define corner pixels of the SCALED/BINNED image
+            corners_pix = np.array([
+                [0.5, 0.5],                        # Bottom-left
+                [target_width + 0.5, 0.5],        # Bottom-right
+                [target_width + 0.5, target_height + 0.5], # Top-right
+                [0.5, target_height + 0.5]        # Top-left
+            ])
+            
+            # Convert corner pixels to world coordinates using scaled WCS
+            corners_world = scaled_wcs.pixel_to_world_values(corners_pix)
             
             # Handle different return formats from astropy
-            if corners_world.ndim == 1:
-                # Single coordinate pair format
-                ra_coords = [corners_world[0] for _ in range(4)]
-                dec_coords = [corners_world[1] for _ in range(4)]
-            elif corners_world.ndim == 2 and corners_world.shape[1] >= 2:
-                # Array of coordinate pairs
-                ra_coords = corners_world[:, 0]
-                dec_coords = corners_world[:, 1]
-            else:
-                # Alternative: use individual pixel conversions
-                ra_coords = []
-                dec_coords = []
+            if isinstance(corners_world, np.ndarray):
+                if corners_world.ndim == 2 and corners_world.shape[1] >= 2:
+                    # Array of coordinate pairs [N, 2]
+                    ra_coords = corners_world[:, 0]
+                    dec_coords = corners_world[:, 1]
+                else:
+                    # 1D array or other format, convert each corner individually
+                    ra_coords, dec_coords = [], []
+                    for i, corner in enumerate(corners_pix):
+                        world_coord = scaled_wcs.pixel_to_world_values(corner[0], corner[1])
+                        if isinstance(world_coord, (list, tuple)) and len(world_coord) >= 2:
+                            ra_coords.append(world_coord[0])
+                            dec_coords.append(world_coord[1])
+                        else:
+                            ra_coords.append(world_coord)
+                            dec_coords.append(world_coord)
+            elif isinstance(corners_world, (tuple, list)):
+                # Return is a tuple/list - convert each corner individually
+                ra_coords, dec_coords = [], []
                 for corner in corners_pix:
-                    world_coord = wcs_binned.pixel_to_world_values(corner[0], corner[1])
+                    world_coord = scaled_wcs.pixel_to_world_values(corner[0], corner[1])
                     if isinstance(world_coord, (list, tuple)) and len(world_coord) >= 2:
                         ra_coords.append(world_coord[0])
                         dec_coords.append(world_coord[1])
                     else:
-                        ra_coords.append(world_coord)
-                        dec_coords.append(world_coord)
+                        print(f"Warning: Unexpected single coordinate: {world_coord}")
+                        ra_coords.append(0.0)
+                        dec_coords.append(0.0)
+            else:
+                # Fallback: convert each corner individually
+                ra_coords = []
+                dec_coords = []
+                for corner in corners_pix:
+                    try:
+                        world_coord = scaled_wcs.pixel_to_world_values(corner[0], corner[1])
+                        if isinstance(world_coord, (list, tuple)) and len(world_coord) >= 2:
+                            ra_coords.append(world_coord[0])
+                            dec_coords.append(world_coord[1])
+                        else:
+                            # Single value returned - this shouldn't happen for 2D coordinates
+                            print(f"Warning: Unexpected WCS conversion result: {world_coord}")
+                            ra_coords.append(0.0)
+                            dec_coords.append(0.0)
+                    except Exception as e:
+                        print(f"Warning: Failed to convert corner {corner}: {e}")
+                        ra_coords.append(0.0)
+                        dec_coords.append(0.0)
+            
+            # Calculate bounds
+            ra_min = np.min(ra_coords)
+            ra_max = np.max(ra_coords)
+            dec_min = np.min(dec_coords)
+            dec_max = np.max(dec_coords)
+            
+            # Calculate the actual tile size in degrees
+            ra_size = ra_max - ra_min
+            dec_size = dec_max - dec_min
+            
+            print(f"Debug: Mosaic tile bounds: RA({ra_min:.6f}, {ra_max:.6f}) = {ra_size:.6f}°")
+            print(f"Debug: Mosaic tile bounds: Dec({dec_min:.6f}, {dec_max:.6f}) = {dec_size:.6f}°")
+            
+            # Handle potential RA wraparound near 0/360 degrees
+            if ra_max - ra_min > 180:
+                print("Debug: Detected RA wraparound, adjusting coordinates")
+                # Find coordinates < 180 and > 180, adjust the smaller ones
+                ra_coords = np.array(ra_coords)
+                if np.any(ra_coords < 180) and np.any(ra_coords > 180):
+                    ra_coords = np.where(ra_coords < 180, ra_coords + 360, ra_coords)
+                    ra_min = np.min(ra_coords)
+                    ra_max = np.max(ra_coords)
+                    ra_size = ra_max - ra_min
+                    print(f"Debug: Adjusted RA bounds: ({ra_min:.6f}, {ra_max:.6f}) = {ra_size:.6f}°")
             
             return {
-                'ra_min': np.min(ra_coords),
-                'ra_max': np.max(ra_coords),
-                'dec_min': np.min(dec_coords),
-                'dec_max': np.max(dec_coords),
-                'wcs_binned': wcs_binned
+                'ra_min': ra_min,
+                'ra_max': ra_max,
+                'dec_min': dec_min,
+                'dec_max': dec_max,
+                'ra_size_deg': ra_size,
+                'dec_size_deg': dec_size,
+                'wcs_scaled': scaled_wcs,
+                'wcs_original': mosaic_wcs
             }
+            
         except Exception as e:
-            print(f"Warning: Error calculating image bounds: {e}")
-            # Fallback to approximate bounds based on central pixel
+            print(f"Error calculating mosaic bounds: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Fallback: try to get pixel scale from WCS and estimate bounds
             try:
-                center_x, center_y = target_width // 2, target_height // 2
-                center_world = wcs_binned.pixel_to_world_values(center_x, center_y)
-                if isinstance(center_world, (list, tuple)) and len(center_world) >= 2:
-                    center_ra, center_dec = center_world[0], center_world[1]
+                # Get pixel scale from WCS
+                pixel_scale = wcs.utils.proj_plane_pixel_scales(mosaic_wcs)  # degrees per pixel
+                if len(pixel_scale) >= 2:
+                    ra_pixel_scale = pixel_scale[0]  # degrees per pixel in RA
+                    dec_pixel_scale = pixel_scale[1]  # degrees per pixel in Dec
+                    
+                    # Get reference point
+                    if 'CRVAL1' in header and 'CRVAL2' in header:
+                        center_ra = header['CRVAL1']
+                        center_dec = header['CRVAL2']
+                    else:
+                        center_ra, center_dec = 0.0, 0.0
+                    
+                    # Calculate approximate size
+                    ra_size = naxis1 * ra_pixel_scale
+                    dec_size = naxis2 * dec_pixel_scale
+                    
+                    print(f"Debug: Fallback - pixel scale: RA={ra_pixel_scale:.8f}°/px, Dec={dec_pixel_scale:.8f}°/px")
+                    print(f"Debug: Fallback - estimated tile size: RA={ra_size:.6f}°, Dec={dec_size:.6f}°")
+                    
+                    return {
+                        'ra_min': center_ra - ra_size/2,
+                        'ra_max': center_ra + ra_size/2,
+                        'dec_min': center_dec - dec_size/2,
+                        'dec_max': center_dec + dec_size/2,
+                        'ra_size_deg': ra_size,
+                        'dec_size_deg': dec_size,
+                        'wcs_original': mosaic_wcs
+                    }
                 else:
-                    center_ra, center_dec = center_world, center_world
-                
-                # Estimate bounds around center (rough approximation)
-                ra_range = dec_range = 0.1  # degrees
+                    raise ValueError("Could not determine pixel scale")
+                    
+            except Exception as fallback_error:
+                print(f"Fallback calculation also failed: {fallback_error}")
+                # Final fallback - use a standard tile size estimate
                 return {
-                    'ra_min': center_ra - ra_range,
-                    'ra_max': center_ra + ra_range,
-                    'dec_min': center_dec - dec_range,
-                    'dec_max': center_dec + dec_range,
-                    'wcs_binned': wcs_binned
-                }
-            except Exception:
-                # Final fallback to generic bounds
-                return {
-                    'ra_min': 0, 'ra_max': 360,
-                    'dec_min': -90, 'dec_max': 90,
-                    'wcs_binned': wcs_binned
+                    'ra_min': 0, 'ra_max': 1.0,  # 1 degree tile size
+                    'dec_min': 0, 'dec_max': 1.0,
+                    'ra_size_deg': 1.0,
+                    'dec_size_deg': 1.0,
+                    'wcs_original': mosaic_wcs
                 }
 
     def create_mosaic_image_trace(self, mertileid: int, opacity: float = 0.5, 
@@ -278,6 +415,7 @@ class MOSAICHandler:
         # Load mosaic data for this tile
         mosaic_info = self.get_mosaic_fits_data_by_mertile(mertileid)
         if not mosaic_info:
+            print(f"Warning: Could not load mosaic data for MER tile {mertileid}")
             return None
         
         # Process the image
@@ -296,6 +434,13 @@ class MOSAICHandler:
         x_coords = np.linspace(bounds['ra_min'], bounds['ra_max'], width)
         y_coords = np.linspace(bounds['dec_min'], bounds['dec_max'], height)
         
+        # Add debug information about the tile size and coordinates
+        print(f"Debug: Creating heatmap trace for MER tile {mertileid}")
+        print(f"       - Tile size: {bounds.get('ra_size_deg', 'unknown'):.6f}° × {bounds.get('dec_size_deg', 'unknown'):.6f}°")
+        print(f"       - RA range: {bounds['ra_min']:.6f}° to {bounds['ra_max']:.6f}°")
+        print(f"       - Dec range: {bounds['dec_min']:.6f}° to {bounds['dec_max']:.6f}°")
+        print(f"       - Image shape: {height} × {width} pixels")
+        
         # Create the heatmap trace
         trace = go.Heatmap(
             z=processed_image,
@@ -307,9 +452,10 @@ class MOSAICHandler:
             name=f"Mosaic {mertileid}",
             hovertemplate=(
                 f"MER Tile: {mertileid}<br>"
-                "RA: %{x:.4f}°<br>"
-                "Dec: %{y:.4f}°<br>"
+                "RA: %{x:.6f}°<br>"
+                "Dec: %{y:.6f}°<br>"
                 "Intensity: %{z:.3f}<br>"
+                f"Tile Size: {bounds.get('ra_size_deg', 'unknown'):.4f}° × {bounds.get('dec_size_deg', 'unknown'):.4f}°<br>"
                 "<extra>Mosaic Image</extra>"
             )
         )
@@ -364,6 +510,33 @@ class MOSAICHandler:
         """Clear the mosaic traces cache."""
         self.traces_cache = []
         self.current_mosaic_data = None
+
+    def _create_placeholder_trace(self, mertileid: int, opacity: float = 0.5, 
+                                 colorscale: str = 'gray') -> go.Heatmap:
+        """Create a placeholder trace for large mosaic files that can't be loaded quickly."""
+        # Create a small placeholder grid to indicate mosaic availability
+        placeholder_size = 10
+        placeholder_data = np.ones((placeholder_size, placeholder_size)) * 0.1  # Very dim
+        
+        # Create basic coordinate bounds (this could be improved with actual tile bounds)
+        # For now, create a small area as a placeholder
+        trace = go.Heatmap(
+            z=placeholder_data,
+            x=np.linspace(0, 1, placeholder_size),  # Placeholder coordinates
+            y=np.linspace(0, 1, placeholder_size),  # Placeholder coordinates
+            opacity=opacity * 0.3,  # Even more transparent for placeholder
+            colorscale=colorscale,
+            name=f"Mosaic {mertileid} (Placeholder)",
+            hovertemplate=(
+                f"<b>MER Tile {mertileid}</b><br>"
+                "<i>Mosaic available but not loaded<br>"
+                "(Large file - use async loading)</i><br>"
+                "<extra></extra>"
+            ),
+            showscale=False
+        )
+        
+        return trace
 
     
 # Example usage and testing code (can be removed in production)

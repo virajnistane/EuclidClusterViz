@@ -69,6 +69,13 @@ class UICallbacks:
             # Disable both buttons until initial render is clicked
             disabled = n_clicks == 0
             return disabled, disabled
-        def enable_redshift_button(n_clicks):
-            # Disable Redshift button until initial render is clicked
-            return n_clicks == 0
+
+        @self.app.callback(
+            Output('mosaic-render-button', 'disabled'),
+            [Input('mosaic-enable-switch', 'value')],
+            prevent_initial_call=False
+        )
+        def toggle_mosaic_button(mosaic_enabled):
+            """Enable/disable mosaic render button based on switch state"""
+            print(f"🔄 Mosaic switch callback: mosaic_enabled={mosaic_enabled}, button_disabled={not mosaic_enabled}")
+            return not mosaic_enabled  # Button is enabled when switch is True

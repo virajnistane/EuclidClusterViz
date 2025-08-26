@@ -15,7 +15,7 @@ import dash_bootstrap_components as dbc
 class MainPlotCallbacks:
     """Handles main plot rendering callbacks"""
     
-    def __init__(self, app, data_loader, catred_handler, trace_creator, figure_manager):
+    def __init__(self, app, data_loader, catred_handler, trace_creator, figure_manager, mosaic_handler=None):
         """
         Initialize main plot callbacks.
         
@@ -25,12 +25,14 @@ class MainPlotCallbacks:
             catred_handler: CATREDHandler instance for CATRED operations
             trace_creator: TraceCreator instance for trace creation
             figure_manager: FigureManager instance for figure layout
+            mosaic_handler: MOSAICHandler instance for mosaic operations
         """
         self.app = app
         self.data_loader = data_loader
         self.catred_handler = catred_handler
         self.trace_creator = trace_creator
         self.figure_manager = figure_manager
+        self.mosaic_handler = mosaic_handler
         
         # Fallback attributes for backward compatibility
         self.data_cache = {}
@@ -48,6 +50,7 @@ class MainPlotCallbacks:
         self._setup_threshold_clientside_callback()
         self._setup_snr_clientside_callback()
         self._setup_redshift_clientside_callback()
+        self._setup_mosaic_render_callback()
     
     def _setup_snr_slider_callback(self):
         """Setup SNR slider initialization callback"""
@@ -863,3 +866,116 @@ class MainPlotCallbacks:
                 fig.update_xaxes(range=current_layout['xaxis']['range'])
             if 'yaxis' in current_layout and 'range' in current_layout['yaxis']:
                 fig.update_yaxes(range=current_layout['yaxis']['range'])
+
+    def _setup_mosaic_render_callback(self):
+        """Setup mosaic image rendering callback"""
+        print(f"🔧 Setting up mosaic render callback, mosaic_handler: {self.mosaic_handler}")
+        if not self.mosaic_handler:
+            print("⚠️  Skipping mosaic callback - no mosaic handler available")
+            return  # Skip if no mosaic handler available
+            
+        print("✅ Adding mosaic render callback")
+        
+        @self.app.callback(
+            Output('cluster-plot', 'figure', allow_duplicate=True),
+            [Input('mosaic-render-button', 'n_clicks')],
+            [State('cluster-plot', 'figure'),
+             State('cluster-plot', 'relayoutData'),
+             State('mosaic-enable-switch', 'value'),
+             State('mosaic-opacity-slider', 'value'),
+             State('algorithm-dropdown', 'value')],
+            prevent_initial_call=True
+        )
+        def render_mosaic_images(n_clicks, current_figure, relayout_data, mosaic_enabled, opacity, algorithm):
+            """Render mosaic images when button is clicked"""
+            try:
+                print(f"🔍 Mosaic callback triggered! n_clicks={n_clicks}, mosaic_enabled={mosaic_enabled}")
+                print(f"   -> relayout_data keys: {list(relayout_data.keys()) if relayout_data else None}")
+                print(f"   -> opacity: {opacity}, algorithm: {algorithm}")
+                print(f"   -> current_figure exists: {current_figure is not None}")
+                
+                if not n_clicks:
+                    print(f"   -> Returning early: n_clicks is {n_clicks}")
+                    return current_figure
+                    
+                if not mosaic_enabled:
+                    print(f"   -> Returning early: mosaic not enabled ({mosaic_enabled})")
+                    return current_figure
+                
+                print("🚀 Proceeding with mosaic loading...")
+                try:
+                    print(f"   -> Loading data for algorithm: {algorithm}")
+                    # Load current data
+                    data = self.data_loader.load_data(algorithm)
+                    print(f"   -> Data loaded successfully")
+                    
+                    # Get mosaic traces for current zoom window
+                    print(f"   -> Calling mosaic handler load_mosaic_traces_in_zoom")
+                    if self.mosaic_handler:
+                        mosaic_traces = self.mosaic_handler.load_mosaic_traces_in_zoom(data, relayout_data, opacity=opacity)
+                        print(f"   -> Mosaic traces result: {len(mosaic_traces) if mosaic_traces else 0} traces")
+                        
+                        if mosaic_traces and len(mosaic_traces) > 0:
+                            # Add mosaic traces to current figure
+                            if current_figure and 'data' in current_figure:
+                                # Remove existing mosaic traces first
+                                existing_traces = [trace for trace in current_figure['data'] 
+                                                 if not (trace.get('name', '').startswith('Mosaic'))]
+                                
+                                # Add new mosaic traces at the end (so they appear on top of other data)
+                                new_data = existing_traces + mosaic_traces
+                                current_figure['data'] = new_data
+                                
+                                print(f"✓ Added {len(mosaic_traces)} mosaic image traces on top layer")
+                            else:
+                                print("⚠️  No current figure data to update")
+                        else:
+                            print("ℹ️  No mosaic images found for current zoom window")
+                    else:
+                        print("❌ No mosaic handler available")
+                    
+                    print("   -> Returning updated figure")
+                    return current_figure
+                    
+                except Exception as e:
+                    print(f"❌ Error in mosaic loading: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    return current_figure
+                    
+            except Exception as e:
+                print(f"❌ Fatal error in mosaic callback: {e}")
+                import traceback
+                traceback.print_exc()
+                return current_figure
+                # Load current data
+                data = self.data_loader.load_data(algorithm)
+                
+                # Get mosaic traces for current zoom window
+                if self.mosaic_handler:
+                    mosaic_traces = self.mosaic_handler.load_mosaic_traces_in_zoom(data, relayout_data, opacity=opacity)
+                    
+                    if mosaic_traces and len(mosaic_traces) > 0:
+                        # Add mosaic traces to current figure
+                        if current_figure and 'data' in current_figure:
+                            # Remove existing mosaic traces first
+                            existing_traces = [trace for trace in current_figure['data'] 
+                                             if not (trace.get('name', '').startswith('Mosaic'))]
+                            
+                            # Add new mosaic traces at the beginning (so they appear behind other data)
+                            new_data = mosaic_traces + existing_traces
+                            current_figure['data'] = new_data
+                            
+                            print(f"✓ Added {len(mosaic_traces)} mosaic image traces")
+                        else:
+                            print("⚠️  No current figure data to update")
+                    else:
+                        print("ℹ️  No mosaic images found for current zoom window")
+                
+                return current_figure
+                
+            except Exception as e:
+                print(f"❌ Error rendering mosaic images: {e}")
+                import traceback
+                print(f"Traceback: {traceback.format_exc()}")
+                return current_figure

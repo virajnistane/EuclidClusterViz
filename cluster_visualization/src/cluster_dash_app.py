@@ -1317,7 +1317,7 @@ class ClusterVisualizationApp:
             # Initialize callback handlers
             self.main_plot_callbacks = MainPlotCallbacks(
                 self.app, self.data_loader, self.catred_handler, 
-                self.trace_creator, self.figure_manager
+                self.trace_creator, self.figure_manager, self.mosaic_handler
             )
             
             self.catred_callbacks = CATREDCallbacks(
@@ -2420,64 +2420,6 @@ class ClusterVisualizationApp:
                     ]
                 )
                 return error_fig
-
-        # Callback to enable/disable mosaic render button based on switch
-        @self.app.callback(
-            Output('mosaic-render-button', 'disabled'),
-            [Input('mosaic-enable-switch', 'value')],
-            prevent_initial_call=False
-        )
-        def toggle_mosaic_button(mosaic_enabled):
-            """Enable/disable mosaic render button based on switch state"""
-            return not mosaic_enabled  # Button is enabled when switch is True
-
-        # Mosaic image controls callbacks
-        @self.app.callback(
-            Output('main-plot', 'figure', allow_duplicate=True),
-            [Input('mosaic-render-button', 'n_clicks')],
-            [State('main-plot', 'figure'),
-             State('main-plot', 'relayoutData'),
-             State('mosaic-enable-switch', 'value'),
-             State('mosaic-opacity-slider', 'value'),
-             State('algorithm-dropdown', 'value')],
-            prevent_initial_call=True
-        )
-        def render_mosaic_images(n_clicks, current_figure, relayout_data, mosaic_enabled, opacity, algorithm):
-            """Render mosaic images when button is clicked"""
-            if not n_clicks or not mosaic_enabled:
-                return current_figure
-            
-            try:
-                # Load current data
-                data = self.load_data(algorithm)
-                
-                # Get mosaic traces for current zoom window
-                mosaic_traces = self.load_mosaic_traces_in_zoom(data, relayout_data, opacity=opacity)
-                
-                if mosaic_traces and len(mosaic_traces) > 0:
-                    # Add mosaic traces to current figure
-                    if current_figure and 'data' in current_figure:
-                        # Remove existing mosaic traces first
-                        existing_traces = [trace for trace in current_figure['data'] 
-                                         if not (trace.get('name', '').startswith('Mosaic'))]
-                        
-                        # Add new mosaic traces at the beginning (so they appear behind other data)
-                        new_data = mosaic_traces + existing_traces
-                        current_figure['data'] = new_data
-                        
-                        print(f"✓ Added {len(mosaic_traces)} mosaic image traces")
-                    else:
-                        print("⚠️  No current figure data to update")
-                else:
-                    print("ℹ️  No mosaic images found for current zoom window")
-                
-                return current_figure
-                
-            except Exception as e:
-                print(f"❌ Error rendering mosaic images: {e}")
-                import traceback
-                print(f"Traceback: {traceback.format_exc()}")
-                return current_figure
 
     def open_browser(self, port=8050, delay=1.5):
         """Open browser after a short delay"""
