@@ -111,12 +111,19 @@ class CATREDCallbacks:
                 # Extract existing CATRED traces from current figure to preserve them
                 existing_catred_traces = self._extract_existing_catred_traces(current_figure)
                 
-                print(f"Debug: Found {len(existing_catred_traces)} existing CATRED traces to preserve")
+                # Extract existing mosaic traces from current figure to preserve them
+                existing_mosaic_traces = self._extract_existing_mosaic_traces(current_figure)
+                
+                print(f"Debug: Found {len(existing_catred_traces)} existing CATRED traces and {len(existing_mosaic_traces)} mosaic traces to preserve")
                 
                 # Create traces with the manually loaded CATRED data and existing traces
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
                                           manual_catred_data=catred_scatter_data, existing_catred_traces=existing_catred_traces,
                                           snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, threshold=threshold)
+                
+                # Add preserved mosaic traces at the beginning (so they appear behind other data)
+                if existing_mosaic_traces:
+                    traces = existing_mosaic_traces + traces
                 
                 # Update the CATRED traces cache with the new trace count
                 if catred_scatter_data and catred_scatter_data['ra']:
@@ -399,3 +406,41 @@ class CATREDCallbacks:
                 fig.update_yaxes(range=[relayout_data['yaxis.range[0]'], relayout_data['yaxis.range[1]']])
             elif 'yaxis.range' in relayout_data:
                 fig.update_yaxes(range=relayout_data['yaxis.range'])
+
+    def _extract_existing_mosaic_traces(self, current_figure):
+        """Extract existing mosaic traces from current figure"""
+        existing_mosaic_traces = []
+        if current_figure and 'data' in current_figure:
+            for trace in current_figure['data']:
+                if (isinstance(trace, dict) and 
+                    'name' in trace and 
+                    trace['name'] and 
+                    'Mosaic' in trace['name']):
+                    
+                    # Handle both Heatmap and Image traces
+                    if trace.get('type') == 'image' or 'source' in trace:
+                        # Convert dict to Image object for PNG-based traces
+                        existing_trace = go.Image(
+                            source=trace.get('source', ''),
+                            x0=trace.get('x0', 0),
+                            y0=trace.get('y0', 0),
+                            dx=trace.get('dx', 1),
+                            dy=trace.get('dy', 1),
+                            opacity=trace.get('opacity', 0.5),
+                            name=trace.get('name', 'Mosaic'),
+                            hovertemplate=trace.get('hovertemplate', '')
+                        )
+                    else:
+                        # Fallback to Heatmap for legacy traces
+                        existing_trace = go.Heatmap(
+                            z=trace.get('z', []),
+                            x=trace.get('x', []),
+                            y=trace.get('y', []),
+                            opacity=trace.get('opacity', 0.5),
+                            colorscale=trace.get('colorscale', 'gray'),
+                            showscale=trace.get('showscale', False),
+                            name=trace.get('name', 'Mosaic'),
+                            hovertemplate=trace.get('hovertemplate', '')
+                        )
+                    existing_mosaic_traces.append(existing_trace)
+        return existing_mosaic_traces

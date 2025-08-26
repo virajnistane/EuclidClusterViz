@@ -242,7 +242,10 @@ class MainPlotCallbacks:
                 # Extract existing CATRED traces from current figure to preserve them
                 existing_catred_traces = self._extract_existing_catred_traces(current_figure)
                 
-                print(f"Debug: Options update - preserving {len(existing_catred_traces)} CATRED traces")
+                # Extract existing mosaic traces from current figure to preserve them
+                existing_mosaic_traces = self._extract_existing_mosaic_traces(current_figure)
+                
+                print(f"Debug: Options update - preserving {len(existing_catred_traces)} CATRED traces and {len(existing_mosaic_traces)} mosaic traces")
                 
                 # Create traces with existing CATRED traces preserved
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
@@ -250,6 +253,10 @@ class MainPlotCallbacks:
                                             snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, 
                                             z_threshold_lower=z_lower, z_threshold_upper=z_upper,
                                             threshold=threshold)
+                
+                # Add preserved mosaic traces at the beginning (so they appear behind other data)
+                if existing_mosaic_traces:
+                    traces = existing_mosaic_traces + traces
                 
                 # Create figure
                 fig = self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio) if self.figure_manager else self._create_fallback_figure(traces, algorithm, free_aspect_ratio)
@@ -709,6 +716,45 @@ class MainPlotCallbacks:
                     existing_catred_traces.append(existing_trace)
         return existing_catred_traces
     
+    def _extract_existing_mosaic_traces(self, current_figure):
+        """Extract existing mosaic traces from current figure"""
+        existing_mosaic_traces = []
+        if current_figure and 'data' in current_figure:
+            for trace in current_figure['data']:
+                if (isinstance(trace, dict) and 
+                    'name' in trace and 
+                    trace['name'] and 
+                    'Mosaic' in trace['name']):
+                    
+                    # Handle both Heatmap and Image traces
+                    if trace.get('type') == 'image' or 'source' in trace:
+                        # Convert dict to Image object for PNG-based traces
+                        existing_trace = go.Image(
+                            source=trace.get('source', ''),
+                            x0=trace.get('x0', 0),
+                            y0=trace.get('y0', 0),
+                            dx=trace.get('dx', 1),
+                            dy=trace.get('dy', 1),
+                            opacity=trace.get('opacity', 0.5),
+                            name=trace.get('name', 'Mosaic'),
+                            hovertemplate=trace.get('hovertemplate', '')
+                        )
+                    else:
+                        # Fallback to Heatmap for legacy traces
+                        existing_trace = go.Heatmap(
+                            z=trace.get('z', []),
+                            x=trace.get('x', []),
+                            y=trace.get('y', []),
+                            opacity=trace.get('opacity', 0.5),
+                            colorscale=trace.get('colorscale', 'gray'),
+                            showscale=trace.get('showscale', False),
+                            name=trace.get('name', 'Mosaic'),
+                            hovertemplate=trace.get('hovertemplate', ''),
+                            showlegend=trace.get('showlegend', True)
+                        )
+                    existing_mosaic_traces.append(existing_trace)
+        return existing_mosaic_traces
+    
     def _calculate_filtered_count(self, merged_data, snr_lower, snr_upper, z_lower, z_upper):
         """Calculate filtered cluster count based on SNR range"""
         if snr_lower is None and snr_upper is None:
@@ -922,11 +968,11 @@ class MainPlotCallbacks:
                                 existing_traces = [trace for trace in current_figure['data'] 
                                                  if not (trace.get('name', '').startswith('Mosaic'))]
                                 
-                                # Add new mosaic traces at the end (so they appear on top of other data)
-                                new_data = existing_traces + mosaic_traces
+                                # Add new mosaic traces at the beginning (so they appear behind other data)
+                                new_data = mosaic_traces + existing_traces
                                 current_figure['data'] = new_data
                                 
-                                print(f"✓ Added {len(mosaic_traces)} mosaic image traces on top layer")
+                                print(f"✓ Added {len(mosaic_traces)} mosaic image traces on bottom layer")
                             else:
                                 print("⚠️  No current figure data to update")
                         else:

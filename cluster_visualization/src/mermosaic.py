@@ -4,6 +4,8 @@ Python class to handle the extraction and visualization of mosaic images.
 
 import glob
 import os
+import tempfile
+import base64
 from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
@@ -12,6 +14,7 @@ from astropy import wcs
 import plotly.graph_objs as go
 from typing import Dict, List, Any, Optional, Tuple
 from shapely.geometry import box
+import io
 
 try:
     from cluster_visualization.src import config
@@ -40,6 +43,10 @@ class MOSAICHandler:
         self.img_height = 1920  # Reduced from 3840 for faster processing
         self.img_scale = 5.0
         self.n_sigma = 1.0  # Number of standard deviations for clipping
+        
+        # PNG rendering parameters for fast display
+        self.png_dpi = 150  # High quality but not excessive
+        self.png_cache = {}  # Cache PNG images to avoid re-rendering
 
     def get_mosaic_fits_data_by_mertile(self, mertileid):
         """Load mosaic FITS data for a specific MER tile ID."""
@@ -409,9 +416,75 @@ class MOSAICHandler:
                     'wcs_original': mosaic_wcs
                 }
 
+    def _render_mosaic_to_png(self, processed_image: np.ndarray, bounds: Dict[str, float], 
+                             mertileid: int, colormap: str = 'gray') -> str:
+        """Render mosaic image to PNG using matplotlib and return as base64 string."""
+        cache_key = f"{mertileid}_{colormap}_{processed_image.shape[0]}x{processed_image.shape[1]}"
+        
+        # Check cache first
+        if cache_key in self.png_cache:
+            print(f"Debug: Using cached PNG for MER tile {mertileid}")
+            return self.png_cache[cache_key]
+        
+        try:
+            print(f"Debug: Rendering PNG for MER tile {mertileid}")
+            
+            # Create matplotlib figure with no margins
+            fig_width = processed_image.shape[1] / self.png_dpi
+            fig_height = processed_image.shape[0] / self.png_dpi
+            
+            fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=self.png_dpi)
+            
+            # Remove all margins and padding
+            fig.subplots_adjust(left=0, bottom=0, right=1, top=1)
+            ax.set_position([0, 0, 1, 1])
+            
+            # Display the image with correct orientation and extent
+            extent = [bounds['ra_min'], bounds['ra_max'], bounds['dec_min'], bounds['dec_max']]
+            
+            # Use imshow with proper extent and origin
+            im = ax.imshow(processed_image, 
+                          cmap=colormap, 
+                          extent=extent,
+                          origin='lower',  # Match coordinate system
+                          aspect='auto',
+                          interpolation='bilinear')
+            
+            # Remove axes
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.axis('off')
+            
+            # Save to memory buffer as PNG
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png', dpi=self.png_dpi, 
+                       bbox_inches='tight', pad_inches=0, 
+                       facecolor='none', edgecolor='none', transparent=True)
+            plt.close(fig)  # Important: close figure to free memory
+            
+            # Convert to base64
+            buf.seek(0)
+            img_bytes = buf.getvalue()
+            buf.close()
+            
+            img_base64 = base64.b64encode(img_bytes).decode('utf-8')
+            
+            # Cache the result
+            self.png_cache[cache_key] = img_base64
+            
+            print(f"Debug: Successfully rendered PNG for MER tile {mertileid} ({len(img_base64)//1024} KB)")
+            
+            return img_base64
+            
+        except Exception as e:
+            print(f"Error rendering PNG for MER tile {mertileid}: {e}")
+            import traceback
+            traceback.print_exc()
+            return ""
+
     def create_mosaic_image_trace(self, mertileid: int, opacity: float = 0.5, 
-                                 colorscale: str = 'gray') -> Optional[go.Heatmap]:
-        """Create a Plotly heatmap trace for a mosaic image."""
+                                 colorscale: str = 'gray') -> Optional[go.Image]:
+        """Create a Plotly image trace for a mosaic image using pre-rendered PNG."""
         # Load mosaic data for this tile
         mosaic_info = self.get_mosaic_fits_data_by_mertile(mertileid)
         if not mosaic_info:
@@ -429,32 +502,32 @@ class MOSAICHandler:
             self.img_height
         )
         
-        # Create coordinate arrays for the heatmap
-        height, width = processed_image.shape
-        x_coords = np.linspace(bounds['ra_min'], bounds['ra_max'], width)
-        y_coords = np.linspace(bounds['dec_min'], bounds['dec_max'], height)
+        # Render to PNG
+        png_base64 = self._render_mosaic_to_png(processed_image, bounds, mertileid, colorscale)
+        if not png_base64:
+            print(f"Warning: Failed to render PNG for MER tile {mertileid}")
+            return None
         
         # Add debug information about the tile size and coordinates
-        print(f"Debug: Creating heatmap trace for MER tile {mertileid}")
+        print(f"Debug: Creating image trace for MER tile {mertileid}")
         print(f"       - Tile size: {bounds.get('ra_size_deg', 'unknown'):.6f}° × {bounds.get('dec_size_deg', 'unknown'):.6f}°")
         print(f"       - RA range: {bounds['ra_min']:.6f}° to {bounds['ra_max']:.6f}°")
         print(f"       - Dec range: {bounds['dec_min']:.6f}° to {bounds['dec_max']:.6f}°")
-        print(f"       - Image shape: {height} × {width} pixels")
+        print(f"       - Image shape: {processed_image.shape[0]} × {processed_image.shape[1]} pixels")
         
-        # Create the heatmap trace
-        trace = go.Heatmap(
-            z=processed_image,
-            x=x_coords,
-            y=y_coords,
+        # Create the image trace
+        trace = go.Image(
+            source=f"data:image/png;base64,{png_base64}",
+            x0=bounds['ra_min'],
+            y0=bounds['dec_min'],
+            dx=(bounds['ra_max'] - bounds['ra_min']) / processed_image.shape[1],
+            dy=(bounds['dec_max'] - bounds['dec_min']) / processed_image.shape[0],
             opacity=opacity,
-            colorscale=colorscale,
-            showscale=False,  # Don't show colorbar
             name=f"Mosaic {mertileid}",
             hovertemplate=(
                 f"MER Tile: {mertileid}<br>"
                 "RA: %{x:.6f}°<br>"
                 "Dec: %{y:.6f}°<br>"
-                "Intensity: %{z:.3f}<br>"
                 f"Tile Size: {bounds.get('ra_size_deg', 'unknown'):.4f}° × {bounds.get('dec_size_deg', 'unknown'):.4f}°<br>"
                 "<extra>Mosaic Image</extra>"
             )
@@ -463,7 +536,7 @@ class MOSAICHandler:
         return trace
 
     def load_mosaic_traces_in_zoom(self, data: Dict[str, Any], relayout_data: Optional[Dict], 
-                                  opacity: float = 0.5, colorscale: str = 'gray') -> List[go.Heatmap]:
+                                  opacity: float = 0.5, colorscale: str = 'gray') -> List[go.Image]:
         """Load mosaic image traces for MER tiles visible in the current zoom window."""
         traces = []
         
@@ -510,33 +583,47 @@ class MOSAICHandler:
         """Clear the mosaic traces cache."""
         self.traces_cache = []
         self.current_mosaic_data = None
+        self.png_cache = {}  # Also clear PNG cache
 
     def _create_placeholder_trace(self, mertileid: int, opacity: float = 0.5, 
-                                 colorscale: str = 'gray') -> go.Heatmap:
+                                 colorscale: str = 'gray') -> go.Image:
         """Create a placeholder trace for large mosaic files that can't be loaded quickly."""
-        # Create a small placeholder grid to indicate mosaic availability
-        placeholder_size = 10
-        placeholder_data = np.ones((placeholder_size, placeholder_size)) * 0.1  # Very dim
+        # Create a small placeholder image
+        placeholder_size = 100
+        placeholder_data = np.ones((placeholder_size, placeholder_size)) * 0.1
         
-        # Create basic coordinate bounds (this could be improved with actual tile bounds)
-        # For now, create a small area as a placeholder
-        trace = go.Heatmap(
-            z=placeholder_data,
-            x=np.linspace(0, 1, placeholder_size),  # Placeholder coordinates
-            y=np.linspace(0, 1, placeholder_size),  # Placeholder coordinates
-            opacity=opacity * 0.3,  # Even more transparent for placeholder
-            colorscale=colorscale,
-            name=f"Mosaic {mertileid} (Placeholder)",
-            hovertemplate=(
-                f"<b>MER Tile {mertileid}</b><br>"
-                "<i>Mosaic available but not loaded<br>"
-                "(Large file - use async loading)</i><br>"
-                "<extra></extra>"
-            ),
-            showscale=False
-        )
+        # Render placeholder to PNG
+        bounds = {'ra_min': 0, 'ra_max': 1, 'dec_min': 0, 'dec_max': 1}
         
-        return trace
+        try:
+            png_base64 = self._render_mosaic_to_png(placeholder_data, bounds, mertileid, colorscale)
+            
+            trace = go.Image(
+                source=f"data:image/png;base64,{png_base64}",
+                x0=0,
+                y0=0,
+                dx=0.01,
+                dy=0.01,
+                opacity=opacity * 0.3,
+                name=f"Mosaic {mertileid} (Placeholder)",
+                hovertemplate=(
+                    f"<b>MER Tile {mertileid}</b><br>"
+                    "<i>Mosaic available but not loaded<br>"
+                    "(Large file - use async loading)</i><br>"
+                    "<extra></extra>"
+                )
+            )
+            
+            return trace
+            
+        except Exception as e:
+            print(f"Error creating placeholder for tile {mertileid}: {e}")
+            # Return minimal trace if PNG rendering fails
+            return go.Scatter(
+                x=[0], y=[0], mode='markers', 
+                name=f"Mosaic {mertileid} (Error)",
+                marker=dict(size=1, opacity=0)
+            )
 
     
 # Example usage and testing code (can be removed in production)

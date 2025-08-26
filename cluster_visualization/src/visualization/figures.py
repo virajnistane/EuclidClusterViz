@@ -35,6 +35,22 @@ class FigureManager:
         # Configure aspect ratio
         xaxis_config, yaxis_config = self._get_axis_config(free_aspect_ratio)
         
+        # Check if there are image traces that might affect aspect ratio
+        has_image_traces = any(hasattr(trace, 'type') and trace.type == 'image' or 
+                              isinstance(trace, go.Image) for trace in traces)
+        
+        # If we have image traces and free aspect ratio is enabled, we may need to adjust settings
+        if has_image_traces and free_aspect_ratio:
+            # Ensure no automatic aspect ratio constraints are applied by image traces
+            yaxis_config.update({
+                'autorange': True,
+                'type': 'linear'
+            })
+            xaxis_config.update({
+                'autorange': True, 
+                'type': 'linear'
+            })
+        
         # Apply layout
         fig.update_layout(
             title=f'Cluster Detection Visualization - {algorithm}',
