@@ -126,6 +126,7 @@ if data_modules_path not in sys.path:
 try:
     from .data.loader import DataLoader
     from .data.catred_handler import CATREDHandler
+    from .mermosaic import MOSAICHandler
     print("✓ Data modules loaded successfully")
 except ImportError:
     # Try alternative import path
@@ -133,12 +134,14 @@ except ImportError:
         sys.path.append(os.path.dirname(__file__))
         from data.loader import DataLoader
         from data.catred_handler import CATREDHandler
+        from mermosaic import MOSAICHandler
         print("✓ Data modules loaded successfully (alternative path)")
     except ImportError as e:
         print(f"⚠️  Error importing data modules: {e}")
         print("   Falling back to inline data handling")
         DataLoader = None
         CATREDHandler = None
+        MOSAICHandler = None
 
 # Import visualization modules
 try:
@@ -332,6 +335,17 @@ class ClusterVisualizationApp:
             self.data_loader = None
             self.catred_handler = None
             print("⚠️  Using fallback inline data handling")
+        
+        # Initialize mosaic handler
+        if MOSAICHandler:
+            try:
+                self.mosaic_handler = MOSAICHandler(config if USE_CONFIG else None, useconfig=USE_CONFIG)
+                print("✓ Mosaic handler initialized")
+            except Exception as e:
+                print(f"⚠️  Error initializing mosaic handler: {e}")
+                self.mosaic_handler = None
+        else:
+            self.mosaic_handler = None
         
         # Initialize visualization modules
         if TraceCreator and FigureManager:
@@ -592,6 +606,14 @@ class ClusterVisualizationApp:
         else:
             # Fallback to original implementation
             return self._load_mer_scatter_data_fallback(data, relayout_data)
+    
+    def load_mosaic_traces_in_zoom(self, data, relayout_data, opacity=0.5, colorscale='gray'):
+        """Load mosaic image traces for MER tiles in the current zoom window"""
+        if self.mosaic_handler:
+            return self.mosaic_handler.load_mosaic_traces_in_zoom(data, relayout_data, opacity, colorscale)
+        else:
+            print("⚠️  Mosaic handler not available")
+            return []
     
     def _get_radec_mertile_fallback(self, mertileid, data):
         """Load CATRED data for a specific MER tile
@@ -2398,6 +2420,64 @@ class ClusterVisualizationApp:
                     ]
                 )
                 return error_fig
+
+        # Callback to enable/disable mosaic render button based on switch
+        @self.app.callback(
+            Output('mosaic-render-button', 'disabled'),
+            [Input('mosaic-enable-switch', 'value')],
+            prevent_initial_call=False
+        )
+        def toggle_mosaic_button(mosaic_enabled):
+            """Enable/disable mosaic render button based on switch state"""
+            return not mosaic_enabled  # Button is enabled when switch is True
+
+        # Mosaic image controls callbacks
+        @self.app.callback(
+            Output('main-plot', 'figure', allow_duplicate=True),
+            [Input('mosaic-render-button', 'n_clicks')],
+            [State('main-plot', 'figure'),
+             State('main-plot', 'relayoutData'),
+             State('mosaic-enable-switch', 'value'),
+             State('mosaic-opacity-slider', 'value'),
+             State('algorithm-dropdown', 'value')],
+            prevent_initial_call=True
+        )
+        def render_mosaic_images(n_clicks, current_figure, relayout_data, mosaic_enabled, opacity, algorithm):
+            """Render mosaic images when button is clicked"""
+            if not n_clicks or not mosaic_enabled:
+                return current_figure
+            
+            try:
+                # Load current data
+                data = self.load_data(algorithm)
+                
+                # Get mosaic traces for current zoom window
+                mosaic_traces = self.load_mosaic_traces_in_zoom(data, relayout_data, opacity=opacity)
+                
+                if mosaic_traces and len(mosaic_traces) > 0:
+                    # Add mosaic traces to current figure
+                    if current_figure and 'data' in current_figure:
+                        # Remove existing mosaic traces first
+                        existing_traces = [trace for trace in current_figure['data'] 
+                                         if not (trace.get('name', '').startswith('Mosaic'))]
+                        
+                        # Add new mosaic traces at the beginning (so they appear behind other data)
+                        new_data = mosaic_traces + existing_traces
+                        current_figure['data'] = new_data
+                        
+                        print(f"✓ Added {len(mosaic_traces)} mosaic image traces")
+                    else:
+                        print("⚠️  No current figure data to update")
+                else:
+                    print("ℹ️  No mosaic images found for current zoom window")
+                
+                return current_figure
+                
+            except Exception as e:
+                print(f"❌ Error rendering mosaic images: {e}")
+                import traceback
+                print(f"Traceback: {traceback.format_exc()}")
+                return current_figure
 
     def open_browser(self, port=8050, delay=1.5):
         """Open browser after a short delay"""

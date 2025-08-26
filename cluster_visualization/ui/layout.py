@@ -50,6 +50,9 @@ class AppLayout:
                             # MER Data controls
                             AppLayout._create_mer_controls_section(),
                             
+                            # Mosaic Image controls
+                            AppLayout._create_mosaic_controls_section(),
+                            
                             html.Hr(),
                             
                             # Main render button
@@ -283,6 +286,47 @@ class AppLayout:
                     n_clicks=0
                 ),
                 html.Small("(Remove all CATRED traces)", className="text-muted d-block text-center")
+            ])
+        ], className="mb-4")
+    
+    @staticmethod
+    def _create_mosaic_controls_section():
+        """Create mosaic image controls section"""
+        return html.Div([
+            html.Label("Mosaic Image Controls:", className="fw-bold mb-2"),
+            
+            html.Div([
+                dbc.Switch(
+                    id="mosaic-enable-switch",
+                    label="Enable mosaic images",
+                    value=False,
+                )
+            ], className="mb-2"),
+            
+            html.Div([
+                html.Label("Mosaic Opacity:", className="fw-bold mb-1"),
+                dcc.Slider(
+                    id="mosaic-opacity-slider",
+                    min=0.1,
+                    max=1.0,
+                    step=0.1,
+                    value=0.5,
+                    marks={0.1: '10%', 0.5: '50%', 1.0: '100%'},
+                    tooltip={"placement": "bottom", "always_visible": False}
+                )
+            ], className="mb-2"),
+            
+            html.Div([
+                dbc.Button(
+                    "🖼️ Load Mosaic in Zoom",
+                    id="mosaic-render-button",
+                    color="info",
+                    size="sm",
+                    className="w-100 mb-2",
+                    n_clicks=0,
+                    disabled=True
+                ),
+                html.Small("(Load mosaic images for visible MER tiles)", className="text-muted d-block text-center")
             ])
         ], className="mb-4")
     

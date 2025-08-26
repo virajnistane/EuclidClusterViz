@@ -106,6 +106,11 @@ class Config:
         else:
             self.effcov_mask_dir = os.path.join(self.rr2_downloads_dir, 'DpdHealpixEffectiveCoverageVMPZ')
         
+        if self.config_parser.has_option('paths', 'mosaic_dir'):
+            self.mosaic_dir = self._expand_path(self.config_parser.get('paths', 'mosaic_dir'))
+        else:
+            self.mosaic_dir = os.path.join(self.rr2_downloads_dir, 'DpdMerBksMosaic')
+
         # Environment paths
         self.eden_path = self._cvmfs_eden_path
         
