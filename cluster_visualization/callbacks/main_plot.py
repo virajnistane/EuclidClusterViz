@@ -962,11 +962,29 @@ class MainPlotCallbacks:
                             existing_traces = [trace for trace in current_figure['data'] 
                                              if not (trace.get('name', '').startswith('Mosaic'))]
                             
-                            # Add new mosaic traces at the beginning (so they appear behind other data)
-                            new_data = mosaic_traces + existing_traces
+                            # Separate traces by type to maintain proper layering order
+                            polygon_traces = []
+                            catred_traces = []
+                            cluster_traces = []
+                            other_traces = []
+                            
+                            for trace in existing_traces:
+                                trace_name = trace.get('name', '')
+                                if 'Tile' in trace_name and ('CORE' in trace_name or 'LEV1' in trace_name or 'MerTile' in trace_name):
+                                    polygon_traces.append(trace)
+                                elif 'CATRED' in trace_name or 'MER High-Res Data' in trace_name:
+                                    catred_traces.append(trace)
+                                elif any(keyword in trace_name for keyword in ['Merged Data', 'Tile', 'clusters']):
+                                    cluster_traces.append(trace)
+                                else:
+                                    other_traces.append(trace)
+                            
+                            # Layer order: polygons (bottom) → mosaic → CATRED → other → cluster traces (top)
+                            new_data = polygon_traces + mosaic_traces + catred_traces + other_traces + cluster_traces
                             current_figure['data'] = new_data
                             
-                            print(f"✓ Added {len(mosaic_traces)} mosaic image traces")
+                            print(f"✓ Added {len(mosaic_traces)} mosaic image traces with proper layering")
+                            print(f"   -> Layer order: {len(polygon_traces)} polygons, {len(mosaic_traces)} mosaics, {len(catred_traces)} CATRED, {len(other_traces)} other, {len(cluster_traces)} clusters (top)")
                         else:
                             print("⚠️  No current figure data to update")
                     else:

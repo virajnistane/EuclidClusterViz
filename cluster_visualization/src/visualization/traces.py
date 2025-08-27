@@ -73,11 +73,18 @@ class TraceCreator:
         # Get CATRED data points for proximity-based marker enhancement
         catred_points = self._get_catred_data_points(manual_catred_data, existing_catred_traces)
 
-        # Create data traces in layered order: CATRED → Merged → Individual tiles
-        self._add_existing_catred_traces(data_traces, existing_catred_traces)
-        self._add_manual_catred_traces(data_traces, show_mer_tiles, catred_mode,
+        # Create data traces in layered order for proper visual hierarchy
+        # Layer order: CATRED (bottom) → Merged clusters → Individual tile clusters (top)
+        catred_traces = []
+        cluster_traces = []
+        
+        # Add CATRED traces to separate list (bottom layer)
+        self._add_existing_catred_traces(catred_traces, existing_catred_traces)
+        self._add_manual_catred_traces(catred_traces, show_mer_tiles, catred_mode,
                                        manual_catred_data, zoom_threshold_met)
-        self._add_merged_cluster_trace(data_traces, datamod_merged, data['algorithm'], catred_points)
+        
+        # Add cluster traces to separate list (top layer)
+        self._add_merged_cluster_trace(cluster_traces, datamod_merged, data['algorithm'], catred_points)
         
         # Create tile traces and polygons
         tile_traces = self._create_tile_traces_and_polygons(
@@ -85,11 +92,12 @@ class TraceCreator:
             snr_threshold_lower, snr_threshold_upper, z_threshold_lower, z_threshold_upper, catred_points
         )
         
-        # Add tile traces to top layer
-        data_traces.extend(tile_traces)
+        # Add tile cluster traces to top layer
+        cluster_traces.extend(tile_traces)
         
-        # Return combined traces: polygons first (bottom), then data traces (top)
-        return traces + data_traces
+        # Combine in proper layer order: polygons (bottom) → CATRED → cluster traces (top)
+        # This ensures cluster traces are always on top of mosaic and CATRED traces
+        return traces + catred_traces + cluster_traces
     
     def _get_catred_data_points(self, manual_catred_data: Optional[Dict], existing_catred_traces: Optional[List]) -> Optional[List]:
         """Get all CATRED data points for proximity-based enhancement."""
@@ -319,6 +327,7 @@ class TraceCreator:
             name=trace_name,
             text=self._format_catred_hover_text(manual_catred_data),
             hoverinfo='text',
+            hoverlabel=dict(bgcolor="lightblue", font_size=12, font_family="Arial"),
             showlegend=True,
             customdata=customdata  # Use coverage data for masked mode, indices for others
         )
@@ -376,7 +385,8 @@ class TraceCreator:
             ),
             name='Enhanced Marker Glow',
             showlegend=False,  # Don't show in legend
-            hoverinfo='skip'   # Don't show hover for glow layer
+            hoverinfo='skip',  # Don't show hover for glow layer
+            hovertemplate=None  # Explicitly disable hover template
         )
 
     def _add_merged_cluster_trace(self, data_traces: List, datamod_merged: np.ndarray, algorithm: str, catred_points: Optional[List] = None) -> None:
@@ -397,7 +407,8 @@ class TraceCreator:
                                               datamod_merged['DECLINATION_CLUSTER'])
                 ],
                 customdata=[[snr, z] for snr, z in zip(datamod_merged['SNR_CLUSTER'], datamod_merged['Z_CLUSTER'])],
-                hoverinfo='text'
+                hoverinfo='text',
+                hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
             )
             data_traces.append(merged_trace)
         else:
@@ -427,7 +438,8 @@ class TraceCreator:
                                                   away_from_catred_data['DECLINATION_CLUSTER'])
                     ],
                     customdata=[[snr, z] for snr, z in zip(away_from_catred_data['SNR_CLUSTER'], away_from_catred_data['Z_CLUSTER'])],
-                    hoverinfo='text'
+                    hoverinfo='text',
+                    hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
                 )
                 data_traces.append(normal_trace)
 
@@ -462,7 +474,8 @@ class TraceCreator:
                                                   near_catred_data['DECLINATION_CLUSTER'])
                     ],
                     customdata=[[snr, z] for snr, z in zip(near_catred_data['SNR_CLUSTER'], near_catred_data['Z_CLUSTER'])],
-                    hoverinfo='text'
+                    hoverinfo='text',
+                    hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
                 )
                 data_traces.append(enhanced_trace)
                 
@@ -499,7 +512,8 @@ class TraceCreator:
                                                   datamod['RIGHT_ASCENSION_CLUSTER'], datamod['DECLINATION_CLUSTER'])
                     ],
                     customdata=[[snr, z] for snr, z in zip(datamod['SNR_CLUSTER'], datamod['Z_CLUSTER'])],
-                    hoverinfo='text'
+                    hoverinfo='text',
+                    hoverlabel=dict(bgcolor="lightyellow", font_size=12, font_family="Arial")
                 )
                 tile_traces.append(tile_trace)
             else:
@@ -527,7 +541,8 @@ class TraceCreator:
                                                       away_from_catred_data['RIGHT_ASCENSION_CLUSTER'], away_from_catred_data['DECLINATION_CLUSTER'])
                         ],
                         customdata=[[snr, z] for snr, z in zip(away_from_catred_data['SNR_CLUSTER'], away_from_catred_data['Z_CLUSTER'])],
-                        hoverinfo='text'
+                        hoverinfo='text',
+                        hoverlabel=dict(bgcolor="lightyellow", font_size=12, font_family="Arial")
                     )
                     tile_traces.append(normal_trace)
 
@@ -560,7 +575,8 @@ class TraceCreator:
                                                       near_catred_data['RIGHT_ASCENSION_CLUSTER'], near_catred_data['DECLINATION_CLUSTER'])
                         ],
                         customdata=[[snr, z] for snr, z in zip(near_catred_data['SNR_CLUSTER'], near_catred_data['Z_CLUSTER'])],
-                        hoverinfo='text'
+                        hoverinfo='text',
+                        hoverlabel=dict(bgcolor="lightyellow", font_size=12, font_family="Arial")
                     )
                     tile_traces.append(enhanced_trace)
 

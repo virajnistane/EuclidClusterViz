@@ -875,12 +875,14 @@ class ClusterVisualizationApp:
         
         print(f"Debug: Final zoom_threshold_met: {zoom_threshold_met}, show_catred_mertile_data: {show_catred_mertile_data}")
         
-        # Create data traces in the desired order: 1. MER traces (bottom), 2. merged trace (middle), 3. tile traces (top)
+        # Create traces with proper layering: CATRED/MER (bottom), then cluster traces (top)
+        catred_mer_traces = []  # Bottom layer for CATRED and MER data
+        cluster_traces = []     # Top layer for cluster detection data
         
         # 1. BOTTOM LAYER: Add existing MER traces from previous renders
         if existing_mer_traces:
             print(f"Debug: Adding {len(existing_mer_traces)} existing MER traces to bottom layer")
-            data_traces.extend(existing_mer_traces)
+            catred_mer_traces.extend(existing_mer_traces)
 
         # 2. BOTTOM LAYER: High-resolution MER tiles scatter data (manual render mode)
         if show_mer_tiles and show_catred_mertile_data and manual_mer_data:
@@ -922,10 +924,11 @@ class ClusterVisualizationApp:
                           for x, y, p1, p70 in zip(manual_mer_data['ra'], manual_mer_data['dec'], 
                                                    manual_mer_data['phz_mode_1'], manual_mer_data['phz_70_int'])],
                     hoverinfo='text',
+                    hoverlabel=dict(bgcolor="lightblue", font_size=12, font_family="Arial"),
                     showlegend=True,
                     customdata=list(range(len(manual_mer_data['ra'])))  # Add index for click tracking
                 )
-                data_traces.append(mer_catred_trace)
+                catred_mer_traces.append(mer_catred_trace)
                 
                 # Store MER data for click callbacks
                 if not hasattr(self, 'current_catred_data') or self.current_catred_data is None:
@@ -944,7 +947,7 @@ class ClusterVisualizationApp:
         else:
             print(f"Debug: MER scatter data conditions not met - show_mer_tiles: {show_mer_tiles}, show_catred_mertile_data: {show_catred_mertile_data}, manual_data: {manual_mer_data is not None}")
 
-        # 3. MIDDLE LAYER: Merged data trace
+        # 3. TOP LAYER: Merged cluster detection trace
         merged_det_trace = go.Scattergl(
             x=datamod_merged['RIGHT_ASCENSION_CLUSTER'],
             y=datamod_merged['DECLINATION_CLUSTER'],
@@ -958,9 +961,10 @@ class ClusterVisualizationApp:
                                           datamod_merged['RIGHT_ASCENSION_CLUSTER'], 
                                           datamod_merged['DECLINATION_CLUSTER'])
             ],
-            hoverinfo='text'
+            hoverinfo='text',
+            hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
         )
-        data_traces.append(merged_det_trace)
+        cluster_traces.append(merged_det_trace)
         
         # Store tile traces separately to add them as the top layer
         det_in_tile_trace = []
@@ -1067,14 +1071,12 @@ class ClusterVisualizationApp:
                             )
                             traces.append(mertile_trace)
         
-        # 4. TOP LAYER: Add tile traces last for maximum visibility
-        data_traces.extend(det_in_tile_trace)
+        # 4. TOP LAYER: Add tile cluster traces to top layer for maximum visibility
+        cluster_traces.extend(det_in_tile_trace)
         
-        # Combine traces: polygon traces first (bottom layer), then data traces in order:
-        # 1. MER CATRED traces (bottom)
-        # 2. Merged detection trace (middle) 
-        # 3. Detection in tile traces (top)
-        return traces + data_traces
+        # Combine traces with proper layering: polygons (bottom) → CATRED/MER → cluster traces (top)
+        # This ensures cluster traces are always on top of mosaic and CATRED traces
+        return traces + catred_mer_traces + cluster_traces
 
     def setup_layout(self):
         """Setup the Dash app layout with side-by-side plots and compact controls"""
