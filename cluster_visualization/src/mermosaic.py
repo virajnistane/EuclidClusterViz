@@ -4,6 +4,9 @@ Python class to handle the extraction and visualization of mosaic images.
 
 import glob
 import os
+import time
+import threading
+import queue
 from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
@@ -25,9 +28,9 @@ class MOSAICHandler:
     """Handler for MER mosaic image data, similar to CATREDHandler."""
     
     def __init__(self, config=None, useconfig=True):
-        """Initiate MOSAICHandler"""
-        self.traces_cache = []  # Store accumulated mosaic image traces
-        self.current_mosaic_data = None  # Store current mosaic data for interactions
+        """Initiate MOSAICHandler with performance optimizations"""
+        self.traces_cache = {}  # Change to dict for better caching by mertileid
+        self.current_mosaic_data = None
         if useconfig:
             self.config = config if config else Config() 
 
@@ -35,14 +38,27 @@ class MOSAICHandler:
         self.mosaic_data = None
         self.mosaic_wcs = None
 
-        # Image processing parameters
-        self.img_width = 1920   # Reduced from 3840 for faster processing
-        self.img_height = 1920  # Reduced from 3840 for faster processing
+        # Performance-optimized image processing parameters
+        self.img_width = 960    # Reduced from 1920 for faster initial rendering
+        self.img_height = 960   # Reduced from 1920 for faster initial rendering
         self.img_scale = 5.0
-        self.n_sigma = 1.0  # Number of standard deviations for clipping
+        self.n_sigma = 1.0
+        
+        # Performance and timeout settings
+        self.timeout_minutes = 10 # 10 minute timeout for FITS loading
+        self.timeout_seconds = 60 * self.timeout_minutes  
+        self.max_file_size_gb = 2.0  # Skip files larger than 2GB initially
+        self.max_pixels_for_stats = 10_000_000  # Sample large images for statistics
 
     def get_mosaic_fits_data_by_mertile(self, mertileid):
-        """Load mosaic FITS data for a specific MER tile ID."""
+        """
+        Load mosaic FITS data with performance optimization and threading timeout
+        """
+        # Check if already cached
+        if mertileid in self.traces_cache:
+            print(f"[CACHE HIT] Using cached data for MER tile {mertileid}")
+            return self.traces_cache[mertileid]
+        
         mosaic_dir = self.config.mosaic_dir
         fits_files = glob.glob(os.path.join(mosaic_dir, f'EUC_MER_BGSUB-MOSAIC-VIS_TILE{mertileid}*.fits.gz'))
         
@@ -52,30 +68,82 @@ class MOSAICHandler:
             
         fits_file = fits_files[0]  # Take the first match
         file_size_gb = os.path.getsize(fits_file) / (1024**3)
-        print(f"Loading mosaic file ({file_size_gb:.2f} GB): {os.path.basename(fits_file)}")
         
-        try:
-            # Use memmap=False to avoid memory mapping issues with compressed files
-            with fits.open(fits_file, ignore_missing_simple=True, memmap=False) as hdul:
-                primary_hdu = hdul[0]
-                self.mosaic_header = primary_hdu.header.copy()
-                # Create a copy of the data to avoid issues with file closure
-                self.mosaic_data = primary_hdu.data.copy() if primary_hdu.data is not None else None
-                self.mosaic_wcs = wcs.WCS(primary_hdu.header)
+        # Check file size for initial performance optimization
+        if file_size_gb > self.max_file_size_gb:
+            print(f"[WARNING] Large file ({file_size_gb:.2f}GB) - may take longer to process")
+        
+        print(f"[LOADING] Processing MER tile {mertileid} ({file_size_gb:.2f}GB)...")
+        
+        # Thread-safe FITS loading with timeout
+        result_queue = queue.Queue()
+        error_queue = queue.Queue()
+        
+        def load_fits_with_timeout():
+            try:
+                start_time = time.time()
                 
-                if self.mosaic_data is None:
-                    print(f"Warning: No data in primary HDU for {fits_file}")
-                    return None
+                # Use memmap=False to avoid memory mapping issues with compressed files
+                with fits.open(fits_file, ignore_missing_simple=True, memmap=False) as hdul:
+                    primary_hdu = hdul[0]
+                    header = primary_hdu.header.copy()
+                    # Create a copy of the data to avoid issues with file closure
+                    data = primary_hdu.data.copy() if primary_hdu.data is not None else None
+                    wcs_obj = wcs.WCS(primary_hdu.header)
                     
-                return {
-                    'header': self.mosaic_header,
-                    'data': self.mosaic_data,
-                    'wcs': self.mosaic_wcs,
-                    'file_path': fits_file
-                }
-        except Exception as e:
-            print(f"Error loading mosaic FITS file {fits_file}: {e}")
+                    if data is None:
+                        error_queue.put(f"No data in primary HDU for {fits_file}")
+                        return
+                    
+                    load_time = time.time() - start_time
+                    print(f"[TIMING] FITS loaded in {load_time:.2f}s")
+                    
+                    result_queue.put({
+                        'header': header,
+                        'data': data,
+                        'wcs': wcs_obj,
+                        'file_path': fits_file
+                    })
+                    
+            except Exception as e:
+                error_queue.put(str(e))
+        
+        # Start loading thread
+        load_thread = threading.Thread(target=load_fits_with_timeout)
+        load_thread.daemon = True
+        load_thread.start()
+        
+        # Wait with timeout
+        load_thread.join(timeout=self.timeout_seconds)
+        
+        if load_thread.is_alive():
+            print(f"[TIMEOUT] Loading MER tile {mertileid} timed out after {self.timeout_seconds}s")
             return None
+        
+        # Check for errors
+        if not error_queue.empty():
+            error_msg = error_queue.get()
+            print(f"[ERROR] Failed to load MER tile {mertileid}: {error_msg}")
+            return None
+        
+        # Get results
+        if result_queue.empty():
+            print(f"[ERROR] No data loaded for MER tile {mertileid}")
+            return None
+        
+        result = result_queue.get()
+        
+        # Store in instance variables for compatibility
+        self.mosaic_header = result['header']
+        self.mosaic_data = result['data']
+        self.mosaic_wcs = result['wcs']
+        
+        # Cache results
+        self.traces_cache[mertileid] = result
+        
+        print(f"[SUCCESS] Processed MER tile {mertileid}")
+        
+        return result
 
     def _extract_zoom_ranges(self, relayout_data: Dict) -> Optional[Tuple[float, float, float, float]]:
         """Extract zoom ranges from Plotly relayout data."""
@@ -126,7 +194,9 @@ class MOSAICHandler:
 
     def _process_mosaic_image(self, mosaic_data: np.ndarray, target_width: int = None, 
                              target_height: int = None) -> np.ndarray:
-        """Process mosaic image data for visualization using the scaling approach from the notebook."""
+        """
+        Process mosaic image data with early downsampling for performance optimization
+        """
         if target_width is None:
             target_width = self.img_width
         if target_height is None:
@@ -141,6 +211,21 @@ class MOSAICHandler:
             print(f"Debug: Original mosaic dimensions: {mosaic_data.shape[1]} x {mosaic_data.shape[0]} pixels")
             print(f"Debug: Target dimensions: {target_width} x {target_height} pixels")
             
+            # PERFORMANCE OPTIMIZATION: Early downsampling for very large images
+            original_shape = mosaic_data.shape
+            downsample_factor = 1
+            
+            # If image is more than 4x larger than target, downsample first
+            if original_shape[0] > target_height * 4 or original_shape[1] > target_width * 4:
+                downsample_factor = max(
+                    original_shape[0] // (target_height * 2),
+                    original_shape[1] // (target_width * 2)
+                )
+                if downsample_factor > 1:
+                    print(f"Debug: Early downsampling by factor {downsample_factor} for performance")
+                    mosaic_data = mosaic_data[::downsample_factor, ::downsample_factor]
+                    print(f"Debug: Downsampled to: {mosaic_data.shape[1]} x {mosaic_data.shape[0]} pixels")
+            
             # Handle NaN values - similar to notebook approach
             valid_mask = np.isfinite(mosaic_data)
             if not np.any(valid_mask):
@@ -152,7 +237,7 @@ class MOSAICHandler:
             # Apply sigma clipping and normalization as in notebook cell 59
             # Use ravel to flatten the array for mean and std calculations
             # For large arrays, sample a subset for statistics to speed up processing
-            if mosaic_data.size > 10_000_000:  # If larger than 10M pixels
+            if mosaic_data.size > self.max_pixels_for_stats:  # If larger than 10M pixels
                 print("Debug: Large image detected, sampling for statistics...")
                 # Sample every 10th pixel for statistics
                 sample_data = mosaic_data[::10, ::10].ravel()
@@ -464,7 +549,10 @@ class MOSAICHandler:
 
     def load_mosaic_traces_in_zoom(self, data: Dict[str, Any], relayout_data: Optional[Dict], 
                                   opacity: float = 0.5, colorscale: str = 'gray') -> List[go.Heatmap]:
-        """Load mosaic image traces for MER tiles visible in the current zoom window."""
+        """
+        Load mosaic image traces with strict performance limits and timing
+        """
+        start_time = time.time()
         traces = []
         
         if not relayout_data:
@@ -488,28 +576,54 @@ class MOSAICHandler:
             print("Debug: No MER tiles with mosaics found in zoom area")
             return traces
         
-        # Limit to avoid loading too many mosaics at once
-        max_mosaics = 3  # Limit for performance
+        # PERFORMANCE LIMITS: Strict limits for interactive experience
+        max_mosaics = 2  # Reduced from 3 for better performance
+        max_processing_time = 30  # Maximum 30 seconds total processing time
+        
         if len(mertiles_to_load) > max_mosaics:
             print(f"Debug: Limiting to first {max_mosaics} mosaics for performance")
             mertiles_to_load = mertiles_to_load[:max_mosaics]
         
-        # Create traces for each mosaic
-        for mertileid in mertiles_to_load:
+        # Create traces for each mosaic with timing checks
+        for i, mertileid in enumerate(mertiles_to_load):
+            # Check if we're running out of time
+            elapsed_time = time.time() - start_time
+            if elapsed_time > max_processing_time:
+                print(f"[TIMEOUT] Stopping mosaic loading after {elapsed_time:.2f}s")
+                break
+            
+            print(f"[PROGRESS] Processing mosaic {i+1}/{len(mertiles_to_load)}: tile {mertileid}")
+            
             try:
+                trace_start = time.time()
                 trace = self.create_mosaic_image_trace(mertileid, opacity, colorscale)
+                trace_time = time.time() - trace_start
+                
                 if trace:
                     traces.append(trace)
-                    print(f"Debug: Created mosaic trace for MER tile {mertileid}")
+                    print(f"[SUCCESS] Created mosaic trace for MER tile {mertileid} in {trace_time:.2f}s")
+                else:
+                    print(f"[WARNING] No trace created for MER tile {mertileid}")
+                    
             except Exception as e:
-                print(f"Warning: Failed to create mosaic trace for tile {mertileid}: {e}")
+                print(f"[ERROR] Failed to create mosaic trace for tile {mertileid}: {e}")
+        
+        total_time = time.time() - start_time
+        print(f"[TIMING] Total mosaic loading completed in {total_time:.2f}s")
         
         return traces
 
     def clear_traces_cache(self):
-        """Clear the mosaic traces cache."""
-        self.traces_cache = []
+        """Clear the mosaic traces cache and free memory."""
+        cache_size = len(self.traces_cache)
+        self.traces_cache = {}  # Changed to dict for better performance
         self.current_mosaic_data = None
+        
+        # Force garbage collection to free memory
+        import gc
+        gc.collect()
+        
+        print(f"[CACHE] Cleared {cache_size} cached mosaic entries")
 
     def _create_placeholder_trace(self, mertileid: int, opacity: float = 0.5, 
                                  colorscale: str = 'gray') -> go.Heatmap:
