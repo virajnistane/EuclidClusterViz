@@ -599,10 +599,10 @@ class ClusterVisualizationApp:
             # Fallback to original implementation
             return self._get_radec_mertile_fallback(mertileid, data)
     
-    def load_catred_scatter_data(self, data, relayout_data):
+    def load_catred_scatter_data(self, data, relayout_data, catred_mode="unmasked", threshold=0.8, maglim=None):
         """Load MER scatter data for the current zoom window - delegates to MER handler"""
         if self.catred_handler:
-            return self.catred_handler.load_catred_scatter_data(data, relayout_data)
+            return self.catred_handler.load_catred_scatter_data(data, relayout_data, catred_mode, threshold, maglim)
         else:
             # Fallback to original implementation
             return self._load_mer_scatter_data_fallback(data, relayout_data)

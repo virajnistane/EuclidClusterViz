@@ -255,6 +255,29 @@ class AppLayout:
                 ),
                 html.Small("(For masked CATRED data filtering)", className="text-muted")
             ], className="mb-3"),
+            
+            # Magnitude limit slider for CATRED data
+            html.Div([
+                html.Label("Magnitude Limit (H-band):", className="fw-bold mb-2"),
+                dcc.Slider(
+                    id="magnitude-limit-slider",
+                    min=20.0,
+                    max=32.0,
+                    step=0.1,
+                    value=24.0,
+                    marks={
+                        20.0: "20.0",
+                        22.0: "22.0",
+                        24.0: "24.0",
+                        26.0: "26.0",
+                        28.0: "28.0",
+                        30.0: "30.0",
+                        32.0: "32.0"
+                    },
+                    tooltip={"placement": "bottom", "always_visible": True}
+                ),
+                html.Small("(Keep sources brighter than limit)", className="text-muted")
+            ], className="mb-3"),
         ], className="mb-4")
     
     @staticmethod

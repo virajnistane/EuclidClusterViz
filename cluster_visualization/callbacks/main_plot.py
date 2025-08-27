@@ -147,12 +147,13 @@ class MainPlotCallbacks:
              State('aspect-ratio-switch', 'value'),
              State('catred-mode-radio', 'value'),
              State('catred-threshold-slider', 'value'),
+             State('magnitude-limit-slider', 'value'),
              State('cluster-plot', 'relayoutData')
              ]
         )
         def update_plot(n_clicks, snr_n_clicks, redshift_n_clicks, algorithm, 
                         snr_range, redshift_range, show_polygons, show_mer_tiles, 
-                        free_aspect_ratio, catred_mode, threshold, relayout_data):
+                        free_aspect_ratio, catred_mode, threshold, maglim, relayout_data):
             # Only render if button has been clicked at least once
             if n_clicks == 0 and snr_n_clicks == 0 and redshift_n_clicks == 0:
                 return self._create_initial_empty_plots(free_aspect_ratio)
@@ -177,7 +178,7 @@ class MainPlotCallbacks:
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
                                             snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, 
                                             z_threshold_lower=z_lower, z_threshold_upper=z_upper, 
-                                            threshold=threshold)
+                                            threshold=threshold, maglim=maglim)
 
                 # Create figure
                 fig = self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio) if self.figure_manager else self._create_fallback_figure(traces, algorithm, free_aspect_ratio)
@@ -218,11 +219,12 @@ class MainPlotCallbacks:
              State('snr-range-slider', 'value'),
              State('redshift-range-slider', 'value'),
              State('catred-threshold-slider', 'value'),
+             State('magnitude-limit-slider', 'value'),
              State('cluster-plot', 'relayoutData'),
              State('cluster-plot', 'figure')],
             prevent_initial_call=True
         )
-        def update_plot_options(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, catred_mode, n_clicks, snr_range, redshift_range, threshold, relayout_data, current_figure):
+        def update_plot_options(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, catred_mode, n_clicks, snr_range, redshift_range, threshold, maglim, relayout_data, current_figure):
             # Only update if render button has been clicked at least once
             if n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update
@@ -249,7 +251,7 @@ class MainPlotCallbacks:
                                             existing_catred_traces=existing_catred_traces, 
                                             snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, 
                                             z_threshold_lower=z_lower, z_threshold_upper=z_upper,
-                                            threshold=threshold)
+                                            threshold=threshold, maglim=maglim)
                 
                 # Create figure
                 fig = self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio) if self.figure_manager else self._create_fallback_figure(traces, algorithm, free_aspect_ratio)
@@ -576,7 +578,7 @@ class MainPlotCallbacks:
                      existing_catred_traces=None, manual_catred_data=None, 
                      snr_threshold_lower=None, snr_threshold_upper=None, 
                      z_threshold_lower=None, z_threshold_upper=None, 
-                     threshold=0.8):
+                     threshold=0.8, maglim=None):
         """Create traces using modular or fallback method"""
         if self.trace_creator:
             return self.trace_creator.create_traces(
@@ -584,7 +586,7 @@ class MainPlotCallbacks:
                 existing_catred_traces=existing_catred_traces, manual_catred_data=manual_catred_data,
                 snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, 
                 z_threshold_lower=z_threshold_lower, z_threshold_upper=z_threshold_upper, 
-                threshold=threshold
+                threshold=threshold, maglim=maglim
             )
         else:
             # Fallback to inline trace creation

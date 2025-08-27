@@ -41,7 +41,7 @@ class TraceCreator:
                      existing_catred_traces: Optional[List] = None, 
                      snr_threshold_lower: Optional[float] = None, snr_threshold_upper: Optional[float] = None, 
                      z_threshold_lower: Optional[float] = None, z_threshold_upper: Optional[float] = None,
-                     threshold: float = 0.8) -> List:
+                     threshold: float = 0.8, maglim: Optional[float] = None) -> List:
         """
         Create all Plotly traces for the visualization.
         
@@ -56,10 +56,10 @@ class TraceCreator:
             snr_threshold_lower: Lower SNR threshold for filtering
             snr_threshold_upper: Upper SNR threshold for filtering
             threshold: Effective coverage threshold for masked CATRED data (default 0.8)
+            maglim: Magnitude limit for CATRED data filtering (default None for no filtering)
             
         Returns:
-            List of Plotly traces ordered for proper layering
-        """
+            List of Plotly trace objects ready for figure display        """
         traces = []  # Polygon traces (bottom layer)
         data_traces = []  # Data traces (top layer)
         

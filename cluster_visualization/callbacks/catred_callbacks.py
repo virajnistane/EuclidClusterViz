@@ -87,15 +87,16 @@ class CATREDCallbacks:
              State('aspect-ratio-switch', 'value'),
              State('catred-mode-radio', 'value'),
              State('catred-threshold-slider', 'value'),
+             State('magnitude-limit-slider', 'value'),
              State('cluster-plot', 'relayoutData'),
              State('cluster-plot', 'figure')],
             prevent_initial_call=True
         )
-        def manual_render_catred_data(catred_n_clicks, algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, catred_mode, threshold, relayout_data, current_figure):
+        def manual_render_catred_data(catred_n_clicks, algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, catred_mode, threshold, maglim, relayout_data, current_figure):
             if catred_n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update
             
-            print(f"Debug: Manual CATRED render button clicked (click #{catred_n_clicks}) with threshold={threshold}")
+            print(f"Debug: Manual CATRED render button clicked (click #{catred_n_clicks}) with threshold={threshold}, maglim={maglim}")
             
             try:
                 # Extract SNR values from range slider
@@ -106,7 +107,7 @@ class CATREDCallbacks:
                 data = self.load_data(algorithm)
                 
                 # Load CATRED scatter data for current zoom window with threshold
-                catred_scatter_data = self.load_catred_scatter_data(data, relayout_data, catred_mode, threshold)
+                catred_scatter_data = self.load_catred_scatter_data(data, relayout_data, catred_mode, threshold, maglim)
                 
                 # Extract existing CATRED traces from current figure to preserve them
                 existing_catred_traces = self._extract_existing_catred_traces(current_figure)
@@ -234,10 +235,10 @@ class CATREDCallbacks:
             # Fallback to inline data loading
             return self._load_data_fallback(algorithm)
     
-    def load_catred_scatter_data(self, data, relayout_data, catred_mode="unmasked", threshold=0.8):
+    def load_catred_scatter_data(self, data, relayout_data, catred_mode="unmasked", threshold=0.8, maglim=None):
         """Load CATRED scatter data using modular or fallback method"""
         if self.catred_handler:
-            return self.catred_handler.load_catred_scatter_data(data, relayout_data, catred_mode, threshold)
+            return self.catred_handler.load_catred_scatter_data(data, relayout_data, catred_mode, threshold, maglim)
         else:
             # Fallback to inline CATRED data loading
             return self._load_catred_scatter_data_fallback(data, relayout_data)
