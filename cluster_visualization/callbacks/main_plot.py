@@ -726,9 +726,33 @@ class MainPlotCallbacks:
                     trace['name'] and 
                     'Mosaic' in trace['name']):
                     
-                    # Handle both Heatmap and Image traces
-                    if trace.get('type') == 'image' or 'source' in trace:
-                        # Convert dict to Image object for PNG-based traces
+                    # Handle Heatmap (preferred), Image, and Scatter traces  
+                    if trace.get('type') == 'heatmap' or 'z' in trace:
+                        # Convert dict to Heatmap object for new heatmap-based traces
+                        existing_trace = go.Heatmap(
+                            z=trace.get('z', []),
+                            x=trace.get('x', []),
+                            y=trace.get('y', []),
+                            opacity=trace.get('opacity', 0.5),
+                            colorscale=trace.get('colorscale', 'gray'),
+                            showscale=trace.get('showscale', False),
+                            name=trace.get('name', 'Mosaic'),
+                            hovertemplate=trace.get('hovertemplate', ''),
+                            showlegend=trace.get('showlegend', True)
+                        )
+                    elif trace.get('type') == 'scatter' or trace.get('mode') == 'markers':
+                        # Convert dict to Scatter object for scatter-based traces (legacy)
+                        existing_trace = go.Scatter(
+                            x=trace.get('x', []),
+                            y=trace.get('y', []),
+                            mode=trace.get('mode', 'markers'),
+                            marker=trace.get('marker', {}),
+                            name=trace.get('name', 'Mosaic'),
+                            showlegend=trace.get('showlegend', True),
+                            hovertemplate=trace.get('hovertemplate', '')
+                        )
+                    elif trace.get('type') == 'image' or 'source' in trace:
+                        # Convert dict to Image object for PNG-based traces (legacy)
                         existing_trace = go.Image(
                             source=trace.get('source', ''),
                             x0=trace.get('x0', 0),
@@ -740,14 +764,14 @@ class MainPlotCallbacks:
                             hovertemplate=trace.get('hovertemplate', '')
                         )
                     else:
-                        # Fallback to Heatmap for legacy traces
+                        # Final fallback
                         existing_trace = go.Heatmap(
-                            z=trace.get('z', []),
-                            x=trace.get('x', []),
-                            y=trace.get('y', []),
+                            z=trace.get('z', [[0]]),
+                            x=trace.get('x', [0]),
+                            y=trace.get('y', [0]),
                             opacity=trace.get('opacity', 0.5),
                             colorscale=trace.get('colorscale', 'gray'),
-                            showscale=trace.get('showscale', False),
+                            showscale=False,
                             name=trace.get('name', 'Mosaic'),
                             hovertemplate=trace.get('hovertemplate', ''),
                             showlegend=trace.get('showlegend', True)
@@ -993,35 +1017,4 @@ class MainPlotCallbacks:
                 print(f"❌ Fatal error in mosaic callback: {e}")
                 import traceback
                 traceback.print_exc()
-                return current_figure
-                # Load current data
-                data = self.data_loader.load_data(algorithm)
-                
-                # Get mosaic traces for current zoom window
-                if self.mosaic_handler:
-                    mosaic_traces = self.mosaic_handler.load_mosaic_traces_in_zoom(data, relayout_data, opacity=opacity)
-                    
-                    if mosaic_traces and len(mosaic_traces) > 0:
-                        # Add mosaic traces to current figure
-                        if current_figure and 'data' in current_figure:
-                            # Remove existing mosaic traces first
-                            existing_traces = [trace for trace in current_figure['data'] 
-                                             if not (trace.get('name', '').startswith('Mosaic'))]
-                            
-                            # Add new mosaic traces at the beginning (so they appear behind other data)
-                            new_data = mosaic_traces + existing_traces
-                            current_figure['data'] = new_data
-                            
-                            print(f"✓ Added {len(mosaic_traces)} mosaic image traces")
-                        else:
-                            print("⚠️  No current figure data to update")
-                    else:
-                        print("ℹ️  No mosaic images found for current zoom window")
-                
-                return current_figure
-                
-            except Exception as e:
-                print(f"❌ Error rendering mosaic images: {e}")
-                import traceback
-                print(f"Traceback: {traceback.format_exc()}")
                 return current_figure

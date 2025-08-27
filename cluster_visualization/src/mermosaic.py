@@ -49,7 +49,7 @@ class MOSAICHandler:
         self.png_cache = {}  # Cache PNG images to avoid re-rendering
 
     def get_mosaic_fits_data_by_mertile(self, mertileid):
-        """Load mosaic FITS data for a specific MER tile ID."""
+        """Load mosaic FITS data for a specific MER tile ID - full data loading regardless of size."""
         mosaic_dir = self.config.mosaic_dir
         fits_files = glob.glob(os.path.join(mosaic_dir, f'EUC_MER_BGSUB-MOSAIC-VIS_TILE{mertileid}*.fits.gz'))
         
@@ -58,30 +58,125 @@ class MOSAICHandler:
             return None
             
         fits_file = fits_files[0]  # Take the first match
-        file_size_gb = os.path.getsize(fits_file) / (1024**3)
-        print(f"Loading mosaic file ({file_size_gb:.2f} GB): {os.path.basename(fits_file)}")
         
+        # Report file size but don't limit it
         try:
-            # Use memmap=False to avoid memory mapping issues with compressed files
-            with fits.open(fits_file, ignore_missing_simple=True, memmap=False) as hdul:
-                primary_hdu = hdul[0]
-                self.mosaic_header = primary_hdu.header.copy()
-                # Create a copy of the data to avoid issues with file closure
-                self.mosaic_data = primary_hdu.data.copy() if primary_hdu.data is not None else None
-                self.mosaic_wcs = wcs.WCS(primary_hdu.header)
+            file_size_gb = os.path.getsize(fits_file) / (1024**3)
+            print(f"Loading mosaic file ({file_size_gb:.2f} GB): {os.path.basename(fits_file)}")
+            print(f"Info: Loading full data regardless of size for complete visualization")
                 
-                if self.mosaic_data is None:
-                    print(f"Warning: No data in primary HDU for {fits_file}")
+        except OSError as e:
+            print(f"Error checking file size for {fits_file}: {e}")
+            return None
+
+        try:
+            print(f"Debug: Opening FITS file for MER tile {mertileid}...")
+            
+            # Load full data with extended timeout for large files
+            import threading
+            import queue
+            
+            result_queue = queue.Queue()
+            exception_queue = queue.Queue()
+            
+            def load_fits_data_full():
+                """Load complete FITS data without size restrictions"""
+                try:
+                    print(f"Debug: Opening FITS file (full data mode)")
+                    with fits.open(fits_file, ignore_missing_simple=True, memmap=False, mode='readonly') as hdul:
+                        primary_hdu = hdul[0]
+                        
+                        # Get header first
+                        header = primary_hdu.header.copy()
+                        
+                        # Load complete data without restrictions
+                        print(f"Debug: Loading complete image data for MER tile {mertileid}")
+                        data = primary_hdu.data
+                        
+                        if data is None:
+                            print(f"Warning: No image data found in FITS file")
+                            result_queue.put(None)
+                            return
+                        
+                        print(f"Debug: Loaded full data with shape {data.shape} ({data.size:,} pixels)")
+                        
+                        # Create WCS from header
+                        try:
+                            mosaic_wcs = wcs.WCS(header)
+                            print(f"Debug: WCS created successfully")
+                        except Exception as wcs_error:
+                            print(f"Warning: WCS creation failed for MER tile {mertileid}: {wcs_error}")
+                            mosaic_wcs = None
+                        
+                        result = {
+                            'header': header,
+                            'data': data.copy(),  # Full resolution copy
+                            'wcs': mosaic_wcs,
+                            'file_path': fits_file
+                        }
+                        result_queue.put(result)
+                        print(f"Debug: Successfully prepared full data for MER tile {mertileid}")
+                        
+                except Exception as e:
+                    print(f"Error in full data loading: {e}")
+                    exception_queue.put(e)
+            
+            # Start loading with extended timeout for large files
+            print(f"Debug: Starting full data loading thread...")
+            load_thread = threading.Thread(target=load_fits_data_full)
+            load_thread.daemon = True
+            load_thread.start()
+            
+            # Extended timeout for large files (20 minutes)
+            timeout_minutes = 20
+            timeout_seconds = timeout_minutes * 60
+            print(f"Debug: Waiting up to {timeout_minutes} minutes for large file loading...")
+            
+            load_thread.join(timeout=timeout_seconds)
+            
+            if load_thread.is_alive():
+                print(f"Warning: FITS file loading timed out ({timeout_minutes} minutes) for MER tile {mertileid}")
+                print(f"Info: File may be extremely large - consider increasing timeout if needed")
+                return None
+            
+            # Check for exceptions
+            if not exception_queue.empty():
+                raise exception_queue.get()
+            
+            # Get result
+            if not result_queue.empty():
+                result = result_queue.get()
+                if result is None:
+                    print(f"Warning: No valid image data in FITS file for MER tile {mertileid}")
                     return None
-                    
-                return {
-                    'header': self.mosaic_header,
-                    'data': self.mosaic_data,
-                    'wcs': self.mosaic_wcs,
-                    'file_path': fits_file
-                }
+                
+                # Store in instance variables for compatibility
+                self.mosaic_header = result['header']
+                self.mosaic_data = result['data']
+                self.mosaic_wcs = result['wcs']
+                
+                print(f"Debug: Successfully loaded full mosaic data for MER tile {mertileid} - {self.mosaic_data.shape}")
+                return result
+            else:
+                print(f"Warning: No result returned from full data loading for MER tile {mertileid}")
+                return None
+                
+        except MemoryError as e:
+            print(f"Memory error loading full mosaic data for {fits_file}: {e}")
+            print(f"Info: File too large for available memory - may need more RAM or data reduction")
+            return None
+        except Exception as e:
+            print(f"Error loading full mosaic data for {fits_file}: {e}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
+            return None
+        except MemoryError as e:
+            print(f"Memory error loading mosaic FITS file {fits_file}: {e}")
+            return None
         except Exception as e:
             print(f"Error loading mosaic FITS file {fits_file}: {e}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
             return None
 
     def _extract_zoom_ranges(self, relayout_data: Dict) -> Optional[Tuple[float, float, float, float]]:
@@ -482,9 +577,57 @@ class MOSAICHandler:
             traceback.print_exc()
             return ""
 
+    def _prepare_heatmap_data(self, processed_image: np.ndarray, bounds: Dict[str, float], 
+                             mertileid: int) -> Optional[Dict[str, Any]]:
+        """Prepare image data for Plotly heatmap trace - full resolution mode."""
+        cache_key = f"heatmap_{mertileid}_{processed_image.shape[0]}x{processed_image.shape[1]}"
+        
+        # Check cache first
+        if cache_key in self.png_cache:
+            print(f"Debug: Using cached heatmap data for MER tile {mertileid}")
+            return self.png_cache[cache_key]
+        
+        try:
+            print(f"Debug: Preparing full-resolution heatmap data for MER tile {mertileid}")
+            print(f"       - Image shape: {processed_image.shape} ({processed_image.size:,} pixels)")
+            
+            # Create coordinate arrays for full resolution
+            # For heatmap, we need x and y coordinate arrays
+            x_coords = np.linspace(bounds['ra_min'], bounds['ra_max'], processed_image.shape[1])
+            y_coords = np.linspace(bounds['dec_min'], bounds['dec_max'], processed_image.shape[0])
+            
+            # Flip the image vertically to match coordinate system
+            # (FITS images typically have origin at bottom-left, Plotly expects top-left)
+            z_data = np.flipud(processed_image)
+            
+            print(f"Debug: Full-resolution heatmap prepared successfully:")
+            print(f"       - Z data shape: {z_data.shape}")
+            print(f"       - X coords: {len(x_coords)} points from {x_coords[0]:.6f} to {x_coords[-1]:.6f}")
+            print(f"       - Y coords: {len(y_coords)} points from {y_coords[0]:.6f} to {y_coords[-1]:.6f}")
+            print(f"       - Data range: {z_data.min():.3f} to {z_data.max():.3f}")
+            
+            heatmap_data = {
+                'z': z_data,
+                'x': x_coords,
+                'y': y_coords
+            }
+            
+            # Cache the result for this session
+            self.png_cache[cache_key] = heatmap_data
+            
+            print(f"Debug: Full-resolution heatmap data cached for MER tile {mertileid}")
+            
+            return heatmap_data
+            
+        except Exception as e:
+            print(f"Error preparing full-resolution heatmap for MER tile {mertileid}: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
     def create_mosaic_image_trace(self, mertileid: int, opacity: float = 0.5, 
-                                 colorscale: str = 'gray') -> Optional[go.Image]:
-        """Create a Plotly image trace for a mosaic image using pre-rendered PNG."""
+                                 colorscale: str = 'gray') -> Optional[go.Heatmap]:
+        """Create a Plotly heatmap trace for a mosaic image using direct image data."""
         # Load mosaic data for this tile
         mosaic_info = self.get_mosaic_fits_data_by_mertile(mertileid)
         if not mosaic_info:
@@ -502,32 +645,34 @@ class MOSAICHandler:
             self.img_height
         )
         
-        # Render to PNG
-        png_base64 = self._render_mosaic_to_png(processed_image, bounds, mertileid, colorscale)
-        if not png_base64:
-            print(f"Warning: Failed to render PNG for MER tile {mertileid}")
+        # Create coordinate arrays for the image
+        heatmap_data = self._prepare_heatmap_data(processed_image, bounds, mertileid)
+        if not heatmap_data:
+            print(f"Warning: Failed to prepare heatmap data for MER tile {mertileid}")
             return None
         
         # Add debug information about the tile size and coordinates
-        print(f"Debug: Creating image trace for MER tile {mertileid}")
+        print(f"Debug: Creating heatmap trace for MER tile {mertileid}")
         print(f"       - Tile size: {bounds.get('ra_size_deg', 'unknown'):.6f}° × {bounds.get('dec_size_deg', 'unknown'):.6f}°")
         print(f"       - RA range: {bounds['ra_min']:.6f}° to {bounds['ra_max']:.6f}°")
         print(f"       - Dec range: {bounds['dec_min']:.6f}° to {bounds['dec_max']:.6f}°")
         print(f"       - Image shape: {processed_image.shape[0]} × {processed_image.shape[1]} pixels")
+        print(f"       - Heatmap data shape: {heatmap_data['z'].shape}")
         
-        # Create the image trace
-        trace = go.Image(
-            source=f"data:image/png;base64,{png_base64}",
-            x0=bounds['ra_min'],
-            y0=bounds['dec_min'],
-            dx=(bounds['ra_max'] - bounds['ra_min']) / processed_image.shape[1],
-            dy=(bounds['dec_max'] - bounds['dec_min']) / processed_image.shape[0],
+        # Create the heatmap trace
+        trace = go.Heatmap(
+            z=heatmap_data['z'],
+            x=heatmap_data['x'],
+            y=heatmap_data['y'],
+            colorscale=colorscale,
             opacity=opacity,
+            showscale=False,  # Don't show colorbar to avoid clutter
             name=f"Mosaic {mertileid}",
             hovertemplate=(
                 f"MER Tile: {mertileid}<br>"
                 "RA: %{x:.6f}°<br>"
                 "Dec: %{y:.6f}°<br>"
+                "Value: %{z:.2f}<br>"
                 f"Tile Size: {bounds.get('ra_size_deg', 'unknown'):.4f}° × {bounds.get('dec_size_deg', 'unknown'):.4f}°<br>"
                 "<extra>Mosaic Image</extra>"
             )
@@ -536,8 +681,8 @@ class MOSAICHandler:
         return trace
 
     def load_mosaic_traces_in_zoom(self, data: Dict[str, Any], relayout_data: Optional[Dict], 
-                                  opacity: float = 0.5, colorscale: str = 'gray') -> List[go.Image]:
-        """Load mosaic image traces for MER tiles visible in the current zoom window."""
+                                  opacity: float = 0.5, colorscale: str = 'gray') -> List[go.Heatmap]:
+        """Load mosaic image traces for MER tiles visible in the current zoom window - full data mode."""
         traces = []
         
         if not relayout_data:
@@ -555,28 +700,53 @@ class MOSAICHandler:
               f"Dec({dec_min:.3f}, {dec_max:.3f})")
         
         # Find intersecting tiles
-        mertiles_to_load = self._find_intersecting_tiles(data, ra_min, ra_max, dec_min, dec_max)
+        try:
+            mertiles_to_load = self._find_intersecting_tiles(data, ra_min, ra_max, dec_min, dec_max)
+        except Exception as e:
+            print(f"Error finding intersecting tiles: {e}")
+            return traces
         
         if not mertiles_to_load:
             print("Debug: No MER tiles with mosaics found in zoom area")
             return traces
         
-        # Limit to avoid loading too many mosaics at once
-        max_mosaics = 3  # Limit for performance
+        # Allow multiple mosaics for complete visualization
+        max_mosaics = 5  # Increased limit for full data visualization
         if len(mertiles_to_load) > max_mosaics:
-            print(f"Debug: Limiting to first {max_mosaics} mosaics for performance")
+            print(f"Debug: Found {len(mertiles_to_load)} tiles, limiting to first {max_mosaics} for performance")
             mertiles_to_load = mertiles_to_load[:max_mosaics]
+        else:
+            print(f"Debug: Will attempt to load all {len(mertiles_to_load)} mosaic tiles")
         
-        # Create traces for each mosaic
-        for mertileid in mertiles_to_load:
+        # Create traces for each mosaic - full data mode
+        successful_loads = 0
+        for i, mertileid in enumerate(mertiles_to_load):
             try:
+                print(f"Debug: Processing mosaic {i+1}/{len(mertiles_to_load)}: MER tile {mertileid}")
+                
+                # Attempt to create full mosaic trace
                 trace = self.create_mosaic_image_trace(mertileid, opacity, colorscale)
                 if trace:
                     traces.append(trace)
-                    print(f"Debug: Created mosaic trace for MER tile {mertileid}")
+                    successful_loads += 1
+                    print(f"Debug: Successfully created full mosaic trace for MER tile {mertileid}")
+                else:
+                    print(f"Warning: Failed to create trace for MER tile {mertileid} - may be due to memory constraints")
+                    
+            except MemoryError as e:
+                print(f"Memory error creating mosaic trace for tile {mertileid}: {e}")
+                print(f"Info: Consider increasing available memory or processing fewer tiles simultaneously")
+                break
             except Exception as e:
                 print(f"Warning: Failed to create mosaic trace for tile {mertileid}: {e}")
+                import traceback
+                traceback.print_exc()
+                # Continue with other tiles rather than failing completely
+                continue
         
+        print(f"Debug: Successfully loaded {successful_loads}/{len(mertiles_to_load)} full mosaic traces")
+        if successful_loads > 0:
+            print(f"Info: Loaded complete high-resolution mosaic data")
         return traces
 
     def clear_traces_cache(self):
@@ -586,43 +756,59 @@ class MOSAICHandler:
         self.png_cache = {}  # Also clear PNG cache
 
     def _create_placeholder_trace(self, mertileid: int, opacity: float = 0.5, 
-                                 colorscale: str = 'gray') -> go.Image:
+                                 colorscale: str = 'gray') -> go.Heatmap:
         """Create a placeholder trace for large mosaic files that can't be loaded quickly."""
         # Create a small placeholder image
-        placeholder_size = 100
+        placeholder_size = 20
         placeholder_data = np.ones((placeholder_size, placeholder_size)) * 0.1
         
-        # Render placeholder to PNG
+        # Create placeholder heatmap
         bounds = {'ra_min': 0, 'ra_max': 1, 'dec_min': 0, 'dec_max': 1}
         
         try:
-            png_base64 = self._render_mosaic_to_png(placeholder_data, bounds, mertileid, colorscale)
+            heatmap_data = self._prepare_heatmap_data(placeholder_data, bounds, mertileid)
             
-            trace = go.Image(
-                source=f"data:image/png;base64,{png_base64}",
-                x0=0,
-                y0=0,
-                dx=0.01,
-                dy=0.01,
-                opacity=opacity * 0.3,
-                name=f"Mosaic {mertileid} (Placeholder)",
-                hovertemplate=(
-                    f"<b>MER Tile {mertileid}</b><br>"
-                    "<i>Mosaic available but not loaded<br>"
-                    "(Large file - use async loading)</i><br>"
-                    "<extra></extra>"
+            if heatmap_data:
+                trace = go.Heatmap(
+                    z=heatmap_data['z'],
+                    x=heatmap_data['x'],
+                    y=heatmap_data['y'],
+                    colorscale=colorscale,
+                    opacity=opacity * 0.3,
+                    showscale=False,
+                    name=f"Mosaic {mertileid} (Placeholder)",
+                    hovertemplate=(
+                        f"<b>MER Tile {mertileid}</b><br>"
+                        "<i>Mosaic available but not loaded<br>"
+                        "(Large file - use async loading)</i><br>"
+                        "<extra></extra>"
+                    )
                 )
-            )
+            else:
+                # If heatmap fails, create minimal placeholder  
+                trace = go.Heatmap(
+                    z=[[0.1]],
+                    x=[0.5],
+                    y=[0.5],
+                    colorscale=colorscale,
+                    opacity=opacity * 0.3,
+                    showscale=False,
+                    name=f"Mosaic {mertileid} (Unavailable)",
+                    hovertemplate=f"<b>MER Tile {mertileid}</b><br><i>Mosaic unavailable</i><extra></extra>"
+                )
             
             return trace
             
         except Exception as e:
             print(f"Error creating placeholder for tile {mertileid}: {e}")
-            # Return minimal trace if PNG rendering fails
-            return go.Scatter(
-                x=[0], y=[0], mode='markers', 
-                name=f"Mosaic {mertileid} (Error)",
-                marker=dict(size=1, opacity=0)
+            # Return minimal trace if heatmap fails
+            return go.Heatmap(
+                z=[[0]],
+                x=[0], y=[0],
+                colorscale=colorscale,
+                opacity=0.1,
+                showscale=False,
+                name=f"Mosaic {mertileid} (Error)"
             )
 
     

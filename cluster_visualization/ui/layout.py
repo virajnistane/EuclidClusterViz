@@ -299,7 +299,7 @@ class AppLayout:
                 dbc.Switch(
                     id="mosaic-enable-switch",
                     label="Enable mosaic images",
-                    value=False,
+                    value=True,
                 )
             ], className="mb-2"),
             
@@ -310,7 +310,7 @@ class AppLayout:
                     min=0.1,
                     max=1.0,
                     step=0.1,
-                    value=0.5,
+                    value=1.0,
                     marks={0.1: '10%', 0.5: '50%', 1.0: '100%'},
                     tooltip={"placement": "bottom", "always_visible": False}
                 )

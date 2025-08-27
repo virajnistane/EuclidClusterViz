@@ -32,16 +32,27 @@ class FigureManager:
         """
         fig = go.Figure(traces)
         
-        # Configure aspect ratio
-        xaxis_config, yaxis_config = self._get_axis_config(free_aspect_ratio)
-        
-        # Check if there are image traces that might affect aspect ratio
+        # Check if there are special trace types that affect aspect ratio
         has_image_traces = any(hasattr(trace, 'type') and trace.type == 'image' or 
                               isinstance(trace, go.Image) for trace in traces)
         
-        # If we have image traces and free aspect ratio is enabled, we may need to adjust settings
-        if has_image_traces and free_aspect_ratio:
-            # Ensure no automatic aspect ratio constraints are applied by image traces
+        # Heatmap-based mosaic traces should not constrain aspect ratio
+        has_heatmap_mosaic_traces = any((hasattr(trace, 'name') and trace.name and 'Mosaic' in trace.name and
+                                        (hasattr(trace, 'type') and trace.type == 'heatmap' or 
+                                         isinstance(trace, go.Heatmap))) for trace in traces)
+        
+        # Override aspect ratio behavior when heatmap mosaics are present
+        effective_free_aspect = free_aspect_ratio or has_heatmap_mosaic_traces
+        
+        # Configure aspect ratio using the effective setting
+        xaxis_config, yaxis_config = self._get_axis_config(effective_free_aspect)
+        
+        # Apply special handling for image traces if needed
+        if has_image_traces and not effective_free_aspect:
+            # This case should rarely happen now with heatmap mosaics
+            pass  # Configuration already set by _get_axis_config
+        elif effective_free_aspect:
+            # Ensure full freedom for heatmap mosaics or user preference
             yaxis_config.update({
                 'autorange': True,
                 'type': 'linear'
