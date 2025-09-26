@@ -100,22 +100,10 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Import configuration
-try:
-    from .config import get_config
-    config = get_config()
-    print("✓ Configuration loaded successfully")
-    USE_CONFIG = True
-except ImportError:
-    # Try direct import if relative import fails
-    try:
-        from config import get_config
-        config = get_config()
-        print("✓ Configuration loaded successfully")
-        USE_CONFIG = True
-    except ImportError as e:
-        print(f"⚠️  Configuration not found: {e}")
-        print("   Using fallback hardcoded paths")
-        USE_CONFIG = False
+from config import get_config
+config = get_config()
+print("✓ Configuration loaded successfully")
+USE_CONFIG = True
 
 # Add local data modules path
 data_modules_path = os.path.join(os.path.dirname(__file__), 'data')
@@ -123,109 +111,30 @@ if data_modules_path not in sys.path:
     sys.path.append(data_modules_path)
 
 # Import data handling modules
-try:
-    from .data.loader import DataLoader
-    from .data.catred_handler import CATREDHandler
-    from .mermosaic import MOSAICHandler
-    print("✓ Data modules loaded successfully")
-except ImportError:
-    # Try alternative import path
-    try:
-        sys.path.append(os.path.dirname(__file__))
-        from data.loader import DataLoader
-        from data.catred_handler import CATREDHandler
-        from mermosaic import MOSAICHandler
-        print("✓ Data modules loaded successfully (alternative path)")
-    except ImportError as e:
-        print(f"⚠️  Error importing data modules: {e}")
-        print("   Falling back to inline data handling")
-        DataLoader = None
-        CATREDHandler = None
-        MOSAICHandler = None
+from data.loader import DataLoader
+from data.catred_handler import CATREDHandler
+from mermosaic import MOSAICHandler
+print("✓ Data modules loaded successfully")
 
 # Import visualization modules
-try:
-    from .visualization.traces import TraceCreator
-    from .visualization.figures import FigureManager
-    print("✓ Visualization modules loaded successfully")
-except ImportError:
-    # Try alternative import path
-    try:
-        sys.path.append(os.path.dirname(__file__))
-        from visualization.traces import TraceCreator
-        from visualization.figures import FigureManager
-        print("✓ Visualization modules loaded successfully (alternative path)")
-    except ImportError as e:
-        print(f"⚠️  Error importing visualization modules: {e}")
-        print("   Falling back to inline visualization handling")
-        TraceCreator = None
-        FigureManager = None
+from visualization.traces import TraceCreator
+from visualization.figures import FigureManager
+print("✓ Visualization modules loaded successfully")
 
-# Import callback modules
-try:
-    from ..callbacks.main_plot import MainPlotCallbacks
-    from ..callbacks.catred_callbacks import CATREDCallbacks
-    from ..callbacks.ui_callbacks import UICallbacks
-    from ..callbacks.phz_callbacks import PHZCallbacks
-    print("✓ Callback modules loaded successfully")
-except ImportError:
-    # Try alternative import path
-    try:
-        sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-        from callbacks.main_plot import MainPlotCallbacks
-        from callbacks.catred_callbacks import CATREDCallbacks
-        from callbacks.ui_callbacks import UICallbacks
-        from callbacks.phz_callbacks import PHZCallbacks
-        print("✓ Callback modules loaded successfully (alternative path)")
-    except ImportError as e:
-        print(f"⚠️  Error importing callback modules: {e}")
-        print("   Falling back to inline callback handling")
-        MainPlotCallbacks = None
-        CATREDCallbacks = None
-        UICallbacks = None
-        PHZCallbacks = None
+# Import callback modules  
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from callbacks.main_plot import MainPlotCallbacks
+from callbacks.catred_callbacks import CATREDCallbacks
+from callbacks.ui_callbacks import UICallbacks
+from callbacks.phz_callbacks import PHZCallbacks
+print("✓ Callback modules loaded successfully")
 
 # Import UI and core modules
-try:
-    from ..ui.layout import AppLayout
-    print("✓ UI layout module loaded successfully")
-except ImportError:
-    # Try alternative import path
-    try:
-        # Add parent directory to path to access ui module
-        parent_dir = os.path.dirname(os.path.dirname(__file__))
-        sys.path.append(parent_dir)
-        from ui.layout import AppLayout
-        print("✓ UI layout module loaded successfully (alternative path)")
-    except ImportError as e:
-        print(f"⚠️  Error importing UI layout module: {e}")
-        print("   Falling back to inline layout handling")
-        AppLayout = None
+from ui.layout import AppLayout
+print("✓ UI layout module loaded successfully")
 
-try:
-    from ..core.app import ClusterVisualizationCore
-    print("✓ Core module loaded successfully")
-except ImportError:
-    # Try alternative import path
-    try:
-        # Add parent directory to path to access core module
-        parent_dir = os.path.dirname(os.path.dirname(__file__))
-        if parent_dir not in sys.path:
-            sys.path.append(parent_dir)
-        from core.app import ClusterVisualizationCore
-        print("✓ Core module loaded successfully (alternative path)")
-    except ImportError as e:
-        print(f"⚠️  Error importing core module: {e}")
-        print("   Falling back to inline core functionality")
-        ClusterVisualizationCore = None
-    try:
-        sys.path.append(os.path.dirname(__file__))
-        from core.app import ClusterVisualizationCore
-        print("✓ Core module loaded successfully (alternative path)")
-    except ImportError as e:
-        print(f"⚠️  Error importing core module: {e}")
-        print("   Falling back to inline core functionality")
-        ClusterVisualizationCore = None
+from core.app import ClusterVisualizationCore
+print("✓ Core module loaded successfully")
 
 # Add local utils path
 parent_dir = os.path.dirname(os.path.dirname(__file__))
@@ -234,16 +143,10 @@ utils_path = os.path.join(parent_dir, 'utils')
 if utils_path not in sys.path:
     sys.path.append(utils_path)
 
-# Import utilities with error handling
-try:
-    from myutils import get_xml_element
-    from colordefinitions import colors_list, colors_list_transparent
-    print(f"✓ Utilities loaded from: {utils_path}")
-except ImportError as e:
-    print(f"⚠️  Error importing utilities: {e}")
-    print(f"   Searched in: {utils_path}")
-    print("   Please ensure myutils.py and colordefinitions.py are available")
-    sys.exit(1)
+# Import utilities
+from myutils import get_xml_element
+from colordefinitions import colors_list, colors_list_transparent
+print(f"✓ Utilities loaded from: {utils_path}")
 
 class ConnectionMonitor:
     """Monitor user connections to detect if anyone has connected to the app"""
@@ -413,14 +316,7 @@ class ClusterVisualizationApp:
                 manual_mer_data, existing_mer_traces, snr_threshold_lower, snr_threshold_upper
             )
     
-    def _load_data_fallback(self, select_algorithm='PZWAV'):
-        """Load and prepare all data for visualization - fallback implementation"""
-        if select_algorithm in self.data_cache:
-            return self.data_cache[select_algorithm]
-            
-        print(f"Loading data for algorithm: {select_algorithm}")
-        
-        # Configuration
+
         snrthreshold_lower = None
         snrthreshold_upper = None
         
@@ -593,155 +489,16 @@ class ClusterVisualizationApp:
 
     def get_radec_mertile(self, mertileid, data):
         """Load CATRED data for a specific MER tile - delegates to MER handler"""
-        if self.catred_handler:
-            return self.catred_handler.get_radec_mertile(mertileid, data)
-        else:
-            # Fallback to original implementation
-            return self._get_radec_mertile_fallback(mertileid, data)
+        return self.catred_handler.get_radec_mertile(mertileid, data)
     
     def load_catred_scatter_data(self, data, relayout_data, catred_mode="unmasked", threshold=0.8, maglim=None):
         """Load MER scatter data for the current zoom window - delegates to MER handler"""
-        if self.catred_handler:
-            return self.catred_handler.load_catred_scatter_data(data, relayout_data, catred_mode, threshold, maglim)
-        else:
-            # Fallback to original implementation
-            return self._load_mer_scatter_data_fallback(data, relayout_data)
+        return self.catred_handler.load_catred_scatter_data(data, relayout_data, catred_mode, threshold, maglim)
     
     def load_mosaic_traces_in_zoom(self, data, relayout_data, opacity=0.5, colorscale='gray'):
         """Load mosaic image traces for MER tiles in the current zoom window"""
-        if self.mosaic_handler:
-            return self.mosaic_handler.load_mosaic_traces_in_zoom(data, relayout_data, opacity, colorscale)
-        else:
-            print("⚠️  Mosaic handler not available")
-            return []
+        return self.mosaic_handler.load_mosaic_traces_in_zoom(data, relayout_data, opacity, colorscale)
     
-    def _get_radec_mertile_fallback(self, mertileid, data):
-        """Load CATRED data for a specific MER tile
-        
-        Args:
-            mertileid: The MER tile ID
-            data: The data dictionary containing catred_info
-            
-        Returns:
-            dict: Dictionary with keys 'RIGHT_ASCENSION', 'DECLINATION', 'PHZ_MODE_1', 'PHZ_70_INT', 'PHZ_PDF'
-                  or empty dict {} if unable to load
-        """
-        try:
-            if isinstance(mertileid, str):
-                mertileid = int(mertileid)
-            
-            # Check if we have the necessary data
-            if 'catred_info' not in data or data['catred_info'].empty:
-                print(f"Debug: No catred_info available for mertile {mertileid}")
-                return {}
-            
-            if mertileid not in data['catred_info'].index:
-                print(f"Debug: MerTile {mertileid} not found in catred_info")
-                return {}
-            
-            mertile_row = data['catred_info'].loc[mertileid]
-            
-            # Check if fits_file column exists
-            if 'fits_file' not in mertile_row or pd.isna(mertile_row['fits_file']):
-                print(f"Debug: No fits_file for mertile {mertileid}, using polygon vertices as demo data")
-                # Fallback: use polygon vertices as demonstration data
-                if 'polygon' in mertile_row and mertile_row['polygon'] is not None:
-                    poly = mertile_row['polygon']
-                    x_coords, y_coords = poly.exterior.xy
-                    return {
-                        'RIGHT_ASCENSION': list(x_coords),
-                        'DECLINATION': list(y_coords),
-                        'PHZ_MODE_1': [0.0] * len(x_coords),  # Dummy scalar values
-                        'PHZ_70_INT': [[0.0, 0.0]] * len(x_coords),  # Dummy interval pairs
-                        'PHZ_PDF': [[0.0] * 10] * len(x_coords)      # Dummy PDF vectors
-                    }
-                else:
-                    return {}
-            
-            # Try to load actual FITS file
-            fits_path = mertile_row['fits_file']
-            if not os.path.exists(fits_path):
-                print(f"Debug: FITS file not found at {fits_path}, using polygon vertices")
-                # Fallback to polygon vertices
-                if 'polygon' in mertile_row and mertile_row['polygon'] is not None:
-                    poly = mertile_row['polygon']
-                    x_coords, y_coords = poly.exterior.xy
-                    return {
-                        'RIGHT_ASCENSION': list(x_coords),
-                        'DECLINATION': list(y_coords),
-                        'PHZ_MODE_1': [0.0] * len(x_coords),  # Dummy scalar values
-                        'PHZ_70_INT': [[0.0, 0.0]] * len(x_coords),  # Dummy interval pairs
-                        'PHZ_PDF': [[0.0] * 10] * len(x_coords)      # Dummy PDF vectors
-                    }
-                else:
-                    return {}
-            
-            # Load actual FITS data
-            with fits.open(fits_path) as hdul:
-                fits_data = hdul[1].data
-                
-                # Extract the required columns
-                result = {
-                    'RIGHT_ASCENSION': fits_data['RIGHT_ASCENSION'].tolist(),
-                    'DECLINATION': fits_data['DECLINATION'].tolist()
-                }
-                
-                # Add photometric redshift columns if they exist
-                for col in ['PHZ_MODE_1', 'PHZ_70_INT', 'PHZ_PDF']:
-                    if col in fits_data.columns.names:
-                        col_data = fits_data[col]
-                        # Handle different column types
-                        if col == 'PHZ_PDF':
-                            # Keep PHZ_PDF as raw vectors - don't process
-                            result[col] = [row.tolist() if hasattr(row, 'tolist') else row for row in col_data]
-                        elif col == 'PHZ_70_INT':
-                            # For PHZ_70_INT, store the raw vectors for difference calculation
-                            if col_data.ndim > 1:
-                                result[col] = [row.tolist() if hasattr(row, 'tolist') else row for row in col_data]
-                            else:
-                                # If it's scalar, convert to list format for consistency
-                                result[col] = [[float(val), float(val)] for val in col_data]
-                        else:
-                            # For PHZ_MODE_1 and other scalar columns
-                            if col_data.ndim > 1:
-                                # Take first element if it's a vector
-                                result[col] = [float(row[0]) if len(row) > 0 else 0.0 for row in col_data]
-                            else:
-                                # Scalar column
-                                result[col] = col_data.tolist()
-                    else:
-                        # Provide dummy values if column doesn't exist
-                        print(f"Debug: Column {col} not found in {fits_path}, using dummy values")
-                        if col == 'PHZ_PDF':
-                            result[col] = [[0.0] * 10] * len(result['RIGHT_ASCENSION'])  # Dummy vector
-                        elif col == 'PHZ_70_INT':
-                            result[col] = [[0.0, 0.0]] * len(result['RIGHT_ASCENSION'])  # Dummy interval
-                        else:
-                            result[col] = [0.0] * len(result['RIGHT_ASCENSION'])
-                
-                return result
-                
-        except Exception as e:
-            print(f"Debug: Error loading MER tile {mertileid}: {e}")
-            # Fallback: try to use polygon vertices
-            try:
-                if mertileid in data['catred_info'].index:
-                    mertile_row = data['catred_info'].loc[mertileid]
-                    if 'polygon' in mertile_row and mertile_row['polygon'] is not None:
-                        poly = mertile_row['polygon']
-                        x_coords, y_coords = poly.exterior.xy
-                        print(f"Debug: Using polygon vertices for MER tile {mertileid} ({len(x_coords)} points)")
-                        return {
-                            'RIGHT_ASCENSION': list(x_coords),
-                            'DECLINATION': list(y_coords),
-                            'PHZ_MODE_1': [0.0] * len(x_coords),  # Dummy scalar values
-                            'PHZ_70_INT': [[0.0, 0.0]] * len(x_coords),  # Dummy interval pairs
-                            'PHZ_PDF': [[0.0] * 10] * len(x_coords)      # Dummy PDF vectors
-                        }
-            except Exception as fallback_error:
-                print(f"Debug: Fallback also failed for MER tile {mertileid}: {fallback_error}")
-            
-            return {}
 
     def load_mer_scatter_data(self, data, relayout_data):
         """Load MER scatter data for the current zoom window
@@ -819,65 +576,7 @@ class ClusterVisualizationApp:
         print(f"Debug: Total MER scatter points loaded: {len(mer_scatter_data['ra'])}")
         return mer_scatter_data
 
-    def _create_traces_fallback(self, data, show_polygons=True, show_mer_tiles=False, relayout_data=None, show_catred_mertile_data=False, manual_mer_data=None, existing_mer_traces=None, snr_threshold_lower=None, snr_threshold_upper=None):
-        """Create all Plotly traces - fallback implementation
-        
-        Args:
-            manual_mer_data: Tuple of (mer_scatter_x, mer_scatter_y) for manually loaded MER data
-            existing_mer_traces: List of existing MER scatter traces to preserve
-            snr_threshold_lower: Lower SNR threshold for filtering
-            snr_threshold_upper: Upper SNR threshold for filtering
-        """
-        traces = []
-        data_traces = []  # Keep data traces separate to add them last (top layer)
-        
-        # Apply SNR filtering to merged data
-        if snr_threshold_lower is None and snr_threshold_upper is None:
-            datamod_merged = data['merged_data']
-        elif snr_threshold_lower is not None and snr_threshold_upper is not None:
-            datamod_merged = data['merged_data'][(data['merged_data']['SNR_CLUSTER'] >= snr_threshold_lower) & 
-                                                 (data['merged_data']['SNR_CLUSTER'] <= snr_threshold_upper)]
-        elif snr_threshold_upper is not None and snr_threshold_lower is None:
-            datamod_merged = data['merged_data'][data['merged_data']['SNR_CLUSTER'] <= snr_threshold_upper]
-        elif snr_threshold_lower is not None:
-            datamod_merged = data['merged_data'][data['merged_data']['SNR_CLUSTER'] >= snr_threshold_lower]
-        else:
-            datamod_merged = data['merged_data']
-        
-        # Check zoom level for high-resolution MER tiles data
-        zoom_threshold_met = False
-        if relayout_data and show_mer_tiles:
-            print(f"Debug: Checking zoom threshold - relayout_data: {relayout_data}")
-            # Extract zoom ranges from relayout_data
-            ra_range = None
-            dec_range = None
-            
-            if 'xaxis.range[0]' in relayout_data and 'xaxis.range[1]' in relayout_data:
-                ra_range = abs(relayout_data['xaxis.range[1]'] - relayout_data['xaxis.range[0]'])
-            elif 'xaxis.range' in relayout_data:
-                ra_range = abs(relayout_data['xaxis.range'][1] - relayout_data['xaxis.range'][0])
-                
-            if 'yaxis.range[0]' in relayout_data and 'yaxis.range[1]' in relayout_data:
-                dec_range = abs(relayout_data['yaxis.range[1]'] - relayout_data['yaxis.range[0]'])
-            elif 'yaxis.range' in relayout_data:
-                dec_range = abs(relayout_data['yaxis.range'][1] - relayout_data['yaxis.range'][0])
-            
-            print(f"Debug: Zoom ranges - RA: {ra_range}, Dec: {dec_range}")
-            
-            # Check if zoom level is less than 2 degrees in both RA and DEC
-            if ra_range is not None and dec_range is not None and ra_range < 2.0 and dec_range < 2.0:
-                zoom_threshold_met = True
-                print(f"Debug: Zoom threshold MET! RA: {ra_range:.3f}° < 2°, Dec: {dec_range:.3f}° < 2°")
-            else:
-                print(f"Debug: Zoom threshold NOT met. RA: {ra_range}, Dec: {dec_range}")
-        else:
-            print(f"Debug: Zoom check skipped - relayout_data: {relayout_data is not None}, show_mer_tiles: {show_mer_tiles}")
-        
-        print(f"Debug: Final zoom_threshold_met: {zoom_threshold_met}, show_catred_mertile_data: {show_catred_mertile_data}")
-        
-        # Create traces with proper layering: CATRED/MER (bottom), then cluster traces (top)
-        catred_mer_traces = []  # Bottom layer for CATRED and MER data
-        cluster_traces = []     # Top layer for cluster detection data
+    def setup_layout(self):
         
         # 1. BOTTOM LAYER: Add existing MER traces from previous renders
         if existing_mer_traces:
