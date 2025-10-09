@@ -1,5 +1,7 @@
 *ipynb
 *.backup
+fix_syntax.py
+
 
 # Local configuration file (user-specific paths)
 config_local.ini
