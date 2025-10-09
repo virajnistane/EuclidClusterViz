@@ -144,8 +144,8 @@ if utils_path not in sys.path:
     sys.path.append(utils_path)
 
 # Import utilities
-from myutils import get_xml_element
-from colordefinitions import colors_list, colors_list_transparent
+from cluster_visualization.utils.myutils import get_xml_element
+from cluster_visualization.utils.colordefinitions import colors_list, colors_list_transparent
 print(f"✓ Utilities loaded from: {utils_path}")
 
 class ConnectionMonitor:
@@ -220,54 +220,31 @@ class ClusterVisualizationApp:
     def __init__(self):
         self.app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
         
-        # Initialize connection monitoring only if using fallback mode
+        # Initialize connection monitoring
         self.connection_monitor = None
         
-        # Always initialize fallback attributes since we're using fallback callbacks
+        # Application state attributes
         self.data_cache = {}
         self.mer_traces_cache = []
         self.current_catred_data = None
         
         # Initialize data handling modules
-        if USE_CONFIG and DataLoader and CATREDHandler:
-            self.data_loader = DataLoader(config, USE_CONFIG)
-            self.catred_handler = CATREDHandler()
-            print("✓ Using modular data handlers")
-        else:
-            # Fallback to inline data handling
-            self.data_loader = None
-            self.catred_handler = None
-            print("⚠️  Using fallback inline data handling")
+        self.data_loader = DataLoader(config, USE_CONFIG)
+        self.catred_handler = CATREDHandler()
+        print("✓ Using modular data handlers")
         
         # Initialize mosaic handler
-        if MOSAICHandler:
-            try:
-                self.mosaic_handler = MOSAICHandler(config if USE_CONFIG else None, useconfig=USE_CONFIG)
-                print("✓ Mosaic handler initialized")
-            except Exception as e:
-                print(f"⚠️  Error initializing mosaic handler: {e}")
-                self.mosaic_handler = None
-        else:
-            self.mosaic_handler = None
+        self.mosaic_handler = MOSAICHandler(config if USE_CONFIG else None, useconfig=USE_CONFIG)
+        print("✓ Mosaic handler initialized")
         
         # Initialize visualization modules
-        if TraceCreator and FigureManager:
-            self.trace_creator = TraceCreator(colors_list, colors_list_transparent, self.catred_handler)
-            self.figure_manager = FigureManager()
-            print("✓ Using modular visualization handlers")
-        else:
-            # Fallback to inline visualization handling
-            self.trace_creator = None
-            self.figure_manager = None
-            print("⚠️  Using fallback inline visualization handling")
+        self.trace_creator = TraceCreator(colors_list, colors_list_transparent, self.catred_handler)
+        self.figure_manager = FigureManager()
+        print("✓ Using modular visualization handlers")
         
         # Initialize UI layout
-        if AppLayout:
-            self.app.layout = AppLayout.create_layout()
-            print("✓ Using modular UI layout")
-        else:
-            self.setup_layout()
-            print("⚠️  Using fallback inline layout")
+        self.app.layout = AppLayout.create_layout()
+        print("✓ Using modular UI layout")
         
         # Initialize callbacks
         self.setup_callbacks()
@@ -293,28 +270,16 @@ class ClusterVisualizationApp:
         
     def load_data(self, select_algorithm='PZWAV'):
         """Load and prepare all data for visualization"""
-        if self.data_loader:
-            # Use modular data loader
-            return self.data_loader.load_data(select_algorithm)
-        else:
-            # Fallback to original inline implementation
-            return self._load_data_fallback(select_algorithm)
+        return self.data_loader.load_data(select_algorithm)
     
     def create_traces(self, data, show_polygons=True, show_mer_tiles=False, relayout_data=None, 
                      show_catred_mertile_data=False, manual_mer_data=None, existing_mer_traces=None, 
                      snr_threshold_lower=None, snr_threshold_upper=None):
         """Create all Plotly traces - delegates to trace creator"""
-        if self.trace_creator:
-            return self.trace_creator.create_traces(
-                data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data,
-                manual_mer_data, existing_mer_traces, snr_threshold_lower, snr_threshold_upper
-            )
-        else:
-            # Fallback to original implementation
-            return self._create_traces_fallback(
-                data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data,
-                manual_mer_data, existing_mer_traces, snr_threshold_lower, snr_threshold_upper
-            )
+        return self.trace_creator.create_traces(
+            data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data,
+            manual_mer_data, existing_mer_traces, snr_threshold_lower, snr_threshold_upper
+        )
     
 
         snrthreshold_lower = None
@@ -575,207 +540,6 @@ class ClusterVisualizationApp:
         
         print(f"Debug: Total MER scatter points loaded: {len(mer_scatter_data['ra'])}")
         return mer_scatter_data
-
-    def setup_layout(self):
-        
-        # 1. BOTTOM LAYER: Add existing MER traces from previous renders
-        if existing_mer_traces:
-            print(f"Debug: Adding {len(existing_mer_traces)} existing MER traces to bottom layer")
-            catred_mer_traces.extend(existing_mer_traces)
-
-        # 2. BOTTOM LAYER: High-resolution MER tiles scatter data (manual render mode)
-        if show_mer_tiles and show_catred_mertile_data and manual_mer_data:
-            print(f"Debug: Using manually loaded MER scatter data")
-            
-            # Add the scatter trace if we have data
-            if manual_mer_data and 'ra' in manual_mer_data and manual_mer_data['ra']:
-                print(f"Debug: Creating MER scatter trace with {len(manual_mer_data['ra'])} points")
-                
-                # Create unique name for this MER trace based on current number of existing traces
-                trace_number = len(self.mer_traces_cache) + 1
-                trace_name = f'MER High-Res Data #{trace_number}'
-                
-                # def format_hover_text(x, y, p1, p70):
-                #     """Safely format hover text for MER data points, handling potential vector values"""
-                #     try:
-                #         # Ensure PHZ_MODE_1 is scalar
-                #         p1_val = float(p1) if np.isscalar(p1) else float(p1[0]) if hasattr(p1, '__len__') and len(p1) > 0 else 0.0
-                        
-                #         # For PHZ_70_INT, calculate the difference between the two values (confidence interval width)
-                #         if hasattr(p70, '__len__') and len(p70) >= 2:
-                #             p70_diff = abs(float(p70[1]) - float(p70[0]))
-                #         elif np.isscalar(p70):
-                #             p70_diff = 0.0  # No interval if scalar
-                #         else:
-                #             p70_diff = 0.0
-                        
-                #         return f'MER Data Point<br>RA: {x:.6f}<br>Dec: {y:.6f}<br>PHZ_MODE_1: {p1_val:.3f}<br>PHZ_70_INT: {p70_diff:.3f}'
-                #     except Exception as e:
-                #         return f'MER Data Point<br>RA: {x:.6f}<br>Dec: {y:.6f}<br>PHZ Data: Error formatting'
-                
-                mer_catred_trace = go.Scattergl(
-                    x=manual_mer_data['ra'],
-                    y=manual_mer_data['dec'],
-                    mode='markers',
-                    marker=dict(size=4, symbol='circle', color='black', opacity=0.5),
-                    name=trace_name,
-                    text=[f'MER Data Point<br>RA: {x:.6f}<br>Dec: {y:.6f}<br>PHZ_MODE_1: {p1:.3f}<br>PHZ_70_INT: {abs(float(p70[1]) - float(p70[0])):.3f}'
-                          for x, y, p1, p70 in zip(manual_mer_data['ra'], manual_mer_data['dec'], 
-                                                   manual_mer_data['phz_mode_1'], manual_mer_data['phz_70_int'])],
-                    hoverinfo='text',
-                    hoverlabel=dict(bgcolor="lightblue", font_size=12, font_family="Arial"),
-                    showlegend=True,
-                    customdata=list(range(len(manual_mer_data['ra'])))  # Add index for click tracking
-                )
-                catred_mer_traces.append(mer_catred_trace)
-                
-                # Store MER data for click callbacks
-                if not hasattr(self, 'current_catred_data') or self.current_catred_data is None:
-                    self.current_catred_data = {}
-                self.current_catred_data[trace_name] = manual_mer_data
-                
-                print(f"Debug: Stored MER data for trace '{trace_name}' with {len(manual_mer_data['ra'])} points")
-                print(f"Debug: PHZ_PDF sample length: {len(manual_mer_data['phz_pdf'][0]) if manual_mer_data['phz_pdf'] else 'No PHZ_PDF data'}")
-                print(f"Debug: Current MER data keys: {list(self.current_catred_data.keys())}")
-                
-                print("Debug: MER CATRED trace added to bottom layer")
-            else:
-                print("Debug: No MER scatter data available to display")
-        elif show_mer_tiles and show_catred_mertile_data and zoom_threshold_met:
-            print(f"Debug: MER scatter conditions met but no manual data provided - use render button")
-        else:
-            print(f"Debug: MER scatter data conditions not met - show_mer_tiles: {show_mer_tiles}, show_catred_mertile_data: {show_catred_mertile_data}, manual_data: {manual_mer_data is not None}")
-
-        # 3. TOP LAYER: Merged cluster detection trace
-        merged_det_trace = go.Scattergl(
-            x=datamod_merged['RIGHT_ASCENSION_CLUSTER'],
-            y=datamod_merged['DECLINATION_CLUSTER'],
-            mode='markers',
-            marker=dict(size=10, symbol='square-open', line=dict(width=2), color='black'),
-            name=f'Merged Data ({data["algorithm"]}) - {len(datamod_merged)} clusters',
-            text=[
-                f"merged<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
-                for snr, cz, ra, dec in zip(datamod_merged['SNR_CLUSTER'], 
-                                          datamod_merged['Z_CLUSTER'], 
-                                          datamod_merged['RIGHT_ASCENSION_CLUSTER'], 
-                                          datamod_merged['DECLINATION_CLUSTER'])
-            ],
-            hoverinfo='text',
-            hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
-        )
-        cluster_traces.append(merged_det_trace)
-        
-        # Store tile traces separately to add them as the top layer
-        det_in_tile_trace = []
-        
-        # Individual tiles traces and polygons
-        for tileid, value in data['tile_data'].items():
-            tile_data = value['data']
-            
-            # Apply SNR filtering (same as merged data logic)
-            if snr_threshold_lower is None and snr_threshold_upper is None:
-                datamod = tile_data
-            elif snr_threshold_lower is not None and snr_threshold_upper is not None:
-                datamod = tile_data[(tile_data['SNR_CLUSTER'] >= snr_threshold_lower) & 
-                                   (tile_data['SNR_CLUSTER'] <= snr_threshold_upper)]
-            elif snr_threshold_upper is not None and snr_threshold_lower is None:
-                datamod = tile_data[tile_data['SNR_CLUSTER'] <= snr_threshold_upper]
-            elif snr_threshold_lower is not None:
-                datamod = tile_data[tile_data['SNR_CLUSTER'] >= snr_threshold_lower]
-            else:
-                datamod = tile_data
-            
-            # 4. TOP LAYER: Tile data trace - will be added last for maximum visibility
-            tile_trace = go.Scattergl(
-                x=datamod['RIGHT_ASCENSION_CLUSTER'],
-                y=datamod['DECLINATION_CLUSTER'],
-                mode='markers',
-                marker=dict(size=6, opacity=1, symbol='x', color=colors_list[int(tileid)]),
-                name=f'Tile {tileid}',
-                text=[
-                    f"TileID: {tileid}<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
-                    for snr, cz, ra, dec in zip(datamod['SNR_CLUSTER'], datamod['Z_CLUSTER'], 
-                                              datamod['RIGHT_ASCENSION_CLUSTER'], datamod['DECLINATION_CLUSTER'])
-                ],
-                hoverinfo='text'
-            )
-            det_in_tile_trace.append(tile_trace)  # Add to separate list for now
-            
-            # Always load tile definition and create polygons
-            with open(os.path.join(data['data_dir'], value['tilefile']), 'r') as f:
-                tile = json.load(f)
-            
-            # LEV1 polygon - always show outline
-            poly = tile['LEV1']['POLYGON'][0]
-            poly_x = [p[0] for p in poly] + [poly[0][0]]
-            poly_y = [p[1] for p in poly] + [poly[0][1]]
-            cltile_lev1_polygon_trace = go.Scatter(
-                x=poly_x,
-                y=poly_y,
-                mode='lines',
-                line=dict(width=2, color=colors_list[int(tileid)], dash='dash'),
-                name=f'Tile {tileid} LEV1',
-                showlegend=False,
-                text=f'Tile {tileid} - LEV1 Polygon',
-                hoverinfo='text'
-            )
-            traces.append(cltile_lev1_polygon_trace)
-            
-            # CORE polygon
-            poly2 = tile['CORE']['POLYGON'][0]
-            poly_x2 = [p[0] for p in poly2] + [poly2[0][0]]
-            poly_y2 = [p[1] for p in poly2] + [poly2[0][1]]
-            
-            # Always show polygon outline, toggle fill based on show_polygons
-            if show_polygons:
-                fillcolor = colors_list_transparent[int(tileid)]
-                fill = 'toself'
-            else:
-                fillcolor = None
-                fill = None
-                
-            cltile_core_polygon_trace = go.Scatter(
-                x=poly_x2,
-                y=poly_y2,
-                fill=fill,
-                fillcolor=fillcolor,
-                mode='lines',
-                line=dict(width=2, color=colors_list[int(tileid)]),
-                name=f'Tile {tileid} CORE',
-                showlegend=False,
-                text=f'Tile {tileid} - CORE Polygon',
-                hoverinfo='text'
-            )
-            traces.append(cltile_core_polygon_trace)
-            
-            # MER tile polygons (only show when polygons are in outline mode and requested)
-            if show_mer_tiles and not show_polygons and not data['catred_info'].empty and 'polygon' in data['catred_info'].columns:
-                for mertileid in tile['LEV1']['ID_INTERSECTED']:
-                    if mertileid in data['catred_info'].index:
-                        merpoly = data['catred_info'].at[mertileid, 'polygon']
-                        if merpoly is not None:
-                            x, y = merpoly.exterior.xy
-                            mertile_trace = go.Scatter(
-                                x=list(x),
-                                y=list(y),
-                                fill='toself',
-                                fillcolor=colors_list_transparent[int(tileid)],
-                                mode='lines',
-                                line=dict(width=2, color=colors_list[int(tileid)], dash='dot'),
-                                name=f'MerTile {mertileid}',
-                                showlegend=False,
-                                text=f'MerTile {mertileid} - CLtile {tileid}',
-                                hoverinfo='text',
-                                hoveron='fills+points'
-                            )
-                            traces.append(mertile_trace)
-        
-        # 4. TOP LAYER: Add tile cluster traces to top layer for maximum visibility
-        cluster_traces.extend(det_in_tile_trace)
-        
-        # Combine traces with proper layering: polygons (bottom) → CATRED/MER → cluster traces (top)
-        # This ensures cluster traces are always on top of mosaic and CATRED traces
-        return traces + catred_mer_traces + cluster_traces
 
     def setup_layout(self):
         """Setup the Dash app layout with side-by-side plots and compact controls"""
