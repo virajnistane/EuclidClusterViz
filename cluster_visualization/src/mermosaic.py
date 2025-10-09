@@ -39,8 +39,8 @@ class MOSAICHandler:
         self.mosaic_wcs = None
 
         # Performance-optimized image processing parameters
-        self.img_width = 960    # Reduced from 1920 for faster initial rendering
-        self.img_height = 960   # Reduced from 1920 for faster initial rendering
+        self.img_width = 1920    # Reduced from 1920 for faster initial rendering
+        self.img_height = 1920   # Reduced from 1920 for faster initial rendering
         self.img_scale = 5.0
         self.n_sigma = 1.0
         
@@ -73,7 +73,7 @@ class MOSAICHandler:
         if file_size_gb > self.max_file_size_gb:
             print(f"[WARNING] Large file ({file_size_gb:.2f}GB) - may take longer to process")
         
-        print(f"[LOADING] Processing MER tile {mertileid} ({file_size_gb:.2f}GB)...")
+        print(f"[LOADING] Processing mosaic for MER tile {mertileid} ({file_size_gb:.2f}GB)...")
         
         # Thread-safe FITS loading with timeout
         result_queue = queue.Queue()
