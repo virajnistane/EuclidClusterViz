@@ -282,176 +282,6 @@ class ClusterVisualizationApp:
         )
     
 
-        snrthreshold_lower = None
-        snrthreshold_upper = None
-        
-        # Validate algorithm choice
-        if select_algorithm not in ['PZWAV', 'AMICO']:
-            print(f"Warning: Unknown algorithm '{select_algorithm}'. Using 'PZWAV' as default.")
-            select_algorithm = 'PZWAV'
-        
-        # Use configuration for paths if available, otherwise fallback to hardcoded paths
-        if USE_CONFIG:
-            mergedetcatdir = config.mergedetcat_dir
-            mergedetcat_datadir = config.mergedetcat_data_dir
-            mergedetcat_inputsdir = config.mergedetcat_inputs_dir
-            mergedetcatoutputdir = config.get_output_dir(select_algorithm)
-            rr2downloadsdir = config.rr2_downloads_dir
-            print("✓ Using configuration-based paths")
-        else:
-            # Fallback to hardcoded paths
-            mergedetcatdir = '/sps/euclid/OU-LE3/CL/ial_workspace/workdir/MergeDetCat/RR2_south/'
-            mergedetcat_datadir = os.path.join(mergedetcatdir, 'data')
-            mergedetcat_inputsdir = os.path.join(mergedetcatdir, 'inputs')
-            mergedetcatoutputdir = os.path.join(mergedetcatdir, f'outvn_mergedetcat_rr2south_{select_algorithm}_3')
-            rr2downloadsdir = '/sps/euclid/OU-LE3/CL/ial_workspace/workdir/RR2_downloads'
-            print("⚠️  Using fallback hardcoded paths")
-        
-        # Validate critical paths exist
-        if not os.path.exists(mergedetcatoutputdir):
-            raise FileNotFoundError(f"Output directory not found: {mergedetcatoutputdir}")
-        if not os.path.exists(mergedetcat_datadir):
-            raise FileNotFoundError(f"Data directory not found: {mergedetcat_datadir}")
-        
-        # Load merged detection catalog
-        det_xml = os.path.join(mergedetcatoutputdir, 'mergedetcat.xml')
-        if not os.path.exists(det_xml):
-            raise FileNotFoundError(f"Merged detection XML not found: {det_xml}")
-            
-        fitsfile = os.path.join(mergedetcat_datadir, 
-                               get_xml_element(det_xml, 'Data/ClustersFile/DataContainer/FileName').text)
-        
-        print(f"Loading merged catalog from: {os.path.basename(fitsfile)}")
-        with fits.open(fitsfile) as hdul:
-            data_merged = hdul[1].data
-        
-        print(f"Loaded {len(data_merged)} merged clusters")
-        
-        # Load individual detection files
-        if USE_CONFIG:
-            indiv_detfiles_list = config.get_detfiles_list(select_algorithm)
-        else:
-            indiv_detfiles_list = os.path.join(mergedetcatdir, f'detfiles_input_{select_algorithm.lower()}_3.json')
-        
-        if not os.path.exists(indiv_detfiles_list):
-            raise FileNotFoundError(f"Detection files list not found: {indiv_detfiles_list}")
-            
-        with open(indiv_detfiles_list, 'r') as f:
-            detfiles_list = json.load(f)
-        
-        data_by_tile = {}
-        for file in detfiles_list:
-            tile_file = get_xml_element(os.path.join(mergedetcat_inputsdir, file), 
-                                      'Data/SpatialInformation/DataContainer/FileName').text
-            tile_id = tile_file.split('TILE_')[1][3:5]
-            fits_file = get_xml_element(os.path.join(mergedetcat_inputsdir, file), 
-                                      'Data/ClustersFile/DataContainer/FileName').text
-            
-            data_by_tile[tile_id] = {
-                'tilefile': tile_file,
-                'fitsfilename': fits_file
-            }
-            
-            with fits.open(os.path.join(mergedetcat_datadir, fits_file)) as hdul:
-                data_by_tile[tile_id]['data'] = hdul[1].data
-        
-        data_by_tile = dict(sorted(data_by_tile.items()))
-        print(f"Loaded {len(data_by_tile)} individual tiles")
-        
-        # Load catred file info using configuration
-        if USE_CONFIG:
-            catred_fileinfo_csv = config.get_catred_fileinfo_csv()
-            catred_polygon_pkl = config.get_catred_polygons_pkl()
-        else:
-            catred_fileinfo_csv = os.path.join(rr2downloadsdir, 'catred_fileinfo.csv')
-            catred_polygon_pkl = os.path.join(rr2downloadsdir, 'catred_polygons_by_tileid.pkl')
-        
-        catred_fileinfo_df = pd.DataFrame()
-        if os.path.exists(catred_fileinfo_csv):
-            catred_fileinfo_df = pd.read_csv(catred_fileinfo_csv)
-            catred_fileinfo_df.set_index('tileid', inplace=True)
-            print("Loaded catred file info")
-        else:
-            print(f"Warning: catred_fileinfo.csv not found at {catred_fileinfo_csv}")
-        
-        # Load catred polygons
-        if os.path.exists(catred_polygon_pkl) and not catred_fileinfo_df.empty:
-            with open(catred_polygon_pkl, 'rb') as f:
-                catred_fileinfo_dict = pickle.load(f)
-            catred_fileinfo_df['polygon'] = pd.Series(catred_fileinfo_dict)
-            print("Loaded catred polygons")
-        else:
-            print(f"Warning: catred polygons not found at {catred_polygon_pkl}")
-        
-        # Calculate SNR min/max for slider bounds
-        snr_min = float(data_merged['SNR_CLUSTER'].min())
-        snr_max = float(data_merged['SNR_CLUSTER'].max())
-        print(f"SNR range: {snr_min:.3f} to {snr_max:.3f}")
-        
-        # Calculate redshift min/max for slider bounds
-        z_min = float(data_merged['Z_CLUSTER'].min())
-        z_max = float(data_merged['Z_CLUSTER'].max())
-        print(f"Redshift range: {z_min:.3f} to {z_max:.3f}")
-        
-        data = {
-            'merged_data': data_merged,  # Store raw unfiltered data
-            'tile_data': data_by_tile,
-            'catred_info': catred_fileinfo_df,
-            'algorithm': select_algorithm,
-            'snr_threshold_lower': snrthreshold_lower,
-            'snr_threshold_upper': snrthreshold_upper,
-            'snr_min': snr_min,
-            'snr_max': snr_max,
-            'z_min': z_min,
-            'z_max': z_max,
-            'data_dir': mergedetcat_datadir
-        }
-        
-        # Cache the data
-        self.data_cache[select_algorithm] = data
-        return data
-
-    def _create_traces_fallback(self, data, show_polygons=True, show_mer_tiles=False, relayout_data=None, 
-                               show_catred_mertile_data=False, manual_mer_data=None, existing_mer_traces=None, 
-                               snr_threshold_lower=None, snr_threshold_upper=None):
-        """Create all Plotly traces - fallback implementation"""
-        traces = []
-        data_traces = []  # Keep data traces separate to add them last (top layer)
-        
-        # Apply SNR filtering to merged data
-        if snr_threshold_lower is None and snr_threshold_upper is None:
-            datamod_merged = data['merged_data']
-        elif snr_threshold_lower is not None and snr_threshold_upper is not None:
-            datamod_merged = data['merged_data'][(data['merged_data']['SNR_CLUSTER'] >= snr_threshold_lower) & 
-                                                 (data['merged_data']['SNR_CLUSTER'] <= snr_threshold_upper)]
-        elif snr_threshold_upper is not None and snr_threshold_lower is None:
-            datamod_merged = data['merged_data'][data['merged_data']['SNR_CLUSTER'] <= snr_threshold_upper]
-        elif snr_threshold_lower is not None:
-            datamod_merged = data['merged_data'][data['merged_data']['SNR_CLUSTER'] >= snr_threshold_lower]
-        else:
-            datamod_merged = data['merged_data']
-        
-        # Create a basic merged data trace
-        merged_det_trace = go.Scattergl(
-            x=datamod_merged['RIGHT_ASCENSION_CLUSTER'],
-            y=datamod_merged['DECLINATION_CLUSTER'],
-            mode='markers',
-            marker=dict(size=10, symbol='square-open', line=dict(width=2), color='black'),
-            name=f'Merged Data ({data["algorithm"]}) - {len(datamod_merged)} clusters',
-            text=[
-                f"merged<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
-                for snr, cz, ra, dec in zip(datamod_merged['SNR_CLUSTER'], 
-                                          datamod_merged['Z_CLUSTER'], 
-                                          datamod_merged['RIGHT_ASCENSION_CLUSTER'], 
-                                          datamod_merged['DECLINATION_CLUSTER'])
-            ],
-            hoverinfo='text'
-        )
-        data_traces.append(merged_det_trace)
-        
-        # Combine traces
-        return traces + data_traces
-
     def get_radec_mertile(self, mertileid, data):
         """Load CATRED data for a specific MER tile - delegates to MER handler"""
         return self.catred_handler.get_radec_mertile(mertileid, data)
@@ -797,9 +627,9 @@ class ClusterVisualizationApp:
             print("✓ All modular callbacks initialized")
             
         else:
-            # Fallback to inline callback setup
-            print("⚠️  Using fallback inline callbacks")
-            self._setup_fallback_callbacks()
+            # All modular components should be available - this should not happen
+            print("❌ ERROR: Modular callback components not available - check imports")
+            raise ImportError("Required callback modules not available")
     
     def _setup_fallback_callbacks(self):
         """Fallback callback setup - contains the original inline callbacks"""
@@ -1897,13 +1727,14 @@ class ClusterVisualizationApp:
         browser_thread.start()
 
     def run(self, host='localhost', port=8050, debug=False, auto_open=True, external_access=False):
-        """Run the Dash app using modular or fallback core"""
+        """Run the Dash app using modular core"""
         if self.core:
             # Use modular core
             return self.core.run(host, port, debug, auto_open, external_access)
         else:
-            # Fallback to inline implementation
-            return self._run_fallback(host, port, debug, auto_open, external_access)
+            # Core module should always be available - this should not happen
+            print("❌ ERROR: Modular core not available - check imports")
+            raise ImportError("Required core module not available")
     
     def _run_fallback(self, host='localhost', port=8050, debug=False, auto_open=True, external_access=False):
         """Fallback run implementation"""
