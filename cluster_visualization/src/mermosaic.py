@@ -26,13 +26,12 @@ except ImportError:
 
 class MOSAICHandler:
     """Handler for MER mosaic image data, similar to CATREDHandler."""
-    
-    def __init__(self, config=None, useconfig=True):
+
+    def __init__(self, config=None):
         """Initiate MOSAICHandler with performance optimizations"""
         self.traces_cache = {}  # Change to dict for better caching by mertileid
         self.current_mosaic_data = None
-        if useconfig:
-            self.config = config if config else Config() 
+        self.config = config if config else Config() 
 
         self.mosaic_header = None
         self.mosaic_data = None

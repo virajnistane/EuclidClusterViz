@@ -22,16 +22,14 @@ from typing import Dict, Any, Optional
 class DataLoader:
     """Handles loading and caching of cluster detection data."""
     
-    def __init__(self, config=None, use_config=True):
+    def __init__(self, config=None):
         """
         Initialize DataLoader with configuration.
         
         Args:
             config: Configuration object with path information
-            use_config: Whether to use configuration or fallback to hardcoded paths
         """
         self.config = config
-        self.use_config = use_config
         self.data_cache = {}
         
         # Import utilities from package structure
@@ -117,7 +115,7 @@ class DataLoader:
     
     def _get_paths(self, algorithm: str) -> Dict[str, str]:
         """Get file paths based on configuration or fallback."""
-        assert self.use_config and self.config, "Configuration is not set"
+        assert self.config, "Configuration is not set"
         paths = {
             'mergedetcat_dir': self.config.mergedetcat_dir,
             'data_dir': self.config.mergedetcat_data_dir,
@@ -223,7 +221,7 @@ class DataLoader:
         return catred_fileinfo_df
     
     def _generate_catred_fileinfo(self, paths: Dict[str, str]) -> pd.DataFrame:
-        """Generate catred_fileinfo.csv from XML files (based on notebook cell 23)."""
+        """Generate catred_fileinfo.csv from XML files. """
         print('Processing catred XML files to create catred_fileinfo dictionary')
         
         # Get catred directory from config
