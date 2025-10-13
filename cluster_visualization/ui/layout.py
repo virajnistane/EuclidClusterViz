@@ -333,7 +333,7 @@ class AppLayout:
                     min=0.1,
                     max=1.0,
                     step=0.1,
-                    value=0.9,
+                    value=0.7,
                     marks={0.1: '10%', 0.5: '50%', 1.0: '100%'},
                     tooltip={"placement": "bottom", "always_visible": False}
                 )

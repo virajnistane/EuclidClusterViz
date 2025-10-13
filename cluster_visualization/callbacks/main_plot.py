@@ -912,23 +912,40 @@ class MainPlotCallbacks:
                     print(f"   -> Data loaded successfully")
                     
                     # Get mosaic traces for current zoom window
-                    print(f"   -> Calling mosaic handler load_mosaic_traces_in_zoom")
                     if self.mosaic_handler:
                         mosaic_traces = self.mosaic_handler.load_mosaic_traces_in_zoom(data, relayout_data, opacity=opacity)
                         print(f"   -> Mosaic traces result: {len(mosaic_traces) if mosaic_traces else 0} traces")
                         
                         if mosaic_traces and len(mosaic_traces) > 0:
-                            # Add mosaic traces to current figure
+                            # Add mosaic traces to current figure with proper layering
                             if current_figure and 'data' in current_figure:
                                 # Remove existing mosaic traces first
                                 existing_traces = [trace for trace in current_figure['data'] 
                                                  if not (trace.get('name', '').startswith('Mosaic'))]
                                 
-                                # Add new mosaic traces at the end (so they appear on top of other data)
-                                new_data = existing_traces + mosaic_traces
+                                # Separate traces by type to maintain proper layering order
+                                polygon_traces = []
+                                catred_traces = []
+                                cluster_traces = []
+                                other_traces = []
+                                
+                                for trace in existing_traces:
+                                    trace_name = trace.get('name', '')
+                                    if 'Tile' in trace_name and ('CORE' in trace_name or 'LEV1' in trace_name or 'MerTile' in trace_name):
+                                        polygon_traces.append(trace)
+                                    elif 'CATRED' in trace_name or 'MER High-Res Data' in trace_name:
+                                        catred_traces.append(trace)
+                                    elif any(keyword in trace_name for keyword in ['Merged Data', 'Tile', 'clusters']):
+                                        cluster_traces.append(trace)
+                                    else:
+                                        other_traces.append(trace)
+                                
+                                # Layer order: polygons (bottom) → mosaic → CATRED → other → cluster traces (top)
+                                new_data = polygon_traces + mosaic_traces + catred_traces + other_traces + cluster_traces
                                 current_figure['data'] = new_data
                                 
-                                print(f"✓ Added {len(mosaic_traces)} mosaic image traces on top layer")
+                                print(f"✓ Added {len(mosaic_traces)} mosaic image traces as 2nd layer from bottom")
+                                print(f"   -> Layer order: {len(polygon_traces)} polygons, {len(mosaic_traces)} mosaics, {len(catred_traces)} CATRED, {len(other_traces)} other, {len(cluster_traces)} clusters (top)")
                             else:
                                 print("⚠️  No current figure data to update")
                         else:
@@ -949,53 +966,4 @@ class MainPlotCallbacks:
                 print(f"❌ Fatal error in mosaic callback: {e}")
                 import traceback
                 traceback.print_exc()
-                return current_figure
-                # Load current data
-                data = self.data_loader.load_data(algorithm)
-                
-                # Get mosaic traces for current zoom window
-                if self.mosaic_handler:
-                    mosaic_traces = self.mosaic_handler.load_mosaic_traces_in_zoom(data, relayout_data, opacity=opacity)
-                    
-                    if mosaic_traces and len(mosaic_traces) > 0:
-                        # Add mosaic traces to current figure
-                        if current_figure and 'data' in current_figure:
-                            # Remove existing mosaic traces first
-                            existing_traces = [trace for trace in current_figure['data'] 
-                                             if not (trace.get('name', '').startswith('Mosaic'))]
-                            
-                            # Separate traces by type to maintain proper layering order
-                            polygon_traces = []
-                            catred_traces = []
-                            cluster_traces = []
-                            other_traces = []
-                            
-                            for trace in existing_traces:
-                                trace_name = trace.get('name', '')
-                                if 'Tile' in trace_name and ('CORE' in trace_name or 'LEV1' in trace_name or 'MerTile' in trace_name):
-                                    polygon_traces.append(trace)
-                                elif 'CATRED' in trace_name or 'MER High-Res Data' in trace_name:
-                                    catred_traces.append(trace)
-                                elif any(keyword in trace_name for keyword in ['Merged Data', 'Tile', 'clusters']):
-                                    cluster_traces.append(trace)
-                                else:
-                                    other_traces.append(trace)
-                            
-                            # Layer order: polygons (bottom) → mosaic → CATRED → other → cluster traces (top)
-                            new_data = polygon_traces + mosaic_traces + catred_traces + other_traces + cluster_traces
-                            current_figure['data'] = new_data
-                            
-                            print(f"✓ Added {len(mosaic_traces)} mosaic image traces with proper layering")
-                            print(f"   -> Layer order: {len(polygon_traces)} polygons, {len(mosaic_traces)} mosaics, {len(catred_traces)} CATRED, {len(other_traces)} other, {len(cluster_traces)} clusters (top)")
-                        else:
-                            print("⚠️  No current figure data to update")
-                    else:
-                        print("ℹ️  No mosaic images found for current zoom window")
-                
-                return current_figure
-                
-            except Exception as e:
-                print(f"❌ Error rendering mosaic images: {e}")
-                import traceback
-                print(f"Traceback: {traceback.format_exc()}")
                 return current_figure
