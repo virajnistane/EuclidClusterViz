@@ -34,7 +34,7 @@ class DataLoader:
         
         # Import utilities from package structure
         try:
-            from myutils import get_xml_element
+            from cluster_visualization.utils.myutils import get_xml_element
             self.get_xml_element = get_xml_element
             
         except ImportError as e:

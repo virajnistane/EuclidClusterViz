@@ -96,8 +96,8 @@ import sys
 import os
 utils_dir = os.path.join(os.getcwd(), 'cluster_visualization/utils')
 sys.path.append(utils_dir)
-from myutils import get_xml_element
-from colordefinitions import colors_list
+from cluster_visualization.utils.myutils import get_xml_element
+from cluster_visualization.utils.colordefinitions import colors_list
 print('✓ Custom modules OK')
 " 2>/dev/null || echo "✗ Custom modules issues"
     
