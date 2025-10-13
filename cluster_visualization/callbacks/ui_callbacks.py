@@ -26,35 +26,59 @@ class UICallbacks:
     
     def _setup_button_text_callbacks(self):
         """Setup callbacks to update button text based on current settings"""
+        # Use a dummy interval to trigger initial callback and then button clicks
         @self.app.callback(
-            [Output('render-button', 'children'), 
-             Output('mer-render-button', 'children'), 
-             Output('snr-render-button', 'children'),
-             Output('redshift-render-button', 'children')],
-            [Input('algorithm-dropdown', 'value'),
-             Input('snr-range-slider', 'value'),
-             Input('redshift-range-slider', 'value'),
-             Input('polygon-switch', 'value'),
-             Input('mer-switch', 'value'),
-             Input('aspect-ratio-switch', 'value'),
-             Input('catred-mertile-switch', 'value'),
-             Input('render-button', 'n_clicks'),
-             Input('mer-render-button', 'n_clicks'),
-             Input('snr-render-button', 'n_clicks'),
-             Input('redshift-render-button', 'n_clicks')]
+            Output('render-button', 'children'),
+            [Input('render-button', 'n_clicks')],
+            prevent_initial_call=False
         )
-        def update_button_texts(algorithm, snr_range, redshift_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, n_clicks, catred_n_clicks, snr_n_clicks, redshift_n_clicks):
-            main_button_text = "🚀 Initial Render" if n_clicks == 0 else "✅ Live Updates Active"
-            catred_button_text = f"🔍 Render CATRED Data ({catred_n_clicks})" if catred_n_clicks > 0 else "🔍 Render CATRED Data"
-            snr_button_text = f"🎯 Update SNR Filter ({snr_n_clicks})" if snr_n_clicks > 0 else "🎯 Update SNR Filter"
-            redshift_button_text = f"🌌 Update Redshift Filter ({redshift_n_clicks})" if redshift_n_clicks > 0 else "🌌 Update Redshift Filter"
-            return main_button_text, catred_button_text, snr_button_text, redshift_button_text
+        def update_main_button_text(n_clicks):
+            """Update main render button text"""
+            if n_clicks is None:
+                n_clicks = 0
+            return "🚀 Initial Render" if n_clicks == 0 else f"✅ Live Updates Active ({n_clicks})"
+
+        @self.app.callback(
+            Output('mer-render-button', 'children'),
+            [Input('mer-render-button', 'n_clicks')],
+            prevent_initial_call=False
+        )
+        def update_catred_button_text(catred_n_clicks):
+            """Update CATRED button text"""
+            if catred_n_clicks is None:
+                catred_n_clicks = 0
+            return f"🔍 Render CATRED Data ({catred_n_clicks})" if catred_n_clicks > 0 else "🔍 Render CATRED Data"
+
+        @self.app.callback(
+            Output('snr-render-button', 'children'),
+            [Input('snr-render-button', 'n_clicks')],
+            prevent_initial_call=False
+        )
+        def update_snr_button_text(snr_n_clicks):
+            """Update SNR button text"""
+            if snr_n_clicks is None:
+                snr_n_clicks = 0
+            return f"🎯 Update SNR Filter ({snr_n_clicks})" if snr_n_clicks > 0 else "🎯 Update SNR Filter"
+
+        @self.app.callback(
+            Output('redshift-render-button', 'children'),
+            [Input('redshift-render-button', 'n_clicks')],
+            prevent_initial_call=False
+        )
+        def update_redshift_button_text(redshift_n_clicks):
+            """Update redshift button text"""
+            if redshift_n_clicks is None:
+                redshift_n_clicks = 0
+            return f"🌌 Update Redshift Filter ({redshift_n_clicks})" if redshift_n_clicks > 0 else "🌌 Update Redshift Filter"
 
         @self.app.callback(
             Output('mer-clear-button', 'children'),
-            [Input('mer-clear-button', 'n_clicks')]
+            [Input('mer-clear-button', 'n_clicks')],
+            prevent_initial_call=False
         )
         def update_clear_button_text(clear_n_clicks):
+            """Update clear button text with click count"""
+            clear_n_clicks = clear_n_clicks or 0
             return f"🗑️ Clear All CATRED ({clear_n_clicks})" if clear_n_clicks > 0 else "🗑️ Clear All CATRED"
     
     def _setup_button_state_callbacks(self):
@@ -66,7 +90,9 @@ class UICallbacks:
             prevent_initial_call=False
         )
         def enable_snr_and_redshift_buttons(n_clicks):
+            """Enable SNR and redshift filter buttons after initial render"""
             # Disable both buttons until initial render is clicked
+            n_clicks = n_clicks or 0
             disabled = n_clicks == 0
             return disabled, disabled
 
