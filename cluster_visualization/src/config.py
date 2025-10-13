@@ -117,23 +117,23 @@ class Config:
         # Project paths - use auto-detected git repository root
         self.project_root = self._detected_project_root
     
-    def get_output_dir(self, algorithm):
+    def get_mergedetcat_xml(self, algorithm):
         """Get algorithm-specific output directory"""
         algorithm_lower = algorithm.lower()
         if algorithm_lower == 'pzwav':
-            dirname = self.config_parser.get('files', 'pzwav_output_dir')
+            xmlname = self.config_parser.get('files', 'pzwav_merged_xml')
         elif algorithm_lower == 'amico':
-            dirname = self.config_parser.get('files', 'amico_output_dir')
+            xmlname = self.config_parser.get('files', 'amico_merged_xml')
         else:
             raise ValueError(f"Unknown algorithm: {algorithm}. Supported: PZWAV, AMICO")
         
         # Check if it's an absolute path
-        expanded_path = self._expand_path(dirname)
+        expanded_path = self._expand_path(xmlname)
         if os.path.isabs(expanded_path):
             return expanded_path
         else:
-            return os.path.join(self.mergedetcat_dir, dirname)
-    
+            return os.path.join(self.mergedetcat_dir, xmlname)
+
     def get_detfiles_list(self, algorithm):
         """Get path to detection files list for given algorithm"""
         algorithm_lower = algorithm.lower()

@@ -117,46 +117,25 @@ class DataLoader:
     
     def _get_paths(self, algorithm: str) -> Dict[str, str]:
         """Get file paths based on configuration or fallback."""
-        if self.use_config and self.config:
-            paths = {
-                'mergedetcat_dir': self.config.mergedetcat_dir,
-                'data_dir': self.config.mergedetcat_data_dir,
-                'inputs_dir': self.config.mergedetcat_inputs_dir,
-                'output_dir': self.config.get_output_dir(algorithm),
-                'rr2_downloads_dir': self.config.rr2_downloads_dir,
-                'mosaic_dir': self.config.mosaic_dir,
-                'catred_fileinfo_csv': self.config.get_catred_fileinfo_csv(),
-                'catred_polygon_pkl': self.config.get_catred_polygons_pkl(),
-                'effcovmask_fileinfo_csv': self.config.get_effcovmask_fileinfo_csv(),
-                'detfiles_list': self.config.get_detfiles_list(algorithm)
-            }
-            print("✓ Using configuration-based paths")
-        else:
-            # Fallback to hardcoded paths
-            base_dir = '/sps/euclid/OU-LE3/CL/ial_workspace/workdir/MergeDetCat/RR2_south/'
-            rr2_downloads = '/sps/euclid/OU-LE3/CL/ial_workspace/workdir/RR2_downloads'
-            catred_dir = os.path.join(rr2_downloads, 'DpdLE3clFullInputCat')
-            effcov_mask_dir = os.path.join(rr2_downloads, 'DpdHealpixEffectiveCoverageVMPZ')
-            
-            paths = {
-                'mergedetcat_dir': base_dir,
-                'data_dir': os.path.join(base_dir, 'data'),
-                'inputs_dir': os.path.join(base_dir, 'inputs'),
-                'output_dir': os.path.join(base_dir, f'outvn_mergedetcat_rr2south_{algorithm}_3'),
-                'rr2_downloads_dir': rr2_downloads,
-                'mosaic_dir': os.path.join(rr2_downloads, 'DpdMerBksMosaic'),
-                'catred_fileinfo_csv': os.path.join(catred_dir, 'catred_fileinfo.csv'),
-                'catred_polygon_pkl': os.path.join(catred_dir, 'catred_polygons_by_tileid.pkl'),
-                'effcovmask_fileinfo_csv': os.path.join(effcov_mask_dir, 'effcovmask_fileinfo.csv'),
-                'detfiles_list': os.path.join(base_dir, f'detfiles_input_{algorithm.lower()}_3.json')
-            }
-            print("⚠️  Using fallback hardcoded paths")
-        
+        assert self.use_config and self.config, "Configuration is not set"
+        paths = {
+            'mergedetcat_dir': self.config.mergedetcat_dir,
+            'data_dir': self.config.mergedetcat_data_dir,
+            'inputs_dir': self.config.mergedetcat_inputs_dir,
+            'mergedetcat_xml': self.config.get_mergedetcat_xml(algorithm),
+            'rr2_downloads_dir': self.config.rr2_downloads_dir,
+            'mosaic_dir': self.config.mosaic_dir,
+            'catred_fileinfo_csv': self.config.get_catred_fileinfo_csv(),
+            'catred_polygon_pkl': self.config.get_catred_polygons_pkl(),
+            'effcovmask_fileinfo_csv': self.config.get_effcovmask_fileinfo_csv(),
+            'detfiles_list': self.config.get_detfiles_list(algorithm)
+        }
+        print("✓ Using configuration-based paths")
         return paths
     
     def _validate_paths(self, paths: Dict[str, str]) -> None:
         """Validate that critical paths exist."""
-        critical_paths = ['output_dir', 'data_dir']
+        critical_paths = ['mergedetcat_xml', 'data_dir']
         
         for path_key in critical_paths:
             path = paths[path_key]
@@ -165,7 +144,7 @@ class DataLoader:
     
     def _load_merged_catalog(self, paths: Dict[str, str]) -> np.ndarray:
         """Load merged detection catalog from XML and FITS files."""
-        det_xml = os.path.join(paths['output_dir'], 'mergedetcat.xml')
+        det_xml = paths['mergedetcat_xml']
         if not os.path.exists(det_xml):
             raise FileNotFoundError(f"Merged detection XML not found: {det_xml}")
         
@@ -192,7 +171,7 @@ class DataLoader:
         data_by_tile = {}
         for file in detfiles_list:
             # Extract tile information from XML files
-            xml_path = os.path.join(paths['inputs_dir'], file)
+            xml_path = os.path.join(paths['inputs_dir'], file) if 'inputs/' not in file else os.path.join(paths['mergedetcat_dir'], file)
             tile_file = self.get_xml_element(xml_path, 'Data/SpatialInformation/DataContainer/FileName').text
             tile_id = tile_file.split('TILE_')[1][3:5]
             fits_file = self.get_xml_element(xml_path, 'Data/ClustersFile/DataContainer/FileName').text
