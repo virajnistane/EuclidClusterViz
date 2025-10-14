@@ -625,7 +625,7 @@ class CATREDHandler:
         return catred_scatter_data
 
     def load_catred_scatter_data(self, data: Dict[str, Any], relayout_data: Dict[str, Any],
-                                catred_mode: str = "unmasked", threshold: float = 0.8, maglim: float = 24.0) -> Dict[str, List]:
+                                catred_mode: str = "masked", threshold: float = 0.8, maglim: float = 24.0) -> Dict[str, List]:
         """
         Load CATRED scatter data based on the specified mode.
         

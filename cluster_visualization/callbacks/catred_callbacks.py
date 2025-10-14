@@ -49,7 +49,7 @@ class CATREDCallbacks:
             Output('mer-render-button', 'disabled'),
             [Input('cluster-plot', 'relayoutData'),
              Input('mer-switch', 'value'),
-             Input('catred-mode-radio', 'value')],
+             Input('catred-mode-switch', 'value')],
             [State('render-button', 'n_clicks')],
             prevent_initial_call=True
         )
@@ -85,7 +85,7 @@ class CATREDCallbacks:
              State('polygon-switch', 'value'),
              State('mer-switch', 'value'),
              State('aspect-ratio-switch', 'value'),
-             State('catred-mode-radio', 'value'),
+             State('catred-mode-switch', 'value'),
              State('catred-threshold-slider', 'value'),
              State('magnitude-limit-slider', 'value'),
              State('cluster-plot', 'relayoutData'),

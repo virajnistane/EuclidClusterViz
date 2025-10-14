@@ -145,7 +145,7 @@ class MainPlotCallbacks:
              State('polygon-switch', 'value'),
              State('mer-switch', 'value'),
              State('aspect-ratio-switch', 'value'),
-             State('catred-mode-radio', 'value'),
+             State('catred-mode-switch', 'value'),
              State('catred-threshold-slider', 'value'),
              State('magnitude-limit-slider', 'value'),
              State('cluster-plot', 'relayoutData')
@@ -214,7 +214,7 @@ class MainPlotCallbacks:
              Input('polygon-switch', 'value'),
              Input('mer-switch', 'value'),
              Input('aspect-ratio-switch', 'value'),
-             Input('catred-mode-radio', 'value')],
+             Input('catred-mode-switch', 'value')],
             [State('render-button', 'n_clicks'),
              State('snr-range-slider', 'value'),
              State('redshift-range-slider', 'value'),

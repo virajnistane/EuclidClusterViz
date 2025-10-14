@@ -47,8 +47,8 @@ class AppLayout:
                             # Display options
                             AppLayout._create_display_options_section(),
                             
-                            # MER Data controls
-                            AppLayout._create_mer_controls_section(),
+                            # CATRED Data controls
+                            AppLayout._create_catred_controls_section(),
                             
                             # Mosaic Image controls
                             AppLayout._create_mosaic_controls_section(),
@@ -221,15 +221,18 @@ class AppLayout:
             
             html.Div([
                 html.Label("High-res CATRED data:", className="fw-bold mb-2"),
-                dbc.RadioItems(
-                    id="catred-mode-radio",
-                    options=[
-                        {"label": "No CATRED data", "value": "none"},
-                        {"label": "Unmasked CATRED data", "value": "unmasked"},
-                        {"label": "Masked CATRED data", "value": "masked"},
-                    ],
-                    value="masked",
-                    inline=True,
+                # dbc.RadioItems(
+                dbc.Switch(
+                    id="catred-mode-switch",
+                    # options=[
+                    #     {"label": "No CATRED data", "value": "none"},
+                    #     # {"label": "Unmasked CATRED data", "value": "unmasked"},
+                    #     {"label": "Masked CATRED data", "value": "masked"},
+                    # ],
+                    label="Masked CATRED data",
+                    # value="masked",
+                    value=True,
+                    # inline=True,
                 ),
                 html.Small("(When zoomed < 2°)", className="text-muted")
             ], className="mb-3"),
@@ -281,8 +284,8 @@ class AppLayout:
         ], className="mb-4")
     
     @staticmethod
-    def _create_mer_controls_section():
-        """Create MER data controls section"""
+    def _create_catred_controls_section():
+        """Create CATRED data controls section"""
         return html.Div([
             html.Label("CATRED Data Controls:", className="fw-bold mb-2"),
             
