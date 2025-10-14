@@ -44,11 +44,8 @@ class AppLayout:
                             # Redshift Filtering section
                             AppLayout._create_redshift_section(),
                             
-                            # Display options
+                            # Display options (includes High-res CATRED data and controls)
                             AppLayout._create_display_options_section(),
-                            
-                            # CATRED Data controls
-                            AppLayout._create_catred_controls_section(),
                             
                             # Mosaic Image controls
                             AppLayout._create_mosaic_controls_section(),
@@ -239,80 +236,84 @@ class AppLayout:
             
             # Threshold slider for masked CATRED data
             html.Div([
-                html.Label("Effective Coverage Threshold:", className="fw-bold mb-2"),
-                dcc.Slider(
-                    id="catred-threshold-slider",
-                    min=0.0,
-                    max=0.99,
-                    step=0.01,
-                    value=0.8,
-                    marks={
-                        0.0: "0.0",
-                        0.2: "0.2",
-                        0.4: "0.4", 
-                        0.6: "0.6",
-                        0.8: "0.8",
-                        0.99: "0.99"
-                    },
-                    tooltip={"placement": "bottom", "always_visible": True}
-                ),
-                html.Small("(For masked CATRED data filtering)", className="text-muted")
-            ], className="mb-3"),
+                html.Div([
+                    html.Label("Effective Coverage Threshold:", className="fw-bold mb-2"),
+                    dcc.Slider(
+                        id="catred-threshold-slider",
+                        min=0.0,
+                        max=0.99,
+                        step=0.01,
+                        value=0.8,
+                        marks={
+                            0.0: "0.0",
+                            0.2: "0.2",
+                            0.4: "0.4", 
+                            0.6: "0.6",
+                            0.8: "0.8",
+                            0.99: "0.99"
+                        },
+                        tooltip={"placement": "bottom", "always_visible": True}
+                    ),
+                    html.Small("(For masked CATRED data filtering)", className="text-muted")
+                ], id="catred-threshold-container", className="mb-3"),
+            ]),
             
             # Magnitude limit slider for CATRED data
             html.Div([
-                html.Label("Magnitude Limit (H-band):", className="fw-bold mb-2"),
-                dcc.Slider(
-                    id="magnitude-limit-slider",
-                    min=20.0,
-                    max=32.0,
-                    step=0.1,
-                    value=24.0,
-                    marks={
-                        20.0: "20.0",
-                        22.0: "22.0",
-                        24.0: "24.0",
-                        26.0: "26.0",
-                        28.0: "28.0",
-                        30.0: "30.0",
-                        32.0: "32.0"
-                    },
-                    tooltip={"placement": "bottom", "always_visible": True}
-                ),
-                html.Small("(Keep sources brighter than limit)", className="text-muted")
-            ], className="mb-3"),
-        ], className="mb-4")
-    
-    @staticmethod
-    def _create_catred_controls_section():
-        """Create CATRED data controls section"""
-        return html.Div([
-            html.Label("CATRED Data Controls:", className="fw-bold mb-2"),
-            
-            html.Div([
-                dbc.Button(
-                    "🔍 Render CATRED Data",
-                    id="mer-render-button",
-                    color="info",
-                    size="sm",
-                    className="w-100 mb-2",
-                    n_clicks=0,
-                    disabled=True
-                ),
-                html.Small("(Zoom in first, then click)", className="text-muted d-block text-center mb-3")
+                html.Div([
+                    html.Label("Magnitude Limit (H-band):", className="fw-bold mb-2"),
+                    dcc.Slider(
+                        id="magnitude-limit-slider",
+                        min=20.0,
+                        max=32.0,
+                        step=0.1,
+                        value=24.0,
+                        marks={
+                            20.0: "20.0",
+                            22.0: "22.0",
+                            24.0: "24.0",
+                            26.0: "26.0",
+                            28.0: "28.0",
+                            30.0: "30.0",
+                            32.0: "32.0"
+                        },
+                        tooltip={"placement": "bottom", "always_visible": True}
+                    ),
+                    html.Small("(Keep sources brighter than limit)", className="text-muted")
+                ], id="magnitude-limit-container", className="mb-3"),
             ]),
             
+            # CATRED Data Controls (within High-res CATRED data section)
             html.Div([
-                dbc.Button(
-                    "🗑️ Clear All CATRED Data",
-                    id="mer-clear-button",
-                    color="warning",
-                    size="sm",
-                    className="w-100 mb-2",
-                    n_clicks=0
-                ),
-                html.Small("(Remove all CATRED traces)", className="text-muted d-block text-center")
-            ])
+                html.Div([
+                    html.Label("CATRED Data Controls:", className="fw-bold mb-2"),
+                    
+                    html.Div([
+                        dbc.Button(
+                            "🔍 Render CATRED Data",
+                            id="catred-render-button",
+                            color="info",
+                            size="sm",
+                            className="w-100 mb-2",
+                            n_clicks=0,
+                            disabled=True
+                        ),
+                        html.Small("(Zoom in first, then click)", className="text-muted d-block text-center mb-3")
+                    ]),
+                    
+                    html.Div([
+                        dbc.Button(
+                            "🗑️ Clear All CATRED Data",
+                            id="catred-clear-button",
+                            color="warning",
+                            size="sm",
+                            className="w-100 mb-2",
+                            n_clicks=0
+                        ),
+                        html.Small("(Remove all CATRED traces)", className="text-muted d-block text-center")
+                    ])
+                ], id="catred-controls-container", className="mb-3"),
+            ]),
         ], className="mb-4")
     
     @staticmethod

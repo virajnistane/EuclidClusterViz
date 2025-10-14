@@ -23,6 +23,7 @@ class UICallbacks:
         """Setup all UI-related callbacks"""
         self._setup_button_text_callbacks()
         self._setup_button_state_callbacks()
+        self._setup_catred_visibility_callback()
     
     def _setup_button_text_callbacks(self):
         """Setup callbacks to update button text based on current settings"""
@@ -39,8 +40,8 @@ class UICallbacks:
             return "🚀 Initial Render" if n_clicks == 0 else f"✅ Live Updates Active ({n_clicks})"
 
         @self.app.callback(
-            Output('mer-render-button', 'children'),
-            [Input('mer-render-button', 'n_clicks')],
+            Output('catred-render-button', 'children'),
+            [Input('catred-render-button', 'n_clicks')],
             prevent_initial_call=False
         )
         def update_catred_button_text(catred_n_clicks):
@@ -72,8 +73,8 @@ class UICallbacks:
             return f"🌌 Update Redshift Filter ({redshift_n_clicks})" if redshift_n_clicks > 0 else "🌌 Update Redshift Filter"
 
         @self.app.callback(
-            Output('mer-clear-button', 'children'),
-            [Input('mer-clear-button', 'n_clicks')],
+            Output('catred-clear-button', 'children'),
+            [Input('catred-clear-button', 'n_clicks')],
             prevent_initial_call=False
         )
         def update_clear_button_text(clear_n_clicks):
@@ -105,3 +106,26 @@ class UICallbacks:
             """Enable/disable mosaic render button based on switch state"""
             print(f"🔄 Mosaic switch callback: mosaic_enabled={mosaic_enabled}, button_disabled={not mosaic_enabled}")
             return not mosaic_enabled  # Button is enabled when switch is True
+
+    def _setup_catred_visibility_callback(self):
+        """Setup clientside callback to show/hide CATRED controls based on catred-mode-switch"""
+        self.app.clientside_callback(
+            """
+            function(catredEnabled) {
+                // Convert boolean to display style
+                let displayStyle = catredEnabled ? 'block' : 'none';
+                
+                // Return the display style for all 3 container elements
+                return [
+                    {display: displayStyle},
+                    {display: displayStyle}, 
+                    {display: displayStyle}
+                ];
+            }
+            """,
+            [Output('catred-threshold-container', 'style'),
+             Output('magnitude-limit-container', 'style'),
+             Output('catred-controls-container', 'style')],
+            [Input('catred-mode-switch', 'value')],
+            prevent_initial_call=False
+        )

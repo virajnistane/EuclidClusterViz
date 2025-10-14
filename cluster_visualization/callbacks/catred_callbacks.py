@@ -46,7 +46,7 @@ class CATREDCallbacks:
     def _setup_catred_button_state_callback(self):
         """Setup callback to enable/disable CATRED render button based on zoom level"""
         @self.app.callback(
-            Output('mer-render-button', 'disabled'),
+            Output('catred-render-button', 'disabled'),
             [Input('cluster-plot', 'relayoutData'),
              Input('mer-switch', 'value'),
              Input('catred-mode-switch', 'value')],
@@ -79,7 +79,7 @@ class CATREDCallbacks:
             [Output('cluster-plot', 'figure', allow_duplicate=True), 
              Output('phz-pdf-plot', 'figure', allow_duplicate=True), 
              Output('status-info', 'children', allow_duplicate=True)],
-            [Input('mer-render-button', 'n_clicks')],
+            [Input('catred-render-button', 'n_clicks')],
             [State('algorithm-dropdown', 'value'),
              State('snr-range-slider', 'value'),
              State('polygon-switch', 'value'),
@@ -164,7 +164,7 @@ class CATREDCallbacks:
             [Output('cluster-plot', 'figure', allow_duplicate=True), 
              Output('phz-pdf-plot', 'figure', allow_duplicate=True), 
              Output('status-info', 'children', allow_duplicate=True)],
-            [Input('mer-clear-button', 'n_clicks')],
+            [Input('catred-clear-button', 'n_clicks')],
             [State('algorithm-dropdown', 'value'),
              State('snr-lower-input', 'value'),
              State('snr-upper-input', 'value'),
