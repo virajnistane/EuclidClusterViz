@@ -44,8 +44,11 @@ class AppLayout:
                             # Redshift Filtering section
                             AppLayout._create_redshift_section(),
                             
-                            # Display options (includes High-res CATRED data and controls)
+                            # Display options
                             AppLayout._create_display_options_section(),
+                            
+                            # High-res CATRED data
+                            AppLayout._create_catred_data_section(),
                             
                             # Mosaic Image controls
                             AppLayout._create_mosaic_controls_section(),
@@ -118,7 +121,7 @@ class AppLayout:
     def _create_algorithm_section():
         """Create algorithm selection section"""
         return html.Div([
-            html.Label("Algorithm:", className="fw-bold mb-2"),
+            html.Label("Algorithm:", className="fw-bold mb-2 text-primary"),
             dcc.Dropdown(
                 id='algorithm-dropdown',
                 options=[
@@ -134,7 +137,7 @@ class AppLayout:
     def _create_snr_section():
         """Create SNR filtering section"""
         return html.Div([
-            html.Label("SNR Filtering:", className="fw-bold mb-2"),
+            html.Label("SNR Filtering:", className="fw-bold mb-2 text-primary"),
             html.Div(id="snr-range-display", className="text-center mb-2"),
             dcc.RangeSlider(
                 id='snr-range-slider',
@@ -161,7 +164,7 @@ class AppLayout:
     def _create_redshift_section():
         """Create redshift filtering section"""
         return html.Div([
-            html.Label("Redshift Filtering:", className="fw-bold mb-2"),
+            html.Label("Redshift Filtering:", className="fw-bold mb-2 text-primary"),
             html.Div(id="redshift-range-display", className="text-center mb-2"),
             dcc.RangeSlider(
                 id='redshift-range-slider',
@@ -188,7 +191,7 @@ class AppLayout:
     def _create_display_options_section():
         """Create display options section"""
         return html.Div([
-            html.Label("Display Options:", className="fw-bold mb-2"),
+            html.Label("Display Options:", className="fw-bold mb-2 text-primary"),
             
             html.Div([
                 dbc.Switch(
@@ -215,24 +218,19 @@ class AppLayout:
                 ),
                 html.Small("(Default: maintain astronomical aspect)", className="text-muted")
             ], className="mb-2"),
-            
-            html.Div([
-                html.Label("High-res CATRED data:", className="fw-bold mb-2"),
-                # dbc.RadioItems(
-                dbc.Switch(
-                    id="catred-mode-switch",
-                    # options=[
-                    #     {"label": "No CATRED data", "value": "none"},
-                    #     # {"label": "Unmasked CATRED data", "value": "unmasked"},
-                    #     {"label": "Masked CATRED data", "value": "masked"},
-                    # ],
-                    label="Masked CATRED data",
-                    # value="masked",
-                    value=True,
-                    # inline=True,
-                ),
-                html.Small("(When zoomed < 2°)", className="text-muted")
-            ], className="mb-3"),
+        ], className="mb-4")
+    
+    @staticmethod
+    def _create_catred_data_section():
+        """Create High-res CATRED data section"""
+        return html.Div([
+            html.Label("High-res CATRED data:", className="fw-bold mb-2 text-primary"),
+            dbc.Switch(
+                id="catred-mode-switch",
+                label="Masked CATRED data",
+                value=True,
+            ),
+            html.Small("(When zoomed < 2°)", className="text-muted"),
             
             # Threshold slider for masked CATRED data
             html.Div([
@@ -320,7 +318,7 @@ class AppLayout:
     def _create_mosaic_controls_section():
         """Create mosaic image controls section"""
         return html.Div([
-            html.Label("Mosaic Image Controls:", className="fw-bold mb-2"),
+            html.Label("Mosaic Image Controls:", className="fw-bold mb-2 text-primary"),
             
             html.Div([
                 dbc.Switch(
