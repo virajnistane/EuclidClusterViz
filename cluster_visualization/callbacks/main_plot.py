@@ -243,12 +243,15 @@ class MainPlotCallbacks:
                 
                 # Extract existing CATRED traces from current figure to preserve them
                 existing_catred_traces = self._extract_existing_catred_traces(current_figure)
-                
+                existing_mosaic_traces = self._extract_existing_mosaic_traces(current_figure)
+
                 print(f"Debug: Options update - preserving {len(existing_catred_traces)} CATRED traces")
-                
+                print(f"Debug: Options update - preserving {len(existing_mosaic_traces)} Mosaic traces")
+
                 # Create traces with existing CATRED traces preserved
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
                                             existing_catred_traces=existing_catred_traces, 
+                                            existing_mosaic_traces=existing_mosaic_traces,
                                             snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, 
                                             z_threshold_lower=z_lower, z_threshold_upper=z_upper,
                                             threshold=threshold, maglim=maglim)
@@ -575,7 +578,7 @@ class MainPlotCallbacks:
             return self._load_data_fallback(algorithm)
     
     def create_traces(self, data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
-                     existing_catred_traces=None, manual_catred_data=None, 
+                     existing_catred_traces=None, existing_mosaic_traces=None, manual_catred_data=None, 
                      snr_threshold_lower=None, snr_threshold_upper=None, 
                      z_threshold_lower=None, z_threshold_upper=None, 
                      threshold=0.8, maglim=None):
@@ -583,7 +586,8 @@ class MainPlotCallbacks:
         if self.trace_creator:
             return self.trace_creator.create_traces(
                 data, show_polygons, show_mer_tiles, relayout_data, catred_mode,
-                existing_catred_traces=existing_catred_traces, manual_catred_data=manual_catred_data,
+                existing_catred_traces=existing_catred_traces, existing_mosaic_traces=existing_mosaic_traces, 
+                manual_catred_data=manual_catred_data,
                 snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, 
                 z_threshold_lower=z_threshold_lower, z_threshold_upper=z_threshold_upper, 
                 threshold=threshold, maglim=maglim
@@ -711,6 +715,47 @@ class MainPlotCallbacks:
                     existing_catred_traces.append(existing_trace)
         return existing_catred_traces
     
+    def _extract_existing_mosaic_traces(self, current_figure):
+        """Extract existing mosaic traces from current figure"""
+        existing_mosaic_traces = []
+        if current_figure and 'data' in current_figure:
+            for trace in current_figure['data']:
+                if (isinstance(trace, dict) and 
+                    'name' in trace and 
+                    trace['name'] and 
+                    'Mosaic' in trace['name']):
+                    # Preserve the original trace type (Image, Heatmap, etc.)
+                    trace_type = trace.get('type', 'image')
+                    
+                    if trace_type == 'image':
+                        existing_trace = go.Image(
+                            source=trace.get('source'),
+                            x0=trace.get('x0'),
+                            y0=trace.get('y0'),
+                            dx=trace.get('dx'),
+                            dy=trace.get('dy'),
+                            name=trace.get('name', 'Mosaic Image'),
+                            opacity=trace.get('opacity', 1.0),
+                            layer=trace.get('layer', 'below')
+                        )
+                    elif trace_type == 'heatmap':
+                        existing_trace = go.Heatmap(
+                            z=trace.get('z'),
+                            x=trace.get('x'),
+                            y=trace.get('y'),
+                            name=trace.get('name', 'Mosaic Image'),
+                            opacity=trace.get('opacity', 1.0),
+                            colorscale=trace.get('colorscale', 'gray'),
+                            showscale=trace.get('showscale', False)
+                        )
+                    else:
+                        # Keep original trace as-is for unknown types
+                        existing_trace = trace
+                    
+                    existing_mosaic_traces.append(existing_trace)
+                    print(f"Debug: Preserved existing mosaic trace: {trace['name']} (type: {trace_type})")
+        return existing_mosaic_traces
+    
     def _calculate_filtered_count(self, cluster_data, snr_lower, snr_upper, z_lower, z_upper):
         """Calculate filtered cluster count based on SNR range"""
         if snr_lower is None and snr_upper is None:
@@ -801,7 +846,8 @@ class MainPlotCallbacks:
         }
     
     def _create_traces_fallback(self, data, show_polygons, show_mer_tiles, relayout_data, catred_mode,
-                               existing_mer_traces=None, manual_mer_data=None, snr_threshold_lower=None, snr_threshold_upper=None, threshold=0.8):
+                               existing_mer_traces=None, existing_mosaic_traces=None, 
+                               manual_mer_data=None, snr_threshold_lower=None, snr_threshold_upper=None, threshold=0.8):
         """Fallback trace creation method"""
         # This would contain the original inline trace creation logic
         # For now, return empty traces to prevent errors

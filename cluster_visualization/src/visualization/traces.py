@@ -39,6 +39,7 @@ class TraceCreator:
                      show_mer_tiles: bool = False, relayout_data: Optional[Dict] = None,
                      catred_mode: str = "none", manual_catred_data: Optional[Dict] = None,
                      existing_catred_traces: Optional[List] = None, 
+                     existing_mosaic_traces: Optional[List] = None,
                      snr_threshold_lower: Optional[float] = None, snr_threshold_upper: Optional[float] = None, 
                      z_threshold_lower: Optional[float] = None, z_threshold_upper: Optional[float] = None,
                      threshold: float = 0.8, maglim: Optional[float] = None) -> List:
@@ -53,6 +54,7 @@ class TraceCreator:
             catred_mode: Mode for CATRED data ("none", "unmasked", "masked")
             manual_catred_data: Manually loaded CATRED scatter data
             existing_catred_traces: Existing CATRED traces to preserve
+            existing_mosaic_traces: Existing mosaic traces to preserve
             snr_threshold_lower: Lower SNR threshold for filtering
             snr_threshold_upper: Upper SNR threshold for filtering
             threshold: Effective coverage threshold for masked CATRED data (default 0.8)
@@ -95,9 +97,14 @@ class TraceCreator:
         # Add tile cluster traces to top layer
         cluster_traces.extend(tile_traces)
         
-        # Combine in proper layer order: polygons (bottom) → CATRED → cluster traces (top)
+        # Prepare mosaic traces (preserve existing ones)
+        mosaic_traces = existing_mosaic_traces or []
+        if mosaic_traces:
+            print(f"Debug: Preserving {len(mosaic_traces)} existing mosaic traces in layer order")
+        
+        # Combine in proper layer order: polygons (bottom) → mosaics → CATRED → clusters (top)
         # This ensures cluster traces are always on top of mosaic and CATRED traces
-        return traces + catred_traces + cluster_traces
+        return traces + mosaic_traces + catred_traces + cluster_traces
     
     def _get_catred_data_points(self, manual_catred_data: Optional[Dict], existing_catred_traces: Optional[List]) -> Optional[List]:
         """Get all CATRED data points for proximity-based enhancement."""

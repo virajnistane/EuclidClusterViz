@@ -112,12 +112,18 @@ class CATREDCallbacks:
                 # Extract existing CATRED traces from current figure to preserve them
                 existing_catred_traces = self._extract_existing_catred_traces(current_figure)
                 
+                # 🆕 EXTRACT EXISTING MOSAIC TRACES TO PRESERVE THEM
+                existing_mosaic_traces = self._extract_existing_mosaic_traces(current_figure)
+                
                 print(f"Debug: Found {len(existing_catred_traces)} existing CATRED traces to preserve")
+                print(f"Debug: Found {len(existing_mosaic_traces)} existing mosaic traces to preserve")
                 
                 # Create traces with the manually loaded CATRED data and existing traces
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
-                                          manual_catred_data=catred_scatter_data, existing_catred_traces=existing_catred_traces,
-                                          snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, threshold=threshold)
+                                      manual_catred_data=catred_scatter_data, 
+                                      existing_catred_traces=existing_catred_traces,
+                                      existing_mosaic_traces=existing_mosaic_traces,  # 🆕 PASS MOSAIC TRACES
+                                      snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, threshold=threshold)
                 
                 # Update the CATRED traces cache with the new trace count
                 if catred_scatter_data and catred_scatter_data['ra']:
@@ -166,35 +172,56 @@ class CATREDCallbacks:
              Output('status-info', 'children', allow_duplicate=True)],
             [Input('catred-clear-button', 'n_clicks')],
             [State('algorithm-dropdown', 'value'),
-             State('snr-lower-input', 'value'),
-             State('snr-upper-input', 'value'),
+             State('snr-range-slider', 'value'),  # 🔧 FIX: Use range slider instead
+             State('redshift-range-slider', 'value'),  # 🔧 FIX: Add redshift slider
              State('polygon-switch', 'value'),
              State('mer-switch', 'value'),
              State('aspect-ratio-switch', 'value'),
-             State('catred-mertile-switch', 'value'),
+             State('catred-mode-switch', 'value'),  # 🔧 FIX: Use correct parameter name
              State('cluster-plot', 'relayoutData'),
+             State('cluster-plot', 'figure'),  # 🆕 ADD CURRENT FIGURE STATE
              State('render-button', 'n_clicks')],
             prevent_initial_call=True
         )
-        def clear_catred_data(clear_n_clicks, algorithm, snr_lower, snr_upper, show_polygons, show_mer_tiles, free_aspect_ratio, show_catred_mertile_data, relayout_data, render_n_clicks):
+        def clear_catred_data(clear_n_clicks, algorithm, snr_range, redshift_range, show_polygons, show_mer_tiles, free_aspect_ratio, catred_mode, relayout_data, current_figure, render_n_clicks):
             if clear_n_clicks == 0 or render_n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update
             
             print(f"Debug: Clear CATRED data button clicked (click #{clear_n_clicks})")
             
             try:
+                # Extract SNR values from range slider
+                snr_lower = snr_range[0] if snr_range and len(snr_range) == 2 else None
+                snr_upper = snr_range[1] if snr_range and len(snr_range) == 2 else None
+                
+                # Extract redshift values from range slider
+                z_lower = redshift_range[0] if redshift_range and len(redshift_range) == 2 else None
+                z_upper = redshift_range[1] if redshift_range and len(redshift_range) == 2 else None
+                
                 # Clear CATRED traces cache
                 if self.catred_handler:
                     self.catred_handler.clear_traces_cache()
                 else:
                     self.catred_traces_cache = []
                 
+                # 🆕 CLEAR CATRED DATA IN TRACE CREATOR TO REVERT MARKER ENHANCEMENTS
+                if self.trace_creator:
+                    self.trace_creator.clear_catred_data()
+                    print("Debug: Cleared CATRED data in TraceCreator to revert marker enhancements")
+                
+                # 🆕 EXTRACT EXISTING MOSAIC TRACES TO PRESERVE THEM
+                existing_mosaic_traces = self._extract_existing_mosaic_traces(current_figure)
+                print(f"Debug: Clear CATRED - preserving {len(existing_mosaic_traces)} existing mosaic traces")
+                
                 # Load data for selected algorithm
                 data = self.load_data(algorithm)
                 
-                # Create traces without any CATRED data
-                traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data,
-                                          snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper)
+                # Create traces without any CATRED data, but preserve mosaic traces
+                # Set catred_mode to "none" to ensure no CATRED data is included
+                traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, "none",  # 🔧 SET TO "none" TO CLEAR
+                                          existing_mosaic_traces=existing_mosaic_traces,  # 🆕 PRESERVE MOSAIC TRACES
+                                          snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper,
+                                          z_threshold_lower=z_lower, z_threshold_upper=z_upper)  # 🔧 ADD REDSHIFT PARAMS
                 
                 # Create figure
                 fig = self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio) if self.figure_manager else self._create_fallback_figure(traces, algorithm, free_aspect_ratio)
@@ -244,19 +271,25 @@ class CATREDCallbacks:
             return self._load_catred_scatter_data_fallback(data, relayout_data)
     
     def create_traces(self, data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
-                     existing_catred_traces=None, manual_catred_data=None, snr_threshold_lower=None, snr_threshold_upper=None, threshold=0.8):
+                     existing_catred_traces=None, existing_mosaic_traces=None, manual_catred_data=None, 
+                     snr_threshold_lower=None, snr_threshold_upper=None, 
+                     z_threshold_lower=None, z_threshold_upper=None, threshold=0.8):
         """Create traces using modular or fallback method"""
         if self.trace_creator:
             return self.trace_creator.create_traces(
                 data, show_polygons, show_mer_tiles, relayout_data, catred_mode,
-                existing_catred_traces=existing_catred_traces, manual_catred_data=manual_catred_data,
-                snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, threshold=threshold
+                existing_catred_traces=existing_catred_traces, existing_mosaic_traces=existing_mosaic_traces, manual_catred_data=manual_catred_data,
+                snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, 
+                z_threshold_lower=z_threshold_lower, z_threshold_upper=z_threshold_upper, threshold=threshold
             )
         else:
             # Fallback to inline trace creation
             return self._create_traces_fallback(data, show_polygons, show_mer_tiles, relayout_data, catred_mode,
-                                              existing_catred_traces=existing_catred_traces, manual_catred_data=manual_catred_data,
-                                              snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, threshold=threshold)
+                                              existing_catred_traces=existing_catred_traces, 
+                                              existing_mosaic_traces=existing_mosaic_traces,  # 🆕 ADD MOSAIC TRACES
+                                              manual_catred_data=manual_catred_data,
+                                              snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, 
+                                              z_threshold_lower=z_threshold_lower, z_threshold_upper=z_threshold_upper, threshold=threshold)
     
     # Helper methods
     def _extract_zoom_ranges(self, relayout_data):
@@ -300,6 +333,47 @@ class CATREDCallbacks:
                     print(f"Debug: Preserved existing CATRED trace: {trace['name']}")
         return existing_catred_traces
     
+    def _extract_existing_mosaic_traces(self, current_figure):
+        """Extract existing mosaic traces from current figure"""
+        existing_mosaic_traces = []
+        if current_figure and 'data' in current_figure:
+            for trace in current_figure['data']:
+                if (isinstance(trace, dict) and 
+                    'name' in trace and 
+                    trace['name'] and 
+                    'Mosaic' in trace['name']):
+                    # Preserve the original trace type (Image, Heatmap, etc.)
+                    trace_type = trace.get('type', 'image')
+                    
+                    if trace_type == 'image':
+                        existing_trace = go.Image(
+                            source=trace.get('source'),
+                            x0=trace.get('x0'),
+                            y0=trace.get('y0'),
+                            dx=trace.get('dx'),
+                            dy=trace.get('dy'),
+                            name=trace.get('name', 'Mosaic Image'),
+                            opacity=trace.get('opacity', 1.0),
+                            layer=trace.get('layer', 'below')
+                        )
+                    elif trace_type == 'heatmap':
+                        existing_trace = go.Heatmap(
+                            z=trace.get('z'),
+                            x=trace.get('x'),
+                            y=trace.get('y'),
+                            name=trace.get('name', 'Mosaic Image'),
+                            opacity=trace.get('opacity', 1.0),
+                            colorscale=trace.get('colorscale', 'gray'),
+                            showscale=trace.get('showscale', False)
+                        )
+                    else:
+                        # Keep original trace as-is for unknown types
+                        existing_trace = trace
+                    
+                    existing_mosaic_traces.append(existing_trace)
+                    print(f"Debug: Preserved existing mosaic trace: {trace['name']} (type: {trace_type})")
+        return existing_mosaic_traces
+    
     def _create_empty_phz_plot(self, message="Click on a CATRED data point to view its PHZ_PDF"):
         """Create empty PHZ_PDF plot with message"""
         empty_phz_fig = go.Figure()
@@ -339,8 +413,10 @@ class CATREDCallbacks:
         # For now, return empty structure to prevent errors
         return {'ra': [], 'dec': [], 'phz_pdf': [], 'phz_mode_1': []}
     
-    def _create_traces_fallback(self, data, show_polygons, show_mer_tiles, relayout_data, show_catred_mertile_data,
-                               existing_catred_traces=None, manual_catred_data=None, snr_threshold_lower=None, snr_threshold_upper=None):
+    def _create_traces_fallback(self, data, show_polygons, show_mer_tiles, relayout_data, catred_mode,
+                               existing_catred_traces=None, existing_mosaic_traces=None, manual_catred_data=None, 
+                               snr_threshold_lower=None, snr_threshold_upper=None, 
+                               z_threshold_lower=None, z_threshold_upper=None, threshold=0.8):
         """Fallback trace creation method"""
         # This would contain the original inline trace creation logic
         # For now, return empty traces to prevent errors
