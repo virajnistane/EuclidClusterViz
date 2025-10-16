@@ -223,7 +223,49 @@ class ConnectionMonitor:
 
 class ClusterVisualizationApp:
     def __init__(self):
-        self.app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+        # Custom CSS file path
+        css_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ui', 'enhanced_styles.css')
+        
+        # Initialize Dash app with Bootstrap and custom CSS
+        external_stylesheets = [
+            dbc.themes.BOOTSTRAP,
+            "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+        ]
+        
+        self.app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+        
+        # Add custom CSS if file exists
+        if os.path.exists(css_path):
+            try:
+                with open(css_path, 'r') as f:
+                    custom_css = f.read()
+                self.app.index_string = f'''
+                <!DOCTYPE html>
+                <html>
+                    <head>
+                        {{%metas%}}
+                        <title>{{%title%}}</title>
+                        {{%favicon%}}
+                        {{%css%}}
+                        <style>
+                            {custom_css}
+                        </style>
+                    </head>
+                    <body>
+                        {{%app_entry%}}
+                        <footer>
+                            {{%config%}}
+                            {{%scripts%}}
+                            {{%renderer%}}
+                        </footer>
+                    </body>
+                </html>
+                '''
+                print("✓ Custom enhanced styling loaded")
+            except Exception as e:
+                print(f"⚠️  Warning: Could not load custom CSS: {e}")
+        else:
+            print(f"⚠️  Warning: Custom CSS file not found at {css_path}")
         
         # Initialize connection monitoring
         self.connection_monitor = None

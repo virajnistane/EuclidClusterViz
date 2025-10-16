@@ -25,43 +25,47 @@ class AppLayout:
             
             # Main horizontal layout: Controls sidebar + Plot area
             dbc.Row([
-                # Left sidebar with controls
+                # Left sidebar with controls - Enhanced beautiful design
                 dbc.Col([
                     dbc.Card([
                         dbc.CardHeader([
-                            html.H5("Visualization Controls", className="mb-0 text-center")
-                        ]),
+                            html.Div([
+                                html.I(className="fas fa-sliders-h me-2 text-white"),
+                                html.H5("Visualization Controls", className="mb-0 d-inline-block text-white"),
+                            ], className="d-flex align-items-center justify-content-center")
+                        ], className="bg-gradient text-white", style={
+                            'background': 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            'border-radius': '15px 15px 0 0'
+                        }),
                         dbc.CardBody([
-                            html.P("Options update in real-time while preserving zoom", 
-                                   className="text-muted small mb-3 text-center"),
+                            # Header info with beautiful styling
+                            dbc.Alert([
+                                html.I(className="fas fa-info-circle me-2"),
+                                "Options update in real-time while preserving zoom level"
+                            ], color="info", className="mb-3 small text-center border-0 card-hover", style={
+                                'background': 'linear-gradient(45deg, #e3f2fd, #f3e5f5)',
+                                'border-radius': '10px',
+                                'box-shadow': '0 2px 10px rgba(0,0,0,0.1)'
+                            }),
                             
-                            
-                            # Main render button
+                            # Main render button with enhanced styling
                             AppLayout._create_main_render_section(),
 
-                            html.Hr(),
+                            # Elegant divider
+                            html.Div(className="position-relative my-4", children=[
+                                html.Hr(className="border-primary", style={'border-width': '2px'}),
+                                html.Div("⚙️", className="position-absolute top-50 start-50 translate-middle bg-white px-2 text-primary", style={'font-size': '1.2rem'})
+                            ]),
 
-                            # Algorithm selection
-                            AppLayout._create_algorithm_section(),
+                            # Collapsible sections for better organization
+                            AppLayout._create_collapsible_sections(),
                             
-                            # SNR Filtering section
-                            AppLayout._create_snr_section(),
-                            
-                            # Redshift Filtering section
-                            AppLayout._create_redshift_section(),
-                            
-                            # Display options
-                            AppLayout._create_display_options_section(),
-                            
-                            # High-res CATRED data
-                            AppLayout._create_catred_data_section(),
-                            
-                            # Mosaic image controls
-                            AppLayout._create_mosaic_controls_section(),
-                            
-                        ])
-                    ], className="h-100")
-                ], width=2, className="pe-2"),
+                        ], style={'overflow-y': 'auto', 'max-height': 'calc(100vh - 200px)'})
+                    ], className="h-100 shadow-lg border-0 sidebar-card card-hover", style={
+                        'background': 'linear-gradient(180deg, #ffffff 0%, #f8f9ff 100%)',
+                        'border-radius': '15px'
+                    })
+                ], width=2, className="pe-3"),
                 
                 # Right side: Plot area and status
                 dbc.Col([
@@ -142,268 +146,590 @@ class AppLayout:
     
     @staticmethod
     def _create_algorithm_section():
-        """Create algorithm selection section"""
+        """Create algorithm selection section with enhanced styling"""
         return html.Div([
-            html.Label("Algorithm:", className="fw-bold mb-2 text-primary"),
-            dcc.Dropdown(
-                id='algorithm-dropdown',
-                options=[
-                    {'label': 'PZWAV', 'value': 'PZWAV'},
-                    {'label': 'AMICO', 'value': 'AMICO'}
-                ],
-                value='PZWAV',
-                clearable=False
-            )
-        ], className="mb-4")
+            html.Div([
+                html.I(className="fas fa-cogs me-2 text-primary"),
+                html.Label("Algorithm Selection:", className="fw-bold mb-0")
+            ], className="d-flex align-items-center mb-3"),
+            
+            dbc.Card([
+                dbc.CardBody([
+                    dcc.Dropdown(
+                        id='algorithm-dropdown',
+                        options=[
+                            {'label': '🔬 PZWAV', 'value': 'PZWAV'},
+                            {'label': '⚡ AMICO', 'value': 'AMICO'}
+                        ],
+                        value='PZWAV',
+                        clearable=False,
+                        style={
+                            'border-radius': '8px',
+                            'font-weight': '500'
+                        }
+                    )
+                ], className="p-2")
+            ], className="border-0 shadow-sm", style={
+                'background': 'linear-gradient(45deg, #f8f9ff, #ffffff)',
+                'border-radius': '10px'
+            })
+        ])
     
     @staticmethod
     def _create_snr_section():
-        """Create SNR filtering section"""
+        """Create SNR filtering section with enhanced styling"""
         return html.Div([
-            html.Label("SNR Filtering:", className="fw-bold mb-2 text-primary"),
-            html.Div(id="snr-range-display", className="text-center mb-2"),
-            dcc.RangeSlider(
-                id='snr-range-slider',
-                min=0,  # Will be updated dynamically
-                max=100,  # Will be updated dynamically
-                step=0.1,
-                marks={},  # Will be updated dynamically
-                value=[0, 100],  # Will be updated dynamically
-                tooltip={"placement": "bottom", "always_visible": True},
-                allowCross=False
-            ),
-            dbc.Button(
-                "Apply SNR Filter",
-                id="snr-render-button",
-                color="secondary",
-                size="sm",
-                className="w-100 mt-2",
-                n_clicks=0,
-                disabled=True
-            )
-        ], className="mb-4")
+            html.Div([
+                html.I(className="fas fa-signal me-2 text-success"),
+                html.Label("SNR Filtering:", className="fw-bold mb-0")
+            ], className="d-flex align-items-center mb-3"),
+            
+            dbc.Card([
+                dbc.CardBody([
+                    # Range display with beautiful styling
+                    dbc.Badge(
+                        id="snr-range-display",
+                        color="light",
+                        className="w-100 mb-3 p-2 fs-6 badge-enhanced status-indicator",
+                        style={
+                            'background': 'linear-gradient(45deg, #e8f5e8, #f0f8f0)',
+                            'color': '#2d5a2d',
+                            'border-radius': '8px',
+                            'border': '1px solid rgba(46, 204, 113, 0.3)'
+                        }
+                    ),
+                    
+                    # Enhanced range slider
+                    html.Div([
+                        dcc.RangeSlider(
+                            id='snr-range-slider',
+                            min=0,
+                            max=100,
+                            step=0.1,
+                            marks={},
+                            value=[0, 100],
+                            tooltip={"placement": "bottom", "always_visible": True},
+                            allowCross=False
+                        )
+                    ], className="mb-3", style={'padding': '0 10px'}),
+                    
+                    # Enhanced apply button
+                    dbc.Button([
+                        html.I(className="fas fa-filter me-2"),
+                        "Apply SNR Filter"
+                    ],
+                        id="snr-render-button",
+                        color="success",
+                        size="sm",
+                        className="w-100 shadow-sm btn-enhanced",
+                        n_clicks=0,
+                        disabled=True,
+                        style={
+                            'border-radius': '8px',
+                            'font-weight': '600'
+                        }
+                    )
+                ], className="p-3")
+            ], className="border-0 shadow-sm", style={
+                'background': 'linear-gradient(135deg, #f0fff0, #ffffff)',
+                'border-radius': '12px'
+            })
+        ])
     
     @staticmethod
     def _create_redshift_section():
-        """Create redshift filtering section"""
+        """Create redshift filtering section with enhanced styling"""
         return html.Div([
-            html.Label("Redshift Filtering:", className="fw-bold mb-2 text-primary"),
-            html.Div(id="redshift-range-display", className="text-center mb-2"),
-            dcc.RangeSlider(
-                id='redshift-range-slider',
-                min=0,  # Will be updated dynamically
-                max=10,  # Will be updated dynamically
-                step=0.1,
-                marks={},  # Will be updated dynamically
-                value=[0, 10],  # Will be updated dynamically
-                tooltip={"placement": "bottom", "always_visible": True},
-                allowCross=False,
-            ),
-            dbc.Button(
-                "Apply redshift Filter",
-                id="redshift-render-button",
-                color="secondary",
-                size="sm",
-                className="w-100 mt-2",
-                n_clicks=0,
-                disabled=True
-            )
-        ], className="mb-4")
+            html.Div([
+                html.I(className="fas fa-expand-arrows-alt me-2 text-danger"),
+                html.Label("Redshift Filtering:", className="fw-bold mb-0")
+            ], className="d-flex align-items-center mb-3"),
+            
+            dbc.Card([
+                dbc.CardBody([
+                    # Range display with beautiful styling  
+                    dbc.Badge(
+                        id="redshift-range-display",
+                        color="light", 
+                        className="w-100 mb-3 p-2 fs-6 badge-enhanced status-indicator",
+                        style={
+                            'background': 'linear-gradient(45deg, #ffe8e8, #fff0f0)',
+                            'color': '#5a2d2d',
+                            'border-radius': '8px',
+                            'border': '1px solid rgba(231, 76, 60, 0.3)'
+                        }
+                    ),
+                    
+                    # Enhanced range slider
+                    html.Div([
+                        dcc.RangeSlider(
+                            id='redshift-range-slider',
+                            min=0,
+                            max=10,
+                            step=0.1,
+                            marks={},
+                            value=[0, 10],
+                            tooltip={"placement": "bottom", "always_visible": True},
+                            allowCross=False,
+                        )
+                    ], className="mb-3", style={'padding': '0 10px'}),
+                    
+                    # Enhanced apply button
+                    dbc.Button([
+                        html.I(className="fas fa-filter me-2"),
+                        "Apply Redshift Filter"
+                    ],
+                        id="redshift-render-button",
+                        color="danger", 
+                        size="sm",
+                        className="w-100 shadow-sm btn-enhanced",
+                        n_clicks=0,
+                        disabled=True,
+                        style={
+                            'border-radius': '8px',
+                            'font-weight': '600'
+                        }
+                    )
+                ], className="p-3")
+            ], className="border-0 shadow-sm", style={
+                'background': 'linear-gradient(135deg, #fff0f0, #ffffff)',
+                'border-radius': '12px'
+            })
+        ])
     
     @staticmethod
     def _create_display_options_section():
-        """Create display options section"""
+        """Create display options section with enhanced styling"""
         return html.Div([
-            html.Label("Display Options:", className="fw-bold mb-2 text-primary"),
+            # Enhanced switch options with beautiful cards
+            dbc.Card([
+                dbc.CardBody([
+                    html.Div([
+                        html.I(className="fas fa-layer-group me-2 text-primary"),
+                        dbc.Switch(
+                            id="merged-clusters-switch",
+                            label="Show merged catalog members",
+                            value=True,
+                            className="ms-2"
+                        )
+                    ], className="d-flex align-items-center mb-2"),
+                    html.Small([
+                        html.I(className="fas fa-info-circle me-1"),
+                        "Toggle to access individual tile clusters underneath"
+                    ], className="text-muted ms-4")
+                ])
+            ], className="mb-3 border-0 shadow-sm", style={
+                'background': 'linear-gradient(45deg, #f0f8ff, #ffffff)',
+                'border-radius': '10px'
+            }),
             
-            html.Div([
-                dbc.Switch(
-                    id="merged-clusters-switch",
-                    label="Show merged catalog members",
-                    value=True,
-                ),
-                html.Small("(Toggle to access individual tile clusters underneath)", className="text-muted")
-            ], className="mb-2"),
+            dbc.Card([
+                dbc.CardBody([
+                    html.Div([
+                        html.I(className="fas fa-shapes me-2 text-info"),
+                        dbc.Switch(
+                            id="polygon-switch", 
+                            label="Fill CL-tiles (CORE) polygons",
+                            value=False,
+                            className="ms-2"
+                        )
+                    ], className="d-flex align-items-center")
+                ])
+            ], className="mb-3 border-0 shadow-sm", style={
+                'background': 'linear-gradient(45deg, #e8f8f8, #ffffff)',
+                'border-radius': '10px'
+            }),
             
-            html.Div([
-                dbc.Switch(
-                    id="polygon-switch",
-                    label="Fill CL-tiles (CORE) polygons",
-                    value=False,
-                )
-            ], className="mb-2"),
+            dbc.Card([
+                dbc.CardBody([
+                    html.Div([
+                        html.I(className="fas fa-th me-2 text-warning"),
+                        dbc.Switch(
+                            id="mer-switch",
+                            label="Show MER tiles (up to LEV2 in CL-tiles)",
+                            value=True,
+                            className="ms-2"
+                        )
+                    ], className="d-flex align-items-center mb-2"),
+                    html.Small([
+                        html.I(className="fas fa-info-circle me-1"),
+                        "Only with unfilled cluster-tile polygons"
+                    ], className="text-muted ms-4")
+                ])
+            ], className="mb-3 border-0 shadow-sm", style={
+                'background': 'linear-gradient(45deg, #fff8e1, #ffffff)',
+                'border-radius': '10px'
+            }),
             
-            html.Div([
-                dbc.Switch(
-                    id="mer-switch",
-                    label="Show MER tiles (up to LEV2 in CL-tiles)",
-                    value=True,
-                ),
-                html.Small("(Only with unfilled cluster-tile polygons)", className="text-muted")
-            ], className="mb-2"),
-            
-            html.Div([
-                dbc.Switch(
-                    id="aspect-ratio-switch",
-                    label="Free aspect ratio",
-                    value=True,
-                ),
-                html.Small("(Default: maintain astronomical aspect)", className="text-muted")
-            ], className="mb-2"),
-            
-        ], className="mb-4")
+            dbc.Card([
+                dbc.CardBody([
+                    html.Div([
+                        html.I(className="fas fa-expand me-2 text-success"),
+                        dbc.Switch(
+                            id="aspect-ratio-switch",
+                            label="Free aspect ratio",
+                            value=True,
+                            className="ms-2"
+                        )
+                    ], className="d-flex align-items-center mb-2"),
+                    html.Small([
+                        html.I(className="fas fa-info-circle me-1"),
+                        "Default: maintain astronomical aspect"
+                    ], className="text-muted ms-4")
+                ])
+            ], className="border-0 shadow-sm", style={
+                'background': 'linear-gradient(45deg, #e8f5e8, #ffffff)',
+                'border-radius': '10px'
+            })
+        ])
     
     @staticmethod
     def _create_catred_data_section():
-        """Create High-res CATRED data section"""
+        """Create High-res CATRED data section with enhanced styling"""
         return html.Div([
-            html.Label("High-res CATRED data:", className="fw-bold mb-2 text-primary"),
-            dbc.Switch(
-                id="catred-mode-switch",
-                label="Masked CATRED data",
-                value=True,
-            ),
-            html.Small("(When zoomed < 2°)", className="text-muted"),
-            
-            # Threshold slider for masked CATRED data
-            html.Div([
-                html.Div([
-                    html.Label("Effective Coverage Threshold:", className="fw-bold mb-2"),
-                    dcc.Slider(
-                        id="catred-threshold-slider",
-                        min=0.0,
-                        max=0.99,
-                        step=0.01,
-                        value=0.8,
-                        marks={
-                            0.0: "0.0",
-                            0.2: "0.2",
-                            0.4: "0.4", 
-                            0.6: "0.6",
-                            0.8: "0.8",
-                            0.99: "0.99"
-                        },
-                        tooltip={"placement": "bottom", "always_visible": True}
-                    ),
-                    html.Small("(For masked CATRED data filtering)", className="text-muted")
-                ], id="catred-threshold-container", className="mb-3"),
-            ]),
-            
-            # Magnitude limit slider for CATRED data
-            html.Div([
-                html.Div([
-                    html.Label("Magnitude Limit (H-band):", className="fw-bold mb-2"),
-                    dcc.Slider(
-                        id="magnitude-limit-slider",
-                        min=20.0,
-                        max=32.0,
-                        step=0.1,
-                        value=24.0,
-                        marks={
-                            20.0: "20.0",
-                            22.0: "22.0",
-                            24.0: "24.0",
-                            26.0: "26.0",
-                            28.0: "28.0",
-                            30.0: "30.0",
-                            32.0: "32.0"
-                        },
-                        tooltip={"placement": "bottom", "always_visible": True}
-                    ),
-                    html.Small("(Keep sources brighter than limit)", className="text-muted")
-                ], id="magnitude-limit-container", className="mb-3"),
-            ]),
-            
-            # CATRED Data Controls (within High-res CATRED data section)
-            html.Div([
-                html.Div([
-                    html.Label("CATRED Data Controls:", className="fw-bold mb-2"),
-                    
+            # Main CATRED toggle with beautiful styling
+            dbc.Card([
+                dbc.CardBody([
                     html.Div([
-                        dbc.Button(
-                            "🔍 Render CATRED Data",
-                            id="catred-render-button",
-                            color="info",
-                            size="sm",
-                            className="w-100 mb-2",
-                            n_clicks=0,
-                            disabled=True
-                        ),
-                        html.Small("(Zoom in first, then click)", className="text-muted d-block text-center mb-3")
-                    ]),
-                    
+                        html.I(className="fas fa-microscope me-2 text-warning"),
+                        dbc.Switch(
+                            id="catred-mode-switch",
+                            label="Masked CATRED data",
+                            value=True,
+                            className="ms-2"
+                        )
+                    ], className="d-flex align-items-center mb-2"),
+                    dbc.Badge([
+                        html.I(className="fas fa-zoom-in me-1"),
+                        "When zoomed < 2°"
+                    ], color="warning", className="opacity-75")
+                ])
+            ], className="mb-3 border-0 shadow-sm", style={
+                'background': 'linear-gradient(45deg, #fff3cd, #ffffff)',
+                'border-radius': '12px'
+            }),
+            
+            # Threshold controls in beautiful card
+            dbc.Card([
+                dbc.CardHeader([
                     html.Div([
-                        dbc.Button(
-                            "🗑️ Clear All CATRED Data",
-                            id="catred-clear-button",
-                            color="warning",
-                            size="sm",
-                            className="w-100 mb-2",
-                            n_clicks=0
-                        ),
-                        html.Small("(Remove all CATRED traces)", className="text-muted d-block text-center")
-                    ])
-                ], id="catred-controls-container", className="mb-3"),
-            ]),
-        ], className="mb-4")
+                        html.I(className="fas fa-sliders-h me-2"),
+                        html.H6("Coverage Threshold", className="mb-0")
+                    ], className="d-flex align-items-center")
+                ], className="border-0", style={
+                    'background': 'linear-gradient(45deg, #ffeaa7, #fdcb6e)',
+                    'border-radius': '8px 8px 0 0'
+                }),
+                dbc.CardBody([
+                    html.Div([
+                        dcc.Slider(
+                            id="catred-threshold-slider",
+                            min=0.0,
+                            max=0.99,
+                            step=0.01,
+                            value=0.8,
+                            marks={
+                                0.0: {"label": "0.0", "style": {"color": "#666"}},
+                                0.2: {"label": "0.2", "style": {"color": "#666"}},
+                                0.4: {"label": "0.4", "style": {"color": "#666"}},
+                                0.6: {"label": "0.6", "style": {"color": "#666"}},
+                                0.8: {"label": "0.8", "style": {"color": "#e17055", "font-weight": "bold"}},
+                                0.99: {"label": "0.99", "style": {"color": "#666"}}
+                            },
+                            tooltip={"placement": "bottom", "always_visible": True}
+                        )
+                    ], id="catred-threshold-container", className="mb-3", style={'padding': '0 10px'}),
+                    html.Small([
+                        html.I(className="fas fa-info-circle me-1"),
+                        "For masked CATRED data filtering"
+                    ], className="text-muted")
+                ])
+            ], className="mb-3 border-0 shadow-sm", style={'border-radius': '12px'}),
+            
+            # Magnitude controls in beautiful card
+            dbc.Card([
+                dbc.CardHeader([
+                    html.Div([
+                        html.I(className="fas fa-star me-2"),
+                        html.H6("Magnitude Limit (H-band)", className="mb-0")
+                    ], className="d-flex align-items-center")
+                ], className="border-0", style={
+                    'background': 'linear-gradient(45deg, #a29bfe, #6c5ce7)',
+                    'color': 'white',
+                    'border-radius': '8px 8px 0 0'
+                }),
+                dbc.CardBody([
+                    html.Div([
+                        dcc.Slider(
+                            id="magnitude-limit-slider",
+                            min=20.0,
+                            max=32.0,
+                            step=0.1,
+                            value=24.0,
+                            marks={
+                                20.0: {"label": "20.0", "style": {"color": "#666"}},
+                                22.0: {"label": "22.0", "style": {"color": "#666"}},
+                                24.0: {"label": "24.0", "style": {"color": "#6c5ce7", "font-weight": "bold"}},
+                                26.0: {"label": "26.0", "style": {"color": "#666"}},
+                                28.0: {"label": "28.0", "style": {"color": "#666"}},
+                                30.0: {"label": "30.0", "style": {"color": "#666"}},
+                                32.0: {"label": "32.0", "style": {"color": "#666"}}
+                            },
+                            tooltip={"placement": "bottom", "always_visible": True}
+                        )
+                    ], id="magnitude-limit-container", className="mb-3", style={'padding': '0 10px'}),
+                    html.Small([
+                        html.I(className="fas fa-info-circle me-1"),
+                        "Keep sources brighter than limit"
+                    ], className="text-muted")
+                ])
+            ], className="mb-3 border-0 shadow-sm", style={'border-radius': '12px'}),
+            
+            # CATRED Data Controls with enhanced styling
+            dbc.Card([
+                dbc.CardHeader([
+                    html.Div([
+                        html.I(className="fas fa-tools me-2"),
+                        html.H6("CATRED Data Controls", className="mb-0")
+                    ], className="d-flex align-items-center")
+                ], className="border-0", style={
+                    'background': 'linear-gradient(45deg, #74b9ff, #0984e3)',
+                    'color': 'white',
+                    'border-radius': '8px 8px 0 0'
+                }),
+                dbc.CardBody([
+                    # Render button
+                    dbc.Button([
+                        html.I(className="fas fa-eye me-2"),
+                        "🔍 Render CATRED Data"
+                    ],
+                        id="catred-render-button",
+                        color="info",
+                        size="sm", 
+                        className="w-100 mb-3 shadow-sm btn-enhanced",
+                        n_clicks=0,
+                        disabled=True,
+                        style={
+                            'border-radius': '8px',
+                            'font-weight': '600'
+                        }
+                    ),
+                    html.Small([
+                        html.I(className="fas fa-search-plus me-1"),
+                        "Zoom in first, then click"
+                    ], className="text-muted d-block text-center mb-3"),
+                    
+                    # Clear button
+                    dbc.Button([
+                        html.I(className="fas fa-trash-alt me-2"), 
+                        "🗑️ Clear All CATRED Data"
+                    ],
+                        id="catred-clear-button",
+                        color="warning",
+                        size="sm",
+                        className="w-100 shadow-sm btn-enhanced",
+                        n_clicks=0,
+                        style={
+                            'border-radius': '8px',
+                            'font-weight': '600'
+                        }
+                    ),
+                    html.Small([
+                        html.I(className="fas fa-eraser me-1"),
+                        "Remove all CATRED traces"
+                    ], className="text-muted d-block text-center")
+                ], className="p-3")
+            ], id="catred-controls-container", className="border-0 shadow-sm", style={'border-radius': '12px'})
+        ])
     
     @staticmethod
     def _create_mosaic_controls_section():
-        """Create mosaic image controls section"""
+        """Create mosaic image controls section with enhanced styling"""
         return html.Div([
-            html.Label("Mosaic Image Controls:", className="fw-bold mb-2 text-primary"),
+            # Main mosaic toggle
+            dbc.Card([
+                dbc.CardBody([
+                    html.Div([
+                        html.I(className="fas fa-images me-2 text-info"),
+                        dbc.Switch(
+                            id="mosaic-enable-switch",
+                            label="Enable mosaic images",
+                            value=True,
+                            className="ms-2"
+                        )
+                    ], className="d-flex align-items-center")
+                ])
+            ], className="mb-3 border-0 shadow-sm", style={
+                'background': 'linear-gradient(45deg, #e8f4f8, #ffffff)',
+                'border-radius': '10px'
+            }),
             
-            html.Div([
-                dbc.Switch(
-                    id="mosaic-enable-switch",
-                    label="Enable mosaic images",
-                    value=True,
-                )
-            ], className="mb-2"),
+            # Opacity control
+            dbc.Card([
+                dbc.CardHeader([
+                    html.Div([
+                        html.I(className="fas fa-adjust me-2"),
+                        html.H6("Mosaic Opacity", className="mb-0")
+                    ], className="d-flex align-items-center")
+                ], className="border-0", style={
+                    'background': 'linear-gradient(45deg, #74b9ff, #0984e3)',
+                    'color': 'white',
+                    'border-radius': '8px 8px 0 0'
+                }),
+                dbc.CardBody([
+                    html.Div([
+                        dcc.Slider(
+                            id="mosaic-opacity-slider",
+                            min=0.1,
+                            max=1.0,
+                            step=0.1,
+                            value=0.7,
+                            marks={
+                                0.1: {"label": '10%', "style": {"color": "#666"}},
+                                0.5: {"label": '50%', "style": {"color": "#0984e3", "font-weight": "bold"}},
+                                1.0: {"label": '100%', "style": {"color": "#666"}}
+                            },
+                            tooltip={"placement": "bottom", "always_visible": False}
+                        )
+                    ], style={'padding': '0 10px'})
+                ])
+            ], className="mb-3 border-0 shadow-sm", style={'border-radius': '12px'}),
             
-            html.Div([
-                html.Label("Mosaic Opacity:", className="fw-bold mb-1"),
-                dcc.Slider(
-                    id="mosaic-opacity-slider",
-                    min=0.1,
-                    max=1.0,
-                    step=0.1,
-                    value=0.7,
-                    marks={0.1: '10%', 0.5: '50%', 1.0: '100%'},
-                    tooltip={"placement": "bottom", "always_visible": False}
-                )
-            ], className="mb-2"),
-            
-            html.Div([
-                dbc.Button(
-                    "🖼️ Load Mosaic in Zoom",
-                    id="mosaic-render-button",
-                    color="info",
-                    size="sm",
-                    className="w-100 mb-2",
-                    n_clicks=0,
-                    disabled=True
-                ),
-                html.Small("(Load mosaic images for visible MER tiles)", className="text-muted d-block text-center")
-            ])
-        ], className="mb-4")
+            # Load mosaic button
+            dbc.Card([
+                dbc.CardBody([
+                    dbc.Button([
+                        html.I(className="fas fa-download me-2"),
+                        "🖼️ Load Mosaic in Zoom"
+                    ],
+                        id="mosaic-render-button",
+                        color="info",
+                        size="sm",
+                        className="w-100 mb-2 shadow-sm btn-enhanced",
+                        n_clicks=0,
+                        disabled=True,
+                        style={
+                            'border-radius': '8px',
+                            'font-weight': '600'
+                        }
+                    ),
+                    html.Small([
+                        html.I(className="fas fa-image me-1"),
+                        "Load mosaic images for visible MER tiles"
+                    ], className="text-muted d-block text-center")
+                ], className="p-3")
+            ], className="border-0 shadow-sm", style={
+                'background': 'linear-gradient(45deg, #e8f4f8, #ffffff)',
+                'border-radius': '12px'
+            })
+        ])
     
     @staticmethod
     def _create_main_render_section():
-        """Create main render button section"""
+        """Create main render button section with beautiful styling"""
+        return dbc.Card([
+            dbc.CardBody([
+                dbc.Button([
+                    html.I(className="fas fa-rocket me-2"),
+                    "🚀 Initial Render"
+                ],
+                    id="render-button",
+                    color="primary",
+                    size="lg",
+                    className="w-100 mb-2 shadow-sm btn-enhanced pulse",
+                    n_clicks=0,
+                    style={
+                        'background': 'linear-gradient(45deg, #007bff, #0056b3)',
+                        'border': 'none',
+                        'border-radius': '12px',
+                        'font-weight': 'bold',
+                        'text-transform': 'uppercase',
+                        'letter-spacing': '0.5px',
+                        'box-shadow': '0 4px 15px rgba(0,123,255,0.3)'
+                    }
+                ),
+                html.Small([
+                    html.I(className="fas fa-magic me-1"),
+                    "After initial render, options update automatically"
+                ], className="text-muted d-block text-center fst-italic")
+            ], className="p-2")
+        ], className="mb-3 border-0 card-hover", style={
+            'background': 'linear-gradient(135deg, #e8f4f8, #f0f8ff)',
+            'border-radius': '12px',
+            'box-shadow': '0 2px 10px rgba(0,0,0,0.1)'
+        })
+
+    @staticmethod
+    def _create_collapsible_sections():
+        """Create organized collapsible sections for better UX"""
         return html.Div([
-            dbc.Button(
-                "🚀 Initial Render",
-                id="render-button",
-                color="primary",
-                size="lg",
-                className="w-100 mb-2",
-                n_clicks=0
+            # Core Settings Section
+            AppLayout._create_collapsible_card(
+                "🎯 Core Settings",
+                "core-settings",
+                [
+                    AppLayout._create_algorithm_section(),
+                    AppLayout._create_snr_section(),
+                    AppLayout._create_redshift_section(),
+                ],
+                is_open=True,
+                color="primary"
             ),
-            html.Small("After initial render, options update automatically", 
-                      className="text-muted d-block text-center")
+            
+            # Display Options Section  
+            AppLayout._create_collapsible_card(
+                "🎨 Display Options",
+                "display-options",
+                [AppLayout._create_display_options_section()],
+                is_open=True,
+                color="success"
+            ),
+            
+            # Advanced Data Section
+            AppLayout._create_collapsible_card(
+                "🔬 Advanced Data",
+                "advanced-data", 
+                [AppLayout._create_catred_data_section()],
+                is_open=False,
+                color="warning"
+            ),
+            
+            # Image Controls Section
+            AppLayout._create_collapsible_card(
+                "🖼️ Image Controls",
+                "image-controls",
+                [AppLayout._create_mosaic_controls_section()],
+                is_open=False,
+                color="info"
+            )
         ])
 
+    @staticmethod
+    def _create_collapsible_card(title, card_id, content, is_open=True, color="primary"):
+        """Create a beautiful collapsible card section"""
+        return dbc.Card([
+            dbc.CardHeader([
+                dbc.Button([
+                    html.I(className=f"fas fa-chevron-{'down' if is_open else 'right'} me-2"),
+                    title
+                ],
+                    id=f"{card_id}-toggle",
+                    color="link",
+                    className="text-decoration-none fw-bold w-100 text-start p-2 collapse-header",
+                    style={'color': f'var(--bs-{color})'}
+                )
+            ], className="border-0 p-0", style={
+                'background': f'linear-gradient(45deg, var(--bs-{color}-100), var(--bs-{color}-50))',
+                'border-radius': '8px 8px 0 0'
+            }),
+            dbc.Collapse([
+                dbc.CardBody(content, className="pt-3")
+            ], id=f"{card_id}-collapse", is_open=is_open)
+        ], className="mb-3 border-0 shadow-sm card-hover", style={
+            'border-radius': '12px',
+            'box-shadow': '0 4px 15px rgba(0,0,0,0.1)'
+        })
+    
     @staticmethod
     def _create_cluster_action_modal():
         """Create modal dialog for cluster actions"""

@@ -3,7 +3,7 @@ UI callbacks for cluster visualization
 """
 
 import dash
-from dash import Input, Output
+from dash import Input, Output, html
 
 
 class UICallbacks:
@@ -24,6 +24,7 @@ class UICallbacks:
         self._setup_button_text_callbacks()
         self._setup_button_state_callbacks()
         self._setup_catred_visibility_callback()
+        self._setup_collapsible_callbacks()
     
     def _setup_button_text_callbacks(self):
         """Setup callbacks to update button text based on current settings"""
@@ -129,3 +130,93 @@ class UICallbacks:
             [Input('catred-mode-switch', 'value')],
             prevent_initial_call=False
         )
+    
+    def _setup_collapsible_callbacks(self):
+        """Setup callbacks for collapsible sections"""
+        # Core Settings Section
+        @self.app.callback(
+            [Output('core-settings-collapse', 'is_open'),
+             Output('core-settings-toggle', 'children')],
+            [Input('core-settings-toggle', 'n_clicks')],
+            prevent_initial_call=False
+        )
+        def toggle_core_settings(n_clicks):
+            """Toggle core settings section"""
+            if n_clicks is None:
+                return True, [
+                    html.I(className="fas fa-chevron-down me-2"),
+                    "🎯 Core Settings"
+                ]
+            
+            is_open = (n_clicks % 2) == 1
+            icon = "fas fa-chevron-up" if is_open else "fas fa-chevron-down"
+            return is_open, [
+                html.I(className=f"{icon} me-2"),
+                "🎯 Core Settings"
+            ]
+        
+        # Display Options Section
+        @self.app.callback(
+            [Output('display-options-collapse', 'is_open'),
+             Output('display-options-toggle', 'children')],
+            [Input('display-options-toggle', 'n_clicks')],
+            prevent_initial_call=False
+        )
+        def toggle_display_options(n_clicks):
+            """Toggle display options section"""
+            if n_clicks is None:
+                return True, [
+                    html.I(className="fas fa-chevron-down me-2"),
+                    "🎨 Display Options"
+                ]
+            
+            is_open = (n_clicks % 2) == 1
+            icon = "fas fa-chevron-up" if is_open else "fas fa-chevron-down"
+            return is_open, [
+                html.I(className=f"{icon} me-2"),
+                "🎨 Display Options"
+            ]
+        
+        # Advanced Data Section
+        @self.app.callback(
+            [Output('advanced-data-collapse', 'is_open'),
+             Output('advanced-data-toggle', 'children')],
+            [Input('advanced-data-toggle', 'n_clicks')],
+            prevent_initial_call=False
+        )
+        def toggle_advanced_data(n_clicks):
+            """Toggle advanced data section"""
+            if n_clicks is None:
+                return False, [
+                    html.I(className="fas fa-chevron-right me-2"),
+                    "🔬 Advanced Data"
+                ]
+            
+            is_open = (n_clicks % 2) == 1
+            icon = "fas fa-chevron-up" if is_open else "fas fa-chevron-down"
+            return is_open, [
+                html.I(className=f"{icon} me-2"),
+                "🔬 Advanced Data"
+            ]
+        
+        # Image Controls Section
+        @self.app.callback(
+            [Output('image-controls-collapse', 'is_open'),
+             Output('image-controls-toggle', 'children')],
+            [Input('image-controls-toggle', 'n_clicks')],
+            prevent_initial_call=False
+        )
+        def toggle_image_controls(n_clicks):
+            """Toggle image controls section"""
+            if n_clicks is None:
+                return False, [
+                    html.I(className="fas fa-chevron-right me-2"),
+                    "🖼️ Image Controls"
+                ]
+            
+            is_open = (n_clicks % 2) == 1
+            icon = "fas fa-chevron-up" if is_open else "fas fa-chevron-down"
+            return is_open, [
+                html.I(className=f"{icon} me-2"),
+                "🖼️ Image Controls"
+            ]
