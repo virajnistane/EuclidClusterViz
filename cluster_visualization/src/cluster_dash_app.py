@@ -131,6 +131,7 @@ from callbacks.main_plot import MainPlotCallbacks
 from callbacks.catred_callbacks import CATREDCallbacks
 from callbacks.ui_callbacks import UICallbacks
 from callbacks.phz_callbacks import PHZCallbacks
+from callbacks.cluster_modal_callbacks import ClusterModalCallbacks
 print("✓ Callback modules loaded successfully")
 
 # Import UI and core modules
@@ -260,7 +261,7 @@ class ClusterVisualizationApp:
     def setup_callbacks(self):
         """Setup Dash callbacks using modular approach"""
         # Use modular callbacks now that imports are working
-        if MainPlotCallbacks and CATREDCallbacks and UICallbacks and PHZCallbacks:
+        if MainPlotCallbacks and CATREDCallbacks and UICallbacks and PHZCallbacks and ClusterModalCallbacks:
             # Use modular callback setup
             print("✓ Setting up modular callbacks")
             
@@ -278,6 +279,11 @@ class ClusterVisualizationApp:
             self.ui_callbacks = UICallbacks(self.app)
             
             self.phz_callbacks = PHZCallbacks(self.app, self.catred_handler)
+            
+            # 🆕 Initialize cluster modal callbacks
+            self.cluster_modal_callbacks = ClusterModalCallbacks(
+                self.app, self.data_loader, self.trace_creator, self.figure_manager
+            )
             
             print("✓ All modular callbacks initialized")
             

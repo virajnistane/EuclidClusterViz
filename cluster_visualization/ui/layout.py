@@ -50,7 +50,7 @@ class AppLayout:
                             # High-res CATRED data
                             AppLayout._create_catred_data_section(),
                             
-                            # Mosaic Image controls
+                            # Mosaic image controls
                             AppLayout._create_mosaic_controls_section(),
                             
                             html.Hr(),
@@ -85,24 +85,42 @@ class AppLayout:
                             )
                         ], width=8),
                         
-                        # PHZ_PDF plot
+                        # Tabbed interface for PHZ plot and Cluster Analysis
                         dbc.Col([
-                            dcc.Loading(
-                                id="loading-phz",
-                                children=[
-                                    dcc.Graph(
-                                        id='phz-pdf-plot',
-                                        style={'height': '75vh', 'width': '100%', 'min-height': '500px'},
-                                        config={
-                                            'displayModeBar': True,
-                                            'displaylogo': False,
-                                            'modeBarButtonsToRemove': ['lasso2d', 'select2d', 'pan2d', 'zoom2d', 'autoScale2d', 'resetScale2d'],
-                                            'responsive': True
-                                        }
-                                    )
-                                ],
-                                type="circle"
-                            )
+                            dbc.Card([
+                                dbc.CardHeader([
+                                    dbc.Tabs([
+                                        dbc.Tab(label="📈 PHZ Analysis", tab_id="phz-tab"),
+                                        dbc.Tab(label="🎯 Cluster Tools", tab_id="cluster-tab")
+                                    ], id="analysis-tabs", active_tab="phz-tab")
+                                ], className="p-0"),
+                                dbc.CardBody([
+                                    # PHZ Plot Tab Content
+                                    html.Div([
+                                        dcc.Loading(
+                                            id="loading-phz",
+                                            children=[
+                                                dcc.Graph(
+                                                    id='phz-pdf-plot',
+                                                    style={'height': '65vh', 'width': '100%', 'min-height': '450px'},
+                                                    config={
+                                                        'displayModeBar': True,
+                                                        'displaylogo': False,
+                                                        'modeBarButtonsToRemove': ['lasso2d', 'select2d', 'pan2d', 'zoom2d', 'autoScale2d', 'resetScale2d'],
+                                                        'responsive': True
+                                                    }
+                                                )
+                                            ],
+                                            type="circle"
+                                        )
+                                    ], id="phz-tab-content", style={'display': 'block'}),
+                                    
+                                    # Cluster Analysis Tab Content
+                                    html.Div([
+                                        AppLayout._create_cluster_analysis_tab_content()
+                                    ], id="cluster-tab-content", style={'display': 'none'})
+                                ], className="p-2")
+                            ], style={'height': '75vh'})
                         ], width=4)
                     ]),
                     
@@ -113,7 +131,10 @@ class AppLayout:
                         ])
                     ])
                 ], width=10)
-            ], className="g-0")  # Remove gutters for tighter layout
+            ], className="g-0"),  # Remove gutters for tighter layout
+            
+            # Cluster Action Modal Dialog
+            AppLayout._create_cluster_action_modal()
             
         ], fluid=True, className="px-3")
     
@@ -217,6 +238,15 @@ class AppLayout:
                     value=True,
                 ),
                 html.Small("(Default: maintain astronomical aspect)", className="text-muted")
+            ], className="mb-2"),
+            
+            html.Div([
+                dbc.Switch(
+                    id="merged-clusters-switch",
+                    label="Show merged clusters",
+                    value=True,
+                ),
+                html.Small("(Toggle to access individual tile clusters underneath)", className="text-muted")
             ], className="mb-2"),
         ], className="mb-4")
     
@@ -370,3 +400,375 @@ class AppLayout:
             html.Small("After initial render, options update automatically", 
                       className="text-muted d-block text-center")
         ])
+
+    @staticmethod
+    def _create_cluster_action_modal():
+        """Create modal dialog for cluster actions"""
+        return dbc.Modal([
+            dbc.ModalHeader([
+                html.H4("Cluster Analysis Options", className="modal-title"),
+                dbc.Button("×", className="btn-close", id="cluster-modal-close", n_clicks=0)
+            ]),
+            dbc.ModalBody([
+                # Cluster information display
+                html.Div(id="cluster-modal-info", className="mb-3"),
+                
+                # Action buttons
+                html.H6("Available Actions:", className="mb-3"),
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Button(
+                            [html.I(className="fas fa-crop me-2"), "Generate Cutout"],
+                            id="cluster-cutout-button",
+                            color="primary",
+                            className="w-100 mb-2",
+                            n_clicks=0
+                        ),
+                        html.Small("Create density map cutout around this cluster", className="text-muted")
+                    ], width=6),
+                    dbc.Col([
+                        dbc.Button(
+                            [html.I(className="fas fa-chart-line me-2"), "Analyze PHZ"],
+                            id="cluster-phz-button", 
+                            color="info",
+                            className="w-100 mb-2",
+                            n_clicks=0
+                        ),
+                        html.Small("Photometric redshift analysis", className="text-muted")
+                    ], width=6)
+                ], className="mb-3"),
+                
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Button(
+                            [html.I(className="fas fa-images me-2"), "View Images"],
+                            id="cluster-images-button",
+                            color="success", 
+                            className="w-100 mb-2",
+                            n_clicks=0
+                        ),
+                        html.Small("View related astronomical images", className="text-muted")
+                    ], width=6),
+                    dbc.Col([
+                        dbc.Button(
+                            [html.I(className="fas fa-table me-2"), "Export Data"],
+                            id="cluster-export-button",
+                            color="warning",
+                            className="w-100 mb-2", 
+                            n_clicks=0
+                        ),
+                        html.Small("Export cluster data and metadata", className="text-muted")
+                    ], width=6)
+                ], className="mb-3"),
+                
+                # Cutout options (initially hidden)
+                dbc.Collapse([
+                    dbc.Card([
+                        dbc.CardHeader("Cutout Options"),
+                        dbc.CardBody([
+                            dbc.Row([
+                                dbc.Col([
+                                    html.Label("Cutout Size (arcmin):", className="form-label"),
+                                    dbc.Input(
+                                        id="cutout-size-input",
+                                        type="number",
+                                        value=5.0,
+                                        min=1.0,
+                                        max=20.0,
+                                        step=0.5,
+                                        className="mb-2"
+                                    )
+                                ], width=6),
+                                dbc.Col([
+                                    html.Label("Data Type:", className="form-label"),
+                                    dbc.Select(
+                                        id="cutout-data-type",
+                                        options=[
+                                            {"label": "Density Map", "value": "density"},
+                                            {"label": "Sky Image", "value": "sky"},
+                                            {"label": "Both", "value": "both"}
+                                        ],
+                                        value="density",
+                                        className="mb-2"
+                                    )
+                                ], width=6)
+                            ]),
+                            dbc.Button(
+                                "Generate Cutout",
+                                id="generate-cutout-button",
+                                color="primary",
+                                className="w-100",
+                                n_clicks=0
+                            )
+                        ])
+                    ])
+                ], id="cutout-options-collapse", is_open=False)
+            ]),
+            dbc.ModalFooter([
+                dbc.Button("Close", id="cluster-modal-close-footer", color="secondary", n_clicks=0)
+            ])
+        ], 
+        id="cluster-action-modal", 
+        is_open=False, 
+        size="lg",
+        backdrop=True,
+        scrollable=True)
+
+    @staticmethod
+    def _create_cluster_analysis_tab_content():
+        """Create cluster analysis tab content for the tabbed interface"""
+        return html.Div([
+            # No cluster selected state
+            html.Div([
+                html.Div([
+                    html.I(className="fas fa-mouse-pointer fa-3x text-muted mb-3"),
+                    html.H5("Select a Cluster", className="text-muted mb-2"),
+                    html.P("Click any cluster point on the plot to analyze", className="text-muted"),
+                    html.Hr(),
+                    html.P([
+                        html.I(className="fas fa-info-circle me-2"),
+                        "Available tools: Cutouts, PHZ Analysis, Images, Export"
+                    ], className="small text-muted")
+                ], className="text-center")
+            ], id="cluster-no-selection", style={'padding': '60px 20px'}),
+            
+            # Cluster selected state
+            html.Div([
+                # Cluster info header
+                dbc.Card([
+                    dbc.CardHeader([
+                        html.H6([
+                            html.I(className="fas fa-crosshairs me-2"),
+                            "Selected Cluster"
+                        ], className="mb-0 text-primary")
+                    ]),
+                    dbc.CardBody([
+                        html.Div(id="cluster-info-display-tab", className="mb-3")
+                    ], className="p-3")
+                ], className="mb-3"),
+                
+                # Analysis tools
+                html.H6("🔬 Analysis Tools", className="mb-3"),
+                
+                # Primary action buttons
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Button(
+                            [html.I(className="fas fa-crop me-2"), "Generate Cutout"],
+                            id="tab-cutout-button",
+                            color="primary",
+                            className="w-100 mb-2",
+                            n_clicks=0
+                        ),
+                        html.Small("Density map cutout around cluster", className="text-muted d-block text-center")
+                    ], width=6),
+                    dbc.Col([
+                        dbc.Button(
+                            [html.I(className="fas fa-chart-line me-2"), "PHZ Analysis"],
+                            id="tab-phz-button",
+                            color="info",
+                            className="w-100 mb-2",
+                            n_clicks=0
+                        ),
+                        html.Small("Photometric redshift analysis", className="text-muted d-block text-center")
+                    ], width=6)
+                ], className="mb-3"),
+                
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Button(
+                            [html.I(className="fas fa-images me-2"), "View Images"],
+                            id="tab-images-button",
+                            color="success",
+                            className="w-100 mb-2",
+                            n_clicks=0
+                        ),
+                        html.Small("Related astronomical images", className="text-muted d-block text-center")
+                    ], width=6),
+                    dbc.Col([
+                        dbc.Button(
+                            [html.I(className="fas fa-download me-2"), "Export Data"],
+                            id="tab-export-button",
+                            color="warning",
+                            className="w-100 mb-2",
+                            n_clicks=0
+                        ),
+                        html.Small("Export cluster data & metadata", className="text-muted d-block text-center")
+                    ], width=6)
+                ], className="mb-4"),
+                
+                # Cutout options (expandable)
+                dbc.Collapse([
+                    dbc.Card([
+                        dbc.CardHeader([
+                            html.H6([
+                                html.I(className="fas fa-cog me-2"),
+                                "Cutout Options"
+                            ], className="mb-0")
+                        ]),
+                        dbc.CardBody([
+                            dbc.Row([
+                                dbc.Col([
+                                    html.Label("Size (arcmin):", className="form-label"),
+                                    dbc.Input(
+                                        id="tab-cutout-size",
+                                        type="number",
+                                        value=5.0,
+                                        min=1.0,
+                                        max=20.0,
+                                        step=0.5,
+                                        className="mb-2"
+                                    )
+                                ], width=6),
+                                dbc.Col([
+                                    html.Label("Data Type:", className="form-label"),
+                                    dbc.Select(
+                                        id="tab-cutout-type",
+                                        options=[
+                                            {"label": "Density Map", "value": "density"},
+                                            {"label": "Sky Image", "value": "sky"},
+                                            {"label": "Both", "value": "both"}
+                                        ],
+                                        value="density",
+                                        className="mb-2"
+                                    )
+                                ], width=6)
+                            ]),
+                            dbc.Button(
+                                [html.I(className="fas fa-play me-2"), "Generate Cutout"],
+                                id="tab-generate-cutout",
+                                color="primary",
+                                className="w-100",
+                                n_clicks=0
+                            )
+                        ])
+                    ])
+                ], id="tab-cutout-options", is_open=False, className="mb-3"),
+                
+                # Analysis results area
+                html.Div([
+                    html.H6("📊 Analysis Results", className="mb-2"),
+                    html.Div(id="cluster-analysis-results", children=[
+                        html.P("Analysis results will appear here", className="text-muted small")
+                    ])
+                ])
+                
+            ], id="cluster-selected-content", style={'display': 'none'})
+            
+        ], style={'height': '60vh', 'overflow-y': 'auto'})
+
+    @staticmethod
+    def _create_cluster_analysis_section():
+        """Create cluster analysis section"""
+        return html.Div([
+            html.H6("🎯 Cluster Analysis", className="text-primary mb-3"),
+            
+            # Cluster selection info (initially hidden)
+            dbc.Collapse([
+                dbc.Card([
+                    dbc.CardHeader([
+                        html.H6("📍 Selected Cluster", className="mb-0 text-success")
+                    ]),
+                    dbc.CardBody([
+                        html.Div(id="cluster-info-display", className="mb-3"),
+                        
+                        # Quick action buttons
+                        dbc.Row([
+                            dbc.Col([
+                                dbc.Button(
+                                    [html.I(className="fas fa-crop me-1"), "Cutout"],
+                                    id="quick-cutout-button",
+                                    color="primary",
+                                    size="sm",
+                                    className="w-100 mb-1",
+                                    n_clicks=0
+                                )
+                            ], width=6),
+                            dbc.Col([
+                                dbc.Button(
+                                    [html.I(className="fas fa-chart-line me-1"), "PHZ"],
+                                    id="quick-phz-button",
+                                    color="info", 
+                                    size="sm",
+                                    className="w-100 mb-1",
+                                    n_clicks=0
+                                )
+                            ], width=6)
+                        ]),
+                        
+                        dbc.Row([
+                            dbc.Col([
+                                dbc.Button(
+                                    [html.I(className="fas fa-images me-1"), "Images"],
+                                    id="quick-images-button",
+                                    color="success",
+                                    size="sm", 
+                                    className="w-100 mb-1",
+                                    n_clicks=0
+                                )
+                            ], width=6),
+                            dbc.Col([
+                                dbc.Button(
+                                    [html.I(className="fas fa-cog me-1"), "More..."],
+                                    id="cluster-more-options-button",
+                                    color="secondary",
+                                    size="sm",
+                                    className="w-100 mb-1",
+                                    n_clicks=0
+                                )
+                            ], width=6)
+                        ]),
+                        
+                        # Expandable detailed options
+                        dbc.Collapse([
+                            html.Hr(className="my-2"),
+                            html.H6("Cutout Options:", className="mb-2"),
+                            dbc.Row([
+                                dbc.Col([
+                                    html.Label("Size (arcmin):", className="form-label small"),
+                                    dbc.Input(
+                                        id="sidebar-cutout-size",
+                                        type="number",
+                                        value=5.0,
+                                        min=1.0,
+                                        max=20.0,
+                                        step=0.5,
+                                        size="sm"
+                                    )
+                                ], width=6),
+                                dbc.Col([
+                                    html.Label("Type:", className="form-label small"),
+                                    dbc.Select(
+                                        id="sidebar-cutout-type",
+                                        options=[
+                                            {"label": "Density", "value": "density"},
+                                            {"label": "Sky", "value": "sky"},
+                                            {"label": "Both", "value": "both"}
+                                        ],
+                                        value="density",
+                                        size="sm"
+                                    )
+                                ], width=6)
+                            ], className="mb-2"),
+                            dbc.Button(
+                                "Generate Cutout",
+                                id="sidebar-generate-cutout",
+                                color="primary",
+                                size="sm",
+                                className="w-100",
+                                n_clicks=0
+                            )
+                        ], id="sidebar-cutout-options", is_open=False)
+                    ])
+                ])
+            ], id="cluster-analysis-panel", is_open=False, className="mb-3"),
+            
+            # Instruction text when no cluster selected
+            html.Div([
+                html.P([
+                    html.I(className="fas fa-mouse-pointer me-2"),
+                    "Click any cluster point to analyze"
+                ], className="text-muted small text-center mb-0")
+            ], id="cluster-instruction-text")
+            
+        ], className="mb-4")

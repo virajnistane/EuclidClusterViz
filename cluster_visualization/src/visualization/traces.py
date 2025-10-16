@@ -42,7 +42,7 @@ class TraceCreator:
                      existing_mosaic_traces: Optional[List] = None,
                      snr_threshold_lower: Optional[float] = None, snr_threshold_upper: Optional[float] = None, 
                      z_threshold_lower: Optional[float] = None, z_threshold_upper: Optional[float] = None,
-                     threshold: float = 0.8, maglim: Optional[float] = None) -> List:
+                     threshold: float = 0.8, maglim: Optional[float] = None, show_merged_clusters: bool = True) -> List:
         """
         Create all Plotly traces for the visualization.
         
@@ -85,8 +85,9 @@ class TraceCreator:
         self._add_manual_catred_traces(catred_traces, show_mer_tiles, catred_mode,
                                        manual_catred_data, zoom_threshold_met)
         
-        # Add cluster traces to separate list (top layer)
-        self._add_merged_cluster_trace(cluster_traces, datamod_detcluster_mergedcat, data['algorithm'], catred_points)
+        # Add cluster traces to separate list (top layer) - conditionally based on toggle
+        if show_merged_clusters:
+            self._add_merged_cluster_trace(cluster_traces, datamod_detcluster_mergedcat, data['algorithm'], catred_points)
         
         # Create tile traces and polygons
         tile_traces = self._create_tile_traces_and_polygons(

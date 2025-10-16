@@ -145,6 +145,7 @@ class MainPlotCallbacks:
              State('polygon-switch', 'value'),
              State('mer-switch', 'value'),
              State('aspect-ratio-switch', 'value'),
+             State('merged-clusters-switch', 'value'),
              State('catred-mode-switch', 'value'),
              State('catred-threshold-slider', 'value'),
              State('magnitude-limit-slider', 'value'),
@@ -153,7 +154,7 @@ class MainPlotCallbacks:
         )
         def update_plot(n_clicks, snr_n_clicks, redshift_n_clicks, algorithm, 
                         snr_range, redshift_range, show_polygons, show_mer_tiles, 
-                        free_aspect_ratio, catred_mode, threshold, maglim, relayout_data):
+                        free_aspect_ratio, show_merged_clusters, catred_mode, threshold, maglim, relayout_data):
             # Only render if button has been clicked at least once
             if n_clicks == 0 and snr_n_clicks == 0 and redshift_n_clicks == 0:
                 return self._create_initial_empty_plots(free_aspect_ratio)
@@ -178,7 +179,7 @@ class MainPlotCallbacks:
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
                                             snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, 
                                             z_threshold_lower=z_lower, z_threshold_upper=z_upper, 
-                                            threshold=threshold, maglim=maglim)
+                                            threshold=threshold, maglim=maglim, show_merged_clusters=show_merged_clusters)
 
                 # Create figure
                 fig = self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio) if self.figure_manager else self._create_fallback_figure(traces, algorithm, free_aspect_ratio)
@@ -214,6 +215,7 @@ class MainPlotCallbacks:
              Input('polygon-switch', 'value'),
              Input('mer-switch', 'value'),
              Input('aspect-ratio-switch', 'value'),
+             Input('merged-clusters-switch', 'value'),
              Input('catred-mode-switch', 'value')],
             [State('render-button', 'n_clicks'),
              State('snr-range-slider', 'value'),
@@ -224,7 +226,7 @@ class MainPlotCallbacks:
              State('cluster-plot', 'figure')],
             prevent_initial_call=True
         )
-        def update_plot_options(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, catred_mode, n_clicks, snr_range, redshift_range, threshold, maglim, relayout_data, current_figure):
+        def update_plot_options(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, show_merged_clusters, catred_mode, n_clicks, snr_range, redshift_range, threshold, maglim, relayout_data, current_figure):
             # Only update if render button has been clicked at least once
             if n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update
@@ -254,7 +256,7 @@ class MainPlotCallbacks:
                                             existing_mosaic_traces=existing_mosaic_traces,
                                             snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, 
                                             z_threshold_lower=z_lower, z_threshold_upper=z_upper,
-                                            threshold=threshold, maglim=maglim)
+                                            threshold=threshold, maglim=maglim, show_merged_clusters=show_merged_clusters)
                 
                 # Create figure
                 fig = self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio) if self.figure_manager else self._create_fallback_figure(traces, algorithm, free_aspect_ratio)
@@ -581,7 +583,7 @@ class MainPlotCallbacks:
                      existing_catred_traces=None, existing_mosaic_traces=None, manual_catred_data=None, 
                      snr_threshold_lower=None, snr_threshold_upper=None, 
                      z_threshold_lower=None, z_threshold_upper=None, 
-                     threshold=0.8, maglim=None):
+                     threshold=0.8, maglim=None, show_merged_clusters=True):
         """Create traces using modular or fallback method"""
         if self.trace_creator:
             return self.trace_creator.create_traces(
@@ -590,7 +592,7 @@ class MainPlotCallbacks:
                 manual_catred_data=manual_catred_data,
                 snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, 
                 z_threshold_lower=z_threshold_lower, z_threshold_upper=z_threshold_upper, 
-                threshold=threshold, maglim=maglim
+                threshold=threshold, maglim=maglim, show_merged_clusters=show_merged_clusters
             )
         else:
             # Fallback to inline trace creation
@@ -598,7 +600,7 @@ class MainPlotCallbacks:
                                               existing_mer_traces=existing_catred_traces, manual_mer_data=manual_catred_data,
                                               snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, 
                                               z_threshold_lower=z_threshold_lower, z_threshold_upper=z_threshold_upper, 
-                                              threshold=threshold)
+                                              threshold=threshold, show_merged_clusters=show_merged_clusters)
 
     # Helper methods for fallback and utility functions
     def _create_initial_empty_plots(self, free_aspect_ratio):
@@ -847,7 +849,8 @@ class MainPlotCallbacks:
     
     def _create_traces_fallback(self, data, show_polygons, show_mer_tiles, relayout_data, catred_mode,
                                existing_mer_traces=None, existing_mosaic_traces=None, 
-                               manual_mer_data=None, snr_threshold_lower=None, snr_threshold_upper=None, threshold=0.8):
+                               manual_mer_data=None, snr_threshold_lower=None, snr_threshold_upper=None, 
+                               z_threshold_lower=None, z_threshold_upper=None, threshold=0.8, show_merged_clusters=True):
         """Fallback trace creation method"""
         # This would contain the original inline trace creation logic
         # For now, return empty traces to prevent errors
