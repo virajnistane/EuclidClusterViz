@@ -35,6 +35,12 @@ class AppLayout:
                             html.P("Options update in real-time while preserving zoom", 
                                    className="text-muted small mb-3 text-center"),
                             
+                            
+                            # Main render button
+                            AppLayout._create_main_render_section(),
+
+                            html.Hr(),
+
                             # Algorithm selection
                             AppLayout._create_algorithm_section(),
                             
@@ -53,10 +59,6 @@ class AppLayout:
                             # Mosaic image controls
                             AppLayout._create_mosaic_controls_section(),
                             
-                            html.Hr(),
-                            
-                            # Main render button
-                            AppLayout._create_main_render_section()
                         ])
                     ], className="h-100")
                 ], width=2, className="pe-2"),
@@ -216,6 +218,15 @@ class AppLayout:
             
             html.Div([
                 dbc.Switch(
+                    id="merged-clusters-switch",
+                    label="Show merged catalog members",
+                    value=True,
+                ),
+                html.Small("(Toggle to access individual tile clusters underneath)", className="text-muted")
+            ], className="mb-2"),
+            
+            html.Div([
+                dbc.Switch(
                     id="polygon-switch",
                     label="Fill CL-tiles (CORE) polygons",
                     value=False,
@@ -240,14 +251,6 @@ class AppLayout:
                 html.Small("(Default: maintain astronomical aspect)", className="text-muted")
             ], className="mb-2"),
             
-            html.Div([
-                dbc.Switch(
-                    id="merged-clusters-switch",
-                    label="Show merged clusters",
-                    value=True,
-                ),
-                html.Small("(Toggle to access individual tile clusters underneath)", className="text-muted")
-            ], className="mb-2"),
         ], className="mb-4")
     
     @staticmethod
