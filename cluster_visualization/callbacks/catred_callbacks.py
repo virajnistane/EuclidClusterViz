@@ -142,8 +142,8 @@ class CATREDCallbacks:
                 
                 status = dbc.Alert([
                     html.H6(f"Algorithm: {algorithm}", className="mb-1"),
-                    html.P(f"Merged clusters: {len(data['merged_data'])}", className="mb-1"),
-                    html.P(f"Individual tiles: {len(data['tile_data'])}", className="mb-1"),
+                    html.P(f"Merged clusters: {len(data['data_detcluster_mergedcat'])}", className="mb-1"),
+                    html.P(f"Individual tiles: {len(data['data_detcluster_by_cltile'])}", className="mb-1"),
                     html.P(f"Polygon mode: {'Filled' if show_polygons else 'Outline'}{catred_status}", className="mb-1"),
                     html.P(f"Aspect ratio: {aspect_mode}", className="mb-1"),
                     html.Small(f"CATRED data rendered at: {pd.Timestamp.now().strftime('%H:%M:%S')}", className="text-muted")
@@ -211,8 +211,8 @@ class CATREDCallbacks:
                 
                 status = dbc.Alert([
                     html.H6(f"Algorithm: {algorithm}", className="mb-1"),
-                    html.P(f"Merged clusters: {len(data['merged_data'])}", className="mb-1"),
-                    html.P(f"Individual tiles: {len(data['tile_data'])}", className="mb-1"),
+                    html.P(f"Merged clusters: {len(data['data_detcluster_mergedcat'])}", className="mb-1"),
+                    html.P(f"Individual tiles: {len(data['data_detcluster_by_cltile'])}", className="mb-1"),
                     html.P(f"Polygon mode: {'Filled' if show_polygons else 'Outline'}{catred_status}", className="mb-1"),
                     html.P(f"Aspect ratio: {aspect_mode}", className="mb-1"),
                     html.Small(f"CATRED data cleared at: {pd.Timestamp.now().strftime('%H:%M:%S')}", className="text-muted")
@@ -327,8 +327,8 @@ class CATREDCallbacks:
         # This would contain the original inline data loading logic
         # For now, return empty structure to prevent errors
         return {
-            'merged_data': pd.DataFrame(),
-            'tile_data': pd.DataFrame(),
+            'data_detcluster_mergedcat': pd.DataFrame(),
+            'data_detcluster_by_cltile': pd.DataFrame(),
             'snr_min': 0,
             'snr_max': 100
         }

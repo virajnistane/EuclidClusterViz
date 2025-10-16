@@ -64,8 +64,8 @@ class TraceCreator:
         data_traces = []  # Data traces (top layer)
         
         # Apply SNR filtering to merged data
-        datamod_merged = self._apply_snr_filtering(data['merged_data'], snr_threshold_lower, snr_threshold_upper)
-        datamod_merged = self._apply_redshift_filtering(datamod_merged, z_threshold_lower, z_threshold_upper)
+        datamod_detcluster_mergedcat = self._apply_snr_filtering(data['data_detcluster_mergedcat'], snr_threshold_lower, snr_threshold_upper)
+        datamod_detcluster_mergedcat = self._apply_redshift_filtering(datamod_detcluster_mergedcat, z_threshold_lower, z_threshold_upper)
 
         # Check zoom threshold for CATRED data display
         zoom_threshold_met = self._check_zoom_threshold(relayout_data, catred_mode != "none")
@@ -84,7 +84,7 @@ class TraceCreator:
                                        manual_catred_data, zoom_threshold_met)
         
         # Add cluster traces to separate list (top layer)
-        self._add_merged_cluster_trace(cluster_traces, datamod_merged, data['algorithm'], catred_points)
+        self._add_merged_cluster_trace(cluster_traces, datamod_detcluster_mergedcat, data['algorithm'], catred_points)
         
         # Create tile traces and polygons
         tile_traces = self._create_tile_traces_and_polygons(
@@ -220,35 +220,35 @@ class TraceCreator:
         
         return False
     
-    def _apply_snr_filtering(self, merged_data: np.ndarray, snr_lower: Optional[float], 
+    def _apply_snr_filtering(self, cluster_data: np.ndarray, snr_lower: Optional[float], 
                            snr_upper: Optional[float]) -> np.ndarray:
         """Apply SNR filtering to merged cluster data."""
         if snr_lower is None and snr_upper is None:
-            return merged_data
+            return cluster_data
         elif snr_lower is not None and snr_upper is not None:
-            return merged_data[(merged_data['SNR_CLUSTER'] >= snr_lower) & 
-                              (merged_data['SNR_CLUSTER'] <= snr_upper)]
+            return cluster_data[(cluster_data['SNR_CLUSTER'] >= snr_lower) & 
+                              (cluster_data['SNR_CLUSTER'] <= snr_upper)]
         elif snr_upper is not None and snr_lower is None:
-            return merged_data[merged_data['SNR_CLUSTER'] <= snr_upper]
+            return cluster_data[cluster_data['SNR_CLUSTER'] <= snr_upper]
         elif snr_lower is not None:
-            return merged_data[merged_data['SNR_CLUSTER'] >= snr_lower]
+            return cluster_data[cluster_data['SNR_CLUSTER'] >= snr_lower]
         else:
-            return merged_data
+            return cluster_data
 
-    def _apply_redshift_filtering(self, merged_data: np.ndarray, z_threshold_lower: Optional[float],
+    def _apply_redshift_filtering(self, cluster_data: np.ndarray, z_threshold_lower: Optional[float],
                                   z_threshold_upper: Optional[float]) -> np.ndarray:
         """Apply redshift filtering to merged cluster data."""
         if z_threshold_lower is None and z_threshold_upper is None:
-            return merged_data
+            return cluster_data
         elif z_threshold_lower is not None and z_threshold_upper is not None:
-            return merged_data[(merged_data['Z_CLUSTER'] >= z_threshold_lower) & 
-                              (merged_data['Z_CLUSTER'] <= z_threshold_upper)]
+            return cluster_data[(cluster_data['Z_CLUSTER'] >= z_threshold_lower) & 
+                              (cluster_data['Z_CLUSTER'] <= z_threshold_upper)]
         elif z_threshold_upper is not None and z_threshold_lower is None:
-            return merged_data[merged_data['Z_CLUSTER'] <= z_threshold_upper]
+            return cluster_data[cluster_data['Z_CLUSTER'] <= z_threshold_upper]
         elif z_threshold_lower is not None:
-            return merged_data[merged_data['Z_CLUSTER'] >= z_threshold_lower]
+            return cluster_data[cluster_data['Z_CLUSTER'] >= z_threshold_lower]
         else:
-            return merged_data
+            return cluster_data
 
     def _check_zoom_threshold(self, relayout_data: Optional[Dict], show_mer_tiles: bool) -> bool:
         """Check if zoom level meets threshold for CATRED data display (< 2 degrees)."""
@@ -389,24 +389,24 @@ class TraceCreator:
             hovertemplate=None  # Explicitly disable hover template
         )
 
-    def _add_merged_cluster_trace(self, data_traces: List, datamod_merged: np.ndarray, algorithm: str, catred_points: Optional[List] = None) -> None:
+    def _add_merged_cluster_trace(self, data_traces: List, datamod_detcluster_mergedcat: np.ndarray, algorithm: str, catred_points: Optional[List] = None) -> None:
         """Add merged cluster detection trace with proximity-based enhancement."""
         if catred_points is None:
             # No CATRED data - create single trace with normal markers
             merged_trace = go.Scattergl(
-                x=datamod_merged['RIGHT_ASCENSION_CLUSTER'],
-                y=datamod_merged['DECLINATION_CLUSTER'],
+                x=datamod_detcluster_mergedcat['RIGHT_ASCENSION_CLUSTER'],
+                y=datamod_detcluster_mergedcat['DECLINATION_CLUSTER'],
                 mode='markers',
                 marker=dict(size=10, symbol='square-open', line=dict(width=2), color='black'),
-                name=f'Merged Data ({algorithm}) - {len(datamod_merged)} clusters',
+                name=f'Merged Data ({algorithm}) - {len(datamod_detcluster_mergedcat)} clusters',
                 text=[
                     f"merged<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
-                    for snr, cz, ra, dec in zip(datamod_merged['SNR_CLUSTER'], 
-                                              datamod_merged['Z_CLUSTER'], 
-                                              datamod_merged['RIGHT_ASCENSION_CLUSTER'], 
-                                              datamod_merged['DECLINATION_CLUSTER'])
+                    for snr, cz, ra, dec in zip(datamod_detcluster_mergedcat['SNR_CLUSTER'], 
+                                              datamod_detcluster_mergedcat['Z_CLUSTER'], 
+                                              datamod_detcluster_mergedcat['RIGHT_ASCENSION_CLUSTER'], 
+                                              datamod_detcluster_mergedcat['DECLINATION_CLUSTER'])
                 ],
-                customdata=[[snr, z] for snr, z in zip(datamod_merged['SNR_CLUSTER'], datamod_merged['Z_CLUSTER'])],
+                customdata=[[snr, z] for snr, z in zip(datamod_detcluster_mergedcat['SNR_CLUSTER'], datamod_detcluster_mergedcat['Z_CLUSTER'])],
                 hoverinfo='text',
                 hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
             )
@@ -415,12 +415,12 @@ class TraceCreator:
             # CATRED data present - create separate traces based on proximity to CATRED points
             near_catred_mask = np.array([
                 self._is_point_near_catred_region(ra, dec, catred_points) 
-                for ra, dec in zip(datamod_merged['RIGHT_ASCENSION_CLUSTER'], 
-                                 datamod_merged['DECLINATION_CLUSTER'])
+                for ra, dec in zip(datamod_detcluster_mergedcat['RIGHT_ASCENSION_CLUSTER'], 
+                                 datamod_detcluster_mergedcat['DECLINATION_CLUSTER'])
             ])
             
-            away_from_catred_data = datamod_merged[~near_catred_mask]
-            near_catred_data = datamod_merged[near_catred_mask]
+            away_from_catred_data = datamod_detcluster_mergedcat[~near_catred_mask]
+            near_catred_data = datamod_detcluster_mergedcat[near_catred_mask]
 
             # Create trace for markers away from CATRED region (normal size)
             if len(away_from_catred_data) > 0:
@@ -491,27 +491,27 @@ class TraceCreator:
         """Create individual tile traces with proximity-based enhancement."""
         tile_traces = []
         
-        for tileid, value in data['tile_data'].items():
-            tile_data = value['data']
+        for tileid, value in data['data_detcluster_by_cltile'].items():
+            data_detcluster_by_cltile = value['data']
             
             # Apply SNR filtering to tile data
-            datamod = self._apply_snr_filtering(tile_data, snr_threshold_lower, snr_threshold_upper)
-            datamod = self._apply_redshift_filtering(datamod, z_threshold_lower, z_threshold_upper)
+            datamod_detcluster_by_cltile = self._apply_snr_filtering(data_detcluster_by_cltile, snr_threshold_lower, snr_threshold_upper)
+            datamod_detcluster_by_cltile = self._apply_redshift_filtering(datamod_detcluster_by_cltile, z_threshold_lower, z_threshold_upper)
 
             if catred_points is None:
                 # No CATRED data - create single trace with normal markers
                 tile_trace = go.Scattergl(
-                    x=datamod['RIGHT_ASCENSION_CLUSTER'],
-                    y=datamod['DECLINATION_CLUSTER'],
+                    x=datamod_detcluster_by_cltile['RIGHT_ASCENSION_CLUSTER'],
+                    y=datamod_detcluster_by_cltile['DECLINATION_CLUSTER'],
                     mode='markers',
                     marker=dict(size=6, opacity=1, symbol='x', color=self.colors_list[int(tileid)]),
                     name=f'Tile {tileid}',
                     text=[
                         f"TileID: {tileid}<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
-                        for snr, cz, ra, dec in zip(datamod['SNR_CLUSTER'], datamod['Z_CLUSTER'], 
-                                                  datamod['RIGHT_ASCENSION_CLUSTER'], datamod['DECLINATION_CLUSTER'])
+                        for snr, cz, ra, dec in zip(datamod_detcluster_by_cltile['SNR_CLUSTER'], datamod_detcluster_by_cltile['Z_CLUSTER'], 
+                                                  datamod_detcluster_by_cltile['RIGHT_ASCENSION_CLUSTER'], datamod_detcluster_by_cltile['DECLINATION_CLUSTER'])
                     ],
-                    customdata=[[snr, z] for snr, z in zip(datamod['SNR_CLUSTER'], datamod['Z_CLUSTER'])],
+                    customdata=[[snr, z] for snr, z in zip(datamod_detcluster_by_cltile['SNR_CLUSTER'], datamod_detcluster_by_cltile['Z_CLUSTER'])],
                     hoverinfo='text',
                     hoverlabel=dict(bgcolor="lightyellow", font_size=12, font_family="Arial")
                 )
@@ -520,12 +520,12 @@ class TraceCreator:
                 # CATRED data present - create separate traces based on proximity to CATRED points
                 near_catred_mask = np.array([
                     self._is_point_near_catred_region(ra, dec, catred_points) 
-                    for ra, dec in zip(datamod['RIGHT_ASCENSION_CLUSTER'], 
-                                     datamod['DECLINATION_CLUSTER'])
+                    for ra, dec in zip(datamod_detcluster_by_cltile['RIGHT_ASCENSION_CLUSTER'], 
+                                     datamod_detcluster_by_cltile['DECLINATION_CLUSTER'])
                 ])
-                
-                away_from_catred_data = datamod[~near_catred_mask]
-                near_catred_data = datamod[near_catred_mask]
+
+                away_from_catred_data = datamod_detcluster_by_cltile[~near_catred_mask]
+                near_catred_data = datamod_detcluster_by_cltile[near_catred_mask]
 
                 # Create trace for markers away from CATRED region (normal size)
                 if len(away_from_catred_data) > 0:
@@ -585,11 +585,11 @@ class TraceCreator:
             # Create polygon traces for this tile
             
             # Create polygon traces for this tile
-            self._create_tile_polygons(polygon_traces, data, tileid, value, show_polygons, show_mer_tiles)
+            self._create_cltile_polygons(polygon_traces, data, tileid, value, show_polygons, show_mer_tiles)
         
         return tile_traces
     
-    def _create_tile_polygons(self, polygon_traces: List, data: Dict[str, Any], tileid: str,
+    def _create_cltile_polygons(self, polygon_traces: List, data: Dict[str, Any], tileid: str,
                              tile_value: Dict[str, Any], show_polygons: bool, show_mer_tiles: bool) -> None:
         """Create polygon traces for a single tile (LEV1, CORE, and optionally MER)."""
         # Load tile definition

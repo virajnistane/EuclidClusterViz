@@ -190,7 +190,7 @@ class MainPlotCallbacks:
                     self._preserve_zoom_state_fallback(fig, relayout_data)
                 
                 # Calculate filtered cluster counts for status
-                filtered_merged_count = self._calculate_filtered_count(data['merged_data'], snr_lower, snr_upper, z_lower, z_upper)
+                filtered_merged_count = self._calculate_filtered_count(data['data_detcluster_mergedcat'], snr_lower, snr_upper, z_lower, z_upper)
                 
                 # Create status info
                 status = self._create_status_info(algorithm, data, filtered_merged_count, snr_lower, snr_upper, 
@@ -263,7 +263,7 @@ class MainPlotCallbacks:
                     self._preserve_zoom_state_fallback(fig, relayout_data, current_figure)
                 
                 # Calculate filtered cluster counts for status
-                filtered_merged_count = self._calculate_filtered_count(data['merged_data'], snr_lower, snr_upper, z_lower, z_upper)
+                filtered_merged_count = self._calculate_filtered_count(data['data_detcluster_mergedcat'], snr_lower, snr_upper, z_lower, z_upper)
 
                 # Create status info
                 status = self._create_status_info(algorithm, data, filtered_merged_count, snr_lower, snr_upper, 
@@ -711,31 +711,31 @@ class MainPlotCallbacks:
                     existing_catred_traces.append(existing_trace)
         return existing_catred_traces
     
-    def _calculate_filtered_count(self, merged_data, snr_lower, snr_upper, z_lower, z_upper):
+    def _calculate_filtered_count(self, cluster_data, snr_lower, snr_upper, z_lower, z_upper):
         """Calculate filtered cluster count based on SNR range"""
         if snr_lower is None and snr_upper is None:
-            merged_data_1 = merged_data
+            cluster_data_1 = cluster_data
         elif snr_lower is not None and snr_upper is not None:
-            merged_data_1 = merged_data[
-                (merged_data['SNR_CLUSTER'] >= snr_lower) & 
-                (merged_data['SNR_CLUSTER'] <= snr_upper)
+            cluster_data_1 = cluster_data[
+                (cluster_data['SNR_CLUSTER'] >= snr_lower) & 
+                (cluster_data['SNR_CLUSTER'] <= snr_upper)
                 ]
         elif snr_upper is not None and snr_lower is None:
-            merged_data_1 = merged_data[merged_data['SNR_CLUSTER'] <= snr_upper]
+            cluster_data_1 = cluster_data[cluster_data['SNR_CLUSTER'] <= snr_upper]
         elif snr_lower is not None and snr_upper is None:
-            merged_data_1 = merged_data[merged_data['SNR_CLUSTER'] >= snr_lower]
+            cluster_data_1 = cluster_data[cluster_data['SNR_CLUSTER'] >= snr_lower]
 
         if z_lower is None and z_upper is None:
-            return len(merged_data_1)
+            return len(cluster_data_1)
         elif z_lower is not None and z_upper is not None:
-            return len(merged_data_1[
-                (merged_data_1['Z_CLUSTER'] >= z_lower) & 
-                (merged_data_1['Z_CLUSTER'] <= z_upper)
+            return len(cluster_data_1[
+                (cluster_data_1['Z_CLUSTER'] >= z_lower) & 
+                (cluster_data_1['Z_CLUSTER'] <= z_upper)
                 ])
         elif z_upper is not None and z_lower is None:
-            return len(merged_data_1[merged_data_1['Z_CLUSTER'] <= z_upper])
+            return len(cluster_data_1[cluster_data_1['Z_CLUSTER'] <= z_upper])
         elif z_lower is not None and z_upper is None:
-            return len(merged_data_1[merged_data_1['Z_CLUSTER'] >= z_lower])
+            return len(cluster_data_1[cluster_data_1['Z_CLUSTER'] >= z_lower])
 
 
     def _create_status_info(self, algorithm, data, filtered_merged_count, snr_lower, snr_upper, 
@@ -775,8 +775,8 @@ class MainPlotCallbacks:
         
         status = dbc.Alert([
             html.H6(f"Algorithm: {algorithm}", className="mb-1"),
-            html.P(f"Merged clusters: {filtered_merged_count}/{len(data['merged_data'])} (filtered)", className="mb-1"),
-            html.P(f"Individual tiles: {len(data['tile_data'])}", className="mb-1"),
+            html.P(f"Merged clusters: {filtered_merged_count}/{len(data['data_detcluster_mergedcat'])} (filtered)", className="mb-1"),
+            html.P(f"Individual tiles: {len(data['data_detcluster_by_cltile'])}", className="mb-1"),
             html.P(f"SNR Filter: {snr_filter_text}", className="mb-1"),
             html.P(f"Redshift Filter: {z_filter_text}", className="mb-1"),
             html.P(f"Polygon mode: {'Filled' if show_polygons else 'Outline'}{mer_status}", className="mb-1"),
@@ -792,8 +792,8 @@ class MainPlotCallbacks:
         # This would contain the original inline data loading logic
         # For now, return empty structure to prevent errors
         return {
-            'merged_data': pd.DataFrame(),
-            'tile_data': pd.DataFrame(),
+            'data_detcluster_mergedcat': pd.DataFrame(),
+            'data_detcluster_by_cltile': pd.DataFrame(),
             'snr_min': 0,
             'snr_max': 100,
             'z_min': 0,

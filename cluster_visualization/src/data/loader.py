@@ -49,8 +49,8 @@ class DataLoader:
             
         Returns:
             Dict containing all loaded data:
-            - merged_data: Merged cluster catalog
-            - tile_data: Individual tile data by tile ID
+            - data_detcluster_mergedcat: Merged cluster catalog
+            - data_detcluster_by_cltile: Individual tile data by tile ID
             - catred_info: CATRED file information DataFrame
             - algorithm: Selected algorithm
             - snr_min/snr_max: SNR range for slider bounds
@@ -78,25 +78,25 @@ class DataLoader:
         self._validate_paths(paths)
         
         # Load data components
-        data_merged = self._load_merged_catalog(paths)
-        data_by_tile = self._load_tile_data(paths)
+        data_detcluster_mergedcat = self._load_data_detcluster_mergedcat(paths)
+        data_detcluster_by_cltile = self._load_data_detcluster_by_cltile(paths)
         catred_fileinfo_df = self._load_catred_info(paths)
         effcovmask_fileinfo_df = self._load_effcovmask_info(paths)
         
         # Calculate SNR range for UI slider
-        snr_min = float(data_merged['SNR_CLUSTER'].min())
-        snr_max = float(data_merged['SNR_CLUSTER'].max())
+        snr_min = float(data_detcluster_mergedcat['SNR_CLUSTER'].min())
+        snr_max = float(data_detcluster_mergedcat['SNR_CLUSTER'].max())
         print(f"SNR range: {snr_min:.3f} to {snr_max:.3f}")
 
         # Calculate redshift range for UI slider
-        z_min = float(data_merged['Z_CLUSTER'].min())
-        z_max = float(data_merged['Z_CLUSTER'].max())
+        z_min = float(data_detcluster_mergedcat['Z_CLUSTER'].min())
+        z_max = float(data_detcluster_mergedcat['Z_CLUSTER'].max())
         print(f"Redshift range: {z_min:.3f} to {z_max:.3f}")
 
         # Assemble final data structure
         data = {
-            'merged_data': data_merged,
-            'tile_data': data_by_tile,
+            'data_detcluster_mergedcat': data_detcluster_mergedcat,
+            'data_detcluster_by_cltile': data_detcluster_by_cltile,
             'catred_info': catred_fileinfo_df,
             'effcovmask_info': effcovmask_fileinfo_df,
             'algorithm': select_algorithm,
@@ -140,7 +140,7 @@ class DataLoader:
             if not os.path.exists(path):
                 raise FileNotFoundError(f"{path_key.replace('_', ' ').title()} not found: {path}")
     
-    def _load_merged_catalog(self, paths: Dict[str, str]) -> np.ndarray:
+    def _load_data_detcluster_mergedcat(self, paths: Dict[str, str]) -> np.ndarray:
         """Load merged detection catalog from XML and FITS files."""
         det_xml = paths['mergedetcat_xml']
         if not os.path.exists(det_xml):
@@ -157,7 +157,7 @@ class DataLoader:
         print(f"Loaded {len(data_merged)} merged clusters")
         return data_merged
     
-    def _load_tile_data(self, paths: Dict[str, str]) -> Dict[str, Dict[str, Any]]:
+    def _load_data_detcluster_by_cltile(self, paths: Dict[str, str]) -> Dict[str, Dict[str, Any]]:
         """Load individual tile detection data."""
         detfiles_list_path = paths['detfiles_list']
         if not os.path.exists(detfiles_list_path):
