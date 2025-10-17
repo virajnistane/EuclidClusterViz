@@ -494,45 +494,6 @@ class CATREDHandler:
                 catred_scatter_data['phz_pdf'].extend(tile_data['PHZ_PDF'])
                 print(f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} masked points from MER tile {mertileid}")
     
-    def update_catred_data_masked(self, zoom_data: Dict[str, Any], data: Dict[str, Any],
-                                 threshold: float = 0.8) -> Dict[str, List]:
-        """
-        Update masked CATRED data for the given zoom window.
-        
-        Args:
-            zoom_data: Dictionary containing zoom window parameters
-            data: Main data dictionary containing MER tile information
-            threshold: Effective coverage threshold for filtering (default 0.8)
-            
-        Returns:
-            Dictionary with scatter plot data for masked CATRED points
-        """
-        # Find MER tiles that intersect with zoom area
-        if not zoom_data or not all(k in zoom_data for k in ['ra_min', 'ra_max', 'dec_min', 'dec_max']):
-            print("Debug: No valid zoom data for masked CATRED")
-            return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_70_int': [], 'phz_pdf': []}
-            
-        mertiles_to_load = self._find_intersecting_tiles(data, zoom_data['ra_min'], zoom_data['ra_max'], 
-                                                        zoom_data['dec_min'], zoom_data['dec_max'])
-        
-        if not mertiles_to_load:
-            print("Debug: No MER tiles found in zoom area for masked processing")
-            return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_70_int': [], 'phz_pdf': []}
-        
-        # Initialize masked scatter data
-        catred_scatter_data = {
-            'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_70_int': [], 'phz_pdf': []
-        }
-        
-        # Load masked data for each tile
-        self._load_tile_data_masked(mertiles_to_load, data, catred_scatter_data, threshold)
-        
-        # Store current data for click callbacks
-        self.current_catred_data = catred_scatter_data
-        
-        print(f"Debug: Total masked CATRED points loaded: {len(catred_scatter_data['ra'])} (threshold={threshold})")
-        return catred_scatter_data
-    
     def update_catred_data_with_coverage(self, zoom_data: Dict[str, Any], data: Dict[str, Any], maglim: float = 24.0) -> Dict[str, List]:
         """
         Update CATRED data with effective coverage values for client-side threshold filtering.
