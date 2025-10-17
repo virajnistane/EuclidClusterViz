@@ -500,7 +500,7 @@ class TraceCreator:
         tile_traces = []
         
         for tileid, value in data['data_detcluster_by_cltile'].items():
-            data_detcluster_by_cltile = value['data']
+            data_detcluster_by_cltile = value['detfits_data']
             
             # Apply SNR filtering to tile data
             datamod_detcluster_by_cltile = self._apply_snr_filtering(data_detcluster_by_cltile, snr_threshold_lower, snr_threshold_upper)
@@ -601,7 +601,7 @@ class TraceCreator:
                              tile_value: Dict[str, Any], show_polygons: bool, show_mer_tiles: bool) -> None:
         """Create polygon traces for a single tile (LEV1, CORE, and optionally MER)."""
         # Load tile definition
-        with open(os.path.join(data['data_dir'], tile_value['tilefile']), 'r') as f:
+        with open(tile_value['cltiledef_file'], 'r') as f:
             tile = json.load(f)
         
         # LEV1 polygon (always outline)

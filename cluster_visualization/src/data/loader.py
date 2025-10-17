@@ -171,18 +171,35 @@ class DataLoader:
             # Extract tile information from XML files
             xml_path = os.path.join(paths['inputs_dir'], file) if 'inputs/' not in file else os.path.join(paths['mergedetcat_dir'], file)
             tile_file = self.get_xml_element(xml_path, 'Data/SpatialInformation/DataContainer/FileName').text
-            tile_id = tile_file.split('TILE_')[1][3:5]
+            with open(os.path.join(paths['data_dir'], tile_file), 'r') as tf:
+                tile_info = json.load(tf)
+            tile_id = tile_info['TILE_ID']
+
             fits_file = self.get_xml_element(xml_path, 'Data/ClustersFile/DataContainer/FileName').text
             
+            for i in os.listdir(paths['inputs_dir']):
+                try:
+                    assert 'DENSITIES' in self.get_xml_element(os.path.join(paths['inputs_dir'], i), 'Data/PZWavDensFile/DataContainer/FileName').text
+                    assert self.get_xml_element(os.path.join(paths['inputs_dir'], i), 'Data/SpatialInformation/DataContainer/FileName').text ==  tile_file
+                    dens_xml = i
+                    dens_fits = self.get_xml_element(os.path.join(paths['inputs_dir'], i), 'Data/PZWavDensFile/DataContainer/FileName').text
+                except:
+                    dens_xml = None
+                    dens_fits = None
+                    pass
+
             # Load FITS data for this tile
             fits_path = os.path.join(paths['data_dir'], fits_file)
             with fits.open(fits_path) as hdul:
                 tile_data = hdul[1].data
             
             data_by_tile[tile_id] = {
-                'tilefile': tile_file,
-                'fitsfilename': fits_file,
-                'data': tile_data
+                'detxml_file': xml_path,
+                'detfits_file': os.path.join(paths['data_dir'], fits_file),
+                'cltiledef_file': os.path.join(paths['data_dir'], tile_file),
+                'densxml_file': os.path.join(paths['inputs_dir'], dens_xml) if dens_xml else None,
+                'densfits_file': os.path.join(paths['data_dir'], dens_fits) if dens_fits else None,
+                'detfits_data': tile_data
             }
         
         data_by_tile = dict(sorted(data_by_tile.items()))
