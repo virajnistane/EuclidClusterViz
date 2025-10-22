@@ -183,10 +183,11 @@ class DataLoader:
                     assert self.get_xml_element(os.path.join(paths['inputs_dir'], i), 'Data/SpatialInformation/DataContainer/FileName').text ==  tile_file
                     dens_xml = i
                     dens_fits = self.get_xml_element(os.path.join(paths['inputs_dir'], i), 'Data/PZWavDensFile/DataContainer/FileName').text
+                    break
                 except:
                     dens_xml = None
                     dens_fits = None
-                    pass
+                    continue
 
             # Load FITS data for this tile
             fits_path = os.path.join(paths['data_dir'], fits_file)
