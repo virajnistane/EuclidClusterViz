@@ -81,7 +81,7 @@ class Mask:
         return hp.ang2pix(self.nside, ra, dec, lonlat=True, nest=self.nested)
 
 
-def get_masked_catred(tile_id, effcovmask_info, catred_info, threshold=0.8, maglim=24.0):
+def get_masked_catred(tile_id, effcovmask_info, catred_info, maglim=24.0, threshold=0.8):
     """Get masked CATRED data for a tile using effective coverage mask and magnitude limit."""
     try:
         # Load mask for the tile
@@ -146,8 +146,8 @@ class CATREDHandler:
     
     def __init__(self):
         """Initialize CATRED handler."""
-        self.traces_cache = []  # Store accumulated MER scatter traces
-        self.current_catred_data = None  # Store current MER data for click callbacks
+        self.traces_cache = []  # Store accumulated CATRED scatter traces
+        self.current_catred_data = None  # Store current CATRED data for click callbacks
     
     def get_radec_mertile(self, mertileid: int, data: Dict[str, Any], maglim: float = 24.0) -> Dict[str, List]:
         """
@@ -304,32 +304,9 @@ class CATREDHandler:
             return False
         return True
     
-    def _extract_zoom_ranges(self, relayout_data: Dict) -> Optional[Tuple[float, float, float, float]]:
-        """Extract zoom ranges from Plotly relayout data."""
-        ra_min = ra_max = dec_min = dec_max = None
-        
-        # Extract RA range
-        if 'xaxis.range[0]' in relayout_data and 'xaxis.range[1]' in relayout_data:
-            ra_min = relayout_data['xaxis.range[0]']
-            ra_max = relayout_data['xaxis.range[1]']
-        elif 'xaxis.range' in relayout_data:
-            ra_min = relayout_data['xaxis.range'][0]
-            ra_max = relayout_data['xaxis.range'][1]
-
-        # Extract Dec range
-        if 'yaxis.range[0]' in relayout_data and 'yaxis.range[1]' in relayout_data:
-            dec_min = relayout_data['yaxis.range[0]']
-            dec_max = relayout_data['yaxis.range[1]']
-        elif 'yaxis.range' in relayout_data:
-            dec_min = relayout_data['yaxis.range'][0]
-            dec_max = relayout_data['yaxis.range'][1]
-        
-        if all(val is not None for val in [ra_min, ra_max, dec_min, dec_max]):
-            return ra_min, ra_max, dec_min, dec_max
-        return None
-    
-    def _find_intersecting_tiles(self, data: Dict[str, Any], ra_min: float, ra_max: float, 
-                                dec_min: float, dec_max: float) -> List[int]:
+    def _find_intersecting_tiles(
+            self, data: Dict[str, Any], ra_min: float, ra_max: float, dec_min: float, dec_max: float
+            ) -> List[int]:
         """Find MER tiles whose polygons intersect with the zoom box."""
         zoom_box = box(ra_min, dec_min, ra_max, dec_max)
         mertiles_to_load = []
@@ -361,7 +338,10 @@ class CATREDHandler:
                 catred_scatter_data['phz_pdf'].extend(tile_data['PHZ_PDF'])
                 print(f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} points from MER tile {mertileid}")
     
-    def get_radec_mertile_with_coverage(self, mertileid: int, data: Dict[str, Any], maglim: float = None) -> Dict[str, List]:
+    def get_radec_mertile_with_coverage(
+            self, mertileid: int, data: Dict[str, Any], 
+            maglim: float = None, threshold: float = 0.8, box: Dict[str, float] = None
+            ) -> Dict[str, List]:
         """
         Load full CATRED data for a specific MER tile with effective coverage values for client-side filtering.
         
@@ -391,12 +371,17 @@ class CATREDHandler:
             
             # Get full CATRED data with coverage values (no threshold filtering)
             full_src_with_coverage = get_masked_catred(mertileid, data['effcovmask_info'], 
-                                                     data['catred_info'], threshold=0.0, maglim=maglim)  # Load all data
+                                                     data['catred_info'], 
+                                                     maglim=maglim, threshold=threshold)  # Load all data
             
             if len(full_src_with_coverage) == 0:
                 print(f"Debug: No CATRED sources found for mertile {mertileid}")
                 return {}
             
+            # Apply box selection if provided
+            if box:
+                full_src_with_coverage = self.apply_box_selection(full_src_with_coverage, box)
+
             # Convert to format expected by plotting functions, including effective coverage
             result = {
                 'RIGHT_ASCENSION': full_src_with_coverage['RA'].tolist(),
@@ -415,7 +400,7 @@ class CATREDHandler:
             return {}
 
     def get_radec_mertile_masked(self, mertileid: int, data: Dict[str, Any], 
-                                threshold: float = 0.8, maglim: float = None) -> Dict[str, List]:
+                                threshold: float = 0.8, maglim: float = None, box: Optional[Dict[str, float]] = None) -> Dict[str, List]:
         """
         Load masked CATRED data for a specific MER tile based on effective coverage and magnitude limit.
         
@@ -443,15 +428,18 @@ class CATREDHandler:
                 mertileid not in data['effcovmask_info'].index):
                 print(f"Debug: MerTile {mertileid} not found in catred_info or effcovmask_info")
                 return {}
-            
+
             # Get masked CATRED data
             filtered_src = get_masked_catred(mertileid, data['effcovmask_info'], 
-                                           data['catred_info'], threshold, maglim=maglim)
+                                           data['catred_info'], maglim=maglim, threshold=threshold)
             
             if len(filtered_src) == 0:
                 print(f"Debug: No sources above threshold {threshold} for mertile {mertileid}")
                 return {}
-            
+
+            # Apply box selection if provided
+            if box:
+                filtered_src = self.apply_box_selection(filtered_src, box)
             # Convert to format expected by plotting functions
             result = {
                 'RIGHT_ASCENSION': filtered_src['RA'].tolist(),
@@ -468,33 +456,9 @@ class CATREDHandler:
             print(f"Debug: Error loading masked MER tile {mertileid}: {e}")
             return {}
 
-    def _load_tile_data_unmasked(self, mertiles_to_load: List[int], data: Dict[str, Any], 
-                                catred_scatter_data: Dict[str, List], maglim: float = 24.0) -> None:
-        """Load unmasked data for each MER tile and accumulate in scatter data."""
-        for mertileid in mertiles_to_load:
-            tile_data = self.get_radec_mertile(mertileid, data, maglim)
-            if tile_data and 'RIGHT_ASCENSION' in tile_data:
-                catred_scatter_data['ra'].extend(tile_data['RIGHT_ASCENSION'])
-                catred_scatter_data['dec'].extend(tile_data['DECLINATION'])
-                catred_scatter_data['phz_mode_1'].extend(tile_data['PHZ_MODE_1'])
-                catred_scatter_data['phz_70_int'].extend(tile_data['PHZ_70_INT'])
-                catred_scatter_data['phz_pdf'].extend(tile_data['PHZ_PDF'])
-                print(f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} unmasked points from MER tile {mertileid}")
-
-    def _load_tile_data_masked(self, mertiles_to_load: List[int], data: Dict[str, Any],
-                              catred_scatter_data: Dict[str, List], threshold: float = 0.8) -> None:
-        """Load masked data for each MER tile and accumulate in scatter data."""
-        for mertileid in mertiles_to_load:
-            tile_data = self.get_radec_mertile_masked(mertileid, data, threshold)
-            if tile_data and 'RIGHT_ASCENSION' in tile_data:
-                catred_scatter_data['ra'].extend(tile_data['RIGHT_ASCENSION'])
-                catred_scatter_data['dec'].extend(tile_data['DECLINATION'])
-                catred_scatter_data['phz_mode_1'].extend(tile_data['PHZ_MODE_1'])
-                catred_scatter_data['phz_70_int'].extend(tile_data['PHZ_70_INT'])
-                catred_scatter_data['phz_pdf'].extend(tile_data['PHZ_PDF'])
-                print(f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} masked points from MER tile {mertileid}")
-    
-    def update_catred_data_with_coverage(self, zoom_data: Dict[str, Any], data: Dict[str, Any], maglim: float = 24.0) -> Dict[str, List]:
+    def update_catred_data_with_coverage(
+            self, zoom_data: Dict[str, Any], data: Dict[str, Any], maglim: float = 24.0, threshold: float = 0.8
+            ) -> Dict[str, List]:
         """
         Update CATRED data with effective coverage values for client-side threshold filtering.
         
@@ -525,7 +489,7 @@ class CATREDHandler:
         print(f"Debug: Found {len(mertiles_to_load)} MER tiles in zoom area for coverage loading")
 
         # Load data with coverage for each MER tile
-        self._load_tile_data_with_coverage(mertiles_to_load, data, catred_scatter_data, maglim)
+        self._load_tile_data_with_coverage(mertiles_to_load, data, catred_scatter_data, maglim, threshold)
         
         # Store current data for click callbacks
         self.current_catred_data = catred_scatter_data
@@ -534,10 +498,10 @@ class CATREDHandler:
         return catred_scatter_data
 
     def _load_tile_data_with_coverage(self, mertiles_to_load: List[int], data: Dict[str, Any],
-                                    catred_scatter_data: Dict[str, List], maglim: float = 24.0) -> None:
+                                    catred_scatter_data: Dict[str, List], maglim: float = 24.0, threshold: float = 0.8) -> None:
         """Load data with coverage for each MER tile and accumulate in scatter data."""
         for mertileid in mertiles_to_load:
-            tile_data = self.get_radec_mertile_with_coverage(mertileid, data, maglim)
+            tile_data = self.get_radec_mertile_with_coverage(mertileid, data, maglim, threshold)
             if tile_data and 'RIGHT_ASCENSION' in tile_data:
                 catred_scatter_data['ra'].extend(tile_data['RIGHT_ASCENSION'])
                 catred_scatter_data['dec'].extend(tile_data['DECLINATION'])
@@ -546,6 +510,58 @@ class CATREDHandler:
                 catred_scatter_data['phz_pdf'].extend(tile_data['PHZ_PDF'])
                 catred_scatter_data['effective_coverage'].extend(tile_data['EFFECTIVE_COVERAGE'])
                 print(f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} sources with coverage from MER tile {mertileid}")
+
+    def update_catred_data_clusterbox(self, box: Dict[str, Any], data: Dict[str, Any],
+                                      threshold: float = 0.8, maglim: float = 24.0) -> Dict[str, List]:
+        """
+        Update CATRED data for the given cluster box selection.
+        
+        Args:
+            box: Dictionary containing box window parameters
+            data: Main data dictionary containing MER tile information
+            threshold: Effective coverage threshold for masked data (default 0.8)
+            maglim: Magnitude limit for filtering (default 24.0)
+
+        Returns:
+            Dictionary with scatter plot data for CATRED points within the box
+        """
+        if not box or not all(k in box for k in ['ra_min', 'ra_max', 'dec_min', 'dec_max', 'z_min', 'z_max']):
+            print("Debug: No valid box data for CATRED")
+            print("Debug: Box data received:", box)
+            return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_70_int': [], 'phz_pdf': []}
+        
+        # Find MER tiles that intersect with box area
+        mertiles_to_load = self._find_intersecting_tiles(data, box['ra_min'], box['ra_max'], box['dec_min'], box['dec_max'])
+
+        if not mertiles_to_load:
+            print("Debug: No intersecting MER tiles found for CATRED")
+            return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_70_int': [], 'phz_pdf': []}
+
+        print(f"Debug: Loading CATRED for {len(mertiles_to_load)} MER tiles")
+
+        # Initialize scatter data container
+        catred_scatter_data = {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_70_int': [], 'phz_pdf': []}
+
+        # Load data for each intersecting tile using masked method
+        self._load_tile_data_clusterbox(mertiles_to_load, data, catred_scatter_data, threshold, maglim, box)
+
+        print(f"Debug: Total CATRED points loaded: {len(catred_scatter_data['ra'])}")
+        return catred_scatter_data
+
+    def _load_tile_data_clusterbox(self, mertiles_to_load: List[int], data: Dict[str, Any],
+                                   catred_scatter_data: Dict[str, List], threshold: float = 0.8, 
+                                   maglim: float = 24.0, box: Dict[str, float] = None) -> None:
+        """Load masked data for each MER tile and accumulate in scatter data."""
+        for mertileid in mertiles_to_load:
+            tile_data = self.get_radec_mertile_masked(mertileid=mertileid, data=data, 
+                                                      threshold=threshold, maglim=maglim, box=box)
+            if tile_data and 'RIGHT_ASCENSION' in tile_data:
+                catred_scatter_data['ra'].extend(tile_data['RIGHT_ASCENSION'])
+                catred_scatter_data['dec'].extend(tile_data['DECLINATION'])
+                catred_scatter_data['phz_mode_1'].extend(tile_data['PHZ_MODE_1'])
+                catred_scatter_data['phz_70_int'].extend(tile_data['PHZ_70_INT'])
+                catred_scatter_data['phz_pdf'].extend(tile_data['PHZ_PDF'])
+                print(f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} masked points from MER tile {mertileid}")
 
     def update_catred_data_unmasked(self, zoom_data: Dict[str, Any], data: Dict[str, Any], maglim: float = 24.0) -> Dict[str, List]:
         """
@@ -585,6 +601,19 @@ class CATREDHandler:
         print(f"Debug: Total unmasked CATRED points loaded: {len(catred_scatter_data['ra'])}")
         return catred_scatter_data
 
+    def _load_tile_data_unmasked(self, mertiles_to_load: List[int], data: Dict[str, Any], 
+                                catred_scatter_data: Dict[str, List], maglim: float = 24.0) -> None:
+        """Load unmasked data for each MER tile and accumulate in scatter data."""
+        for mertileid in mertiles_to_load:
+            tile_data = self.get_radec_mertile(mertileid, data, maglim)
+            if tile_data and 'RIGHT_ASCENSION' in tile_data:
+                catred_scatter_data['ra'].extend(tile_data['RIGHT_ASCENSION'])
+                catred_scatter_data['dec'].extend(tile_data['DECLINATION'])
+                catred_scatter_data['phz_mode_1'].extend(tile_data['PHZ_MODE_1'])
+                catred_scatter_data['phz_70_int'].extend(tile_data['PHZ_70_INT'])
+                catred_scatter_data['phz_pdf'].extend(tile_data['PHZ_PDF'])
+                print(f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} unmasked points from MER tile {mertileid}")
+
     def load_catred_scatter_data(self, data: Dict[str, Any], relayout_data: Dict[str, Any],
                                 catred_mode: str = "masked", threshold: float = 0.8, maglim: float = 24.0) -> Dict[str, List]:
         """
@@ -609,11 +638,80 @@ class CATREDHandler:
         
         if catred_mode == "masked":
             print(f"Debug: Loading masked CATRED data with coverage for client-side filtering")
-            return self.update_catred_data_with_coverage(zoom_data, data, maglim)
+            return self.update_catred_data_with_coverage(zoom_data, data, maglim, threshold)
         else:  # unmasked
             print("Debug: Loading unmasked CATRED data")
             return self.update_catred_data_unmasked(zoom_data, data, maglim)
+
+    def load_catred_data_clusterbox(self, box: Dict[str, Any], data: Dict[str, Any],
+                                   threshold: float = 0.8, maglim: float = 24.0) -> Dict[str, List]:
+        """
+        Load CATRED data for a specific cluster box.
+
+        Args:
+            box: Dictionary containing box window parameters
+            data: Main data dictionary containing MER tile information
+            threshold: Effective coverage threshold for masked data (default 0.8)
+            maglim: Magnitude limit for filtering (default 24.0)
+
+        Returns:
+            Dictionary with scatter plot data for CATRED points
+        """
+        print("Debug: Loading CATRED data for cluster box selection")
+        print("Debug: Box data received:", box)
+        return self.update_catred_data_clusterbox(box, data, threshold, maglim)
+
+    def apply_box_selection(
+            self, src: Table, box: Dict[str, float]
+            ) -> Table:
+        """Apply RA/Dec box selection to the source table."""
+        ra_min = box['ra_min']
+        ra_max = box['ra_max']
+        dec_min = box['dec_min']
+        dec_max = box['dec_max']
+        z_min = box['z_min']
+        z_max = box['z_max']
+
+        catred_z_param_select = 'PHZ_MODE_1'  # Assuming PHZ_MODE_1 is used for redshift selection
+
+        selection_mask = (
+            (src['RIGHT_ASCENSION'] >= ra_min) & (src['RIGHT_ASCENSION'] <= ra_max) &
+            (src['DECLINATION'] >= dec_min) & (src['DECLINATION'] <= dec_max) & 
+            (src[catred_z_param_select] >= z_min) & (src[catred_z_param_select] <= z_max)
+        )
+        
+        filtered_src = src[selection_mask]
+        print(f"Debug: Applied box selection: {len(filtered_src)} sources remain after filtering")
+        return filtered_src
     
+    def _extract_box_data_from_cluster_click(self, click_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Extract box window parameters from cluster click data.
+        
+        Args:
+            click_data: Plotly click data containing box selection
+        Returns:
+            Dictionary with box window parameters
+        """
+        if not click_data:
+            return {}
+
+        ra_min = click_data['ra'] - click_data['catred_box_size'] / 2
+        ra_max = click_data['ra'] + click_data['catred_box_size'] / 2
+        dec_min = click_data['dec'] - click_data['catred_box_size'] / 2
+        dec_max = click_data['dec'] + click_data['catred_box_size'] / 2
+        z_min = click_data['redshift'] - click_data['catred_redshift_bin_width'] / 2
+        z_max = click_data['redshift'] + click_data['catred_redshift_bin_width'] / 2
+
+        return {
+            'ra_min': ra_min,
+            'ra_max': ra_max,
+            'dec_min': dec_min,
+            'dec_max': dec_max,
+            'z_min': z_min,
+            'z_max': z_max
+        }
+
     def _extract_zoom_data_from_relayout(self, relayout_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Extract zoom window parameters from relayout data.
@@ -641,10 +739,35 @@ class CATREDHandler:
         return zoom_data
     
     def clear_traces_cache(self) -> None:
-        """Clear the MER traces cache."""
+        """Clear the CATRED traces cache."""
         self.traces_cache = []
-        print("MER traces cache cleared")
-    
+        print("CATRED traces cache cleared")
+
     def get_traces_count(self) -> int:
-        """Get the number of cached MER traces."""
+        """Get the number of cached CATRED traces."""
         return len(self.traces_cache)
+
+
+    def _extract_zoom_ranges(self, relayout_data: Dict) -> Optional[Tuple[float, float, float, float]]:
+        """Extract zoom ranges from Plotly relayout data."""
+        ra_min = ra_max = dec_min = dec_max = None
+        
+        # Extract RA range
+        if 'xaxis.range[0]' in relayout_data and 'xaxis.range[1]' in relayout_data:
+            ra_min = relayout_data['xaxis.range[0]']
+            ra_max = relayout_data['xaxis.range[1]']
+        elif 'xaxis.range' in relayout_data:
+            ra_min = relayout_data['xaxis.range'][0]
+            ra_max = relayout_data['xaxis.range'][1]
+
+        # Extract Dec range
+        if 'yaxis.range[0]' in relayout_data and 'yaxis.range[1]' in relayout_data:
+            dec_min = relayout_data['yaxis.range[0]']
+            dec_max = relayout_data['yaxis.range[1]']
+        elif 'yaxis.range' in relayout_data:
+            dec_min = relayout_data['yaxis.range'][0]
+            dec_max = relayout_data['yaxis.range'][1]
+        
+        if all(val is not None for val in [ra_min, ra_max, dec_min, dec_max]):
+            return ra_min, ra_max, dec_min, dec_max
+        return None

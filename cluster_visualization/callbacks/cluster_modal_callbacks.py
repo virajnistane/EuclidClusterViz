@@ -16,7 +16,7 @@ import json
 class ClusterModalCallbacks:
     """Handles cluster modal and action callbacks"""
     
-    def __init__(self, app, data_loader, trace_creator, figure_manager):
+    def __init__(self, app, data_loader, catred_handler, trace_creator, figure_manager):
         """
         Initialize cluster modal callbacks.
         
@@ -28,9 +28,10 @@ class ClusterModalCallbacks:
         """
         self.app = app
         self.data_loader = data_loader
+        self.catred_handler = catred_handler
         self.trace_creator = trace_creator
         self.figure_manager = figure_manager
-        
+
         # Store selected cluster data
         self.selected_cluster = None
         
@@ -41,7 +42,9 @@ class ClusterModalCallbacks:
         self._setup_cluster_click_callback()
         self._setup_modal_close_callbacks()
         self._setup_cutout_toggle_callback()
+        self._setup_catred_visibility_callback()
         self._setup_action_callbacks()
+        self._setup_sidebar_callbacks()
         self._setup_tab_callbacks()  # 🆕 Add tab callbacks
     
     def _setup_cluster_click_callback(self):
@@ -74,8 +77,8 @@ class ClusterModalCallbacks:
                     # Extract cluster information from clicked point
                     ra = point.get('x', 'N/A')
                     dec = point.get('y', 'N/A')
-                    snr = customdata[0] if len(customdata) > 0 else 'N/A'
-                    redshift = customdata[1] if len(customdata) > 1 else 'N/A'
+                    snr = round(customdata[0], 2) if len(customdata) > 0 else 'N/A'
+                    redshift = round(customdata[1], 2) if len(customdata) > 1 else 'N/A'
                     
                     # Get trace name from hover text or use curve number
                     trace_name = f"Curve {curve_number}"
@@ -166,20 +169,33 @@ class ClusterModalCallbacks:
                 return not is_open
             return is_open
     
+    def _setup_catred_visibility_callback(self):
+        @self.app.callback(
+            Output('catred-box-options-collapse', 'is_open'),
+            [Input('cluster-catred-box-button', 'n_clicks')],
+            [State('catred-box-options-collapse', 'is_open')],
+            prevent_initial_call=True
+        )
+        def toggle_catred_box_options(n_clicks, is_open):
+            """Toggle catred box options when catred box button is clicked"""
+            if n_clicks:
+                return not is_open
+            return is_open
+
     def _setup_action_callbacks(self):
         """Setup callbacks for cluster action buttons"""
         @self.app.callback(
             Output('status-info', 'children', allow_duplicate=True),
-            [Input('generate-cutout-button', 'n_clicks'),
+            [Input('cluster-cutout-button', 'n_clicks'),
              Input('cluster-phz-button', 'n_clicks'),
-             Input('cluster-images-button', 'n_clicks'),
+             Input('cluster-catred-box-button', 'n_clicks'),
              Input('cluster-export-button', 'n_clicks')],
             [State('cutout-size-input', 'value'),
              State('cutout-data-type', 'value')],
             prevent_initial_call=True
         )
-        def handle_cluster_actions(cutout_clicks, phz_clicks, images_clicks, export_clicks, 
-                                 cutout_size, cutout_type):
+        def handle_cluster_actions(cutout_clicks, phz_clicks, catred_box_clicks, export_clicks, 
+                                   cutout_size, cutout_type):
             """Handle various cluster action button clicks"""
             ctx = callback_context
             if not ctx.triggered:
@@ -191,8 +207,8 @@ class ClusterModalCallbacks:
                 return dbc.Alert("⚠️ No cluster selected", color="warning")
             
             cluster = self.selected_cluster
-            
-            if button_id == 'generate-cutout-button':
+
+            if button_id == 'cluster-cutout-button':
                 # Placeholder for cutout generation
                 status_msg = dbc.Alert([
                     html.H6("🔬 Cutout Generation Requested", className="mb-2"),
@@ -208,7 +224,7 @@ class ClusterModalCallbacks:
                     html.Small("Cutout generation functionality will be implemented here", 
                              className="text-muted")
                 ], color="info")
-                
+
                 print(f"🔬 Cutout requested: RA={cluster['ra']}, Dec={cluster['dec']}, Size={cutout_size}arcmin, Type={cutout_type}")
                 return status_msg
                 
@@ -229,21 +245,21 @@ class ClusterModalCallbacks:
                 
                 print(f"📈 PHZ analysis requested for cluster at RA={cluster['ra']}, Dec={cluster['dec']}")
                 return status_msg
-                
-            elif button_id == 'cluster-images-button':
-                # Placeholder for image viewing
+
+            elif button_id == 'cluster-catred-box-button':
+                # Placeholder for CATRED box viewing
                 status_msg = dbc.Alert([
-                    html.H6("🖼️ Image Viewer Requested", className="mb-2"),
+                    html.H6("🖼️ CATRED Box Requested", className="mb-2"),
                     html.P([
-                        f"📍 Target: RA {cluster['ra']:.6f}°, Dec {cluster['dec']:.6f}°",
+                        f"📍 Target: RA {cluster['ra']:.6f}°, Dec {cluster['dec']:.6f}°, z {cluster['redshift']:.6f}",
                         html.Br(),
                         f"🔍 Algorithm: {cluster['algorithm']}"
                     ]),
-                    html.Small("Image viewer functionality will be implemented here", 
-                             className="text-muted")
+                    html.Small("CATRED box functionality will be implemented here", 
+                               className="text-muted")
                 ], color="primary")
-                
-                print(f"🖼️ Image viewer requested for cluster at RA={cluster['ra']}, Dec={cluster['dec']}")
+
+                print(f"🖼️ CATRED box requested for cluster at RA={cluster['ra']}, Dec={cluster['dec']}")
                 return status_msg
                 
             elif button_id == 'cluster-export-button':
@@ -279,19 +295,32 @@ class ClusterModalCallbacks:
                 return not is_open
             return is_open
         
+        # Toggle CATRED box options in sidebar
+        @self.app.callback(
+            Output('sidebar-catred-box-options', 'is_open'),
+            [Input('quick-catred-box-button', 'n_clicks')],
+            [State('sidebar-catred-box-options', 'is_open')],
+            prevent_initial_call=True
+        )
+        def toggle_sidebar_catred_box_options(n_clicks, is_open):
+            """Toggle sidebar CATRED box options"""
+            if n_clicks:
+                return not is_open
+            return is_open
+        
         # Handle sidebar action buttons
         @self.app.callback(
             Output('status-info', 'children', allow_duplicate=True),
             [Input('sidebar-generate-cutout', 'n_clicks'),
              Input('quick-phz-button', 'n_clicks'),
-             Input('quick-images-button', 'n_clicks'),
+             Input('quick-catred-box-button', 'n_clicks'),
              Input('cluster-more-options-button', 'n_clicks')],
             [State('sidebar-cutout-size', 'value'),
              State('sidebar-cutout-type', 'value')],
             prevent_initial_call=True
         )
-        def handle_sidebar_actions(cutout_clicks, phz_clicks, images_clicks, more_clicks,
-                                 cutout_size, cutout_type):
+        def handle_sidebar_actions(cutout_clicks, phz_clicks, catred_box_clicks, more_clicks,
+                                   cutout_size, cutout_type):
             """Handle sidebar action button clicks"""
             ctx = callback_context
             if not ctx.triggered:
@@ -325,9 +354,9 @@ class ClusterModalCallbacks:
                 ], color="success")
                 return status_msg
                 
-            elif button_id == 'quick-images-button':
+            elif button_id == 'quick-catred-box-button':
                 status_msg = dbc.Alert([
-                    html.H6("🖼️ Loading Images...", className="mb-2"),
+                    html.H6("🖼️ Loading CATRED Box...", className="mb-2"),
                     html.P(f"📍 RA {cluster['ra']:.4f}°, Dec {cluster['dec']:.4f}°")
                 ], color="primary")
                 return status_msg
@@ -372,24 +401,54 @@ class ClusterModalCallbacks:
                 return not is_open
             return is_open
         
+        # Toggle CATRED box options in tab
+        @self.app.callback(
+            Output('tab-catred-box-options', 'is_open'),
+            [Input('tab-catred-box-button', 'n_clicks')],
+            [State('tab-catred-box-options', 'is_open')],
+            prevent_initial_call=True
+        )
+        def toggle_tab_catred_box_options(n_clicks, is_open):
+            """Toggle tab CATRED box options"""
+            if n_clicks:
+                return not is_open
+            return is_open
+        
         # Handle tab action buttons
         @self.app.callback(
-            [Output('cluster-analysis-results', 'children'),
+            [Output('cluster-plot', 'figure', allow_duplicate=True), 
+             Output('phz-pdf-plot', 'figure', allow_duplicate=True),
+             Output('cluster-analysis-results', 'children'),
              Output('status-info', 'children', allow_duplicate=True)],
             [Input('tab-generate-cutout', 'n_clicks'),
              Input('tab-phz-button', 'n_clicks'),
-             Input('tab-images-button', 'n_clicks'),
+             Input('tab-view-catred-box', 'n_clicks'),
              Input('tab-export-button', 'n_clicks')],
-            [State('tab-cutout-size', 'value'),
-             State('tab-cutout-type', 'value')],
+            [State('algorithm-dropdown', 'value'),
+             State('snr-range-slider', 'value'),
+             State('polygon-switch', 'value'),
+             State('mer-switch', 'value'),
+             State('aspect-ratio-switch', 'value'),
+             State('merged-clusters-switch', 'value'),
+             State('tab-cutout-size', 'value'),
+             State('tab-cutout-type', 'value'),
+             State('tab-catred-box-size', 'value'),
+             State('tab-catred-redshift-bin-width', 'value'),
+             State('catred-mode-switch', 'value'),
+             State('catred-threshold-slider', 'value'),
+             State('magnitude-limit-slider', 'value'),
+             State('cluster-plot', 'relayoutData'),
+             State('cluster-plot', 'figure')],
             prevent_initial_call=True
         )
-        def handle_tab_actions(cutout_clicks, phz_clicks, images_clicks, export_clicks,
-                              cutout_size, cutout_type):
+        def handle_tab_actions(cutout_clicks, phz_clicks, catred_box_clicks, export_clicks,
+                               algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_merged_clusters,
+                               cutout_size, cutout_type, catred_box_size, catred_redshift_bin_width,
+                               catred_mode, threshold, maglim, relayout_data, current_figure):
             """Handle tab action button clicks"""
             ctx = callback_context
             if not ctx.triggered:
-                return dash.no_update, dash.no_update
+                return dash.no_update, dash.no_update, dash.no_update, dash.no_update
             
             button_id = ctx.triggered[0]['prop_id'].split('.')[0]
             
@@ -449,30 +508,73 @@ class ClusterModalCallbacks:
                     html.H6("📈 PHZ Analysis Complete", className="mb-2"),
                     html.P(f"🎯 z={cluster['redshift']} | SNR={cluster['snr']}")
                 ], color="success")
-                
-                return results_content, status_msg
-                
-            elif button_id == 'tab-images-button':
+
+                return dash.no_update, dash.no_update, results_content, status_msg
+
+            elif button_id == 'tab-view-catred-box':
                 results_content = dbc.Card([
                     dbc.CardHeader([
-                        html.H6([html.I(className="fas fa-images me-2"), "Image Viewer"], className="mb-0 text-primary")
+                        html.H6([html.I(className="fas fa-magnifying-glass me-2"), "CATRED Box View"], className="mb-0 text-primary")
                     ]),
                     dbc.CardBody([
                         html.P([
                             html.Strong("Target: "), f"RA {cluster['ra']:.4f}°, Dec {cluster['dec']:.4f}°",
                             html.Br(),
-                            html.Strong("Status: "), html.Span("Loading Images...", className="text-info")
+                            html.Strong("Box Size: "), f"{catred_box_size} arcmin",
+                            html.Br(),
+                            html.Strong("Redshift Bin Width: "), f"{catred_redshift_bin_width}",
+                            html.Br(),
+                            html.Strong("Status: "), html.Span("Loading CATRED Box...", className="text-info")
                         ])
                     ])
                 ])
-                
+
+                # Extract SNR values from range slider
+                snr_lower = snr_range[0] if snr_range and len(snr_range) == 2 else None
+                snr_upper = snr_range[1] if snr_range and len(snr_range) == 2 else None
+
+                # Load CATRED Box data
+                box_params = self.catred_handler._extract_box_data_from_cluster_click(
+                    click_data={'ra': cluster['ra'], 'dec': cluster['dec'],
+                                'redshift': cluster['redshift'],
+                                'catred_box_size': catred_box_size/60,  # Convert arcmin to degrees
+                                'catred_redshift_bin_width': catred_redshift_bin_width}
+                )
+
+                data = self.data_loader.load_data(select_algorithm=algorithm)
+                catred_cutout_data = self.catred_handler.load_catred_data_clusterbox(
+                    box=box_params, data=data,
+                    threshold=threshold, maglim=maglim
+                    )
+
+                if self.trace_creator:
+                    traces = self.trace_creator.create_traces(
+                        data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
+                        manual_catred_data=catred_cutout_data, 
+                        snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, 
+                        threshold=threshold, show_merged_clusters=show_merged_clusters
+                        )
+
+                if self.figure_manager:
+                    fig = self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio)
+                else:
+                    fig = self._create_fallback_figure(traces, algorithm, free_aspect_ratio)
+
+                # Preserve zoom state
+                if self.figure_manager:
+                    self.figure_manager.preserve_zoom_state(fig, relayout_data)
+                else:
+                    self._preserve_zoom_state_fallback(fig, relayout_data)
+
+                empty_phz_fig = self._create_empty_phz_plot()
+
                 status_msg = dbc.Alert([
-                    html.H6("🖼️ Loading Images...", className="mb-2"),
+                    html.H6("🖼️ Loading CATRED Box...", className="mb-2"),
                     html.P(f"📍 RA {cluster['ra']:.4f}°, Dec {cluster['dec']:.4f}°")
                 ], color="primary")
-                
-                return results_content, status_msg
-                
+
+                return fig, empty_phz_fig, results_content, status_msg
+
             elif button_id == 'tab-export-button':
                 results_content = dbc.Card([
                     dbc.CardHeader([
@@ -493,7 +595,83 @@ class ClusterModalCallbacks:
                     html.H6("💾 Data Export Ready", className="mb-2"),
                     html.P(f"📊 Cluster data prepared for download")
                 ], color="warning")
+
+                return dash.no_update, dash.no_update, results_content, status_msg
+
+            return dash.no_update, dash.no_update, dash.no_update, dash.no_update
+    
+    def _create_fallback_figure(self, traces, algorithm, free_aspect_ratio):
+        """Fallback figure creation method"""
+        fig = go.Figure(traces)
+        
+        # Configure aspect ratio based on setting
+        if free_aspect_ratio:
+            xaxis_config = dict(visible=True)
+            yaxis_config = dict(visible=True)
+        else:
+            xaxis_config = dict(
+                scaleanchor="y",
+                scaleratio=1,
+                constrain="domain",
+                visible=True
+            )
+            yaxis_config = dict(
+                constrain="domain",
+                visible=True
+            )
+        
+        fig.update_layout(
+            title=f'Cluster Detection Visualization - {algorithm}',
+            xaxis_title='Right Ascension (degrees)',
+            yaxis_title='Declination (degrees)',
+            legend=dict(
+                title='Legend',
+                orientation='v',
+                xanchor='left',
+                x=1.01,
+                yanchor='top',
+                y=1,
+                font=dict(size=10)
+            ),
+            hovermode='closest',
+            margin=dict(l=40, r=120, t=60, b=40),
+            xaxis=xaxis_config,
+            yaxis=yaxis_config,
+            autosize=True
+        )
+        
+        return fig
+    
+    def _create_empty_phz_plot(self, message="Click on a CATRED data point to view its PHZ_PDF"):
+        """Create empty PHZ_PDF plot with message"""
+        empty_phz_fig = go.Figure()
+        empty_phz_fig.update_layout(
+            title='PHZ_PDF Plot',
+            xaxis_title='Redshift',
+            yaxis_title='Probability Density',
+            margin=dict(l=40, r=20, t=40, b=40),
+            showlegend=False,
+            annotations=[
+                dict(
+                    text=message,
+                    xref="paper", yref="paper",
+                    x=0.5, y=0.5, xanchor='center', yanchor='middle',
+                    showarrow=False,
+                    font=dict(size=14, color="gray")
+                )
+            ]
+        )
+        return empty_phz_fig
+    
+    def _preserve_zoom_state_fallback(self, fig, relayout_data):
+        """Fallback zoom state preservation method"""
+        if relayout_data:
+            if 'xaxis.range[0]' in relayout_data and 'xaxis.range[1]' in relayout_data:
+                fig.update_xaxes(range=[relayout_data['xaxis.range[0]'], relayout_data['xaxis.range[1]']])
+            elif 'xaxis.range' in relayout_data:
+                fig.update_xaxes(range=relayout_data['xaxis.range'])
                 
-                return results_content, status_msg
-            
-            return dash.no_update, dash.no_update
+            if 'yaxis.range[0]' in relayout_data and 'yaxis.range[1]' in relayout_data:
+                fig.update_yaxes(range=[relayout_data['yaxis.range[0]'], relayout_data['yaxis.range[1]']])
+            elif 'yaxis.range' in relayout_data:
+                fig.update_yaxes(range=relayout_data['yaxis.range'])

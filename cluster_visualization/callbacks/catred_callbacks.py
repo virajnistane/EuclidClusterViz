@@ -93,7 +93,9 @@ class CATREDCallbacks:
              State('cluster-plot', 'figure')],
             prevent_initial_call=True
         )
-        def manual_render_catred_data(catred_n_clicks, algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_merged_clusters, catred_mode, threshold, maglim, relayout_data, current_figure):
+        def manual_render_catred_data(catred_n_clicks, 
+                                      algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, 
+                                      show_merged_clusters, catred_mode, threshold, maglim, relayout_data, current_figure):
             if catred_n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update
             
@@ -124,7 +126,8 @@ class CATREDCallbacks:
                                       manual_catred_data=catred_scatter_data, 
                                       existing_catred_traces=existing_catred_traces,
                                       existing_mosaic_traces=existing_mosaic_traces,  # 🆕 PASS MOSAIC TRACES
-                                      snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, threshold=threshold, show_merged_clusters=show_merged_clusters)
+                                      snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, 
+                                      threshold=threshold, show_merged_clusters=show_merged_clusters)
                 
                 # Update the CATRED traces cache with the new trace count
                 if catred_scatter_data and catred_scatter_data['ra']:
