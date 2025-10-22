@@ -130,7 +130,7 @@ print('✓ Custom modules OK')
 }
 
 # Main execution
-choice=$(get_choice)
+choice=1 # $(get_choice)
 choice=$(echo "$choice" | tr -d '[:space:]')  # Remove whitespace
 
 case $choice in
