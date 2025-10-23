@@ -486,8 +486,8 @@ class ClusterModalCallbacks:
                 ], color="info")
                 
                 print(f"🔬 Tab cutout: RA={cluster['ra']}, Dec={cluster['dec']}, Size={cutout_size}, Type={cutout_type}")
-                return results_content, status_msg
-                
+                return dash.no_update, dash.no_update, results_content, status_msg
+
             elif button_id == 'tab-phz-button':
                 results_content = dbc.Card([
                     dbc.CardHeader([
