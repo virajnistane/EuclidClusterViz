@@ -46,6 +46,7 @@ class ClusterModalCallbacks:
         self._setup_action_callbacks()
         self._setup_sidebar_callbacks()
         self._setup_tab_callbacks()  # 🆕 Add tab callbacks
+        self._setup_parameter_sync_callbacks()
     
     def _setup_cluster_click_callback(self):
         """Setup callback to detect cluster clicks and show in cluster tab"""
@@ -434,6 +435,8 @@ class ClusterModalCallbacks:
              State('tab-cutout-type', 'value'),
              State('tab-catred-box-size', 'value'),
              State('tab-catred-redshift-bin-width', 'value'),
+             State('tab-catred-mask-threshold', 'value'),
+             State('tab-catred-maglim', 'value'),
              State('catred-mode-switch', 'value'),
              State('catred-threshold-slider', 'value'),
              State('magnitude-limit-slider', 'value'),
@@ -443,7 +446,7 @@ class ClusterModalCallbacks:
         )
         def handle_tab_actions(cutout_clicks, phz_clicks, catred_box_clicks, export_clicks,
                                algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_merged_clusters,
-                               cutout_size, cutout_type, catred_box_size, catred_redshift_bin_width,
+                               cutout_size, cutout_type, catred_box_size, catred_redshift_bin_width, catred_mask_threshold, catred_maglim,
                                catred_mode, threshold, maglim, relayout_data, current_figure):
             """Handle tab action button clicks"""
             ctx = callback_context
@@ -675,3 +678,56 @@ class ClusterModalCallbacks:
                 fig.update_yaxes(range=[relayout_data['yaxis.range[0]'], relayout_data['yaxis.range[1]']])
             elif 'yaxis.range' in relayout_data:
                 fig.update_yaxes(range=relayout_data['yaxis.range'])
+
+    def _setup_parameter_sync_callbacks(self):
+        """Setup callbacks to sync parameters between tab inputs and sliders"""
+        
+        # Bidirectional sync for magnitude limit
+        @self.app.callback(
+            [Output('magnitude-limit-slider', 'value', allow_duplicate=True),
+            Output('tab-catred-maglim', 'value', allow_duplicate=True)],
+            [Input('magnitude-limit-slider', 'value'),
+            Input('tab-catred-maglim', 'value')],
+            prevent_initial_call=True
+        )
+        def sync_magnitude_limit_bidirectional(slider_value, tab_value):
+            """Bidirectionally sync magnitude limit between slider and tab input"""
+            ctx = callback_context
+            if not ctx.triggered:
+                return dash.no_update, dash.no_update
+                
+            triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
+            
+            if triggered_id == 'magnitude-limit-slider' and slider_value is not None:
+                # Slider changed, update tab input
+                return dash.no_update, slider_value
+            elif triggered_id == 'tab-catred-maglim' and tab_value is not None:
+                # Tab input changed, update slider
+                return tab_value, dash.no_update
+                
+            return dash.no_update, dash.no_update
+        
+        # Bidirectional sync for threshold
+        @self.app.callback(
+            [Output('catred-threshold-slider', 'value', allow_duplicate=True),
+            Output('tab-catred-mask-threshold', 'value', allow_duplicate=True)],
+            [Input('catred-threshold-slider', 'value'),
+            Input('tab-catred-mask-threshold', 'value')],
+            prevent_initial_call=True
+        )
+        def sync_threshold_bidirectional(slider_value, tab_value):
+            """Bidirectionally sync threshold between slider and tab input"""
+            ctx = callback_context
+            if not ctx.triggered:
+                return dash.no_update, dash.no_update
+                
+            triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
+            
+            if triggered_id == 'catred-threshold-slider' and slider_value is not None:
+                # Slider changed, update tab input
+                return dash.no_update, slider_value
+            elif triggered_id == 'tab-catred-mask-threshold' and tab_value is not None:
+                # Tab input changed, update slider
+                return tab_value, dash.no_update
+                
+            return dash.no_update, dash.no_update
