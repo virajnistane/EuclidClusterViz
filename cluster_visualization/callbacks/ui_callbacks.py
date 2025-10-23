@@ -125,8 +125,8 @@ class UICallbacks:
             }
             """,
             [Output('catred-threshold-container', 'style'),
-             Output('magnitude-limit-container', 'style'),
-             Output('catred-controls-container', 'style')],
+             Output('magnitude-limit-container', 'style')],
+            #  Output('catred-controls-container', 'style')],
             [Input('catred-mode-switch', 'value')],
             prevent_initial_call=False
         )

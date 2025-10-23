@@ -101,7 +101,7 @@ def get_masked_catred(tile_id, effcovmask_info, catred_info, maglim=24.0, thresh
         
         if threshold == 1:
             threshold = 0.99  # Adjust threshold to avoid exact 1.0 filtering issues
-            
+
         # Apply threshold filter
         coverage_mask = eff_cov >= threshold
         filtered_src = src[coverage_mask]
@@ -618,35 +618,38 @@ class CATREDHandler:
                 print(f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} unmasked points from MER tile {mertileid}")
 
     def load_catred_scatter_data(self, data: Dict[str, Any], relayout_data: Dict[str, Any],
-                                catred_mode: str = "masked", threshold: float = 0.8, maglim: float = 24.0) -> Dict[str, List]:
+                                catred_masked: bool = True, threshold: float = 0.8, maglim: float = 24.0) -> Dict[str, List]:
         """
         Load CATRED scatter data based on the specified mode.
         
         Args:
             data: Main data dictionary containing MER tile information
             relayout_data: Current zoom/pan state for determining zoom window
-            catred_mode: Mode for CATRED data ("none", "unmasked", "masked")
+            catred_masked: CATRED data, masked (True) or unmasked (False)
             threshold: Effective coverage threshold for masked data (default 0.8)
             maglim: Magnitude limit for filtering (default 24.0)
             
         Returns:
             Dictionary with scatter plot data for CATRED points
         """
-        if catred_mode == "none":
-            print("Debug: CATRED mode is 'none', returning empty data")
+        try:
+            assert type(catred_masked) == bool, "catred_masked must be a boolean"
+            # Extract zoom data from relayout_data
+            zoom_data = self._extract_zoom_data_from_relayout(relayout_data)
+
+            if catred_masked:
+                print(f"Debug: Loading masked CATRED data with coverage for client-side filtering")
+                return self.update_catred_data_with_coverage(zoom_data, data, maglim, threshold)
+            else:  # unmasked
+                print("Debug: Loading unmasked CATRED data")
+                return self.update_catred_data_unmasked(zoom_data, data, maglim)
+        except:
+            print(f"Debug: catred_masked not a boolean, executing catred_masked='True' fallback")
             return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_70_int': [], 'phz_pdf': []}
         
-        # Extract zoom data from relayout_data
-        zoom_data = self._extract_zoom_data_from_relayout(relayout_data)
         
-        if catred_mode == "masked":
-            print(f"Debug: Loading masked CATRED data with coverage for client-side filtering")
-            return self.update_catred_data_with_coverage(zoom_data, data, maglim, threshold)
-        else:  # unmasked
-            print("Debug: Loading unmasked CATRED data")
-            return self.update_catred_data_unmasked(zoom_data, data, maglim)
 
-    def load_catred_data_clusterbox(self, box: Dict[str, Any], data: Dict[str, Any],
+    def load_catred_data_clusterbox(self, box: Dict[str, Any], data: Dict[str, Any], catred_masked: bool = True,
                                    threshold: float = 0.8, maglim: float = 24.0) -> Dict[str, List]:
         """
         Load CATRED data for a specific cluster box.
@@ -660,8 +663,7 @@ class CATREDHandler:
         Returns:
             Dictionary with scatter plot data for CATRED points
         """
-        print("Debug: Loading CATRED data for cluster box selection")
-        print("Debug: Box data received:", box)
+        print("Debug: Loading masked (default) CATRED data for cluster box selection")
         return self.update_catred_data_clusterbox(box, data, threshold, maglim)
 
     def apply_box_selection(

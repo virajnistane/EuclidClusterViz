@@ -37,7 +37,8 @@ class TraceCreator:
     
     def create_traces(self, data: Dict[str, Any], show_polygons: bool = True, 
                      show_mer_tiles: bool = False, relayout_data: Optional[Dict] = None,
-                     catred_mode: str = "none", manual_catred_data: Optional[Dict] = None,
+                     catred_masked: bool = False, manual_catred_data: Optional[Dict] = None, 
+                     catred_box_data: Optional[Dict] = None,
                      existing_catred_traces: Optional[List] = None, 
                      existing_mosaic_traces: Optional[List] = None,
                      snr_threshold_lower: Optional[float] = None, snr_threshold_upper: Optional[float] = None, 
@@ -51,7 +52,7 @@ class TraceCreator:
             show_polygons: Whether to fill polygons or show outlines only
             show_mer_tiles: Whether to show MER tile polygons
             relayout_data: Current zoom/pan state for zoom threshold checking
-            catred_mode: Mode for CATRED data ("none", "unmasked", "masked")
+            catred_masked: CATRED data masked (True) or unmasked (False)
             manual_catred_data: Manually loaded CATRED scatter data
             existing_catred_traces: Existing CATRED traces to preserve
             existing_mosaic_traces: Existing mosaic traces to preserve
@@ -63,17 +64,16 @@ class TraceCreator:
         Returns:
             List of Plotly trace objects ready for figure display        """
         traces = []  # Polygon traces (bottom layer)
-        data_traces = []  # Data traces (top layer)
         
         # Apply SNR filtering to merged data
         datamod_detcluster_mergedcat = self._apply_snr_filtering(data['data_detcluster_mergedcat'], snr_threshold_lower, snr_threshold_upper)
         datamod_detcluster_mergedcat = self._apply_redshift_filtering(datamod_detcluster_mergedcat, z_threshold_lower, z_threshold_upper)
 
         # Check zoom threshold for CATRED data display
-        zoom_threshold_met = self._check_zoom_threshold(relayout_data, catred_mode != "none")
+        zoom_threshold_met = self._check_zoom_threshold(relayout_data, show_mer_tiles)
 
         # Get CATRED data points for proximity-based marker enhancement
-        catred_points = self._get_catred_data_points(manual_catred_data, existing_catred_traces)
+        catred_points = self._get_catred_data_points(manual_catred_data, existing_catred_traces, catred_box_data)
 
         # Create data traces in layered order for proper visual hierarchy
         # Layer order: CATRED (bottom) → Merged clusters → Individual tile clusters (top)
@@ -82,9 +82,21 @@ class TraceCreator:
         
         # Add CATRED traces to separate list (bottom layer)
         self._add_existing_catred_traces(catred_traces, existing_catred_traces)
-        self._add_manual_catred_traces(catred_traces, show_mer_tiles, catred_mode,
+        try: 
+            assert type(catred_masked) is bool
+            self._add_manual_catred_traces(catred_traces, show_mer_tiles, catred_masked,
                                        manual_catred_data, zoom_threshold_met)
-        
+        except:
+            print("Debug: catred_masked is not a boolean, probably set to 'none' in CATREDCallbacks")
+            pass
+
+        try:
+            assert type(catred_masked) is bool
+            self._add_catred_box_trace(catred_traces, show_mer_tiles, catred_masked, catred_box_data)
+        except:
+            print("Debug: catred_masked is not a boolean, probably set to 'none' in CATREDCallbacks")
+            pass
+
         # Add cluster traces to separate list (top layer) - conditionally based on toggle
         if show_merged_clusters:
             self._add_merged_cluster_trace(cluster_traces, datamod_detcluster_mergedcat, data['algorithm'], catred_points)
@@ -106,8 +118,8 @@ class TraceCreator:
         # Combine in proper layer order: polygons (bottom) → mosaics → CATRED → clusters (top)
         # This ensures cluster traces are always on top of mosaic and CATRED traces
         return traces + mosaic_traces + catred_traces + cluster_traces
-    
-    def _get_catred_data_points(self, manual_catred_data: Optional[Dict], existing_catred_traces: Optional[List]) -> Optional[List]:
+
+    def _get_catred_data_points(self, manual_catred_data: Optional[Dict], existing_catred_traces: Optional[List], catred_box_data: Optional[Dict]) -> Optional[List]:
         """Get all CATRED data points for proximity-based enhancement."""
         all_points = []
 
@@ -139,6 +151,11 @@ class TraceCreator:
             # Clear bounds cache as well
             if hasattr(self, '_catred_bounds_cache'):
                 delattr(self, '_catred_bounds_cache')
+
+        if catred_box_data and catred_box_data.get('ra'):
+            for ra, dec in zip(catred_box_data['ra'], catred_box_data['dec']):
+                all_points.append((ra, dec))
+            print(f"Debug: Added {len(catred_box_data['ra'])} points from CATRED box data")
 
         # If no CATRED data found, return None (no enhancement)
         if not all_points:
@@ -289,22 +306,24 @@ class TraceCreator:
             print(f"Debug: Zoom threshold NOT met. RA: {ra_range}, Dec: {dec_range}")
             return False
     
-    def _add_existing_catred_traces(self, data_traces: List, existing_catred_traces: Optional[List]) -> None:
+    def _add_existing_catred_traces(
+            self, data_traces: List, existing_catred_traces: Optional[List]
+            ) -> None:
         """Add existing CATRED traces to preserve them across renders."""
         if existing_catred_traces:
             print(f"Debug: Adding {len(existing_catred_traces)} existing CATRED traces to bottom layer")
             data_traces.extend(existing_catred_traces)
     
-    def _add_manual_catred_traces(self, data_traces: List, show_mer_tiles: bool, 
-                              catred_mode: str, manual_catred_data: Optional[Dict],
-                              zoom_threshold_met: bool) -> None:
+    def _add_manual_catred_traces(
+            self, data_traces: List, show_mer_tiles: bool, catred_masked: bool, manual_catred_data: Optional[Dict], zoom_threshold_met: bool
+            ) -> None:
         """Add manually loaded CATRED high-resolution data traces."""
-        if not (show_mer_tiles and catred_mode != "none" and manual_catred_data):
-            if show_mer_tiles and catred_mode != "none" and zoom_threshold_met:
+        if not (show_mer_tiles and manual_catred_data):
+            if show_mer_tiles and zoom_threshold_met:
                 print(f"Debug: CATRED scatter conditions met but no manual data provided - use render button")
             else:
                 print(f"Debug: CATRED scatter data conditions not met - show_mer_tiles: {show_mer_tiles}, "
-                      f"catred_mode: {catred_mode}, manual_data: {manual_catred_data is not None}")
+                      f"manual_data: {manual_catred_data is not None}")
             return
         
         if not manual_catred_data.get('ra'):
@@ -316,12 +335,12 @@ class TraceCreator:
 
         # Generate unique trace name
         trace_count = self.catred_handler.get_traces_count() if self.catred_handler else 1
-        mode_label = "Masked" if catred_mode == "masked" else "Unmasked"
+        mode_label = "Masked" if catred_masked else "Unmasked"
         trace_name = f'CATRED {mode_label} Data #{trace_count + 1}'
 
         # Create CATRED scatter trace
         # For masked mode, include effective coverage in customdata for client-side filtering
-        if catred_mode == "masked" and 'effective_coverage' in manual_catred_data:
+        if catred_masked and 'effective_coverage' in manual_catred_data:
             customdata = manual_catred_data['effective_coverage']
             print(f"Debug: Including effective coverage data for client-side filtering, values range: {min(customdata):.3f} to {max(customdata):.3f}")
         else:
@@ -361,6 +380,76 @@ class TraceCreator:
         print("Debug: CATRED trace added to TOP LAYER (should be clickable)")
         print("Debug: About to return from _add_manual_catred_traces method")
     
+    def _add_catred_box_trace(
+            self, data_traces: List, show_mer_tiles: bool, catred_masked: bool, catred_box_data: Optional[Dict]
+            ) -> None:
+        """Add CATRED bounding box trace if applicable."""
+        if not (show_mer_tiles and catred_box_data):
+            if show_mer_tiles:
+                print(f"Debug: CATRED scatter conditions met but no manual data provided - use render button")
+            else:
+                print(f"Debug: CATRED scatter data conditions not met - show_mer_tiles: {show_mer_tiles}, "
+                      f"catred_box_data: {catred_box_data is not None}")
+            return
+        
+        if not catred_box_data.get('ra'):
+            print("Debug: No CATRED scatter data available to display")
+            return
+
+        print(f"Debug: Using manually loaded CATRED scatter data")
+        print(f"Debug: Creating CATRED scatter trace with {len(catred_box_data['ra'])} points")
+
+        # Generate unique trace name
+        trace_count = self.catred_handler.get_traces_count() if self.catred_handler else 1
+        mode_label = "Masked" if catred_masked else "Unmasked"
+        trace_name = f'CATRED {mode_label} Data #{trace_count + 1}'
+
+        # Create CATRED scatter trace
+        # For masked mode, include effective coverage in customdata for client-side filtering
+        if catred_masked and 'effective_coverage' in catred_box_data:
+            customdata = catred_box_data['effective_coverage']
+            print(f"Debug: Including effective coverage data for client-side filtering, values range: {min(customdata):.3f} to {max(customdata):.3f}")
+        else:
+            customdata = list(range(len(catred_box_data['ra'])))  # Fallback to index for click tracking
+
+        # glow_trace = self._create_glow_trace(catred_box_data['ra'], catred_box_data['dec'], size=10, shape='circle', opacity=0.3)
+        # data_traces.append(glow_trace)
+
+        catred_trace = go.Scattergl(
+            x=catred_box_data['ra'],
+            y=catred_box_data['dec'],
+            mode='markers',
+            marker=dict(size=10, symbol='circle', color='rgba(100, 100, 100, 0)', line=dict(width=2, color='yellow')), #  color='black', opacity=0,
+            name=trace_name,
+            text=self._format_catred_hover_text(catred_box_data),
+            hoverinfo='text',
+            hoverlabel=dict(bgcolor="lightblue", font_size=12, font_family="Arial"),
+            showlegend=True,
+            customdata=customdata  # Use coverage data for masked mode, indices for others
+        )
+        data_traces.append(catred_trace)
+
+        # Store CATRED data for click callbacks in multiple locations for better access
+        if not hasattr(self, 'current_catred_data') or self.current_catred_data is None:
+            self.current_catred_data = {}
+        self.current_catred_data[trace_name] = catred_box_data
+        
+        # Also store in CATRED handler if available
+        if self.catred_handler:
+            if not hasattr(self.catred_handler, 'current_catred_data') or self.catred_handler.current_catred_data is None:
+                self.catred_handler.current_catred_data = {}
+            self.catred_handler.current_catred_data[trace_name] = catred_box_data
+            print(f"Debug: Also stored CATRED data in catred_handler")
+
+        print(f"Debug: Stored CATRED data for trace '{trace_name}' with {len(catred_box_data['ra'])} points")
+        print(f"Debug: PHZ_PDF sample length: {len(catred_box_data['phz_pdf'][0]) if catred_box_data['phz_pdf'] else 'No PHZ_PDF data'}")
+        print(f"Debug: Current CATRED data keys: {list(self.current_catred_data.keys())}")
+        print(f"Debug: TraceCreator.current_catred_data id: {id(self.current_catred_data)}")
+        print(f"Debug: Trace name: '{trace_name}'")
+        print("Debug: CATRED trace added to TOP LAYER (should be clickable)")
+        print("Debug: About to return from _add_manual_catred_traces method")
+
+
     def _format_catred_hover_text(self, catred_data: Dict[str, List]) -> List[str]:
         """Format hover text for CATRED data points."""
         hover_texts = []
@@ -377,8 +466,11 @@ class TraceCreator:
             hover_texts.append(text)
         
         return hover_texts
-    
-    def _create_glow_trace(self, x_coords, y_coords, size: int) -> go.Scattergl:
+
+    def _create_glow_trace(
+            self, x_coords, y_coords, size: int, 
+            shape: str = 'square', opacity: float = 0.3
+            ) -> go.Scattergl:
         """Create a glow effect trace for enhanced markers."""
         return go.Scattergl(
             x=x_coords,
@@ -386,9 +478,9 @@ class TraceCreator:
             mode='markers',
             marker=dict(
                 size=size,  # Size passed from caller
-                symbol='square',
+                symbol=shape, # 'square'
                 color='yellow',
-                opacity=0.3,  # Semi-transparent for glow effect
+                opacity=opacity,  # Semi-transparent for glow effect
                 line=dict(width=2, color='yellow')
             ),
             name='Enhanced Marker Glow',
@@ -457,7 +549,8 @@ class TraceCreator:
                 glow_trace = self._create_glow_trace(
                     near_catred_data['RIGHT_ASCENSION_CLUSTER'],
                     near_catred_data['DECLINATION_CLUSTER'],
-                    28
+                    size=28,
+                    shape='square'
                 )
                 data_traces.append(glow_trace)
                 
@@ -561,7 +654,8 @@ class TraceCreator:
                     glow_trace = self._create_glow_trace(
                         near_catred_data['RIGHT_ASCENSION_CLUSTER'],
                         near_catred_data['DECLINATION_CLUSTER'],
-                        20
+                        20,
+                        shape='square'
                     )
                     tile_traces.append(glow_trace)
                     

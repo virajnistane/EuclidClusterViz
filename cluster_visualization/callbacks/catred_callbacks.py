@@ -48,17 +48,17 @@ class CATREDCallbacks:
         @self.app.callback(
             Output('catred-render-button', 'disabled'),
             [Input('cluster-plot', 'relayoutData'),
-             Input('mer-switch', 'value'),
-             Input('catred-mode-switch', 'value')],
+             Input('mer-switch', 'value')],
+            #  Input('catred-mode-switch', 'value')],
             [State('render-button', 'n_clicks')],
             prevent_initial_call=True
         )
-        def update_mer_button_state(relayout_data, show_mer_tiles, catred_mode, n_clicks):
+        def update_mer_button_state(relayout_data, show_mer_tiles, n_clicks):
             # Only enable if main app has been rendered and conditions are met
             if n_clicks == 0:
                 return True  # Disabled
             
-            if not show_mer_tiles or catred_mode == "none":
+            if not show_mer_tiles:
                 return True  # Disabled - switches not turned on
             
             if not relayout_data:
@@ -95,7 +95,7 @@ class CATREDCallbacks:
         )
         def manual_render_catred_data(catred_n_clicks, 
                                       algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, 
-                                      show_merged_clusters, catred_mode, threshold, maglim, relayout_data, current_figure):
+                                      show_merged_clusters, catred_masked, threshold, maglim, relayout_data, current_figure):
             if catred_n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update
             
@@ -110,7 +110,7 @@ class CATREDCallbacks:
                 data = self.load_data(algorithm)
                 
                 # Load CATRED scatter data for current zoom window with threshold
-                catred_scatter_data = self.load_catred_scatter_data(data, relayout_data, catred_mode, threshold, maglim)
+                catred_scatter_data = self.load_catred_scatter_data(data, relayout_data, catred_masked, threshold, maglim)
                 
                 # Extract existing CATRED traces from current figure to preserve them
                 existing_catred_traces = self._extract_existing_catred_traces(current_figure)
@@ -122,13 +122,15 @@ class CATREDCallbacks:
                 print(f"Debug: Found {len(existing_mosaic_traces)} existing mosaic traces to preserve")
                 
                 # Create traces with the manually loaded CATRED data and existing traces
-                traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
-                                      manual_catred_data=catred_scatter_data, 
-                                      existing_catred_traces=existing_catred_traces,
-                                      existing_mosaic_traces=existing_mosaic_traces,  # 🆕 PASS MOSAIC TRACES
-                                      snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, 
-                                      threshold=threshold, show_merged_clusters=show_merged_clusters)
-                
+                traces = self.create_traces(
+                    data, show_polygons, show_mer_tiles, relayout_data, catred_masked,
+                    manual_catred_data=catred_scatter_data,
+                    existing_catred_traces=existing_catred_traces,
+                    existing_mosaic_traces=existing_mosaic_traces,  # 🆕 PASS MOSAIC TRACES
+                    snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper,
+                    threshold=threshold, show_merged_clusters=show_merged_clusters
+                )
+
                 # Update the CATRED traces cache with the new trace count
                 if catred_scatter_data and catred_scatter_data['ra']:
                     self.catred_traces_cache.extend(existing_catred_traces)
@@ -188,7 +190,7 @@ class CATREDCallbacks:
              State('render-button', 'n_clicks')],
             prevent_initial_call=True
         )
-        def clear_catred_data(clear_n_clicks, algorithm, snr_range, redshift_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_merged_clusters, catred_mode, relayout_data, current_figure, render_n_clicks):
+        def clear_catred_data(clear_n_clicks, algorithm, snr_range, redshift_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_merged_clusters, catred_masked, relayout_data, current_figure, render_n_clicks):
             if clear_n_clicks == 0 or render_n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update
             
@@ -222,8 +224,7 @@ class CATREDCallbacks:
                 data = self.load_data(algorithm)
                 
                 # Create traces without any CATRED data, but preserve mosaic traces
-                # Set catred_mode to "none" to ensure no CATRED data is included
-                traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, "none",  # 🔧 SET TO "none" TO CLEAR
+                traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, catred_masked='none',
                                           existing_mosaic_traces=existing_mosaic_traces,  # 🆕 PRESERVE MOSAIC TRACES
                                           snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper,
                                           z_threshold_lower=z_lower, z_threshold_upper=z_upper,  # 🔧 ADD REDSHIFT PARAMS
@@ -267,30 +268,30 @@ class CATREDCallbacks:
         else:
             # Fallback to inline data loading
             return self._load_data_fallback(algorithm)
-    
-    def load_catred_scatter_data(self, data, relayout_data, catred_mode="unmasked", threshold=0.8, maglim=None):
+
+    def load_catred_scatter_data(self, data, relayout_data, catred_masked=False, threshold=0.8, maglim=None):
         """Load CATRED scatter data using modular or fallback method"""
         if self.catred_handler:
-            return self.catred_handler.load_catred_scatter_data(data, relayout_data, catred_mode, threshold, maglim)
+            return self.catred_handler.load_catred_scatter_data(data, relayout_data, catred_masked, threshold, maglim)
         else:
             # Fallback to inline CATRED data loading
             return self._load_catred_scatter_data_fallback(data, relayout_data)
     
-    def create_traces(self, data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
+    def create_traces(self, data, show_polygons, show_mer_tiles, relayout_data, catred_masked, 
                      existing_catred_traces=None, existing_mosaic_traces=None, manual_catred_data=None, 
                      snr_threshold_lower=None, snr_threshold_upper=None, 
                      z_threshold_lower=None, z_threshold_upper=None, threshold=0.8, show_merged_clusters=True):
         """Create traces using modular or fallback method"""
         if self.trace_creator:
             return self.trace_creator.create_traces(
-                data, show_polygons, show_mer_tiles, relayout_data, catred_mode,
+                data, show_polygons, show_mer_tiles, relayout_data, catred_masked,
                 existing_catred_traces=existing_catred_traces, existing_mosaic_traces=existing_mosaic_traces, manual_catred_data=manual_catred_data,
                 snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, 
                 z_threshold_lower=z_threshold_lower, z_threshold_upper=z_threshold_upper, threshold=threshold, show_merged_clusters=show_merged_clusters
             )
         else:
             # Fallback to inline trace creation
-            return self._create_traces_fallback(data, show_polygons, show_mer_tiles, relayout_data, catred_mode,
+            return self._create_traces_fallback(data, show_polygons, show_mer_tiles, relayout_data, catred_masked,
                                               existing_catred_traces=existing_catred_traces, 
                                               existing_mosaic_traces=existing_mosaic_traces,  # 🆕 ADD MOSAIC TRACES
                                               manual_catred_data=manual_catred_data,
@@ -419,7 +420,7 @@ class CATREDCallbacks:
         # For now, return empty structure to prevent errors
         return {'ra': [], 'dec': [], 'phz_pdf': [], 'phz_mode_1': []}
     
-    def _create_traces_fallback(self, data, show_polygons, show_mer_tiles, relayout_data, catred_mode,
+    def _create_traces_fallback(self, data, show_polygons, show_mer_tiles, relayout_data, catred_masked,
                                existing_catred_traces=None, existing_mosaic_traces=None, manual_catred_data=None, 
                                snr_threshold_lower=None, snr_threshold_upper=None, 
                                z_threshold_lower=None, z_threshold_upper=None, threshold=0.8, show_merged_clusters=True):
@@ -434,14 +435,15 @@ class CATREDCallbacks:
         
         # Configure aspect ratio based on setting
         if free_aspect_ratio:
-            xaxis_config = dict(visible=True)
+            xaxis_config = dict(visible=True, autorange='reversed')  # Reverse RA axis for astronomy convention
             yaxis_config = dict(visible=True)
         else:
             xaxis_config = dict(
                 scaleanchor="y",
                 scaleratio=1,
                 constrain="domain",
-                visible=True
+                visible=True,
+                autorange='reversed'  # Reverse RA axis for astronomy convention
             )
             yaxis_config = dict(
                 constrain="domain",
@@ -474,9 +476,10 @@ class CATREDCallbacks:
         """Fallback zoom state preservation method"""
         if relayout_data:
             if 'xaxis.range[0]' in relayout_data and 'xaxis.range[1]' in relayout_data:
-                fig.update_xaxes(range=[relayout_data['xaxis.range[0]'], relayout_data['xaxis.range[1]']])
+                fig.update_xaxes(range=[relayout_data['xaxis.range[0]'], relayout_data['xaxis.range[1]']],
+                                 autorange=False)
             elif 'xaxis.range' in relayout_data:
-                fig.update_xaxes(range=relayout_data['xaxis.range'])
+                fig.update_xaxes(range=relayout_data['xaxis.range'], autorange=False)
                 
             if 'yaxis.range[0]' in relayout_data and 'yaxis.range[1]' in relayout_data:
                 fig.update_yaxes(range=[relayout_data['yaxis.range[0]'], relayout_data['yaxis.range[1]']])
