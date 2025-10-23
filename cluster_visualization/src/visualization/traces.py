@@ -386,10 +386,10 @@ class TraceCreator:
             mode='markers',
             marker=dict(
                 size=size,  # Size passed from caller
-                symbol='circle',
+                symbol='square',
                 color='yellow',
                 opacity=0.3,  # Semi-transparent for glow effect
-                line=dict(width=1, color='yellow')
+                line=dict(width=2, color='yellow')
             ),
             name='Enhanced Marker Glow',
             showlegend=False,  # Don't show in legend
@@ -405,7 +405,7 @@ class TraceCreator:
                 x=datamod_detcluster_mergedcat['RIGHT_ASCENSION_CLUSTER'],
                 y=datamod_detcluster_mergedcat['DECLINATION_CLUSTER'],
                 mode='markers',
-                marker=dict(size=10, symbol='square-open', line=dict(width=2), color='black'),
+                marker=dict(size=20, symbol='square-open', line=dict(width=2), color='black'),
                 name=f'Merged Data ({algorithm}) - {len(datamod_detcluster_mergedcat)} clusters',
                 text=[
                     f"merged<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
@@ -436,7 +436,7 @@ class TraceCreator:
                     x=away_from_catred_data['RIGHT_ASCENSION_CLUSTER'],
                     y=away_from_catred_data['DECLINATION_CLUSTER'],
                     mode='markers',
-                    marker=dict(size=10, symbol='square-open', line=dict(width=2), color='black'),
+                    marker=dict(size=20, symbol='square-open', line=dict(width=2), color='black'),
                     name=f'Merged Data ({algorithm}) - {len(away_from_catred_data)} clusters',
                     text=[
                         f"merged<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
@@ -474,6 +474,7 @@ class TraceCreator:
                         opacity=1.0
                     ),
                     name=f'Merged Data (Enhanced) - {len(near_catred_data)} clusters',
+                    showlegend=False,
                     text=[
                         f"merged (enhanced)<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
                         for snr, cz, ra, dec in zip(near_catred_data['SNR_CLUSTER'], 
@@ -512,7 +513,7 @@ class TraceCreator:
                     x=datamod_detcluster_by_cltile['RIGHT_ASCENSION_CLUSTER'],
                     y=datamod_detcluster_by_cltile['DECLINATION_CLUSTER'],
                     mode='markers',
-                    marker=dict(size=6, opacity=1, symbol='x', color=self.colors_list[int(tileid)]),
+                    marker=dict(size=10, opacity=1, symbol='x-thin', line=dict(width=2, color=self.colors_list[int(tileid)])),
                     name=f'Tile {tileid}',
                     text=[
                         f"TileID: {tileid}<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
@@ -541,7 +542,7 @@ class TraceCreator:
                         x=away_from_catred_data['RIGHT_ASCENSION_CLUSTER'],
                         y=away_from_catred_data['DECLINATION_CLUSTER'],
                         mode='markers',
-                        marker=dict(size=6, opacity=1, symbol='x', color=self.colors_list[int(tileid)]),
+                        marker=dict(size=10, opacity=1, symbol='x-thin', line=dict(width=2, color=self.colors_list[int(tileid)])),
                         name=f'Tile {tileid}',
                         text=[
                             f"TileID: {tileid}<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
@@ -560,7 +561,7 @@ class TraceCreator:
                     glow_trace = self._create_glow_trace(
                         near_catred_data['RIGHT_ASCENSION_CLUSTER'],
                         near_catred_data['DECLINATION_CLUSTER'],
-                        23
+                        20
                     )
                     tile_traces.append(glow_trace)
                     
@@ -570,13 +571,14 @@ class TraceCreator:
                         y=near_catred_data['DECLINATION_CLUSTER'],
                         mode='markers',
                         marker=dict(
-                            size=15, 
+                            size=10, 
                             opacity=1, 
-                            symbol='x', 
-                            color=self.colors_list[int(tileid)],
-                            line=dict(width=2, color='yellow')  # Yellow highlight for 'x' symbols
+                            symbol='x-thin', 
+                            # color=self.colors_list[int(tileid)],
+                            line=dict(width=2, color=self.colors_list[int(tileid)])  # Yellow highlight for 'x' symbols
                         ),
                         name=f'Tile {tileid} (Enhanced)',
+                        showlegend=False,  # Avoid duplicate legend entries
                         text=[
                             f"TileID: {tileid} (enhanced)<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
                             for snr, cz, ra, dec in zip(near_catred_data['SNR_CLUSTER'], near_catred_data['Z_CLUSTER'], 
