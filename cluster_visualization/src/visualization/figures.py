@@ -141,7 +141,7 @@ class FigureManager:
         """
         if free_aspect_ratio:
             # Free aspect ratio - no constraints, better for zooming
-            xaxis_config = dict(visible=visible, autorange='reversed')  # Reverse RA axis for astronomy convention
+            xaxis_config = dict(visible=visible)
             yaxis_config = dict(visible=visible)
         else:
             # Equal aspect ratio - astronomical accuracy
@@ -149,8 +149,7 @@ class FigureManager:
                 scaleanchor="y",
                 scaleratio=1,
                 constrain="domain",
-                visible=visible,
-                autorange='reversed'  # Reverse RA axis for astronomy convention
+                visible=visible
             )
             yaxis_config = dict(
                 constrain="domain",
@@ -235,60 +234,12 @@ class FigureManager:
         """Apply saved zoom state to figure."""
         # Apply X-axis zoom
         if 'xaxis.range[0]' in relayout_data and 'xaxis.range[1]' in relayout_data:
-            fig.update_xaxes(range=[relayout_data['xaxis.range[0]'], relayout_data['xaxis.range[1]']],
-                             autorange=False)
+            fig.update_xaxes(range=[relayout_data['xaxis.range[0]'], relayout_data['xaxis.range[1]']])
         elif 'xaxis.range' in relayout_data:
-            fig.update_xaxes(range=relayout_data['xaxis.range'],
-                             autorange=False)
-
+            fig.update_xaxes(range=relayout_data['xaxis.range'])
+        
         # Apply Y-axis zoom
         if 'yaxis.range[0]' in relayout_data and 'yaxis.range[1]' in relayout_data:
             fig.update_yaxes(range=[relayout_data['yaxis.range[0]'], relayout_data['yaxis.range[1]']])
         elif 'yaxis.range' in relayout_data:
             fig.update_yaxes(range=relayout_data['yaxis.range'])
-
-    def _create_fallback_figure(self, traces, algorithm, free_aspect_ratio):
-        """Fallback figure creation method with reversed RA axis"""
-        fig = go.Figure(traces)
-        
-        # Configure aspect ratio based on setting
-        if free_aspect_ratio:
-            xaxis_config = dict(
-                visible=True,
-                autorange='reversed'  # 🆕 Reverse RA axis for astronomy convention
-            )
-            yaxis_config = dict(visible=True)
-        else:
-            xaxis_config = dict(
-                scaleanchor="y",
-                scaleratio=1,
-                constrain="domain",
-                visible=True,
-                autorange='reversed'  # 🆕 Reverse RA axis for astronomy convention
-            )
-            yaxis_config = dict(
-                constrain="domain",
-                visible=True
-            )
-        
-        fig.update_layout(
-            title=f'Cluster Detection Visualization - {algorithm}',
-            xaxis_title='Right Ascension (degrees)',
-            yaxis_title='Declination (degrees)',
-            legend=dict(
-                title='Legend',
-                orientation='v',
-                xanchor='left',
-                x=1.01,
-                yanchor='top',
-                y=1,
-                font=dict(size=10)
-            ),
-            hovermode='closest',
-            margin=dict(l=40, r=120, t=60, b=40),
-            xaxis=xaxis_config,
-            yaxis=yaxis_config,
-            autosize=True
-        )
-        
-        return fig

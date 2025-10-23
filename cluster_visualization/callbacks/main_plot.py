@@ -154,7 +154,7 @@ class MainPlotCallbacks:
         )
         def update_plot(n_clicks, snr_n_clicks, redshift_n_clicks, algorithm, 
                         snr_range, redshift_range, show_polygons, show_mer_tiles, 
-                        free_aspect_ratio, show_merged_clusters, catred_masked, threshold, maglim, relayout_data):
+                        free_aspect_ratio, show_merged_clusters, catred_mode, threshold, maglim, relayout_data):
             # Only render if button has been clicked at least once
             if n_clicks == 0 and snr_n_clicks == 0 and redshift_n_clicks == 0:
                 return self._create_initial_empty_plots(free_aspect_ratio)
@@ -176,7 +176,7 @@ class MainPlotCallbacks:
                 # Note: This preserves CATRED data when only SNR/redshift filters change
                 
                 # Create traces
-                traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, catred_masked, 
+                traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
                                             snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, 
                                             z_threshold_lower=z_lower, z_threshold_upper=z_upper, 
                                             threshold=threshold, maglim=maglim, show_merged_clusters=show_merged_clusters)
@@ -226,10 +226,7 @@ class MainPlotCallbacks:
              State('cluster-plot', 'figure')],
             prevent_initial_call=True
         )
-        def update_plot_options(
-            algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, show_merged_clusters, catred_masked, 
-            n_clicks, snr_range, redshift_range, threshold, maglim, relayout_data, current_figure
-            ):
+        def update_plot_options(algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, show_merged_clusters, catred_mode, n_clicks, snr_range, redshift_range, threshold, maglim, relayout_data, current_figure):
             # Only update if render button has been clicked at least once
             if n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update
@@ -254,7 +251,7 @@ class MainPlotCallbacks:
                 print(f"Debug: Options update - preserving {len(existing_mosaic_traces)} Mosaic traces")
 
                 # Create traces with existing CATRED traces preserved
-                traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, catred_masked, 
+                traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
                                             existing_catred_traces=existing_catred_traces, 
                                             existing_mosaic_traces=existing_mosaic_traces,
                                             snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, 
@@ -581,16 +578,16 @@ class MainPlotCallbacks:
         else:
             # Fallback to inline data loading
             return self._load_data_fallback(algorithm)
-
-    def create_traces(self, data, show_polygons, show_mer_tiles, relayout_data, catred_masked,
-                     existing_catred_traces=None, existing_mosaic_traces=None, manual_catred_data=None,
-                     snr_threshold_lower=None, snr_threshold_upper=None,
-                     z_threshold_lower=None, z_threshold_upper=None,
+    
+    def create_traces(self, data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
+                     existing_catred_traces=None, existing_mosaic_traces=None, manual_catred_data=None, 
+                     snr_threshold_lower=None, snr_threshold_upper=None, 
+                     z_threshold_lower=None, z_threshold_upper=None, 
                      threshold=0.8, maglim=None, show_merged_clusters=True):
         """Create traces using modular or fallback method"""
         if self.trace_creator:
             return self.trace_creator.create_traces(
-                data, show_polygons, show_mer_tiles, relayout_data, catred_masked,
+                data, show_polygons, show_mer_tiles, relayout_data, catred_mode,
                 existing_catred_traces=existing_catred_traces, existing_mosaic_traces=existing_mosaic_traces, 
                 manual_catred_data=manual_catred_data,
                 snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, 
@@ -599,7 +596,7 @@ class MainPlotCallbacks:
             )
         else:
             # Fallback to inline trace creation
-            return self._create_traces_fallback(data, show_polygons, show_mer_tiles, relayout_data, catred_masked,
+            return self._create_traces_fallback(data, show_polygons, show_mer_tiles, relayout_data, catred_mode,
                                               existing_mer_traces=existing_catred_traces, manual_mer_data=manual_catred_data,
                                               snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, 
                                               z_threshold_lower=z_threshold_lower, z_threshold_upper=z_threshold_upper, 
@@ -613,15 +610,14 @@ class MainPlotCallbacks:
         
         # Configure aspect ratio based on setting
         if free_aspect_ratio:
-            xaxis_config = dict(visible=False, autorange='reversed')
+            xaxis_config = dict(visible=False)
             yaxis_config = dict(visible=False)
         else:
             xaxis_config = dict(
                 scaleanchor="y",
                 scaleratio=1,
                 constrain="domain",
-                visible=False,
-                autorange='reversed'
+                visible=False
             )
             yaxis_config = dict(
                 constrain="domain",
@@ -850,10 +846,10 @@ class MainPlotCallbacks:
             'z_min': 0,
             'z_max': 10
         }
-
-    def _create_traces_fallback(self, data, show_polygons, show_mer_tiles, relayout_data, catred_masked,
-                               existing_mer_traces=None, existing_mosaic_traces=None,
-                               manual_mer_data=None, snr_threshold_lower=None, snr_threshold_upper=None,
+    
+    def _create_traces_fallback(self, data, show_polygons, show_mer_tiles, relayout_data, catred_mode,
+                               existing_mer_traces=None, existing_mosaic_traces=None, 
+                               manual_mer_data=None, snr_threshold_lower=None, snr_threshold_upper=None, 
                                z_threshold_lower=None, z_threshold_upper=None, threshold=0.8, show_merged_clusters=True):
         """Fallback trace creation method"""
         # This would contain the original inline trace creation logic
@@ -866,15 +862,14 @@ class MainPlotCallbacks:
         
         # Configure aspect ratio based on setting
         if free_aspect_ratio:
-            xaxis_config = dict(visible=True, autorange='reversed')
+            xaxis_config = dict(visible=True)
             yaxis_config = dict(visible=True)
         else:
             xaxis_config = dict(
                 scaleanchor="y",
                 scaleratio=1,
                 constrain="domain",
-                visible=True,
-                autorange='reversed'
+                visible=True
             )
             yaxis_config = dict(
                 constrain="domain",
@@ -908,19 +903,18 @@ class MainPlotCallbacks:
         # Preserve zoom state if available
         if relayout_data and any(key in relayout_data for key in ['xaxis.range[0]', 'xaxis.range[1]', 'yaxis.range[0]', 'yaxis.range[1]']):
             if 'xaxis.range[0]' in relayout_data and 'xaxis.range[1]' in relayout_data:
-                fig.update_xaxes(range=[relayout_data['xaxis.range[0]'], relayout_data['xaxis.range[1]']],
-                                 autorange=False)
+                fig.update_xaxes(range=[relayout_data['xaxis.range[0]'], relayout_data['xaxis.range[1]']])
             if 'yaxis.range[0]' in relayout_data and 'yaxis.range[1]' in relayout_data:
                 fig.update_yaxes(range=[relayout_data['yaxis.range[0]'], relayout_data['yaxis.range[1]']])
         elif relayout_data and 'xaxis.range' in relayout_data:
-            fig.update_xaxes(range=relayout_data['xaxis.range'], autorange=False)
+            fig.update_xaxes(range=relayout_data['xaxis.range'])
             if 'yaxis.range' in relayout_data:
                 fig.update_yaxes(range=relayout_data['yaxis.range'])
         elif current_figure and 'layout' in current_figure:
             # Fallback: try to preserve from current figure layout
             current_layout = current_figure['layout']
             if 'xaxis' in current_layout and 'range' in current_layout['xaxis']:
-                fig.update_xaxes(range=current_layout['xaxis']['range'], autorange=False)
+                fig.update_xaxes(range=current_layout['xaxis']['range'])
             if 'yaxis' in current_layout and 'range' in current_layout['yaxis']:
                 fig.update_yaxes(range=current_layout['yaxis']['range'])
 

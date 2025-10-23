@@ -447,7 +447,7 @@ class ClusterModalCallbacks:
         def handle_tab_actions(cutout_clicks, phz_clicks, catred_box_clicks, export_clicks,
                                algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_merged_clusters,
                                cutout_size, cutout_type, catred_box_size, catred_redshift_bin_width, catred_mask_threshold, catred_maglim,
-                               catred_masked, threshold, maglim, relayout_data, current_figure):
+                               catred_mode, threshold, maglim, relayout_data, current_figure):
             """Handle tab action button clicks"""
             ctx = callback_context
             if not ctx.triggered:
@@ -536,9 +536,6 @@ class ClusterModalCallbacks:
                 snr_lower = snr_range[0] if snr_range and len(snr_range) == 2 else None
                 snr_upper = snr_range[1] if snr_range and len(snr_range) == 2 else None
 
-                # Extract existing CATRED traces from current figure to preserve them
-                existing_catred_traces = self._extract_existing_catred_traces(current_figure)
-
                 # Load CATRED Box data
                 box_params = self.catred_handler._extract_box_data_from_cluster_click(
                     click_data={'ra': cluster['ra'], 'dec': cluster['dec'],
@@ -548,18 +545,17 @@ class ClusterModalCallbacks:
                 )
 
                 data = self.data_loader.load_data(select_algorithm=algorithm)
-                catred_box_data = self.catred_handler.load_catred_data_clusterbox(
+                catred_cutout_data = self.catred_handler.load_catred_data_clusterbox(
                     box=box_params, data=data,
-                    threshold=catred_mask_threshold, maglim=catred_maglim
+                    threshold=threshold, maglim=maglim
                     )
 
                 if self.trace_creator:
                     traces = self.trace_creator.create_traces(
-                        data, show_polygons, show_mer_tiles, relayout_data, catred_masked, 
-                        catred_box_data=catred_box_data, 
-                        existing_catred_traces=existing_catred_traces,
+                        data, show_polygons, show_mer_tiles, relayout_data, catred_mode, 
+                        manual_catred_data=catred_cutout_data, 
                         snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, 
-                        threshold=catred_mask_threshold, show_merged_clusters=show_merged_clusters
+                        threshold=threshold, show_merged_clusters=show_merged_clusters
                         )
 
                 if self.figure_manager:
@@ -607,44 +603,20 @@ class ClusterModalCallbacks:
 
             return dash.no_update, dash.no_update, dash.no_update, dash.no_update
     
-    def _extract_existing_catred_traces(self, current_figure):
-        """Extract existing CATRED traces from current figure"""
-        existing_catred_traces = []
-        if current_figure and 'data' in current_figure:
-            for trace in current_figure['data']:
-                if (isinstance(trace, dict) and 'name' in trace and trace['name'] and
-                    ('CATRED' in trace['name'] or 'CATRED Tiles High-Res Data' in trace['name'])):
-                    # Convert dict to Scattergl object for consistency
-                    existing_trace = go.Scattergl(
-                        x=trace.get('x', []),
-                        y=trace.get('y', []),
-                        mode=trace.get('mode', 'markers'),
-                        marker=trace.get('marker', {}),
-                        name=trace.get('name', 'CATRED Data'),
-                        text=trace.get('text', []),
-                        hoverinfo=trace.get('hoverinfo', 'text'),
-                        showlegend=trace.get('showlegend', True)
-                    )
-                    existing_catred_traces.append(existing_trace)
-                    print(f"Debug: Preserved existing CATRED trace: {trace['name']}")
-        return existing_catred_traces
-    
-
     def _create_fallback_figure(self, traces, algorithm, free_aspect_ratio):
         """Fallback figure creation method"""
         fig = go.Figure(traces)
         
         # Configure aspect ratio based on setting
         if free_aspect_ratio:
-            xaxis_config = dict(visible=True, autorange='reversed')  # Reverse RA axis for astronomy convention
+            xaxis_config = dict(visible=True)
             yaxis_config = dict(visible=True)
         else:
             xaxis_config = dict(
                 scaleanchor="y",
                 scaleratio=1,
                 constrain="domain",
-                visible=True,
-                autorange='reversed'  # Reverse RA axis for astronomy convention
+                visible=True
             )
             yaxis_config = dict(
                 constrain="domain",
@@ -698,10 +670,9 @@ class ClusterModalCallbacks:
         """Fallback zoom state preservation method"""
         if relayout_data:
             if 'xaxis.range[0]' in relayout_data and 'xaxis.range[1]' in relayout_data:
-                fig.update_xaxes(range=[relayout_data['xaxis.range[0]'], relayout_data['xaxis.range[1]']],
-                                 autorange=False)
+                fig.update_xaxes(range=[relayout_data['xaxis.range[0]'], relayout_data['xaxis.range[1]']])
             elif 'xaxis.range' in relayout_data:
-                fig.update_xaxes(range=relayout_data['xaxis.range'], autorange=False)
+                fig.update_xaxes(range=relayout_data['xaxis.range'])
                 
             if 'yaxis.range[0]' in relayout_data and 'yaxis.range[1]' in relayout_data:
                 fig.update_yaxes(range=[relayout_data['yaxis.range[0]'], relayout_data['yaxis.range[1]']])
