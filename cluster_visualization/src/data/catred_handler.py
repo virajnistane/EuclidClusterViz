@@ -99,6 +99,9 @@ def get_masked_catred(tile_id, effcovmask_info, catred_info, maglim=24.0, thresh
         # Get effective coverage for each source position
         eff_cov = msk.hpdata[hp_cells]
         
+        if threshold == 1:
+            threshold = 0.99  # Adjust threshold to avoid exact 1.0 filtering issues
+            
         # Apply threshold filter
         coverage_mask = eff_cov >= threshold
         filtered_src = src[coverage_mask]

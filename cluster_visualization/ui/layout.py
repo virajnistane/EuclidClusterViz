@@ -425,7 +425,7 @@ class AppLayout:
                         dcc.Slider(
                             id="catred-threshold-slider",
                             min=0.0,
-                            max=0.99,
+                            max=1.0,
                             step=0.01,
                             value=0.8,
                             marks={
@@ -434,7 +434,7 @@ class AppLayout:
                                 0.4: {"label": "0.4", "style": {"color": "#666"}},
                                 0.6: {"label": "0.6", "style": {"color": "#666"}},
                                 0.8: {"label": "0.8", "style": {"color": "#e17055", "font-weight": "bold"}},
-                                0.99: {"label": "0.99", "style": {"color": "#666"}}
+                                1.0: {"label": "0.99", "style": {"color": "#666"}}
                             },
                             tooltip={"placement": "bottom", "always_visible": True}
                         )
@@ -760,10 +760,11 @@ class AppLayout:
                             [html.I(className="fas fa-chart-line me-2"), "Analyze PHZ"],
                             id="cluster-phz-button", 
                             color="info",
+                            disabled=True,
                             className="w-100 mb-2",
                             n_clicks=0
                         ),
-                        html.Small("Photometric redshift analysis", className="text-muted")
+                        html.Small("Coming soon ...", className="text-muted")
                     ], width=6)
                 ], className="mb-3"),
                 
@@ -783,6 +784,7 @@ class AppLayout:
                             [html.I(className="fas fa-table me-2"), "Export Data"],
                             id="cluster-export-button",
                             color="warning",
+                            disabled=True,
                             className="w-100 mb-2", 
                             n_clicks=0
                         ),
@@ -927,10 +929,11 @@ class AppLayout:
                             [html.I(className="fas fa-chart-line me-2"), "PHZ Analysis"],
                             id="tab-phz-button",
                             color="info",
+                            disabled=True,
                             className="w-100 mb-2",
                             n_clicks=0
                         ),
-                        html.Small("Photometric redshift analysis", className="text-muted d-block text-center")
+                        html.Small("Coming soon ...", className="text-muted d-block text-center")
                     ], width=6)
                 ], className="mb-3"),
                 
@@ -951,10 +954,11 @@ class AppLayout:
                             [html.I(className="fas fa-download me-2"), "Export Data"],
                             id="tab-export-button",
                             color="warning",
+                            disabled=True,
                             className="w-100 mb-2",
                             n_clicks=0
                         ),
-                        html.Small("Export cluster data & metadata", className="text-muted d-block text-center")
+                        html.Small("Coming soon ...", className="text-muted d-block text-center")
                     ], width=6)
                 ], className="mb-4"),
                 
@@ -1034,10 +1038,36 @@ class AppLayout:
                                     dbc.Input(
                                         id="tab-catred-redshift-bin-width",
                                         type="number",
-                                        value=0.05,
+                                        value=0.1,
                                         min=0.01,
                                         max=1.0,
                                         step=0.01,
+                                        className="mb-2"
+                                    )
+                                ], width=6)
+                            ]),
+                            dbc.Row([
+                                dbc.Col([
+                                    html.Label("Mask Threshold:", className="form-label"),
+                                    dbc.Input(
+                                        id="tab-catred-mask-threshold",
+                                        type="number",
+                                        value=0.8,
+                                        min=0.0,
+                                        max=1.0,
+                                        step=0.1,
+                                        className="mb-2"
+                                    )
+                                ], width=6),
+                                dbc.Col([
+                                    html.Label("Magnitude Limit:", className="form-label"),
+                                    dbc.Input(
+                                        id="tab-catred-maglim",
+                                        type="number",
+                                        value=24.0,
+                                        min=20.0,
+                                        max=32.0,
+                                        step=1.0,
                                         className="mb-2"
                                     )
                                 ], width=6)
