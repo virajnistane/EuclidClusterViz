@@ -62,7 +62,6 @@ class ClusterModalCallbacks:
             """Handle cluster point clicks and show in cluster analysis tab"""
             if not clickData or not clickData.get('points'):
                 return dash.no_update, dash.no_update, dash.no_update, dash.no_update
-            
             point = clickData['points'][0]
             
             # Get the trace index and look up the actual trace name
@@ -71,7 +70,8 @@ class ClusterModalCallbacks:
             # We need to check if this is from individual tile cluster data
             if 'customdata' in point and point['customdata']:
                 customdata = point.get('customdata', [])
-                
+                customdata = [customdata] if not isinstance(customdata, list) else customdata
+
                 # Check if this looks like cluster data (has SNR and redshift)
                 if len(customdata) >= 2:
                     # Extract cluster information from clicked point
