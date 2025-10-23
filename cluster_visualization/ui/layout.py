@@ -750,6 +750,7 @@ class AppLayout:
                             [html.I(className="fas fa-crop me-2"), "Generate Cutout"],
                             id="cluster-cutout-button",
                             color="primary",
+                            disabled=True,
                             className="w-100 mb-2",
                             n_clicks=0
                         ),
