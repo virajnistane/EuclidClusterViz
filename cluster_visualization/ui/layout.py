@@ -208,10 +208,19 @@ class AppLayout:
                             step=0.1,
                             marks={},
                             value=[0, 100],
-                            tooltip={"placement": "bottom", "always_visible": True},
-                            allowCross=False
+                            tooltip={
+                                "placement": "bottom", 
+                                "always_visible": False,
+                                "style": {"fontSize": "12px"}
+                            },
+                            allowCross=False,
+                            className="custom-range-slider"
                         )
-                    ], className="mb-3", style={'padding': '0 10px'}),
+                    ], className="mb-3", style={
+                        'padding': '10px 15px', 
+                        'margin': '5px 0',
+                        'minHeight': '60px'
+                    }),
                     
                     # Enhanced apply button
                     dbc.Button([
@@ -269,10 +278,19 @@ class AppLayout:
                             step=0.1,
                             marks={},
                             value=[0, 10],
-                            tooltip={"placement": "bottom", "always_visible": True},
+                            tooltip={
+                                "placement": "bottom", 
+                                "always_visible": False,
+                                "style": {"fontSize": "12px"}
+                            },
                             allowCross=False,
+                            className="custom-range-slider"
                         )
-                    ], className="mb-3", style={'padding': '0 10px'}),
+                    ], className="mb-3", style={
+                        'padding': '10px 15px', 
+                        'margin': '5px 0',
+                        'minHeight': '60px'
+                    }),
                     
                     # Enhanced apply button
                     dbc.Button([
@@ -429,16 +447,26 @@ class AppLayout:
                             step=0.01,
                             value=0.8,
                             marks={
-                                0.0: {"label": "0.0", "style": {"color": "#666"}},
-                                0.2: {"label": "0.2", "style": {"color": "#666"}},
-                                0.4: {"label": "0.4", "style": {"color": "#666"}},
-                                0.6: {"label": "0.6", "style": {"color": "#666"}},
-                                0.8: {"label": "0.8", "style": {"color": "#e17055", "font-weight": "bold"}},
-                                1.0: {"label": "0.99", "style": {"color": "#666"}}
+                                0.0: {"label": "0.0", "style": {"color": "#666", "fontSize": "12px"}},
+                                0.2: {"label": "0.2", "style": {"color": "#666", "fontSize": "12px"}},
+                                0.4: {"label": "0.4", "style": {"color": "#666", "fontSize": "12px"}},
+                                0.6: {"label": "0.6", "style": {"color": "#666", "fontSize": "12px"}},
+                                0.8: {"label": "0.8", "style": {"color": "#e17055", "font-weight": "bold", "fontSize": "13px"}},
+                                1.0: {"label": "1.0", "style": {"color": "#666", "fontSize": "12px"}}
                             },
-                            tooltip={"placement": "bottom", "always_visible": True}
+                            tooltip={
+                                "placement": "bottom", 
+                                "always_visible": False,
+                                "style": {"fontSize": "12px"}
+                            },
+                            className="custom-slider"
                         )
-                    ], id="catred-threshold-container", className="mb-3", style={'padding': '0 10px'}),
+                    ], id="catred-threshold-container", className="mb-3", 
+                       style={
+                           'padding': '10px 15px', 
+                           'margin': '5px 0',
+                           'minHeight': '60px'
+                       }),
                     html.Small([
                         html.I(className="fas fa-info-circle me-1"),
                         "For masked CATRED data filtering"
@@ -467,17 +495,27 @@ class AppLayout:
                             step=0.1,
                             value=24.0,
                             marks={
-                                20.0: {"label": "20.0", "style": {"color": "#666"}},
-                                22.0: {"label": "22.0", "style": {"color": "#666"}},
-                                24.0: {"label": "24.0", "style": {"color": "#6c5ce7", "font-weight": "bold"}},
-                                26.0: {"label": "26.0", "style": {"color": "#666"}},
-                                28.0: {"label": "28.0", "style": {"color": "#666"}},
-                                30.0: {"label": "30.0", "style": {"color": "#666"}},
-                                32.0: {"label": "32.0", "style": {"color": "#666"}}
+                                20.0: {"label": "20.0", "style": {"color": "#666", "fontSize": "12px"}},
+                                22.0: {"label": "22.0", "style": {"color": "#666", "fontSize": "12px"}},
+                                24.0: {"label": "24.0", "style": {"color": "#6c5ce7", "font-weight": "bold", "fontSize": "13px"}},
+                                26.0: {"label": "26.0", "style": {"color": "#666", "fontSize": "12px"}},
+                                28.0: {"label": "28.0", "style": {"color": "#666", "fontSize": "12px"}},
+                                30.0: {"label": "30.0", "style": {"color": "#666", "fontSize": "12px"}},
+                                32.0: {"label": "32.0", "style": {"color": "#666", "fontSize": "12px"}}
                             },
-                            tooltip={"placement": "bottom", "always_visible": True}
+                            tooltip={
+                                "placement": "bottom", 
+                                "always_visible": False,
+                                "style": {"fontSize": "12px"}
+                            },
+                            className="custom-slider"
                         )
-                    ], id="magnitude-limit-container", className="mb-3", style={'padding': '0 10px'}),
+                    ], id="magnitude-limit-container", className="mb-3", 
+                       style={
+                           'padding': '10px 15px', 
+                           'margin': '5px 0',
+                           'minHeight': '60px'
+                       }),
                     html.Small([
                         html.I(className="fas fa-info-circle me-1"),
                         "Keep sources brighter than limit"
@@ -585,13 +623,22 @@ class AppLayout:
                             step=0.1,
                             value=0.7,
                             marks={
-                                0.1: {"label": '10%', "style": {"color": "#666"}},
-                                0.5: {"label": '50%', "style": {"color": "#0984e3", "font-weight": "bold"}},
-                                1.0: {"label": '100%', "style": {"color": "#666"}}
+                                0.1: {"label": '10%', "style": {"color": "#666", "fontSize": "12px"}},
+                                0.5: {"label": '50%', "style": {"color": "#0984e3", "font-weight": "bold", "fontSize": "13px"}},
+                                1.0: {"label": '100%', "style": {"color": "#666", "fontSize": "12px"}}
                             },
-                            tooltip={"placement": "bottom", "always_visible": False}
+                            tooltip={
+                                "placement": "bottom", 
+                                "always_visible": False,
+                                "style": {"fontSize": "12px"}
+                            },
+                            className="custom-slider"
                         )
-                    ], style={'padding': '0 10px'})
+                    ], style={
+                        'padding': '10px 15px', 
+                        'margin': '5px 0',
+                        'minHeight': '60px'
+                    })
                 ])
             ], className="mb-3 border-0 shadow-sm", style={'border-radius': '12px'}),
             

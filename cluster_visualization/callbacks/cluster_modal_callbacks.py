@@ -738,25 +738,23 @@ class ClusterModalCallbacks:
         
         # Bidirectional sync for threshold
         @self.app.callback(
-            [Output('catred-threshold-slider', 'value', allow_duplicate=True),
-            Output('tab-catred-mask-threshold', 'value', allow_duplicate=True)],
-            [Input('catred-threshold-slider', 'value'),
-            Input('tab-catred-mask-threshold', 'value')],
+            Output('tab-catred-mask-threshold', 'value', allow_duplicate=True),
+            [Input('catred-threshold-slider', 'value')],
             prevent_initial_call=True
         )
-        def sync_threshold_bidirectional(slider_value, tab_value):
-            """Bidirectionally sync threshold between slider and tab input"""
-            ctx = callback_context
-            if not ctx.triggered:
-                return dash.no_update, dash.no_update
-                
-            triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
+        def sync_threshold_slider_to_tab(slider_value):
+            """Update tab input when threshold slider changes"""
+            if slider_value is not None:
+                return slider_value
+            return dash.no_update
             
-            if triggered_id == 'catred-threshold-slider' and slider_value is not None:
-                # Slider changed, update tab input
-                return dash.no_update, slider_value
-            elif triggered_id == 'tab-catred-mask-threshold' and tab_value is not None:
-                # Tab input changed, update slider
-                return tab_value, dash.no_update
-                
-            return dash.no_update, dash.no_update
+        @self.app.callback(
+            Output('catred-threshold-slider', 'value', allow_duplicate=True),
+            [Input('tab-catred-mask-threshold', 'value')],
+            prevent_initial_call=True
+        )
+        def sync_threshold_tab_to_slider(tab_value):
+            """Update threshold slider when tab input changes"""
+            if tab_value is not None:
+                return tab_value
+            return dash.no_update
