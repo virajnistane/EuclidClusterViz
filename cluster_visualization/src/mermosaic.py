@@ -15,6 +15,7 @@ from astropy import wcs
 import plotly.graph_objs as go
 from typing import Dict, List, Any, Optional, Tuple
 from shapely.geometry import box
+from typing import Union
 
 try:
     from cluster_visualization.src import config
@@ -40,7 +41,7 @@ class MOSAICHandler:
         # Performance-optimized image processing parameters
         self.img_width = 1920    # Reduced from 1920 for faster initial rendering
         self.img_height = 1920   # Reduced from 1920 for faster initial rendering
-        self.img_scale = 5.0
+        self.img_scale_factor = 1/10  # Initial downscale factor for performance
         self.n_sigma = 1.0
         
         # Performance and timeout settings
@@ -49,6 +50,61 @@ class MOSAICHandler:
         self.max_file_size_gb = 2.0  # Skip files larger than 2GB initially
         self.max_pixels_for_stats = 10_000_000  # Sample large images for statistics
 
+    def get_mosaic_cutout_box(self, mosaic_fits, racen, deccen, size):
+        """
+        Get a cutout from the mosaic FITS file.
+
+        Parameters:
+        -----------
+        mosaic_fits : str
+            Path to the mosaic FITS file.
+        racen : float
+            Right Ascension of the cutout center (degrees).
+        deccen : float
+            Declination of the cutout center (degrees).
+        size : float
+            Size of the cutout (degrees).
+        """
+        # Open the mosaic FITS file
+        with fits.open(mosaic_fits) as hdul:
+
+            self.mosaic_header = hdul[0].header
+            self.mosaic_data = hdul[0].data
+            self.mosaic_wcs = wcs.WCS(self.mosaic_header)
+
+            naxis1_org, naxis2_org = self.mosaic_data.shape[1], self.mosaic_data.shape[0]  # Original image size
+            xcen, ycen = self.mosaic_wcs.wcs_world2pix(racen,deccen,0)[0], self.mosaic_wcs.wcs_world2pix(racen,deccen,0)[1]  # Convert RA/Dec to pixel coordinates
+
+            cdelt = self.mosaic_wcs.wcs.cd[0][0]  # degrees/pixel - pixel scale
+            np0 = abs(int(size/(2.*abs(cdelt))))  # Half-width in pixels
+            npt = 2*np0+1  # Total cutout size (odd number for center symmetry)
+
+            crpix1, crpix2 = np0+xcen-int(xcen), np0+ycen-int(ycen)  # New reference pixel
+            crval1, crval2 = self.mosaic_wcs.wcs_pix2world(xcen,ycen,0)[0], self.mosaic_wcs.wcs_pix2world(xcen,ycen,0)[1]  # Reference coordinates
+
+            cutout = np.zeros((npt,npt))
+
+            xmin0, xmax0 = int(xcen)-np0, int(xcen)+np0  # Desired pixel range
+            ymin0, ymax0 = int(ycen)-np0, int(ycen)+np0
+
+            xmin, xmax = max(xmin0,0), min(xmax0,naxis1_org-1)  # Clamp to image bounds
+            ymin, ymax = max(ymin0,0), min(ymax0,naxis2_org-1)
+
+            # Copy data, handling cases where cutout extends beyond image edges
+            cutout[ymin-ymin0:npt-(ymax0-ymax),xmin-xmin0:npt-(xmax0-xmax)] = self.mosaic_data[ymin:ymax+1,xmin:xmax+1]
+
+            wnew = self.mosaic_wcs.deepcopy()
+            wnew.wcs.crpix[0] = crpix1  # Update reference pixel
+            wnew.wcs.crpix[1] = crpix2
+            wnew.wcs.crval[0] = crval1  # Update reference coordinates  
+            wnew.wcs.crval[1] = crval2
+
+            hdr = wnew.to_header()  # Convert to FITS header
+            hdu = fits.PrimaryHDU(header=hdr)
+            hdu.data = cutout
+            
+            return cutout, wnew
+    
     def get_mosaic_fits_data_by_mertile(self, mertileid):
         """
         Load mosaic FITS data with performance optimization and threading timeout
@@ -144,7 +200,9 @@ class MOSAICHandler:
         
         return result
 
-    def _extract_zoom_ranges(self, relayout_data: Dict) -> Optional[Tuple[float, float, float, float]]:
+    def _extract_zoom_ranges(
+            self, relayout_data: Dict
+            ) -> Optional[Tuple[float, float, float, float]]:
         """Extract zoom ranges from Plotly relayout data."""
         ra_min = ra_max = dec_min = dec_max = None
         
@@ -191,16 +249,30 @@ class MOSAICHandler:
         
         return mertiles_to_load
 
-    def _process_mosaic_image(self, mosaic_data: np.ndarray, target_width: int = None, 
-                             target_height: int = None) -> np.ndarray:
+    def _process_mosaic_image(
+            self, 
+            mosaic_data: np.ndarray, 
+            target_width_and_height: Union[list, tuple] = None, 
+            target_scale_factor: float = None
+            ) -> np.ndarray:
         """
         Process mosaic image data with early downsampling for performance optimization
         """
-        if target_width is None:
-            target_width = self.img_width
-        if target_height is None:
-            target_height = self.img_height
+        if target_width_and_height is None and target_scale_factor is None:
+            print("Warning: No target dimensions or scale factor provided for mosaic processing, using original size")
+            target_width = mosaic_data.shape[1]
+            target_height = mosaic_data.shape[0]
+
+        if target_width_and_height is None and target_scale_factor is not None:
+            target_width = int(mosaic_data.shape[1] * target_scale_factor)
+            target_height = int(mosaic_data.shape[0] * target_scale_factor)
+        elif target_width_and_height is not None:
+            assert len(target_width_and_height) == 2, "target_width_and_height must be a tuple/list of (width, height)"
+            target_width, target_height = target_width_and_height
             
+        self.image_width = target_width
+        self.image_height = target_height
+
         try:
             # Ensure we have a valid numpy array
             if not isinstance(mosaic_data, np.ndarray):
@@ -254,7 +326,7 @@ class MOSAICHandler:
             
             mer_image = np.clip(mosaic_data, 0.0, max_val)
             
-            # Normalize the image as in the notebook
+            # Normalize the image
             mer_image = mer_image / max_val
             
             print(f"Debug: After clipping and normalization - range: [{np.min(mer_image):.3f}, {np.max(mer_image):.3f}]")
@@ -266,7 +338,7 @@ class MOSAICHandler:
             mer_array = np.array(
                 Image.fromarray(mer_image)
                 .resize((target_width, target_height), Image.Resampling.LANCZOS)
-                .transpose(Image.FLIP_TOP_BOTTOM)
+                .transpose(Image.FLIP_LEFT_RIGHT)
             )
             
             print(f"Debug: Final processed image shape: {mer_array.shape}")
@@ -333,6 +405,7 @@ class MOSAICHandler:
             print(f"Warning: Failed to create scaled WCS, using original: {e}")
             # Fallback to original WCS
             return wcs.WCS(original_header)
+
     def _calculate_image_bounds(self, mosaic_wcs: wcs.WCS, header: fits.Header, 
                                target_width: int, target_height: int) -> Dict[str, float]:
         """Calculate coordinate bounds for the processed image using scaled WCS approach from notebook."""
@@ -503,7 +576,10 @@ class MOSAICHandler:
             return None
         
         # Process the image
-        processed_image = self._process_mosaic_image(mosaic_info['data'])
+        processed_image = self._process_mosaic_image(
+            mosaic_info['data'], 
+            target_scale_factor=self.img_scale_factor
+            )
         
         # Calculate coordinate bounds
         bounds = self._calculate_image_bounds(
@@ -546,8 +622,13 @@ class MOSAICHandler:
         
         return trace
 
-    def load_mosaic_traces_in_zoom(self, data: Dict[str, Any], relayout_data: Optional[Dict], 
-                                  opacity: float = 0.5, colorscale: str = 'gray') -> List[go.Heatmap]:
+    def load_mosaic_traces_in_zoom(
+            self,
+            data: Dict[str, Any],
+            relayout_data: Optional[Dict],
+            opacity: float = 0.5,
+            colorscale: str = 'gray'
+        ) -> List[go.Heatmap]:
         """
         Load mosaic image traces with strict performance limits and timing
         """
@@ -576,7 +657,7 @@ class MOSAICHandler:
             return traces
         
         # PERFORMANCE LIMITS: Strict limits for interactive experience
-        max_mosaics = 2  # Reduced from 3 for better performance
+        max_mosaics = 3  # Reduced from 3 for better performance
         max_processing_time = 30  # Maximum 30 seconds total processing time
         
         if len(mertiles_to_load) > max_mosaics:

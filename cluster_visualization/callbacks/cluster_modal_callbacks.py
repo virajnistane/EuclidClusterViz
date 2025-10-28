@@ -538,6 +538,7 @@ class ClusterModalCallbacks:
 
                 # Extract existing CATRED traces from current figure to preserve them
                 existing_catred_traces = self._extract_existing_catred_traces(current_figure)
+                existing_mosaic_traces = self._extract_existing_mosaic_traces(current_figure)
 
                 # Load CATRED Box data
                 box_params = self.catred_handler._extract_box_data_from_cluster_click(
@@ -558,6 +559,7 @@ class ClusterModalCallbacks:
                         data, show_polygons, show_mer_tiles, relayout_data, catred_masked, 
                         catred_box_data=catred_box_data, 
                         existing_catred_traces=existing_catred_traces,
+                        existing_mosaic_traces=existing_mosaic_traces,
                         snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, 
                         threshold=catred_mask_threshold, show_merged_clusters=show_merged_clusters
                         )
@@ -629,7 +631,47 @@ class ClusterModalCallbacks:
                     print(f"Debug: Preserved existing CATRED trace: {trace['name']}")
         return existing_catred_traces
     
-
+    def _extract_existing_mosaic_traces(self, current_figure):
+        """Extract existing mosaic traces from current figure"""
+        existing_mosaic_traces = []
+        if current_figure and 'data' in current_figure:
+            for trace in current_figure['data']:
+                if (isinstance(trace, dict) and 
+                    'name' in trace and 
+                    trace['name'] and 
+                    'Mosaic' in trace['name']):
+                    # Preserve the original trace type (Image, Heatmap, etc.)
+                    trace_type = trace.get('type', 'image')
+                    
+                    if trace_type == 'image':
+                        existing_trace = go.Image(
+                            source=trace.get('source'),
+                            x0=trace.get('x0'),
+                            y0=trace.get('y0'),
+                            dx=trace.get('dx'),
+                            dy=trace.get('dy'),
+                            name=trace.get('name', 'Mosaic Image'),
+                            opacity=trace.get('opacity', 1.0),
+                            layer=trace.get('layer', 'below')
+                        )
+                    elif trace_type == 'heatmap':
+                        existing_trace = go.Heatmap(
+                            z=trace.get('z'),
+                            x=trace.get('x'),
+                            y=trace.get('y'),
+                            name=trace.get('name', 'Mosaic Image'),
+                            opacity=trace.get('opacity', 1.0),
+                            colorscale=trace.get('colorscale', 'gray'),
+                            showscale=trace.get('showscale', False)
+                        )
+                    else:
+                        # Keep original trace as-is for unknown types
+                        existing_trace = trace
+                    
+                    existing_mosaic_traces.append(existing_trace)
+                    print(f"Debug: Preserved existing mosaic trace: {trace['name']} (type: {trace_type})")
+        return existing_mosaic_traces
+    
     def _create_fallback_figure(self, traces, algorithm, free_aspect_ratio):
         """Fallback figure creation method"""
         fig = go.Figure(traces)

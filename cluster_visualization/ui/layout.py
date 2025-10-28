@@ -719,7 +719,7 @@ class AppLayout:
                     AppLayout._create_snr_section(),
                     AppLayout._create_redshift_section(),
                 ],
-                is_open=True,
+                is_open=False,
                 color="primary"
             ),
             
@@ -728,7 +728,7 @@ class AppLayout:
                 "🎨 Display Options",
                 "display-options",
                 [AppLayout._create_display_options_section()],
-                is_open=True,
+                is_open=False,
                 color="success"
             ),
             
@@ -800,7 +800,7 @@ class AppLayout:
                             className="w-100 mb-2",
                             n_clicks=0
                         ),
-                        html.Small("Create density map cutout around this cluster", className="text-muted")
+                        html.Small("Create MER mosaic cutout around this cluster", className="text-muted")
                     ], width=6),
                     dbc.Col([
                         dbc.Button(
@@ -862,11 +862,11 @@ class AppLayout:
                                     dbc.Select(
                                         id="cutout-data-type",
                                         options=[
+                                            {"label": "MER Mosaic", "value": "mermosaic"},
                                             {"label": "Density Map", "value": "density"},
-                                            {"label": "Sky Image", "value": "sky"},
                                             {"label": "Both", "value": "both"}
                                         ],
-                                        value="density",
+                                        value="mermosaic",
                                         className="mb-2"
                                     )
                                 ], width=6)
@@ -968,7 +968,7 @@ class AppLayout:
                             className="w-100 mb-2",
                             n_clicks=0
                         ),
-                        html.Small("Density map cutout around cluster", className="text-muted d-block text-center")
+                        html.Small("Click to see options", className="text-muted d-block text-center")
                     ], width=6),
 
                     dbc.Col([
@@ -1037,11 +1037,11 @@ class AppLayout:
                                     dbc.Select(
                                         id="tab-cutout-type",
                                         options=[
+                                            {"label": "MER Mosaic", "value": "mermosaic"},
                                             {"label": "Density Map", "value": "density"},
-                                            {"label": "Sky Image", "value": "sky"},
                                             {"label": "Both", "value": "both"}
                                         ],
-                                        value="density",
+                                        value="mermosaic",
                                         className="mb-2"
                                     )
                                 ], width=6)
