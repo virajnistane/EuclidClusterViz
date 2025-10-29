@@ -143,8 +143,8 @@ class UICallbacks:
         def toggle_core_settings(n_clicks):
             """Toggle core settings section"""
             if n_clicks is None:
-                return True, [
-                    html.I(className="fas fa-chevron-down me-2"),
+                return False, [  # 🔧 Changed from True to False
+                    html.I(className="fas fa-chevron-right me-2"),  # 🔧 Changed to right arrow
                     "🎯 Core Settings"
                 ]
             
@@ -165,8 +165,8 @@ class UICallbacks:
         def toggle_display_options(n_clicks):
             """Toggle display options section"""
             if n_clicks is None:
-                return True, [
-                    html.I(className="fas fa-chevron-down me-2"),
+                return False, [  # 🔧 Changed from True to False to match layout
+                    html.I(className="fas fa-chevron-right me-2"),  # 🔧 Changed to right arrow
                     "🎨 Display Options"
                 ]
             

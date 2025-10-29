@@ -965,10 +965,12 @@ class AppLayout:
                             [html.I(className="fas fa-crop me-2"), "Generate Cutout"],
                             id="tab-cutout-button",
                             color="primary",
+                            disabled=True,
                             className="w-100 mb-2",
                             n_clicks=0
                         ),
-                        html.Small("Click to see options", className="text-muted d-block text-center")
+                        # html.Small("Click to see options", className="text-muted d-block text-center")
+                        html.Small("Coming soon ...", className="text-muted d-block text-center")
                     ], width=6),
 
                     dbc.Col([
