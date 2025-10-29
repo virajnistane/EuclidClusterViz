@@ -456,7 +456,7 @@ class TraceCreator:
         for i, (x, y, p1, p70) in enumerate(zip(catred_data['ra'], catred_data['dec'], 
                                                catred_data['phz_mode_1'], catred_data['phz_70_int'])):
             text = f'CATRED Data Point<br>RA: {x:.6f}<br>Dec: {y:.6f}<br>PHZ_MODE_1: {p1:.3f}<br>' \
-                   f'PHZ_70_INT: {abs(float(p70[1]) - float(p70[0])):.3f}'
+                   f'PHZ_MEDIAN: {catred_data["phz_median"][i]:.3f}<br>PHZ_70_INT: {abs(float(p70[1]) - float(p70[0])):.3f}'
             
             # Add effective coverage if available
             if 'effective_coverage' in catred_data and i < len(catred_data['effective_coverage']):

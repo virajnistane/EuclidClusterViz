@@ -151,6 +151,7 @@ class CATREDHandler:
         """Initialize CATRED handler."""
         self.traces_cache = []  # Store accumulated CATRED scatter traces
         self.current_catred_data = None  # Store current CATRED data for click callbacks
+        self.catred_z_param_select_for_filter = 'PHZ_MEDIAN'  # Default redshift parameter for filtering
     
     def get_radec_mertile(self, mertileid: int, data: Dict[str, Any], maglim: float = 24.0) -> Dict[str, List]:
         """
@@ -219,8 +220,10 @@ class CATREDHandler:
                 'RIGHT_ASCENSION': list(x_coords),
                 'DECLINATION': list(y_coords),
                 'PHZ_MODE_1': [0.0] * num_points,  # Dummy scalar values
+                'PHZ_MEDIAN': [0.5] * num_points,  # Dummy median values
                 'PHZ_70_INT': [[0.0, 0.0]] * num_points,  # Dummy interval pairs
-                'PHZ_PDF': [[0.0] * 10] * num_points  # Dummy PDF vectors
+                'PHZ_PDF': [[0.0] * 10] * num_points,  # Dummy PDF vectors
+                'KRON_RADIUS': [0.0] * num_points  # Dummy Kron radius values
             }
         else:
             return {}
@@ -257,7 +260,7 @@ class CATREDHandler:
             }
             
             # Add photometric redshift columns if they exist
-            for col in ['PHZ_MODE_1', 'PHZ_70_INT', 'PHZ_PDF']:
+            for col in ['PHZ_MODE_1', 'PHZ_70_INT', 'PHZ_PDF', 'PHZ_MEDIAN', 'KRON_RADIUS']:
                 if col in fits_data.columns.names:
                     col_data = fits_data[col]
                     result[col] = self._process_column_data(col, col_data)
@@ -281,7 +284,7 @@ class CATREDHandler:
                 # If it's scalar, convert to list format for consistency
                 return [[float(val), float(val)] for val in col_data]
         else:
-            # For PHZ_MODE_1 and other scalar columns
+            # For PHZ_MODE_1, PHZ_MEDIAN, KRON_RADIUS, and other scalar columns
             if col_data.ndim > 1:
                 # Take first element if it's a vector
                 return [float(row[0]) if len(row) > 0 else 0.0 for row in col_data]
@@ -297,9 +300,7 @@ class CATREDHandler:
             return [[0.0, 0.0]] * num_points  # Dummy interval
         else:
             return [0.0] * num_points
-    
 
-    
     def _validate_catred_data(self, data: Dict[str, Any]) -> bool:
         """Validate that required CATRED data is available."""
         if 'catred_info' not in data or data['catred_info'].empty or 'polygon' not in data['catred_info'].columns:
@@ -328,19 +329,6 @@ class CATREDHandler:
         
         return mertiles_to_load
     
-    def _load_tile_data(self, mertiles_to_load: List[int], data: Dict[str, Any], 
-                       catred_scatter_data: Dict[str, List]) -> None:
-        """Load data for each MER tile and accumulate in scatter data."""
-        for mertileid in mertiles_to_load:
-            tile_data = self.get_radec_mertile(mertileid, data)
-            if tile_data and 'RIGHT_ASCENSION' in tile_data:
-                catred_scatter_data['ra'].extend(tile_data['RIGHT_ASCENSION'])
-                catred_scatter_data['dec'].extend(tile_data['DECLINATION'])
-                catred_scatter_data['phz_mode_1'].extend(tile_data['PHZ_MODE_1'])
-                catred_scatter_data['phz_70_int'].extend(tile_data['PHZ_70_INT'])
-                catred_scatter_data['phz_pdf'].extend(tile_data['PHZ_PDF'])
-                print(f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} points from MER tile {mertileid}")
-    
     def get_radec_mertile_with_coverage(
             self, mertileid: int, data: Dict[str, Any], 
             maglim: float = None, threshold: float = 0.8, box: Dict[str, float] = None
@@ -354,8 +342,8 @@ class CATREDHandler:
             maglim: Magnitude limit for filtering (default: None for no magnitude filtering)
             
         Returns:
-            Dictionary with keys 'RIGHT_ASCENSION', 'DECLINATION', 'PHZ_MODE_1', 
-            'PHZ_70_INT', 'PHZ_PDF', 'EFFECTIVE_COVERAGE' for all sources or empty dict {} if unable to load
+            Dictionary with keys 'RIGHT_ASCENSION', 'DECLINATION', 'PHZ_MODE_1', 'PHZ_MEDIAN',
+            'PHZ_70_INT', 'PHZ_PDF', 'KRON_RADIUS', 'EFFECTIVE_COVERAGE' for all sources or empty dict {} if unable to load
         """
         try:
             if isinstance(mertileid, str):
@@ -390,8 +378,10 @@ class CATREDHandler:
                 'RIGHT_ASCENSION': full_src_with_coverage['RA'].tolist(),
                 'DECLINATION': full_src_with_coverage['DEC'].tolist(),
                 'PHZ_MODE_1': full_src_with_coverage['PHZ_MODE_1'].tolist() if 'PHZ_MODE_1' in full_src_with_coverage.colnames else [0.5] * len(full_src_with_coverage),
+                'PHZ_MEDIAN': full_src_with_coverage['PHZ_MEDIAN'].tolist() if 'PHZ_MEDIAN' in full_src_with_coverage.colnames else [0.5] * len(full_src_with_coverage),
                 'PHZ_70_INT': full_src_with_coverage['PHZ_70_INT'].tolist() if 'PHZ_70_INT' in full_src_with_coverage.colnames else [[0.1, 0.9]] * len(full_src_with_coverage),
                 'PHZ_PDF': full_src_with_coverage['PHZ_PDF'].tolist() if 'PHZ_PDF' in full_src_with_coverage.colnames else [None] * len(full_src_with_coverage),
+                'KRON_RADIUS': full_src_with_coverage['KRON_RADIUS'].tolist() if 'KRON_RADIUS' in full_src_with_coverage.colnames else [0.0] * len(full_src_with_coverage),
                 'EFFECTIVE_COVERAGE': full_src_with_coverage['EFFECTIVE_COVERAGE'].tolist() if 'EFFECTIVE_COVERAGE' in full_src_with_coverage.colnames else [1.0] * len(full_src_with_coverage)
             }
             
@@ -434,7 +424,7 @@ class CATREDHandler:
 
             # Get masked CATRED data
             filtered_src = get_masked_catred(mertileid, data['effcovmask_info'], 
-                                           data['catred_info'], maglim=maglim, threshold=threshold)
+                                             data['catred_info'], maglim=maglim, threshold=threshold)
             
             if len(filtered_src) == 0:
                 print(f"Debug: No sources above threshold {threshold} for mertile {mertileid}")
@@ -443,13 +433,17 @@ class CATREDHandler:
             # Apply box selection if provided
             if box:
                 filtered_src = self.apply_box_selection(filtered_src, box)
+
             # Convert to format expected by plotting functions
             result = {
                 'RIGHT_ASCENSION': filtered_src['RA'].tolist(),
                 'DECLINATION': filtered_src['DEC'].tolist(),
                 'PHZ_MODE_1': filtered_src['PHZ_MODE_1'].tolist() if 'PHZ_MODE_1' in filtered_src.colnames else [0.5] * len(filtered_src),
+                'PHZ_MEDIAN': filtered_src['PHZ_MEDIAN'].tolist() if 'PHZ_MEDIAN' in filtered_src.colnames else [0.5] * len(filtered_src),
                 'PHZ_70_INT': filtered_src['PHZ_70_INT'].tolist() if 'PHZ_70_INT' in filtered_src.colnames else [[0.1, 0.9]] * len(filtered_src),
-                'PHZ_PDF': filtered_src['PHZ_PDF'].tolist() if 'PHZ_PDF' in filtered_src.colnames else [None] * len(filtered_src)
+                'PHZ_PDF': filtered_src['PHZ_PDF'].tolist() if 'PHZ_PDF' in filtered_src.colnames else [None] * len(filtered_src),
+                'KRON_RADIUS': filtered_src['KRON_RADIUS'].tolist() if 'KRON_RADIUS' in filtered_src.colnames else [0.0] * len(filtered_src),
+                'EFFECTIVE_COVERAGE': filtered_src['EFFECTIVE_COVERAGE'].tolist() if 'EFFECTIVE_COVERAGE' in filtered_src.colnames else [1.0] * len(filtered_src)
             }
             
             print(f"Debug: Loaded {len(result['RIGHT_ASCENSION'])} masked sources from MER tile {mertileid} (threshold={threshold})")
@@ -477,8 +471,10 @@ class CATREDHandler:
             'ra': [],
             'dec': [],
             'phz_mode_1': [],
+            'phz_median': [],
             'phz_70_int': [],
             'phz_pdf': [],
+            'kron_radius': [],
             'effective_coverage': []  # Add coverage data for client-side filtering
         }
 
@@ -509,8 +505,10 @@ class CATREDHandler:
                 catred_scatter_data['ra'].extend(tile_data['RIGHT_ASCENSION'])
                 catred_scatter_data['dec'].extend(tile_data['DECLINATION'])
                 catred_scatter_data['phz_mode_1'].extend(tile_data['PHZ_MODE_1'])
+                catred_scatter_data['phz_median'].extend(tile_data['PHZ_MEDIAN'])
                 catred_scatter_data['phz_70_int'].extend(tile_data['PHZ_70_INT'])
                 catred_scatter_data['phz_pdf'].extend(tile_data['PHZ_PDF'])
+                catred_scatter_data['kron_radius'].extend(tile_data['KRON_RADIUS'])
                 catred_scatter_data['effective_coverage'].extend(tile_data['EFFECTIVE_COVERAGE'])
                 print(f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} sources with coverage from MER tile {mertileid}")
 
@@ -531,19 +529,19 @@ class CATREDHandler:
         if not box or not all(k in box for k in ['ra_min', 'ra_max', 'dec_min', 'dec_max', 'z_min', 'z_max']):
             print("Debug: No valid box data for CATRED")
             print("Debug: Box data received:", box)
-            return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_70_int': [], 'phz_pdf': []}
+            return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_median': [], 'phz_70_int': [], 'phz_pdf': [], 'kron_radius': [], 'effective_coverage': []}
         
         # Find MER tiles that intersect with box area
         mertiles_to_load = self._find_intersecting_tiles(data, box['ra_min'], box['ra_max'], box['dec_min'], box['dec_max'])
 
         if not mertiles_to_load:
             print("Debug: No intersecting MER tiles found for CATRED")
-            return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_70_int': [], 'phz_pdf': []}
+            return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_median': [], 'phz_70_int': [], 'phz_pdf': [], 'kron_radius': [], 'effective_coverage': []}
 
         print(f"Debug: Loading CATRED for {len(mertiles_to_load)} MER tiles")
 
         # Initialize scatter data container
-        catred_scatter_data = {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_70_int': [], 'phz_pdf': []}
+        catred_scatter_data = {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_median': [], 'phz_70_int': [], 'phz_pdf': [], 'kron_radius': [], 'effective_coverage': []}
 
         # Load data for each intersecting tile using masked method
         self._load_tile_data_clusterbox(mertiles_to_load, data, catred_scatter_data, threshold, maglim, box)
@@ -562,8 +560,12 @@ class CATREDHandler:
                 catred_scatter_data['ra'].extend(tile_data['RIGHT_ASCENSION'])
                 catred_scatter_data['dec'].extend(tile_data['DECLINATION'])
                 catred_scatter_data['phz_mode_1'].extend(tile_data['PHZ_MODE_1'])
+                catred_scatter_data['phz_median'].extend(tile_data['PHZ_MEDIAN'])
                 catred_scatter_data['phz_70_int'].extend(tile_data['PHZ_70_INT'])
                 catred_scatter_data['phz_pdf'].extend(tile_data['PHZ_PDF'])
+                catred_scatter_data['kron_radius'].extend(tile_data['KRON_RADIUS'])
+                catred_scatter_data['effective_coverage'].extend(tile_data['EFFECTIVE_COVERAGE'])
+
                 print(f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} masked points from MER tile {mertileid}")
 
     def update_catred_data_unmasked(self, zoom_data: Dict[str, Any], data: Dict[str, Any], maglim: float = 24.0) -> Dict[str, List]:
@@ -581,19 +583,19 @@ class CATREDHandler:
         # Find MER tiles that intersect with zoom area
         if not zoom_data or not all(k in zoom_data for k in ['ra_min', 'ra_max', 'dec_min', 'dec_max']):
             print("Debug: No valid zoom data for unmasked CATRED")
-            return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_70_int': [], 'phz_pdf': []}
+            return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_median': [], 'phz_70_int': [], 'phz_pdf': [], 'kron_radius': [], 'effective_coverage': []}
             
         mertiles_to_load = self._find_intersecting_tiles(data, zoom_data['ra_min'], zoom_data['ra_max'], 
                                                         zoom_data['dec_min'], zoom_data['dec_max'])
         
         if not mertiles_to_load:
             print("Debug: No intersecting MER tiles found for unmasked CATRED")
-            return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_70_int': [], 'phz_pdf': []}
+            return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_median': [], 'phz_70_int': [], 'phz_pdf': [], 'kron_radius': [], 'effective_coverage': []}
         
         print(f"Debug: Loading unmasked CATRED for {len(mertiles_to_load)} MER tiles")
         
         # Initialize scatter data container
-        catred_scatter_data = {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_70_int': [], 'phz_pdf': []}
+        catred_scatter_data = {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_median': [], 'phz_70_int': [], 'phz_pdf': [], 'kron_radius': [], 'effective_coverage': []}
         
         # Load data for each intersecting tile using unmasked method
         self._load_tile_data_unmasked(mertiles_to_load, data, catred_scatter_data, maglim)
@@ -613,8 +615,11 @@ class CATREDHandler:
                 catred_scatter_data['ra'].extend(tile_data['RIGHT_ASCENSION'])
                 catred_scatter_data['dec'].extend(tile_data['DECLINATION'])
                 catred_scatter_data['phz_mode_1'].extend(tile_data['PHZ_MODE_1'])
+                catred_scatter_data['phz_median'].extend(tile_data['PHZ_MEDIAN'])
                 catred_scatter_data['phz_70_int'].extend(tile_data['PHZ_70_INT'])
                 catred_scatter_data['phz_pdf'].extend(tile_data['PHZ_PDF'])
+                catred_scatter_data['kron_radius'].extend(tile_data['KRON_RADIUS'])
+                catred_scatter_data['effective_coverage'].extend(tile_data['EFFECTIVE_COVERAGE'])  # Dummy coverage for unmasked data
                 print(f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} unmasked points from MER tile {mertileid}")
 
     def load_catred_scatter_data(self, data: Dict[str, Any], relayout_data: Dict[str, Any],
@@ -642,10 +647,10 @@ class CATREDHandler:
                 return self.update_catred_data_with_coverage(zoom_data, data, maglim, threshold)
             else:  # unmasked
                 print("Debug: Loading unmasked CATRED data")
-                return self.update_catred_data_unmasked(zoom_data, data, maglim)
+                return self.update_catred_data_unmasked(zoom_data, data, maglim=1000.0)  # Use high maglim for unmasked to avoid filtering
         except:
             print(f"Debug: catred_masked not a boolean, executing catred_masked='True' fallback")
-            return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_70_int': [], 'phz_pdf': []}
+            return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_median': [], 'phz_70_int': [], 'phz_pdf': [], 'kron_radius': [], 'effective_coverage': []}
         
         
 
@@ -677,12 +682,12 @@ class CATREDHandler:
         z_min = box['z_min']
         z_max = box['z_max']
 
-        catred_z_param_select = 'PHZ_MODE_1'  # Assuming PHZ_MODE_1 is used for redshift selection
+        # self.catred_z_param_select_for_filter = 'PHZ_MODE_1'
 
         selection_mask = (
             (src['RIGHT_ASCENSION'] >= ra_min) & (src['RIGHT_ASCENSION'] <= ra_max) &
             (src['DECLINATION'] >= dec_min) & (src['DECLINATION'] <= dec_max) & 
-            (src[catred_z_param_select] >= z_min) & (src[catred_z_param_select] <= z_max)
+            (src[self.catred_z_param_select_for_filter] >= z_min) & (src[self.catred_z_param_select_for_filter] <= z_max)
         )
         
         filtered_src = src[selection_mask]

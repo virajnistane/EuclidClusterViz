@@ -196,10 +196,11 @@ class PHZCallbacks:
                     ra = found_catred_data['ra'][point_index]
                     dec = found_catred_data['dec'][point_index]
                     phz_mode_1 = found_catred_data['phz_mode_1'][point_index]
-                    
-                    print(f"Debug: PHZ_PDF length: {len(phz_pdf)}, PHZ_MODE_1: {phz_mode_1}")
-                    
-                    return self._create_phz_pdf_plot(phz_pdf, ra, dec, phz_mode_1)
+                    phz_median = found_catred_data['phz_median'][point_index]
+
+                    print(f"Debug: PHZ_PDF length: {len(phz_pdf)}, PHZ_MODE_1: {phz_mode_1}, PHZ_MEDIAN: {phz_median}")
+
+                    return self._create_phz_pdf_plot(phz_pdf, ra, dec, phz_mode_1, phz_median)
                 else:
                     print("Debug: Click was not on a CATRED data point")
                 
@@ -213,7 +214,7 @@ class PHZCallbacks:
                 
                 return self._create_error_phz_plot(str(e))
     
-    def _create_phz_pdf_plot(self, phz_pdf, ra, dec, phz_mode_1):
+    def _create_phz_pdf_plot(self, phz_pdf, ra, dec, phz_mode_1, phz_median):
         """Create PHZ_PDF plot for a given CATRED point"""
         try:
             # Validate PHZ_PDF data
@@ -251,6 +252,13 @@ class PHZCallbacks:
                 line=dict(color='red', width=2, dash='dash'),
                 annotation_text=f"PHZ_MODE_1: {phz_mode_1:.3f}",
                 annotation_position="top"
+            )
+
+            phz_fig.add_vline(
+                x=phz_median,
+                line=dict(color='green', width=2, dash='dot'),
+                annotation_text=f"PHZ_MEDIAN: {phz_median:.3f}",
+                annotation_position="top left" if phz_median < phz_mode_1 else "top right"
             )
             
             phz_fig.update_layout(
