@@ -39,8 +39,8 @@ class MOSAICHandler:
         self.mosaic_wcs = None
 
         # Performance-optimized image processing parameters
-        self.img_width = 1920    # Reduced from 1920 for faster initial rendering
-        self.img_height = 1920   # Reduced from 1920 for faster initial rendering
+        self.img_width = 1920    # Reduced from 19200 for faster initial rendering
+        self.img_height = 1920   # Reduced from 19200 for faster initial rendering
         self.img_scale_factor = 1/10  # Initial downscale factor for performance
         self.n_sigma = 1.0
         
@@ -50,7 +50,7 @@ class MOSAICHandler:
         self.max_file_size_gb = 2.0  # Skip files larger than 2GB initially
         self.max_pixels_for_stats = 10_000_000  # Sample large images for statistics
 
-    def get_mosaic_cutout_box(self, mosaic_fits, racen, deccen, size):
+    def get_mosaic_cutout(self, mertileid, racen, deccen, size, mosaicinfo=None):
         """
         Get a cutout from the mosaic FITS file.
 
@@ -63,48 +63,63 @@ class MOSAICHandler:
         deccen : float
             Declination of the cutout center (degrees).
         size : float
-            Size of the cutout (degrees).
+            Size of the cutout (arcmin).
         """
-        # Open the mosaic FITS file
-        with fits.open(mosaic_fits) as hdul:
 
-            self.mosaic_header = hdul[0].header
-            self.mosaic_data = hdul[0].data
-            self.mosaic_wcs = wcs.WCS(self.mosaic_header)
-
-            naxis1_org, naxis2_org = self.mosaic_data.shape[1], self.mosaic_data.shape[0]  # Original image size
-            xcen, ycen = self.mosaic_wcs.wcs_world2pix(racen,deccen,0)[0], self.mosaic_wcs.wcs_world2pix(racen,deccen,0)[1]  # Convert RA/Dec to pixel coordinates
-
-            cdelt = self.mosaic_wcs.wcs.cd[0][0]  # degrees/pixel - pixel scale
-            np0 = abs(int(size/(2.*abs(cdelt))))  # Half-width in pixels
-            npt = 2*np0+1  # Total cutout size (odd number for center symmetry)
-
-            crpix1, crpix2 = np0+xcen-int(xcen), np0+ycen-int(ycen)  # New reference pixel
-            crval1, crval2 = self.mosaic_wcs.wcs_pix2world(xcen,ycen,0)[0], self.mosaic_wcs.wcs_pix2world(xcen,ycen,0)[1]  # Reference coordinates
-
-            cutout = np.zeros((npt,npt))
-
-            xmin0, xmax0 = int(xcen)-np0, int(xcen)+np0  # Desired pixel range
-            ymin0, ymax0 = int(ycen)-np0, int(ycen)+np0
-
-            xmin, xmax = max(xmin0,0), min(xmax0,naxis1_org-1)  # Clamp to image bounds
-            ymin, ymax = max(ymin0,0), min(ymax0,naxis2_org-1)
-
-            # Copy data, handling cases where cutout extends beyond image edges
-            cutout[ymin-ymin0:npt-(ymax0-ymax),xmin-xmin0:npt-(xmax0-xmax)] = self.mosaic_data[ymin:ymax+1,xmin:xmax+1]
-
-            wnew = self.mosaic_wcs.deepcopy()
-            wnew.wcs.crpix[0] = crpix1  # Update reference pixel
-            wnew.wcs.crpix[1] = crpix2
-            wnew.wcs.crval[0] = crval1  # Update reference coordinates  
-            wnew.wcs.crval[1] = crval2
-
-            hdr = wnew.to_header()  # Convert to FITS header
-            hdu = fits.PrimaryHDU(header=hdr)
-            hdu.data = cutout
+        if mosaicinfo is None:
+            try:
+                mosaicinfo = self.get_mosaic_fits_data_by_mertile(mertileid)
+            except Exception as e:
+                print(f"Error loading mosaic data for MER tile {mertileid}: {e}")
+                return None, None, None
             
-            return cutout, wnew
-    
+        mosaic_header = mosaicinfo['header']
+        mosaic_data = mosaicinfo['data']
+        mosaic_wcs = mosaicinfo['wcs']
+
+        naxis1_org, naxis2_org = mosaic_data.shape[1], mosaic_data.shape[0]  # Original image size
+        xcen, ycen = mosaic_wcs.wcs_world2pix(racen,deccen,0)[0], mosaic_wcs.wcs_world2pix(racen,deccen,0)[1]  # Convert RA/Dec to pixel coordinates
+
+        cdelt = mosaic_wcs.wcs.cd[0][0]  # degrees/pixel - pixel scale
+        np0 = int( size/60/2./abs(cdelt) )  # Half-width in pixels
+        npt = 2*np0+1  # Total cutout size (odd number for center symmetry)
+
+        crpix1, crpix2 = np0+xcen-int(xcen), np0+ycen-int(ycen)  # New reference pixel
+        crval1, crval2 = mosaic_wcs.wcs_pix2world(xcen,ycen,0)[0], mosaic_wcs.wcs_pix2world(xcen,ycen,0)[1]  # Reference coordinates
+
+        cutout = np.zeros((npt,npt))
+
+        xmin0, xmax0 = int(xcen)-np0, int(xcen)+np0  # Desired pixel range
+        ymin0, ymax0 = int(ycen)-np0, int(ycen)+np0
+
+        xmin, xmax = max(xmin0,0), min(xmax0,naxis1_org-1)  # Clamp to image bounds
+        ymin, ymax = max(ymin0,0), min(ymax0,naxis2_org-1)
+
+        # Copy data, handling cases where cutout extends beyond image edges
+        cutout[ymin-ymin0:npt-(ymax0-ymax),xmin-xmin0:npt-(xmax0-xmax)] = mosaic_data[ymin:ymax+1,xmin:xmax+1]
+
+        hdr = mosaicinfo['header'].copy()
+        hdr['NAXIS1'] = cutout.shape[1]
+        hdr['NAXIS2'] = cutout.shape[0]
+        hdr['CRPIX1'] = crpix1
+        hdr['CRPIX2'] = crpix2
+        hdr['CRVAL1'] = crval1.item()
+        hdr['CRVAL2'] = crval2.item()
+
+        wnew = wcs.WCS(hdr)
+
+        # wnew = self.mosaic_wcs.deepcopy()
+        # wnew.wcs.crpix[0] = crpix1  # Update reference pixel
+        # wnew.wcs.crpix[1] = crpix2
+        # wnew.wcs.crval[0] = crval1  # Update reference coordinates  
+        # wnew.wcs.crval[1] = crval2
+        # hdr = wnew.to_header()  # Convert to FITS header
+        # naxis1_new, naxis2_new = cutout.shape[1], cutout.shape[0]
+        # hdr['NAXIS1'] = naxis1_new
+        # hdr['NAXIS2'] = naxis2_new
+
+        return cutout, wnew, hdr
+
     def get_mosaic_fits_data_by_mertile(self, mertileid):
         """
         Load mosaic FITS data with performance optimization and threading timeout
@@ -262,16 +277,15 @@ class MOSAICHandler:
             print("Warning: No target dimensions or scale factor provided for mosaic processing, using original size")
             target_width = mosaic_data.shape[1]
             target_height = mosaic_data.shape[0]
-
-        if target_width_and_height is None and target_scale_factor is not None:
+        elif target_width_and_height is None and target_scale_factor is not None:
             target_width = int(mosaic_data.shape[1] * target_scale_factor)
             target_height = int(mosaic_data.shape[0] * target_scale_factor)
         elif target_width_and_height is not None:
             assert len(target_width_and_height) == 2, "target_width_and_height must be a tuple/list of (width, height)"
             target_width, target_height = target_width_and_height
             
-        self.image_width = target_width
-        self.image_height = target_height
+        self.img_width = target_width
+        self.img_height = target_height
 
         try:
             # Ensure we have a valid numpy array
@@ -305,18 +319,22 @@ class MOSAICHandler:
             
             print("Debug: Computing statistics...")
             
-            # Apply sigma clipping and normalization as in notebook cell 59
+            # Apply sigma clipping and normalization 
             # Use ravel to flatten the array for mean and std calculations
             # For large arrays, sample a subset for statistics to speed up processing
-            if mosaic_data.size > self.max_pixels_for_stats:  # If larger than 10M pixels
-                print("Debug: Large image detected, sampling for statistics...")
-                # Sample every 10th pixel for statistics
-                sample_data = mosaic_data[::10, ::10].ravel()
-                mean = np.mean(sample_data)
-                std = np.std(sample_data)
-            else:
-                mean = np.mean(mosaic_data.ravel())
-                std = np.std(mosaic_data.ravel())
+            # if mosaic_data.size > self.max_pixels_for_stats:  # If larger than 10M pixels
+            #     print("Debug: Large image detected, sampling for statistics...")
+            #     # Sample every 10th pixel for statistics
+            #     sample_data = mosaic_data[::10, ::10].ravel()
+            #     mean = np.mean(sample_data)
+            #     std = np.std(sample_data)
+            # else:
+            #     # Sample all pixels for statistics
+            #     mean = np.mean(mosaic_data.ravel())
+            #     std = np.std(mosaic_data.ravel())
+            
+            mean = np.mean(mosaic_data.ravel())
+            std = np.std(mosaic_data.ravel())
             
             print(f"Debug: Mosaic data statistics - mean: {mean:.3f}, std: {std:.3f}")
             
@@ -333,8 +351,9 @@ class MOSAICHandler:
             
             print("Debug: Starting image resize...")
             
-            # Resize the image to match target dimensions using the same approach as notebook
-            # Convert to PIL Image, resize with LANCZOS, and transpose with FLIP_TOP_BOTTOM
+            # Resize the image to match target dimensions
+            # Convert to PIL Image, resize with LANCZOS, 
+            # and transpose with FLIP_LEFT_RIGHT
             mer_array = np.array(
                 Image.fromarray(mer_image)
                 .resize((target_width, target_height), Image.Resampling.LANCZOS)
@@ -374,25 +393,25 @@ class MOSAICHandler:
             
             # Adjust WCS parameters for the scaling
             if 'CRPIX1' in header_binned:
-                header_binned['CRPIX1'] /= scale_x
+                header_binned['CRPIX1'] = header_binned['CRPIX1'] / scale_x
             if 'CRPIX2' in header_binned:
-                header_binned['CRPIX2'] /= scale_y
-                
+                header_binned['CRPIX2'] = header_binned['CRPIX2'] / scale_y
+
             # Scale the CD matrix elements
             if 'CD1_1' in header_binned:
-                header_binned['CD1_1'] *= scale_x
+                header_binned['CD1_1'] = header_binned['CD1_1'] * scale_x
             if 'CD1_2' in header_binned:
-                header_binned['CD1_2'] *= scale_x
+                header_binned['CD1_2'] = header_binned['CD1_2'] * scale_x
             if 'CD2_1' in header_binned:
-                header_binned['CD2_1'] *= scale_y
+                header_binned['CD2_1'] = header_binned['CD2_1'] * scale_y
             if 'CD2_2' in header_binned:
-                header_binned['CD2_2'] *= scale_y
-                
+                header_binned['CD2_2'] = header_binned['CD2_2'] * scale_y
+
             # Alternative: if using CDELT instead of CD matrix
             if 'CDELT1' in header_binned and 'CD1_1' not in header_binned:
-                header_binned['CDELT1'] *= scale_x
+                header_binned['CDELT1'] = header_binned['CDELT1'] * scale_x
             if 'CDELT2' in header_binned and 'CD2_2' not in header_binned:
-                header_binned['CDELT2'] *= scale_y
+                header_binned['CDELT2'] = header_binned['CDELT2'] * scale_y
             
             # Create the scaled WCS
             wcs_binned = wcs.WCS(header_binned)
@@ -406,19 +425,24 @@ class MOSAICHandler:
             # Fallback to original WCS
             return wcs.WCS(original_header)
 
-    def _calculate_image_bounds(self, mosaic_wcs: wcs.WCS, header: fits.Header, 
-                               target_width: int, target_height: int) -> Dict[str, float]:
+    def _calculate_image_bounds(
+            self, mosaic_wcs: wcs.WCS, header: fits.Header, 
+            target_width: int, target_height: int,
+            wcs_cutout=None
+            ) -> Dict[str, float]:
         """Calculate coordinate bounds for the processed image using scaled WCS approach from notebook."""
         try:
-            # Get the original image dimensions
-            naxis1 = header['NAXIS1']  # Width in pixels
-            naxis2 = header['NAXIS2']  # Height in pixels
-            
-            print(f"Debug: Original mosaic dimensions: {naxis1} x {naxis2} pixels")
-            
-            # Create scaled WCS similar to notebook's header_binned approach
-            original_shape = (naxis2, naxis1)  # (height, width)
-            scaled_wcs = self._create_scaled_wcs(header, original_shape, target_width, target_height)
+            if wcs_cutout:
+                print("Debug: Using provided wcs_cutout for bounds calculation")
+                scaled_wcs = wcs_cutout
+            else:
+                # Get the original image dimensions
+                naxis1 = header['NAXIS1']  # Width in pixels
+                naxis2 = header['NAXIS2']  # Height in pixels
+                print(f"Debug: Original mosaic dimensions: {naxis1} x {naxis2} pixels")
+                # Create scaled WCS similar to notebook's header_binned approach
+                original_shape = (naxis2, naxis1)  # (height, width)
+                scaled_wcs = self._create_scaled_wcs(header, original_shape, target_width, target_height)
             
             # Define corner pixels of the SCALED/BINNED image
             corners_pix = np.array([
@@ -566,8 +590,73 @@ class MOSAICHandler:
                     'wcs_original': mosaic_wcs
                 }
 
-    def create_mosaic_image_trace(self, mertileid: int, opacity: float = 0.5, 
-                                 colorscale: str = 'gray') -> Optional[go.Heatmap]:
+    def _calculate_image_bounds_direct(
+            self, mosaic_wcs: wcs.WCS, processed_image: np.ndarray
+            ) -> Dict[str, float]:
+        """Calculate bounds using original WCS and image corners."""
+        height, width = processed_image.shape
+        
+        # Define corner pixels of the PROCESSED image
+        corners = np.array([
+            [0, 0],           # Bottom-left
+            [width-1, 0],     # Bottom-right  
+            [width-1, height-1], # Top-right
+            [0, height-1]     # Top-left
+        ])
+        
+        # FIXED: Get the original image dimensions from WCS header
+        try:
+            # Get original dimensions from the WCS object
+            if hasattr(mosaic_wcs, '_naxis'):
+                orig_width = mosaic_wcs._naxis[0]
+                orig_height = mosaic_wcs._naxis[1]
+            elif hasattr(mosaic_wcs, 'pixel_shape'):
+                orig_height, orig_width = mosaic_wcs.pixel_shape
+            else:
+                # Fallback: get from the stored mosaic data
+                orig_height, orig_width = self.mosaic_data.shape
+                
+            print(f"Debug: Original image size: {orig_width} x {orig_height}")
+            print(f"Debug: Processed image size: {width} x {height}")
+            
+            # Calculate correct scaling factors
+            scale_x = orig_width / width
+            scale_y = orig_height / height
+            
+            print(f"Debug: Scale factors: scale_x={scale_x:.3f}, scale_y={scale_y:.3f}")
+            
+            # Scale corners back to original image coordinates
+            corners_original = corners * [scale_x, scale_y]
+            
+            # Convert to world coordinates using original WCS
+            ra_coords, dec_coords = mosaic_wcs.wcs_pix2world(
+                corners_original[:, 0], corners_original[:, 1], 0
+            )
+            
+        except Exception as e:
+            print(f"Warning: Could not get original dimensions, using direct conversion: {e}")
+            # Fallback: use processed image corners directly with WCS
+            # This assumes the WCS has been properly scaled for the processed image
+            ra_coords, dec_coords = mosaic_wcs.wcs_pix2world(
+                corners[:, 0], corners[:, 1], 0
+            )
+        
+        ra_size = np.max(ra_coords) - np.min(ra_coords)
+        dec_size = np.max(dec_coords) - np.min(dec_coords)
+        
+        return {
+            'ra_min': np.min(ra_coords),
+            'ra_max': np.max(ra_coords),
+            'dec_min': np.min(dec_coords), 
+            'dec_max': np.max(dec_coords),
+            'ra_size_deg': ra_size,
+            'dec_size_deg': dec_size
+        }
+
+    def create_mosaic_image_trace(
+            self, mertileid: int, 
+            opacity: float = 0.5, colorscale: str = 'gray'
+            ) -> Optional[go.Heatmap]:
         """Create a Plotly heatmap trace for a mosaic image."""
         # Load mosaic data for this tile
         mosaic_info = self.get_mosaic_fits_data_by_mertile(mertileid)
@@ -582,13 +671,17 @@ class MOSAICHandler:
             )
         
         # Calculate coordinate bounds
-        bounds = self._calculate_image_bounds(
+        # bounds = self._calculate_image_bounds(
+        #     mosaic_info['wcs'], 
+        #     mosaic_info['header'],
+        #     self.img_width, 
+        #     self.img_height
+        # )
+        bounds = self._calculate_image_bounds_direct(
             mosaic_info['wcs'], 
-            mosaic_info['header'],
-            self.img_width, 
-            self.img_height
+            processed_image
         )
-        
+
         # Create coordinate arrays for the heatmap
         height, width = processed_image.shape
         x_coords = np.linspace(bounds['ra_min'], bounds['ra_max'], width)
@@ -622,6 +715,93 @@ class MOSAICHandler:
         
         return trace
 
+    def create_mosaic_cutout_trace(
+            self, data: Dict[str, Any], clickdata: Dict[str, Any], 
+            opacity: float = 0.8, colorscale: str = 'viridis'
+            ) -> Optional[go.Heatmap]:
+        """Create a Plotly heatmap trace for a mosaic cutout."""
+
+        print(f"Debug: Creating cutout trace with size {clickdata.get('cutout_size', 1)} arcmin")
+
+        ra_cen, dec_cen = clickdata['cluster_ra'], clickdata['cluster_dec']
+
+        ra_min, ra_max = ra_cen-1e-4, ra_cen+1e-4       # Small box around click
+        dec_min, dec_max = dec_cen-1e-4, dec_cen+1e-4   # Small box around click
+
+        # Find which MER tiles intersect with the cutout region
+        mertiles_to_load = self._find_intersecting_tiles(data, ra_min, ra_max, dec_min, dec_max)
+        if len(mertiles_to_load) != 1:
+            print("Warning: Multiple MER tiles intersect with cutout region, returning None")
+            return None
+        else:
+            mertileid = mertiles_to_load[0]
+
+        mosaicinfo =self.get_mosaic_fits_data_by_mertile(mertileid)
+        
+        # Load mosaic data for this tile
+        data_cutout, wcs_cutout, hdr_cutout = self.get_mosaic_cutout(
+            mertileid=mertileid,
+            racen=ra_cen,
+            deccen=dec_cen,
+            size=clickdata.get('cutout_size', 1), # size in arcmin
+            mosaicinfo=mosaicinfo
+        )
+        
+        # Process the image
+        if data_cutout is None:
+            print(f"Warning: Could not get cutout for MER tile {mertileid}")
+            return None
+        else:
+            processed_image = self._process_mosaic_image(data_cutout)
+        
+        # Calculate coordinate bounds
+        # bounds = self._calculate_image_bounds(
+        #     mosaicinfo['wcs'], 
+        #     hdr_cutout,
+        #     self.img_width, 
+        #     self.img_height,
+        #     wcs_cutout=wcs_cutout
+        # )
+
+        bounds = self._calculate_image_bounds_direct(
+            wcs_cutout, 
+            processed_image
+        )
+
+        # Create coordinate arrays for the heatmap
+        height, width = processed_image.shape
+        x_coords = np.linspace(bounds['ra_min'], bounds['ra_max'], width)
+        y_coords = np.linspace(bounds['dec_min'], bounds['dec_max'], height)
+        
+        # Add debug information about the tile size and coordinates
+        print(f"Debug: Creating heatmap trace for MER tile {mertileid}")
+        print(f"       - Tile size (degree): {bounds.get('ra_size_deg', 'unknown'):.6f}° × {bounds.get('dec_size_deg', 'unknown'):.6f}°")
+        print(f"       - Tile size (arcmin): {bounds.get('ra_size_deg', 'unknown')*60:.3f} arcmin × {bounds.get('dec_size_deg', 'unknown')*60:.3f} arcmin")
+        print(f"       - RA range: {bounds['ra_min']:.6f}° to {bounds['ra_max']:.6f}°")
+        print(f"       - Dec range: {bounds['dec_min']:.6f}° to {bounds['dec_max']:.6f}°")
+        print(f"       - Image shape: {height} × {width} pixels")
+        
+        # Create the heatmap trace
+        trace = go.Heatmap(
+            z=processed_image,
+            x=x_coords,
+            y=y_coords,
+            opacity=opacity,
+            colorscale=colorscale,
+            showscale=False,  # Don't show colorbar
+            name=f"MER-Mosaic cutout #{clickdata.get('nclicks', 1)}",
+            hovertemplate=(
+                f"MER Tile: {mertileid}<br>"
+                "RA: %{x:.6f}°<br>"
+                "Dec: %{y:.6f}°<br>"
+                "Intensity: %{z:.3f}<br>"
+                f"Tile Size: {bounds.get('ra_size_deg', 'unknown'):.4f}° × {bounds.get('dec_size_deg', 'unknown'):.4f}°<br>"
+                "<extra>Mosaic Image</extra>"
+            )
+        )
+        
+        return trace
+    
     def load_mosaic_traces_in_zoom(
             self,
             data: Dict[str, Any],

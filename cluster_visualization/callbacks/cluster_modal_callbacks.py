@@ -15,8 +15,8 @@ import json
 
 class ClusterModalCallbacks:
     """Handles cluster modal and action callbacks"""
-    
-    def __init__(self, app, data_loader, catred_handler, trace_creator, figure_manager):
+
+    def __init__(self, app, data_loader, catred_handler, mosaic_handler, trace_creator, figure_manager):
         """
         Initialize cluster modal callbacks.
         
@@ -29,6 +29,7 @@ class ClusterModalCallbacks:
         self.app = app
         self.data_loader = data_loader
         self.catred_handler = catred_handler
+        self.mosaic_handler = mosaic_handler
         self.trace_creator = trace_creator
         self.figure_manager = figure_manager
 
@@ -462,6 +463,11 @@ class ClusterModalCallbacks:
                 )
             
             cluster = self.selected_cluster
+
+            print(f"Loading data for algorithm: {algorithm}")
+            data = self.data_loader.load_data(select_algorithm=algorithm)
+            print("Data loaded successfully.")
+
             
             if button_id == 'tab-generate-cutout':
                 # Analysis results for the tab
@@ -482,6 +488,68 @@ class ClusterModalCallbacks:
                     ])
                 ])
                 
+                clickdata = {'cluster_ra': cluster['ra'], 'cluster_dec': cluster['dec'],
+                             'cutout_size': cutout_size,  # cutout size in arcmin
+                             'cutout_type': cutout_type,
+                             'nclicks': cutout_clicks}
+
+                if cutout_type == 'mermosaic':
+                    if self.mosaic_handler:
+                        mosaic_cutout_trace = self.mosaic_handler.create_mosaic_cutout_trace(data, clickdata)
+
+                        if mosaic_cutout_trace:
+                            # Add mosaic traces to current figure with proper layering
+                            if current_figure and 'data' in current_figure:
+                                # Remove existing mosaic traces first
+                                existing_traces = [trace for trace in current_figure['data']
+                                                    if not (trace.get('name', '').startswith('MER-Mosaic cutout'))]
+
+                                # Separate traces by type to maintain proper layering order
+                                polygon_traces = []
+                                mosaic_traces = []
+                                catred_traces = []
+                                cluster_traces = []
+                                other_traces = []
+                                
+                                for trace in existing_traces:
+                                    trace_name = trace.get('name', '')
+                                    if 'Tile' in trace_name and ('CORE' in trace_name or 'LEV1' in trace_name or 'MerTile' in trace_name):
+                                        polygon_traces.append(trace)
+                                    elif 'Mosaic' in trace_name:
+                                        mosaic_traces.append(trace)
+                                    elif 'CATRED' in trace_name or 'MER High-Res Data' in trace_name:
+                                        catred_traces.append(trace)
+                                    elif any(keyword in trace_name for keyword in ['Merged Data', 'Tile', 'clusters']):
+                                        cluster_traces.append(trace)
+                                    else:
+                                        other_traces.append(trace)
+                                
+                                # Layer order: polygons (bottom) → mosaic → CATRED → other → cluster traces (top)
+                                new_data = polygon_traces + mosaic_traces + [mosaic_cutout_trace] + catred_traces + other_traces + cluster_traces
+                                current_figure['data'] = new_data
+                                
+                                print(f"✓ Added mosaic cutout trace as 2nd layer from bottom")
+                                print(f"   -> Layer order: {len(polygon_traces)} polygons, {len(mosaic_traces)} mosaics, 1 mosaic cutout, {len(catred_traces)} CATRED, {len(other_traces)} other, {len(cluster_traces)} clusters (top)")
+                            else:
+                                print("⚠️  No current figure data to update")
+                        else:
+                            print("ℹ️  No mosaic images found for current zoom window")
+                    else:
+                        print("❌ No mosaic handler available")
+                    
+                # if self.figure_manager:
+                #     fig = self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio)
+                # else:
+                #     fig = self._create_fallback_figure(traces, algorithm, free_aspect_ratio)
+
+                # # Preserve zoom state
+                # if self.figure_manager:
+                #     self.figure_manager.preserve_zoom_state(fig, relayout_data)
+                # else:
+                #     self._preserve_zoom_state_fallback(fig, relayout_data)
+
+                empty_phz_fig = self._create_empty_phz_plot()
+
                 # Status message
                 status_msg = dbc.Alert([
                     html.H6("🔬 Generating Cutout...", className="mb-2"),
@@ -489,7 +557,7 @@ class ClusterModalCallbacks:
                 ], color="info")
                 
                 print(f"🔬 Tab cutout: RA={cluster['ra']}, Dec={cluster['dec']}, Size={cutout_size}, Type={cutout_type}")
-                return dash.no_update, dash.no_update, results_content, status_msg
+                return current_figure, empty_phz_fig, results_content, status_msg
 
             elif button_id == 'tab-phz-button':
                 results_content = dbc.Card([
@@ -548,7 +616,7 @@ class ClusterModalCallbacks:
                                 'catred_redshift_bin_width': catred_redshift_bin_width}
                 )
 
-                data = self.data_loader.load_data(select_algorithm=algorithm)
+                # data = self.data_loader.load_data(select_algorithm=algorithm)
                 catred_box_data = self.catred_handler.load_catred_data_clusterbox(
                     box=box_params, data=data,
                     threshold=catred_mask_threshold, maglim=catred_maglim

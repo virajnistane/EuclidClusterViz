@@ -324,7 +324,9 @@ class ClusterVisualizationApp:
             
             # 🆕 Initialize cluster modal callbacks
             self.cluster_modal_callbacks = ClusterModalCallbacks(
-                self.app, self.data_loader, self.catred_handler, self.trace_creator, self.figure_manager
+                app=self.app, data_loader=self.data_loader, 
+                catred_handler=self.catred_handler, mosaic_handler=self.mosaic_handler, 
+                trace_creator=self.trace_creator, figure_manager=self.figure_manager
             )
             
             print("✓ All modular callbacks initialized")

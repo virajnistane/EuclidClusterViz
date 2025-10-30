@@ -965,12 +965,12 @@ class AppLayout:
                             [html.I(className="fas fa-crop me-2"), "Generate Cutout"],
                             id="tab-cutout-button",
                             color="primary",
-                            disabled=True,
+                            disabled=False,
                             className="w-100 mb-2",
                             n_clicks=0
                         ),
                         # html.Small("Click to see options", className="text-muted d-block text-center")
-                        html.Small("Coming soon ...", className="text-muted d-block text-center")
+                        html.Small("Click to see options", className="text-muted d-block text-center")
                     ], width=6),
 
                     dbc.Col([
@@ -1028,9 +1028,9 @@ class AppLayout:
                                         id="tab-cutout-size",
                                         type="number",
                                         value=1.0,
-                                        min=1.0,
-                                        max=20.0,
-                                        step=0.5,
+                                        min=0.1,
+                                        max=10.0,
+                                        step=0.1,
                                         className="mb-2"
                                     )
                                 ], width=6),
@@ -1040,8 +1040,8 @@ class AppLayout:
                                         id="tab-cutout-type",
                                         options=[
                                             {"label": "MER Mosaic", "value": "mermosaic"},
-                                            {"label": "Density Map", "value": "density"},
-                                            {"label": "Both", "value": "both"}
+                                            # {"label": "Density Map", "value": "density"},
+                                            # {"label": "Both", "value": "both"}
                                         ],
                                         value="mermosaic",
                                         className="mb-2"
