@@ -871,6 +871,33 @@ class AppLayout:
                                     )
                                 ], width=6)
                             ]),
+                            dbc.Row([
+                                dbc.Col([
+                                    html.Label("Opacity:", className="form-label"),
+                                    dbc.Input(
+                                        id="cutout-opacity-input",
+                                        type="number",
+                                        value=1.0,
+                                        min=0.0,
+                                        max=1.0,
+                                        step=0.1,
+                                        className="mb-2"
+                                    )
+                                ], width=6),
+                                dbc.Col([
+                                    html.Label("Colorscale:", className="form-label"),
+                                    dbc.Select(
+                                        id="cutout-colorscale",
+                                        options=[
+                                            {"label": "viridis", "value": "viridis"},
+                                            {"label": "gray", "value": "gray"},
+                                            {"label": "plasma", "value": "plasma"}
+                                        ],
+                                        value="viridis",
+                                        className="mb-2"
+                                    )
+                                ], width=6)
+                            ]),
                             dbc.Button(
                                 "Generate Cutout",
                                 id="generate-cutout-button",
@@ -1044,6 +1071,33 @@ class AppLayout:
                                             # {"label": "Both", "value": "both"}
                                         ],
                                         value="mermosaic",
+                                        className="mb-2"
+                                    )
+                                ], width=6)
+                            ]),
+                            dbc.Row([
+                                dbc.Col([
+                                    html.Label("Opacity (0 to 1):", className="form-label"),
+                                    dbc.Input(
+                                        id="tab-cutout-opacity",
+                                        type="number",
+                                        value=1.0,
+                                        min=0.0,
+                                        max=1.0,
+                                        step=0.1,
+                                        className="mb-2"
+                                    )
+                                ], width=6),
+                                dbc.Col([
+                                    html.Label("Colorscale:", className="form-label"),
+                                    dbc.Select(
+                                        id="tab-cutout-colorscale",
+                                        options=[
+                                            {"label": "viridis", "value": "viridis"},
+                                            {"label": "gray", "value": "gray"},
+                                            {"label": "plasma", "value": "plasma"}
+                                        ],
+                                        value="viridis",
                                         className="mb-2"
                                     )
                                 ], width=6)

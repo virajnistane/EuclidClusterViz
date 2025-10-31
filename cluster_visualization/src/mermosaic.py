@@ -790,8 +790,8 @@ class MOSAICHandler:
             z=processed_image,
             x=x_coords,
             y=y_coords,
-            opacity=opacity,
-            colorscale=colorscale,
+            opacity=clickdata.get('cutout_opacity', opacity),
+            colorscale=clickdata.get('cutout_colorscale', colorscale),
             showscale=False,  # Don't show colorbar
             name=f"MER-Mosaic cutout #{clickdata.get('nclicks', 1)}",
             hovertemplate=(

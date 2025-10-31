@@ -436,6 +436,9 @@ class ClusterModalCallbacks:
              #
              State('tab-cutout-size', 'value'),
              State('tab-cutout-type', 'value'),
+             State('tab-cutout-opacity', 'value'),
+             State('tab-cutout-colorscale', 'value'),
+             #
              State('tab-catred-box-size', 'value'),
              State('tab-catred-redshift-bin-width', 'value'),
              State('tab-catred-mask-threshold', 'value'),
@@ -453,7 +456,8 @@ class ClusterModalCallbacks:
         )
         def handle_tab_actions(cutout_clicks, phz_clicks, catred_box_clicks, export_clicks,
                                algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_merged_clusters,
-                               cutout_size, cutout_type, catred_box_size, catred_redshift_bin_width, catred_mask_threshold, catred_maglim, catred_marker_size_option, catred_marker_size_custom, catred_marker_color,
+                               cutout_size, cutout_type, cutout_opacity, cutout_colorscale,
+                               catred_box_size, catred_redshift_bin_width, catred_mask_threshold, catred_maglim, catred_marker_size_option, catred_marker_size_custom, catred_marker_color,
                                catred_masked, threshold, maglim, relayout_data, current_figure):
             """Handle tab action button clicks"""
             ctx = callback_context
@@ -497,6 +501,8 @@ class ClusterModalCallbacks:
                 clickdata = {'cluster_ra': cluster['ra'], 'cluster_dec': cluster['dec'],
                              'cutout_size': cutout_size,  # cutout size in arcmin
                              'cutout_type': cutout_type,
+                             'cutout_opacity': cutout_opacity,
+                             'cutout_colorscale': cutout_colorscale,
                              'nclicks': cutout_clicks}
 
                 if cutout_type == 'mermosaic':
@@ -523,7 +529,7 @@ class ClusterModalCallbacks:
                                         polygon_traces.append(trace)
                                     elif 'Mosaic' in trace_name:
                                         mosaic_traces.append(trace)
-                                    elif 'CATRED' in trace_name or 'MER High-Res Data' in trace_name:
+                                    elif 'CATRED' in trace_name:
                                         catred_traces.append(trace)
                                     elif any(keyword in trace_name for keyword in ['Merged Data', 'Tile', 'clusters']):
                                         cluster_traces.append(trace)
