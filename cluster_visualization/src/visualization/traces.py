@@ -419,7 +419,7 @@ class TraceCreator:
             x=catred_box_data['ra'],
             y=catred_box_data['dec'],
             mode='markers',
-            marker=dict(size=10, symbol='circle', color='rgba(100, 100, 100, 0)', line=dict(width=2, color='yellow')), #  color='black', opacity=0,
+            marker=dict(size=10, symbol='circle', color='rgba(100, 100, 100, 0)', line=dict(width=2, color='white')), #  color='black', opacity=0,
             name=trace_name,
             text=self._format_catred_hover_text(catred_box_data),
             hoverinfo='text',
