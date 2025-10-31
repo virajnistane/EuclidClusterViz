@@ -426,18 +426,24 @@ class ClusterModalCallbacks:
              Input('tab-phz-button', 'n_clicks'),
              Input('tab-view-catred-box', 'n_clicks'),
              Input('tab-export-button', 'n_clicks')],
+             #
             [State('algorithm-dropdown', 'value'),
              State('snr-range-slider', 'value'),
              State('polygon-switch', 'value'),
              State('mer-switch', 'value'),
              State('aspect-ratio-switch', 'value'),
              State('merged-clusters-switch', 'value'),
+             #
              State('tab-cutout-size', 'value'),
              State('tab-cutout-type', 'value'),
              State('tab-catred-box-size', 'value'),
              State('tab-catred-redshift-bin-width', 'value'),
              State('tab-catred-mask-threshold', 'value'),
              State('tab-catred-maglim', 'value'),
+             State('tab-catred-marker-size', 'value'),
+             State('tab-catred-marker-size-custom', 'value'),
+             State('tab-catred-marker-color-picker', 'value'),
+             #
              State('catred-mode-switch', 'value'),
              State('catred-threshold-slider', 'value'),
              State('magnitude-limit-slider', 'value'),
@@ -447,7 +453,7 @@ class ClusterModalCallbacks:
         )
         def handle_tab_actions(cutout_clicks, phz_clicks, catred_box_clicks, export_clicks,
                                algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_merged_clusters,
-                               cutout_size, cutout_type, catred_box_size, catred_redshift_bin_width, catred_mask_threshold, catred_maglim,
+                               cutout_size, cutout_type, catred_box_size, catred_redshift_bin_width, catred_mask_threshold, catred_maglim, catred_marker_size_option, catred_marker_size_custom, catred_marker_color,
                                catred_masked, threshold, maglim, relayout_data, current_figure):
             """Handle tab action button clicks"""
             ctx = callback_context
@@ -552,7 +558,7 @@ class ClusterModalCallbacks:
 
                 # Status message
                 status_msg = dbc.Alert([
-                    html.H6("🔬 Generating Cutout...", className="mb-2"),
+                    html.H6("🔬 Cutout generated", className="mb-2"),
                     html.P(f"📍 RA {cluster['ra']:.6f}°, Dec {cluster['dec']:.6f}° | 📏 {cutout_size} arcmin")
                 ], color="info")
                 
@@ -613,7 +619,11 @@ class ClusterModalCallbacks:
                     click_data={'ra': cluster['ra'], 'dec': cluster['dec'],
                                 'redshift': cluster['redshift'],
                                 'catred_box_size': catred_box_size/60,  # Convert arcmin to degrees
-                                'catred_redshift_bin_width': catred_redshift_bin_width}
+                                'catred_redshift_bin_width': catred_redshift_bin_width,
+                                'trace_marker': {'size_option': catred_marker_size_option,  # 'set_size_custom' or 'set_size_kron'
+                                                 'size_custom_value': catred_marker_size_custom,
+                                                 'color': catred_marker_color}
+                                }
                 )
 
                 # data = self.data_loader.load_data(select_algorithm=algorithm)
@@ -646,7 +656,7 @@ class ClusterModalCallbacks:
                 empty_phz_fig = self._create_empty_phz_plot()
 
                 status_msg = dbc.Alert([
-                    html.H6("🖼️ Loading CATRED Box...", className="mb-2"),
+                    html.H6("🖼️ CATRED Box loaded", className="mb-2"),
                     html.P(f"📍 RA {cluster['ra']:.4f}°, Dec {cluster['dec']:.4f}°")
                 ], color="primary")
 
@@ -683,7 +693,7 @@ class ClusterModalCallbacks:
         if current_figure and 'data' in current_figure:
             for trace in current_figure['data']:
                 if (isinstance(trace, dict) and 'name' in trace and trace['name'] and
-                    ('CATRED' in trace['name'] or 'CATRED Tiles High-Res Data' in trace['name'])):
+                    ('CATRED' in trace['name'] and 'MER Tile' in trace['name'])):
                     # Convert dict to Scattergl object for consistency
                     existing_trace = go.Scattergl(
                         x=trace.get('x', []),

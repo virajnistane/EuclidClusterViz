@@ -336,7 +336,7 @@ class TraceCreator:
         # Generate unique trace name
         trace_count = self.catred_handler.get_traces_count() if self.catred_handler else 1
         mode_label = "Masked" if catred_masked else "Unmasked"
-        trace_name = f'CATRED {mode_label} Data #{trace_count + 1}'
+        trace_name = f'CATRED {mode_label} - MER Tile'
 
         # Create CATRED scatter trace
         # For masked mode, include effective coverage in customdata for client-side filtering
@@ -402,7 +402,7 @@ class TraceCreator:
         # Generate unique trace name
         trace_count = self.catred_handler.get_traces_count() if self.catred_handler else 1
         mode_label = "Masked" if catred_masked else "Unmasked"
-        trace_name = f'CATRED {mode_label} Data #{trace_count + 1}'
+        trace_name = f'CATRED {mode_label} - Boxed' # Data #{trace_count + 1}
 
         # Create CATRED scatter trace
         # For masked mode, include effective coverage in customdata for client-side filtering
@@ -419,7 +419,7 @@ class TraceCreator:
             x=catred_box_data['ra'],
             y=catred_box_data['dec'],
             mode='markers',
-            marker=dict(size=10, symbol='circle', color='rgba(100, 100, 100, 0)', line=dict(width=2, color='white')), #  color='black', opacity=0,
+            marker=dict(size=catred_box_data['trace_marker_size'], symbol='circle', color='rgba(100, 100, 100, 0)', line=dict(width=2, color=catred_box_data['trace_marker_color'][0])), #  color='black', opacity=0,
             name=trace_name,
             text=self._format_catred_hover_text(catred_box_data),
             hoverinfo='text',

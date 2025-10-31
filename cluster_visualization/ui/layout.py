@@ -1121,6 +1121,43 @@ class AppLayout:
                                     )
                                 ], width=6)
                             ]),
+                            dbc.Row([
+                                dbc.Col([
+                                    html.Label("Marker Size:", className="form-label"),
+                                    dbc.Select(
+                                        id="tab-catred-marker-size",
+                                        options=[
+                                            {"label": "Constant size", "value": "set_size_custom"},
+                                            {"label": "KRON Radius", "value": "set_size_kronradius"},
+                                            # {"label": "Both", "value": "both"}
+                                        ],
+                                        value="set_size_custom",
+                                        className="mb-2"
+                                    )
+                                ], width=4),
+                                dbc.Col([
+                                    html.Label("Custom Size:", className="form-label"),
+                                    dbc.Input(
+                                        id="tab-catred-marker-size-custom",
+                                        type="number",
+                                        value=10.0,
+                                        min=5.0,
+                                        max=50.0,
+                                        step=5.0,
+                                        className="mb-2"
+                                    )
+                                ], width=4),
+                                dbc.Col([
+                                    html.Label("Marker Color:", className="form-label"),
+                                    dbc.Input(
+                                        id="tab-catred-marker-color-picker",
+                                        type="color",
+                                        value="#00FFF2",
+                                        className="w-100",
+                                        style={'height': '38px', 'cursor': 'pointer', 'border-radius': '6px'}
+                                    )
+                                ], width=4)
+                            ]),
                             dbc.Button(
                                 [html.I(className="fas fa-play me-2"), "View CATRED Box"],
                                 id="tab-view-catred-box",

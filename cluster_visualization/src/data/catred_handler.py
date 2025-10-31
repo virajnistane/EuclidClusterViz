@@ -526,22 +526,22 @@ class CATREDHandler:
         Returns:
             Dictionary with scatter plot data for CATRED points within the box
         """
-        if not box or not all(k in box for k in ['ra_min', 'ra_max', 'dec_min', 'dec_max', 'z_min', 'z_max']):
+        if not box or not all(k in box for k in ['ra_min', 'ra_max', 'dec_min', 'dec_max', 'z_min', 'z_max', 'trace_marker_size', 'trace_marker_color']):
             print("Debug: No valid box data for CATRED")
             print("Debug: Box data received:", box)
-            return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_median': [], 'phz_70_int': [], 'phz_pdf': [], 'kron_radius': [], 'effective_coverage': []}
+            return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_median': [], 'phz_70_int': [], 'phz_pdf': [], 'kron_radius': [], 'effective_coverage': [], 'trace_marker_size': [], 'trace_marker_color': []}
         
         # Find MER tiles that intersect with box area
         mertiles_to_load = self._find_intersecting_tiles(data, box['ra_min'], box['ra_max'], box['dec_min'], box['dec_max'])
 
         if not mertiles_to_load:
             print("Debug: No intersecting MER tiles found for CATRED")
-            return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_median': [], 'phz_70_int': [], 'phz_pdf': [], 'kron_radius': [], 'effective_coverage': []}
+            return {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_median': [], 'phz_70_int': [], 'phz_pdf': [], 'kron_radius': [], 'effective_coverage': [], 'trace_marker_size': [], 'trace_marker_color': []}
 
         print(f"Debug: Loading CATRED for {len(mertiles_to_load)} MER tiles")
 
         # Initialize scatter data container
-        catred_scatter_data = {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_median': [], 'phz_70_int': [], 'phz_pdf': [], 'kron_radius': [], 'effective_coverage': []}
+        catred_scatter_data = {'ra': [], 'dec': [], 'phz_mode_1': [], 'phz_median': [], 'phz_70_int': [], 'phz_pdf': [], 'kron_radius': [], 'effective_coverage': [], 'trace_marker_size': [], 'trace_marker_color': []}
 
         # Load data for each intersecting tile using masked method
         self._load_tile_data_clusterbox(mertiles_to_load, data, catred_scatter_data, threshold, maglim, box)
@@ -551,7 +551,7 @@ class CATREDHandler:
 
     def _load_tile_data_clusterbox(self, mertiles_to_load: List[int], data: Dict[str, Any],
                                    catred_scatter_data: Dict[str, List], threshold: float = 0.8, 
-                                   maglim: float = 24.0, box: Dict[str, float] = None) -> None:
+                                   maglim: float = 24.0, box: Dict[str, Any] = None) -> None:
         """Load masked data for each MER tile and accumulate in scatter data."""
         for mertileid in mertiles_to_load:
             tile_data = self.get_radec_mertile_masked(mertileid=mertileid, data=data, 
@@ -565,6 +565,16 @@ class CATREDHandler:
                 catred_scatter_data['phz_pdf'].extend(tile_data['PHZ_PDF'])
                 catred_scatter_data['kron_radius'].extend(tile_data['KRON_RADIUS'])
                 catred_scatter_data['effective_coverage'].extend(tile_data['EFFECTIVE_COVERAGE'])
+
+                if 'trace_marker_size' in box and type(box['trace_marker_size']) == float:
+                    catred_scatter_data['trace_marker_size'].extend([box['trace_marker_size']] * len(tile_data['RIGHT_ASCENSION']))
+                elif 'trace_marker_size' in box and box['trace_marker_size'] == 'variable':
+                    catred_scatter_data['trace_marker_size'].extend(tile_data['KRON_RADIUS'])
+                else:
+                    catred_scatter_data['trace_marker_size'].extend([10] * len(tile_data['RIGHT_ASCENSION']))
+
+                if 'trace_marker_color' in box and type(box['trace_marker_color']) == str:
+                    catred_scatter_data['trace_marker_color'].append(box['trace_marker_color'])
 
                 print(f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} masked points from MER tile {mertileid}")
 
@@ -713,13 +723,28 @@ class CATREDHandler:
         z_min = click_data['redshift'] - click_data['catred_redshift_bin_width'] / 2
         z_max = click_data['redshift'] + click_data['catred_redshift_bin_width'] / 2
 
+        if 'trace_marker' in click_data:
+            if click_data['trace_marker']['size_option'] == 'set_size_custom':
+                trace_catred_marker_size = click_data['trace_marker']['size_custom_value']
+            elif click_data['trace_marker']['size_option'] == 'set_size_kronradius':
+                trace_catred_marker_size = 'variable'  # Use default sizing
+        else:
+            trace_catred_marker_size = 10  # Use default sizing
+        
+        if 'trace_marker' in click_data and 'color' in click_data['trace_marker']:
+            trace_catred_marker_color = click_data['trace_marker']['color']
+        else:
+            trace_catred_marker_color = 'yellow'  # Default color
+
         return {
             'ra_min': ra_min,
             'ra_max': ra_max,
             'dec_min': dec_min,
             'dec_max': dec_max,
             'z_min': z_min,
-            'z_max': z_max
+            'z_max': z_max,
+            'trace_marker_size': trace_catred_marker_size,
+            'trace_marker_color': trace_catred_marker_color
         }
 
     def _extract_zoom_data_from_relayout(self, relayout_data: Dict[str, Any]) -> Dict[str, Any]:
