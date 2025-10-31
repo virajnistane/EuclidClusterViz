@@ -717,7 +717,7 @@ class MOSAICHandler:
 
     def create_mosaic_cutout_trace(
             self, data: Dict[str, Any], clickdata: Dict[str, Any], 
-            opacity: float = 0.8, colorscale: str = 'viridis'
+            opacity: float = 1, colorscale: str = 'viridis'
             ) -> Optional[go.Heatmap]:
         """Create a Plotly heatmap trace for a mosaic cutout."""
 
@@ -739,13 +739,17 @@ class MOSAICHandler:
         mosaicinfo =self.get_mosaic_fits_data_by_mertile(mertileid)
         
         # Load mosaic data for this tile
-        data_cutout, wcs_cutout, hdr_cutout = self.get_mosaic_cutout(
-            mertileid=mertileid,
-            racen=ra_cen,
-            deccen=dec_cen,
-            size=clickdata.get('cutout_size', 1), # size in arcmin
-            mosaicinfo=mosaicinfo
-        )
+        try:
+            data_cutout, wcs_cutout, hdr_cutout = self.get_mosaic_cutout(
+                mertileid=mertileid,
+                racen=ra_cen,
+                deccen=dec_cen,
+                size=clickdata.get('cutout_size', 1), # size in arcmin
+                mosaicinfo=mosaicinfo
+            )
+        except Exception as e:
+            print(f"Warning: Exception while getting cutout for MER tile {mertileid}: {e}")
+            return None
         
         # Process the image
         if data_cutout is None:
