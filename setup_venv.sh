@@ -39,7 +39,7 @@ echo ""
 # Create virtual environment if it doesn't exist
 if [ ! -d "$VENV_DIR" ]; then
     echo "Creating virtual environment..."
-    python -m venv "$VENV_DIR"
+    python -m venv --system-site-packages "$VENV_DIR"
     echo "✓ Virtual environment created"
 else
     echo "✓ Virtual environment already exists"
@@ -53,47 +53,25 @@ source "$VENV_DIR/bin/activate"
 echo "Upgrading pip..."
 pip install --upgrade pip
 
-# Install required packages
+# Install required packages from requirements.txt
 echo ""
-echo "Installing required packages..."
+echo "Installing required packages from requirements.txt..."
 echo "This may take a few minutes..."
 
-# Install packages one by one to catch any issues
-packages=(
-    "dash==2.14.1"
-    "dash-bootstrap-components==1.5.0"
-    "plotly==5.17.0"
-    "pandas==2.1.4"
-    "numpy==1.24.3"
-    "healpy>=1.16.0"
-)
-
-# Note: astropy and shapely should be available from EDEN
-# But we'll install them if needed
-
-for package in "${packages[@]}"; do
-    echo "Installing $package..."
-    pip install "$package"
+if [ -f "$PROJECT_DIR/requirements.txt" ]; then
+    pip install -r "$PROJECT_DIR/requirements.txt"
     if [ $? -eq 0 ]; then
-        echo "✓ $package installed successfully"
+        echo "✓ All packages from requirements.txt installed successfully"
     else
-        echo "✗ Failed to install $package"
+        echo "✗ Failed to install some packages from requirements.txt"
     fi
-done
+else
+    echo "✗ requirements.txt not found in $PROJECT_DIR"
+    exit 1
+fi
 
-# Try to install astropy and shapely if not available from EDEN
-echo ""
-echo "Checking scientific packages..."
-
-python -c "from astropy.io import fits; print('✓ astropy available')" 2>/dev/null || {
-    echo "Installing astropy..."
-    pip install astropy==5.3.4
-}
-
-python -c "from shapely.geometry import Polygon; print('✓ shapely available')" 2>/dev/null || {
-    echo "Installing shapely..."
-    pip install shapely==2.0.2
-}
+# Note: Some packages like astropy and shapely may be available from EDEN
+# The above will install/upgrade them if needed
 
 # Test all imports
 echo ""
@@ -110,7 +88,8 @@ modules = [
     ('numpy', 'numpy'),
     ('astropy.io.fits', 'astropy'),
     ('shapely.geometry', 'shapely'),
-    ('healpy', 'healpy')
+    ('healpy', 'healpy'),
+    ('PIL', 'Pillow')
 ]
 
 for module, name in modules:
