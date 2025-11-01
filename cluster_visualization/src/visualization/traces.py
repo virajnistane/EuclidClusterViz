@@ -396,7 +396,7 @@ class TraceCreator:
             print("Debug: No CATRED scatter data available to display")
             return
 
-        print(f"Debug: Using manually loaded CATRED scatter data")
+        print(f"Debug: Using loaded CATRED box data")
         print(f"Debug: Creating CATRED scatter trace with {len(catred_box_data['ra'])} points")
 
         # Generate unique trace name
@@ -419,7 +419,11 @@ class TraceCreator:
             x=catred_box_data['ra'],
             y=catred_box_data['dec'],
             mode='markers',
-            marker=dict(size=catred_box_data['trace_marker_size'], symbol='circle', color='rgba(100, 100, 100, 0)', line=dict(width=2, color=catred_box_data['trace_marker_color'][0])), #  color='black', opacity=0,
+            marker=dict(size=catred_box_data['trace_marker_size'], 
+                        symbol='circle', 
+                        sizemode='diameter',
+                        color='rgba(100, 100, 100, 0)', 
+                        line=dict(width=2, color=catred_box_data['trace_marker_color'][0])), #  color='black', opacity=0,
             name=trace_name,
             text=self._format_catred_hover_text(catred_box_data),
             hoverinfo='text',
