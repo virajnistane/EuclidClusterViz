@@ -804,6 +804,19 @@ class AppLayout:
                     ], width=6),
                     dbc.Col([
                         dbc.Button(
+                            [html.I(className="fas fa-magnifying-glass me-2"), "View CATRED Box"],
+                            id="cluster-catred-box-button",
+                            color="success", 
+                            className="w-100 mb-2",
+                            n_clicks=0
+                        ),
+                        html.Small("View CATRED Box", className="text-muted")
+                    ], width=6),
+                ], className="mb-3"),
+                
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Button(
                             [html.I(className="fas fa-chart-line me-2"), "Analyze PHZ"],
                             id="cluster-phz-button", 
                             color="info",
@@ -812,19 +825,6 @@ class AppLayout:
                             n_clicks=0
                         ),
                         html.Small("Coming soon ...", className="text-muted")
-                    ], width=6)
-                ], className="mb-3"),
-                
-                dbc.Row([
-                    dbc.Col([
-                        dbc.Button(
-                            [html.I(className="fas fa-magnifying-glass me-2"), "View CATRED Box"],
-                            id="cluster-catred-box-button",
-                            color="success", 
-                            className="w-100 mb-2",
-                            n_clicks=0
-                        ),
-                        html.Small("View CATRED Box", className="text-muted")
                     ], width=6),
                     dbc.Col([
                         dbc.Button(
@@ -1002,6 +1002,19 @@ class AppLayout:
 
                     dbc.Col([
                         dbc.Button(
+                            [html.I(className="fas fa-magnifying-glass me-2"), "CATRED data box"],
+                            id="tab-catred-box-button",
+                            color="success",
+                            className="w-100 mb-2",
+                            n_clicks=0
+                        ),
+                        html.Small("CATRED data in selected box", className="text-muted d-block text-center")
+                    ], width=6),
+                ], className="mb-3"),
+                
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Button(
                             [html.I(className="fas fa-chart-line me-2"), "PHZ Analysis"],
                             id="tab-phz-button",
                             color="info",
@@ -1010,19 +1023,6 @@ class AppLayout:
                             n_clicks=0
                         ),
                         html.Small("Coming soon ...", className="text-muted d-block text-center")
-                    ], width=6)
-                ], className="mb-3"),
-                
-                dbc.Row([
-                    dbc.Col([
-                        dbc.Button(
-                            [html.I(className="fas fa-magnifying-glass me-2"), "CATRED data box"],
-                            id="tab-catred-box-button",
-                            color="success",
-                            className="w-100 mb-2",
-                            n_clicks=0
-                        ),
-                        html.Small("CATRED data in selected box", className="text-muted d-block text-center")
                     ], width=6),
 
                     dbc.Col([
