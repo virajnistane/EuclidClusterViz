@@ -45,7 +45,7 @@ class DataLoader:
         Load and prepare all data for visualization.
         
         Args:
-            select_algorithm: Algorithm choice ('PZWAV' or 'AMICO')
+            select_algorithm: Algorithm choice ('PZWAV', 'AMICO', or 'BOTH')
             
         Returns:
             Dict containing all loaded data:
@@ -54,7 +54,6 @@ class DataLoader:
             - catred_info: CATRED file information DataFrame
             - algorithm: Selected algorithm
             - snr_min/snr_max: SNR range for slider bounds
-            - data_dir: Data directory path
             
         Raises:
             FileNotFoundError: If required data files are missing
@@ -67,7 +66,7 @@ class DataLoader:
         print(f"Loading data for algorithm: {select_algorithm}")
         
         # Validate algorithm choice
-        if select_algorithm not in ['PZWAV', 'AMICO']:
+        if select_algorithm not in ['PZWAV', 'AMICO', 'BOTH']:
             print(f"Warning: Unknown algorithm '{select_algorithm}'. Using 'PZWAV' as default.")
             select_algorithm = 'PZWAV'
         
@@ -77,9 +76,10 @@ class DataLoader:
         # Validate critical paths
         self._validate_paths(paths)
         
-        # Load data components
-        data_detcluster_mergedcat = self._load_data_detcluster_mergedcat(paths)
-        data_detcluster_by_cltile = self._load_data_detcluster_by_cltile(paths)
+        # Load data components - check for gluematchcat first, fallback to separate files
+        data_detcluster_mergedcat = self._load_data_detcluster_mergedcat(paths, select_algorithm)
+        data_detcluster_by_cltile = self._load_data_detcluster_by_cltile(paths, select_algorithm)
+
         catred_fileinfo_df = self._load_catred_info(paths)
         effcovmask_fileinfo_df = self._load_effcovmask_info(paths)
         
@@ -106,7 +106,6 @@ class DataLoader:
             'snr_max': snr_max,
             'z_min': z_min,
             'z_max': z_max,
-            'data_dir': paths['data_dir']
         }
         
         # Cache the data for future requests
@@ -116,92 +115,219 @@ class DataLoader:
     def _get_paths(self, algorithm: str) -> Dict[str, str]:
         """Get file paths based on configuration or fallback."""
         assert self.config, "Configuration is not set"
-        paths = {
-            'mergedetcat_dir': self.config.mergedetcat_dir,
-            'data_dir': self.config.mergedetcat_data_dir,
-            'inputs_dir': self.config.mergedetcat_inputs_dir,
-            'mergedetcat_xml': self.config.get_mergedetcat_xml(algorithm),
-            'rr2_downloads_dir': self.config.rr2_downloads_dir,
-            'mosaic_dir': self.config.mosaic_dir,
-            'catred_fileinfo_csv': self.config.get_catred_fileinfo_csv(),
-            'catred_polygon_pkl': self.config.get_catred_polygons_pkl(),
-            'effcovmask_fileinfo_csv': self.config.get_effcovmask_fileinfo_csv(),
-            'detfiles_list': self.config.get_detfiles_list(algorithm)
-        }
-        print("✓ Using configuration-based paths")
+        
+        # Check if gluematchcat exists
+        gluematchcat_xml = self.config.get_gluematchcat_clusters_xml()
+        use_gluematchcat = gluematchcat_xml is not None and os.path.exists(gluematchcat_xml)
+        
+        # Always get detintile files for per-tile data
+        detfiles_list_files_dict = self.config.get_detintile_list_files(algorithm)
+        
+        if use_gluematchcat:
+            print(f"✓ Using GlueMatchCat for merged data (includes both PZWAV and AMICO)")
+            print(f"✓ Using separate DetInTile files for per-tile data")
+            paths = {
+                'use_gluematchcat': True,
+                'gluematchcat_dir': self.config.gluematchcat_workdir,
+                'gluematchcat_xml': gluematchcat_xml,
+                'gluematchcat_data_dir': os.path.join(self.config.gluematchcat_workdir, 'data'),
+                'mergedetcat_dir': self.config.mergedetcat_workdir,
+                'mergedetcat_data_dir': os.path.join(self.config.mergedetcat_workdir, 'data'),
+                'mergedetcat_inputs_dir': os.path.join(self.config.mergedetcat_workdir, 'inputs'),
+                'detfiles_list_files_dict': detfiles_list_files_dict,
+                'catred_fileinfo_csv': self.config.get_catred_fileinfo_csv(),
+                'catred_polygon_pkl': self.config.get_catred_polygons_pkl(),
+                'effcovmask_fileinfo_csv': self.config.get_effcovmask_fileinfo_csv(),
+            }
+        else:
+            print(f"✓ Using separate MergeDetCat files for {algorithm}")
+            mergedetcat_xml_files_dict = self.config.get_mergedetcat_xml_files(algorithm)
+            
+            paths = {
+                'use_gluematchcat': False,
+                'mergedetcat_dir': self.config.mergedetcat_workdir,
+                'mergedetcat_data_dir': os.path.join(self.config.mergedetcat_workdir, 'data'),
+                'mergedetcat_inputs_dir': os.path.join(self.config.mergedetcat_workdir, 'inputs'),
+                'mergedetcat_xml_files_dict': mergedetcat_xml_files_dict,
+                'detfiles_list_files_dict': detfiles_list_files_dict,
+                'catred_fileinfo_csv': self.config.get_catred_fileinfo_csv(),
+                'catred_polygon_pkl': self.config.get_catred_polygons_pkl(),
+                'effcovmask_fileinfo_csv': self.config.get_effcovmask_fileinfo_csv(),
+            }
+        
         return paths
     
     def _validate_paths(self, paths: Dict[str, str]) -> None:
         """Validate that critical paths exist."""
-        critical_paths = ['mergedetcat_xml', 'data_dir']
+        if paths.get('use_gluematchcat'):
+            critical_paths = ['gluematchcat_xml', 'gluematchcat_data_dir']
+        else:
+            critical_paths = ['mergedetcat_xml_files_dict', 'mergedetcat_data_dir']
         
         for path_key in critical_paths:
-            path = paths[path_key]
-            if not os.path.exists(path):
-                raise FileNotFoundError(f"{path_key.replace('_', ' ').title()} not found: {path}")
+            if path_key == 'mergedetcat_xml_files_dict':
+                # Multiple files - check each one
+                for xml_path in paths[path_key].values():
+                    if not os.path.exists(xml_path):
+                        raise FileNotFoundError(f"MergeDetCat XML not found: {xml_path}")
+            else:
+                path = paths[path_key]
+                if not os.path.exists(path):
+                    raise FileNotFoundError(f"{path_key.replace('_', ' ').title()} not found: {path}")
     
-    def _load_data_detcluster_mergedcat(self, paths: Dict[str, str]) -> np.ndarray:
+    def _load_data_detcluster_mergedcat(self, paths: Dict[str, str], algorithm: str) -> np.ndarray:
         """Load merged detection catalog from XML and FITS files."""
-        det_xml = paths['mergedetcat_xml']
-        if not os.path.exists(det_xml):
-            raise FileNotFoundError(f"Merged detection XML not found: {det_xml}")
+        if paths.get('use_gluematchcat'):
+            # Load from gluematchcat
+            gluematchcat_xml = paths['gluematchcat_xml']
+            if not os.path.exists(gluematchcat_xml):
+                raise FileNotFoundError(f"GlueMatchCat XML not found: {gluematchcat_xml}")
+            
+            # Extract FITS filename from XML
+            fits_filename = self.get_xml_element(gluematchcat_xml, 'Data/FullDetectionsFile/DataContainer/FileName').text
+            fitsfile = os.path.join(paths['gluematchcat_data_dir'], fits_filename)
+            
+            print(f"Loading clusters from GlueMatchCat: {os.path.basename(fitsfile)}")
+            with fits.open(fitsfile) as hdul:
+                data_all = hdul[1].data
+            
+            # Filter by algorithm if not BOTH
+            if algorithm == 'BOTH':
+                data_merged = data_all
+                print(f"Loaded {len(data_merged)} total clusters (PZWAV + AMICO)")
+            else:
+                # Filter by DET_CODE_NB or ID_DET_AMICO columns
+                if algorithm == 'PZWAV':
+                    # Keep rows where DET_CODE_NB is 2
+                    data_merged = data_all[data_all['DET_CODE_NB'] == 2]
+                    print(f"Loaded {len(data_merged)} PZWAV clusters from GlueMatchCat")
+                elif algorithm == 'AMICO':
+                    # Keep rows where DET_CODE_NB is 1
+                    data_merged = data_all[data_all['DET_CODE_NB'] == 1]
+                    print(f"Loaded {len(data_merged)} AMICO clusters from GlueMatchCat")
+        else:
+            # Load from separate mergedetcat files
+            mergedetcat_xml_files_dict = paths['mergedetcat_xml_files_dict']
+            
+            if algorithm == 'BOTH':
+                # Load both files and combine
+                all_data = []
+                for det_xml_key, det_xml in mergedetcat_xml_files_dict.items():
+                    if not os.path.exists(det_xml):
+                        raise FileNotFoundError(f"Merged detection XML not found: {det_xml}")
+                    
+                    fits_filename = self.get_xml_element(det_xml, 'Data/ClustersFile/DataContainer/FileName').text
+                    fitsfile = os.path.join(paths['mergedetcat_data_dir'], fits_filename)
+                    
+                    print(f"Loading merged catalog from: {os.path.basename(fitsfile)}")
+                    with fits.open(fitsfile) as hdul:
+                        all_data.append(hdul[1].data)
+                
+                # Combine arrays
+                data_merged = np.concatenate(all_data)
+                print(f"Loaded {len(data_merged)} total merged clusters (combined)")
+            else:
+                # Load single file
+                det_xml = mergedetcat_xml_files_dict[f'mergedetcat_{algorithm.lower()}']
+                if not os.path.exists(det_xml):
+                    raise FileNotFoundError(f"Merged detection XML not found: {det_xml}")
+                
+                fits_filename = self.get_xml_element(det_xml, 'Data/ClustersFile/DataContainer/FileName').text
+                fitsfile = os.path.join(paths['mergedetcat_data_dir'], fits_filename)
+                
+                print(f"Loading merged catalog from: {os.path.basename(fitsfile)}")
+                with fits.open(fitsfile) as hdul:
+                    data_merged = hdul[1].data
+                
+                print(f"Loaded {len(data_merged)} {algorithm} merged clusters")
         
-        # Extract FITS filename from XML
-        fits_filename = self.get_xml_element(det_xml, 'Data/ClustersFile/DataContainer/FileName').text
-        fitsfile = os.path.join(paths['data_dir'], fits_filename)
-        
-        print(f"Loading merged catalog from: {os.path.basename(fitsfile)}")
-        with fits.open(fitsfile) as hdul:
-            data_merged = hdul[1].data
-        
-        print(f"Loaded {len(data_merged)} merged clusters")
         return data_merged
     
-    def _load_data_detcluster_by_cltile(self, paths: Dict[str, str]) -> Dict[str, Dict[str, Any]]:
-        """Load individual tile detection data."""
-        detfiles_list_path = paths['detfiles_list']
-        if not os.path.exists(detfiles_list_path):
-            raise FileNotFoundError(f"Detection files list not found: {detfiles_list_path}")
-        
-        with open(detfiles_list_path, 'r') as f:
-            detfiles_list = json.load(f)
+    def _load_data_detcluster_by_cltile(self, paths: Dict[str, str], algorithm: str) -> Dict[str, Dict[str, Any]]:
+        """Load individual tile detection data from separate detintile files."""
+        # Always load from separate detintile files (even when using gluematchcat for merged data)
+        detfiles_list_files_dict = paths['detfiles_list_files_dict']
         
         data_by_tile = {}
-        for file in detfiles_list:
-            # Extract tile information from XML files
-            xml_path = os.path.join(paths['inputs_dir'], file) if 'inputs/' not in file else os.path.join(paths['mergedetcat_dir'], file)
-            tile_file = self.get_xml_element(xml_path, 'Data/SpatialInformation/DataContainer/FileName').text
-            with open(os.path.join(paths['data_dir'], tile_file), 'r') as tf:
-                tile_info = json.load(tf)
-            tile_id = tile_info['TILE_ID']
-
-            fits_file = self.get_xml_element(xml_path, 'Data/ClustersFile/DataContainer/FileName').text
+        for detfiles_list_path_key, detfiles_list_path in detfiles_list_files_dict.items():
+            if not os.path.exists(detfiles_list_path):
+                print(f"Warning: Detection files list not found: {detfiles_list_path}")
+                continue
             
-            for i in os.listdir(paths['inputs_dir']):
-                try:
-                    assert 'DENSITIES' in self.get_xml_element(os.path.join(paths['inputs_dir'], i), 'Data/PZWavDensFile/DataContainer/FileName').text
-                    assert self.get_xml_element(os.path.join(paths['inputs_dir'], i), 'Data/SpatialInformation/DataContainer/FileName').text ==  tile_file
-                    dens_xml = i
-                    dens_fits = self.get_xml_element(os.path.join(paths['inputs_dir'], i), 'Data/PZWavDensFile/DataContainer/FileName').text
-                    break
-                except:
-                    dens_xml = None
-                    dens_fits = None
+            # Determine algorithm from the list file path
+            tile_algorithm = None
+            if detfiles_list_path_key == 'detintile_pzwav_list':
+                tile_algorithm = 'PZWAV'
+            elif detfiles_list_path_key == 'detintile_amico_list':
+                tile_algorithm = 'AMICO'
+            
+            with open(detfiles_list_path, 'r') as f:
+                detfiles_list = json.load(f)
+            
+            for file in detfiles_list:
+                # Extract tile information from XML files
+                xml_path = os.path.join(paths['mergedetcat_inputs_dir'], file) if 'inputs/' not in file else os.path.join(paths['mergedetcat_dir'], file)
+                
+                if not os.path.exists(xml_path):
+                    print(f"Warning: XML file not found: {xml_path}")
                     continue
+                
+                tile_file = self.get_xml_element(xml_path, 'Data/SpatialInformation/DataContainer/FileName').text
+                
+                # Use mergedetcat_data_dir for tile data (even when using gluematchcat for merged data)
+                tile_data_dir = paths.get('mergedetcat_data_dir', paths['mergedetcat_data_dir'])
+                tile_file_path = os.path.join(tile_data_dir, tile_file)
+                
+                if not os.path.exists(tile_file_path):
+                    print(f"Warning: Tile definition file not found: {tile_file_path}")
+                    continue
+                    
+                with open(tile_file_path, 'r') as tf:
+                    tile_info = json.load(tf)
+                tile_id = tile_info['TILE_ID']
+                
+                # When loading BOTH algorithms, use composite key to avoid overwriting
+                # Format: "tileid" for single algorithm, "tileid_ALGORITHM" for BOTH
+                if algorithm == 'BOTH' and tile_algorithm:
+                    tile_key = f"{tile_id}_{tile_algorithm}"
+                else:
+                    tile_key = tile_id
 
-            # Load FITS data for this tile
-            fits_path = os.path.join(paths['data_dir'], fits_file)
-            with fits.open(fits_path) as hdul:
-                tile_data = hdul[1].data
-            
-            data_by_tile[tile_id] = {
-                'detxml_file': xml_path,
-                'detfits_file': os.path.join(paths['data_dir'], fits_file),
-                'cltiledef_file': os.path.join(paths['data_dir'], tile_file),
-                'densxml_file': os.path.join(paths['inputs_dir'], dens_xml) if dens_xml else None,
-                'densfits_file': os.path.join(paths['data_dir'], dens_fits) if dens_fits else None,
-                'detfits_data': tile_data
-            }
+                fits_file = self.get_xml_element(xml_path, 'Data/ClustersFile/DataContainer/FileName').text
+                
+                # Try to find density files
+                dens_xml = None
+                dens_fits = None
+                if os.path.exists(paths['mergedetcat_inputs_dir']):
+                    for i in os.listdir(paths['mergedetcat_inputs_dir']):
+                        try:
+                            assert 'DENSITIES' in self.get_xml_element(os.path.join(paths['mergedetcat_inputs_dir'], i), 'Data/PZWavDensFile/DataContainer/FileName').text
+                            assert self.get_xml_element(os.path.join(paths['mergedetcat_inputs_dir'], i), 'Data/SpatialInformation/DataContainer/FileName').text ==  tile_file
+                            dens_xml = i
+                            dens_fits = self.get_xml_element(os.path.join(paths['mergedetcat_inputs_dir'], i), 'Data/PZWavDensFile/DataContainer/FileName').text
+                            break
+                        except:
+                            continue
+
+                # Load FITS data for this tile
+                fits_path = os.path.join(tile_data_dir, fits_file)
+                if not os.path.exists(fits_path):
+                    print(f"Warning: FITS file not found: {fits_path}")
+                    continue
+                    
+                with fits.open(fits_path) as hdul:
+                    tile_data = hdul[1].data
+                
+                data_by_tile[tile_key] = {
+                    'detxml_file': xml_path,
+                    'detfits_file': fits_path,
+                    'cltiledef_file': tile_file_path,
+                    'densxml_file': os.path.join(paths['mergedetcat_inputs_dir'], dens_xml) if dens_xml else None,
+                    'densfits_file': os.path.join(tile_data_dir, dens_fits) if dens_fits else None,
+                    'detfits_data': tile_data,
+                    'algorithm': tile_algorithm,  # Add algorithm identifier
+                    'tile_id': tile_id  # Store original tile_id separately
+                }
         
         data_by_tile = dict(sorted(data_by_tile.items()))
         print(f"Loaded {len(data_by_tile)} individual tiles")

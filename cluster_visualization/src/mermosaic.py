@@ -841,7 +841,7 @@ class MOSAICHandler:
             return traces
         
         # PERFORMANCE LIMITS: Strict limits for interactive experience
-        max_mosaics = 3  # Reduced from 3 for better performance
+        max_mosaics = 5 # Maximum 5 mosaics per zoom
         max_processing_time = 30  # Maximum 30 seconds total processing time
         
         if len(mertiles_to_load) > max_mosaics:

@@ -158,8 +158,9 @@ class AppLayout:
                     dcc.Dropdown(
                         id='algorithm-dropdown',
                         options=[
-                            {'label': '🔬 PZWAV', 'value': 'PZWAV'},
-                            {'label': '⚡ AMICO', 'value': 'AMICO'}
+                            {'label': 'PZWAV', 'value': 'PZWAV'},
+                            {'label': 'AMICO', 'value': 'AMICO'},
+                            {'label': '🌌 PZWAV & AMICO', 'value': 'BOTH'}
                         ],
                         value='PZWAV',
                         clearable=False,

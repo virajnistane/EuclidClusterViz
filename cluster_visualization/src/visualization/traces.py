@@ -495,26 +495,85 @@ class TraceCreator:
 
     def _add_merged_cluster_trace(self, data_traces: List, datamod_detcluster_mergedcat: np.ndarray, algorithm: str, catred_points: Optional[List] = None) -> None:
         """Add merged cluster detection trace with proximity-based enhancement."""
+        
+        # Determine symbol based on algorithm
+        # Check if data has DET_CODE_NB column (from gluematchcat)
+        has_det_code = 'DET_CODE_NB' in datamod_detcluster_mergedcat.dtype.names
+        
         if catred_points is None:
-            # No CATRED data - create single trace with normal markers
-            merged_trace = go.Scattergl(
-                x=datamod_detcluster_mergedcat['RIGHT_ASCENSION_CLUSTER'],
-                y=datamod_detcluster_mergedcat['DECLINATION_CLUSTER'],
-                mode='markers',
-                marker=dict(size=20, symbol='square-open', line=dict(width=2), color='black'),
-                name=f'Merged Data ({algorithm}) - {len(datamod_detcluster_mergedcat)} clusters',
-                text=[
-                    f"merged<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
-                    for snr, cz, ra, dec in zip(datamod_detcluster_mergedcat['SNR_CLUSTER'], 
-                                              datamod_detcluster_mergedcat['Z_CLUSTER'], 
-                                              datamod_detcluster_mergedcat['RIGHT_ASCENSION_CLUSTER'], 
-                                              datamod_detcluster_mergedcat['DECLINATION_CLUSTER'])
-                ],
-                customdata=[[snr, z] for snr, z in zip(datamod_detcluster_mergedcat['SNR_CLUSTER'], datamod_detcluster_mergedcat['Z_CLUSTER'])],
-                hoverinfo='text',
-                hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
-            )
-            data_traces.append(merged_trace)
+            # No CATRED data - create trace(s) with normal markers
+            if has_det_code and algorithm == 'BOTH':
+                # Separate PZWAV and AMICO clusters
+                pzwav_mask = datamod_detcluster_mergedcat['DET_CODE_NB'] == 2
+                amico_mask = datamod_detcluster_mergedcat['DET_CODE_NB'] == 1
+                
+                pzwav_data = datamod_detcluster_mergedcat[pzwav_mask]
+                amico_data = datamod_detcluster_mergedcat[amico_mask]
+                
+                # PZWAV trace
+                if len(pzwav_data) > 0:
+                    pzwav_trace = go.Scattergl(
+                        x=pzwav_data['RIGHT_ASCENSION_CLUSTER'],
+                        y=pzwav_data['DECLINATION_CLUSTER'],
+                        mode='markers',
+                        marker=dict(size=20, symbol='square-open', line=dict(width=2), color='black'),
+                        name=f'Merged PZWAV - {len(pzwav_data)} clusters',
+                        legendgroup='merged_pzwav',
+                        text=[
+                            f"merged (PZWAV)<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                            for snr, cz, ra, dec in zip(pzwav_data['SNR_CLUSTER'], 
+                                                      pzwav_data['Z_CLUSTER'], 
+                                                      pzwav_data['RIGHT_ASCENSION_CLUSTER'], 
+                                                      pzwav_data['DECLINATION_CLUSTER'])
+                        ],
+                        customdata=[[snr, z] for snr, z in zip(pzwav_data['SNR_CLUSTER'], pzwav_data['Z_CLUSTER'])],
+                        hoverinfo='text',
+                        hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
+                    )
+                    data_traces.append(pzwav_trace)
+                
+                # AMICO trace
+                if len(amico_data) > 0:
+                    amico_trace = go.Scattergl(
+                        x=amico_data['RIGHT_ASCENSION_CLUSTER'],
+                        y=amico_data['DECLINATION_CLUSTER'],
+                        mode='markers',
+                        marker=dict(size=20, symbol='diamond-open', line=dict(width=2), color='black'),
+                        name=f'Merged AMICO - {len(amico_data)} clusters',
+                        legendgroup='merged_amico',
+                        text=[
+                            f"merged (AMICO)<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                            for snr, cz, ra, dec in zip(amico_data['SNR_CLUSTER'], 
+                                                      amico_data['Z_CLUSTER'], 
+                                                      amico_data['RIGHT_ASCENSION_CLUSTER'], 
+                                                      amico_data['DECLINATION_CLUSTER'])
+                        ],
+                        customdata=[[snr, z] for snr, z in zip(amico_data['SNR_CLUSTER'], amico_data['Z_CLUSTER'])],
+                        hoverinfo='text',
+                        hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
+                    )
+                    data_traces.append(amico_trace)
+            else:
+                # Single algorithm or no DET_CODE_NB column
+                symbol = {'amico': 'diamond-open', 'pzwav': 'square-open'}.get(algorithm.lower())
+                merged_trace = go.Scattergl(
+                    x=datamod_detcluster_mergedcat['RIGHT_ASCENSION_CLUSTER'],
+                    y=datamod_detcluster_mergedcat['DECLINATION_CLUSTER'],
+                    mode='markers',
+                    marker=dict(size=20, symbol=symbol, line=dict(width=2), color='black'),
+                    name=f'Merged Data ({algorithm}) - {len(datamod_detcluster_mergedcat)} clusters',
+                    text=[
+                        f"merged<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                        for snr, cz, ra, dec in zip(datamod_detcluster_mergedcat['SNR_CLUSTER'], 
+                                                  datamod_detcluster_mergedcat['Z_CLUSTER'], 
+                                                  datamod_detcluster_mergedcat['RIGHT_ASCENSION_CLUSTER'], 
+                                                  datamod_detcluster_mergedcat['DECLINATION_CLUSTER'])
+                    ],
+                    customdata=[[snr, z] for snr, z in zip(datamod_detcluster_mergedcat['SNR_CLUSTER'], datamod_detcluster_mergedcat['Z_CLUSTER'])],
+                    hoverinfo='text',
+                    hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
+                )
+                data_traces.append(merged_trace)
         else:
             # CATRED data present - create separate traces based on proximity to CATRED points
             near_catred_mask = np.array([
@@ -526,66 +585,210 @@ class TraceCreator:
             away_from_catred_data = datamod_detcluster_mergedcat[~near_catred_mask]
             near_catred_data = datamod_detcluster_mergedcat[near_catred_mask]
 
-            # Create trace for markers away from CATRED region (normal size)
+            # Process away from CATRED data
             if len(away_from_catred_data) > 0:
-                normal_trace = go.Scattergl(
-                    x=away_from_catred_data['RIGHT_ASCENSION_CLUSTER'],
-                    y=away_from_catred_data['DECLINATION_CLUSTER'],
-                    mode='markers',
-                    marker=dict(size=20, symbol='square-open', line=dict(width=2), color='black'),
-                    name=f'Merged Data ({algorithm}) - {len(away_from_catred_data)} clusters',
-                    text=[
-                        f"merged<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
-                        for snr, cz, ra, dec in zip(away_from_catred_data['SNR_CLUSTER'], 
-                                                  away_from_catred_data['Z_CLUSTER'], 
-                                                  away_from_catred_data['RIGHT_ASCENSION_CLUSTER'], 
-                                                  away_from_catred_data['DECLINATION_CLUSTER'])
-                    ],
-                    customdata=[[snr, z] for snr, z in zip(away_from_catred_data['SNR_CLUSTER'], away_from_catred_data['Z_CLUSTER'])],
-                    hoverinfo='text',
-                    hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
-                )
-                data_traces.append(normal_trace)
+                if has_det_code and algorithm == 'BOTH':
+                    # Separate PZWAV and AMICO for away_from_catred
+                    pzwav_mask_away = away_from_catred_data['DET_CODE_NB'] == 2
+                    amico_mask_away = away_from_catred_data['DET_CODE_NB'] == 1
+                    
+                    pzwav_away = away_from_catred_data[pzwav_mask_away]
+                    amico_away = away_from_catred_data[amico_mask_away]
+                    
+                    # PZWAV away trace
+                    if len(pzwav_away) > 0:
+                        normal_trace_pzwav = go.Scattergl(
+                            x=pzwav_away['RIGHT_ASCENSION_CLUSTER'],
+                            y=pzwav_away['DECLINATION_CLUSTER'],
+                            mode='markers',
+                            marker=dict(size=20, symbol='square-open', line=dict(width=2), color='black'),
+                            name=f'Merged PZWAV - {len(pzwav_away)} clusters',
+                            legendgroup='merged_pzwav',
+                            showlegend=False,  # Hide to avoid duplicate with main trace
+                            text=[
+                                f"merged (PZWAV)<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                                for snr, cz, ra, dec in zip(pzwav_away['SNR_CLUSTER'], 
+                                                          pzwav_away['Z_CLUSTER'], 
+                                                          pzwav_away['RIGHT_ASCENSION_CLUSTER'], 
+                                                          pzwav_away['DECLINATION_CLUSTER'])
+                            ],
+                            customdata=[[snr, z] for snr, z in zip(pzwav_away['SNR_CLUSTER'], pzwav_away['Z_CLUSTER'])],
+                            hoverinfo='text',
+                            hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
+                        )
+                        data_traces.append(normal_trace_pzwav)
+                    
+                    # AMICO away trace
+                    if len(amico_away) > 0:
+                        normal_trace_amico = go.Scattergl(
+                            x=amico_away['RIGHT_ASCENSION_CLUSTER'],
+                            y=amico_away['DECLINATION_CLUSTER'],
+                            mode='markers',
+                            marker=dict(size=20, symbol='diamond-open', line=dict(width=2), color='black'),
+                            name=f'Merged AMICO - {len(amico_away)} clusters',
+                            legendgroup='merged_amico',
+                            showlegend=False,  # Hide to avoid duplicate with main trace
+                            text=[
+                                f"merged (AMICO)<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                                for snr, cz, ra, dec in zip(amico_away['SNR_CLUSTER'], 
+                                                          amico_away['Z_CLUSTER'], 
+                                                          amico_away['RIGHT_ASCENSION_CLUSTER'], 
+                                                          amico_away['DECLINATION_CLUSTER'])
+                            ],
+                            customdata=[[snr, z] for snr, z in zip(amico_away['SNR_CLUSTER'], amico_away['Z_CLUSTER'])],
+                            hoverinfo='text',
+                            hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
+                        )
+                        data_traces.append(normal_trace_amico)
+                else:
+                    # Single algorithm
+                    symbol = 'diamond-open' if algorithm == 'AMICO' else 'square-open'
+                    normal_trace = go.Scattergl(
+                        x=away_from_catred_data['RIGHT_ASCENSION_CLUSTER'],
+                        y=away_from_catred_data['DECLINATION_CLUSTER'],
+                        mode='markers',
+                        marker=dict(size=20, symbol=symbol, line=dict(width=2), color='black'),
+                        name=f'Merged Data ({algorithm}) - {len(away_from_catred_data)} clusters',
+                        text=[
+                            f"merged<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                            for snr, cz, ra, dec in zip(away_from_catred_data['SNR_CLUSTER'], 
+                                                      away_from_catred_data['Z_CLUSTER'], 
+                                                      away_from_catred_data['RIGHT_ASCENSION_CLUSTER'], 
+                                                      away_from_catred_data['DECLINATION_CLUSTER'])
+                        ],
+                        customdata=[[snr, z] for snr, z in zip(away_from_catred_data['SNR_CLUSTER'], away_from_catred_data['Z_CLUSTER'])],
+                        hoverinfo='text',
+                        hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
+                    )
+                    data_traces.append(normal_trace)
 
             # Create trace for markers near CATRED region (enhanced size with highlight)
             if len(near_catred_data) > 0:
-                # Add glow effect trace first (background)
-                glow_trace = self._create_glow_trace(
-                    near_catred_data['RIGHT_ASCENSION_CLUSTER'],
-                    near_catred_data['DECLINATION_CLUSTER'],
-                    size=28,
-                    shape='square'
-                )
-                data_traces.append(glow_trace)
-                
-                # Add main enhanced trace (foreground)
-                enhanced_trace = go.Scattergl(
-                    x=near_catred_data['RIGHT_ASCENSION_CLUSTER'],
-                    y=near_catred_data['DECLINATION_CLUSTER'],
-                    mode='markers',
-                    marker=dict(
-                        size=20, 
-                        symbol='square-open', 
-                        line=dict(width=3, color='yellow'),  # Bright yellow highlight
-                        color='black',
-                        opacity=1.0
-                    ),
-                    name=f'Merged Data (Enhanced) - {len(near_catred_data)} clusters',
-                    showlegend=False,
-                    text=[
-                        f"merged (enhanced)<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
-                        for snr, cz, ra, dec in zip(near_catred_data['SNR_CLUSTER'], 
-                                                  near_catred_data['Z_CLUSTER'], 
-                                                  near_catred_data['RIGHT_ASCENSION_CLUSTER'], 
-                                                  near_catred_data['DECLINATION_CLUSTER'])
-                    ],
-                    customdata=[[snr, z] for snr, z in zip(near_catred_data['SNR_CLUSTER'], near_catred_data['Z_CLUSTER'])],
-                    hoverinfo='text',
-                    hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
-                )
-                data_traces.append(enhanced_trace)
-                
-                print(f"Debug: Enhanced {len(near_catred_data)} merged clusters near MER data, {len(away_from_catred_data)} normal")
+                if has_det_code and algorithm == 'BOTH':
+                    # Separate PZWAV and AMICO for near_catred
+                    pzwav_mask_near = near_catred_data['DET_CODE_NB'] == 2
+                    amico_mask_near = near_catred_data['DET_CODE_NB'] == 1
+                    
+                    pzwav_near = near_catred_data[pzwav_mask_near]
+                    amico_near = near_catred_data[amico_mask_near]
+                    
+                    # PZWAV enhanced traces
+                    if len(pzwav_near) > 0:
+                        glow_trace_pzwav = self._create_glow_trace(
+                            pzwav_near['RIGHT_ASCENSION_CLUSTER'],
+                            pzwav_near['DECLINATION_CLUSTER'],
+                            size=28,
+                            shape='square'
+                        )
+                        data_traces.append(glow_trace_pzwav)
+                        
+                        enhanced_trace_pzwav = go.Scattergl(
+                            x=pzwav_near['RIGHT_ASCENSION_CLUSTER'],
+                            y=pzwav_near['DECLINATION_CLUSTER'],
+                            mode='markers',
+                            marker=dict(
+                                size=20, 
+                                symbol='square-open', 
+                                line=dict(width=3, color='yellow'),
+                                color='black',
+                                opacity=1.0
+                            ),
+                            name=f'Merged PZWAV (Enhanced) - {len(pzwav_near)} clusters',
+                            legendgroup='merged_pzwav',
+                            showlegend=False,
+                            text=[
+                                f"merged PZWAV (enhanced)<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                                for snr, cz, ra, dec in zip(pzwav_near['SNR_CLUSTER'], 
+                                                          pzwav_near['Z_CLUSTER'], 
+                                                          pzwav_near['RIGHT_ASCENSION_CLUSTER'], 
+                                                          pzwav_near['DECLINATION_CLUSTER'])
+                            ],
+                            customdata=[[snr, z] for snr, z in zip(pzwav_near['SNR_CLUSTER'], pzwav_near['Z_CLUSTER'])],
+                            hoverinfo='text',
+                            hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
+                        )
+                        data_traces.append(enhanced_trace_pzwav)
+                    
+                    # AMICO enhanced traces
+                    if len(amico_near) > 0:
+                        glow_trace_amico = self._create_glow_trace(
+                            amico_near['RIGHT_ASCENSION_CLUSTER'],
+                            amico_near['DECLINATION_CLUSTER'],
+                            size=28,
+                            shape='diamond'
+                        )
+                        data_traces.append(glow_trace_amico)
+                        
+                        enhanced_trace_amico = go.Scattergl(
+                            x=amico_near['RIGHT_ASCENSION_CLUSTER'],
+                            y=amico_near['DECLINATION_CLUSTER'],
+                            mode='markers',
+                            marker=dict(
+                                size=20, 
+                                symbol='diamond-open', 
+                                line=dict(width=3, color='yellow'),
+                                color='black',
+                                opacity=1.0
+                            ),
+                            name=f'Merged AMICO (Enhanced) - {len(amico_near)} clusters',
+                            legendgroup='merged_amico',
+                            showlegend=False,
+                            text=[
+                                f"merged AMICO (enhanced)<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                                for snr, cz, ra, dec in zip(amico_near['SNR_CLUSTER'], 
+                                                          amico_near['Z_CLUSTER'], 
+                                                          amico_near['RIGHT_ASCENSION_CLUSTER'], 
+                                                          amico_near['DECLINATION_CLUSTER'])
+                            ],
+                            customdata=[[snr, z] for snr, z in zip(amico_near['SNR_CLUSTER'], amico_near['Z_CLUSTER'])],
+                            hoverinfo='text',
+                            hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
+                        )
+                        data_traces.append(enhanced_trace_amico)
+                    
+                    print(f"Debug: Enhanced {len(pzwav_near)} PZWAV and {len(amico_near)} AMICO merged clusters near MER data")
+                else:
+                    # Single algorithm
+                    symbol = 'diamond-open' if algorithm == 'AMICO' else 'square-open'
+                    glow_shape = 'diamond' if algorithm == 'AMICO' else 'square'
+                    
+                    # Add glow effect trace first (background)
+                    glow_trace = self._create_glow_trace(
+                        near_catred_data['RIGHT_ASCENSION_CLUSTER'],
+                        near_catred_data['DECLINATION_CLUSTER'],
+                        size=28,
+                        shape=glow_shape
+                    )
+                    data_traces.append(glow_trace)
+                    
+                    # Add main enhanced trace (foreground)
+                    enhanced_trace = go.Scattergl(
+                        x=near_catred_data['RIGHT_ASCENSION_CLUSTER'],
+                        y=near_catred_data['DECLINATION_CLUSTER'],
+                        mode='markers',
+                        marker=dict(
+                            size=20, 
+                            symbol=symbol, 
+                            line=dict(width=3, color='yellow'),  # Bright yellow highlight
+                            color='black',
+                            opacity=1.0
+                        ),
+                        name=f'Merged Data (Enhanced) - {len(near_catred_data)} clusters',
+                        showlegend=False,
+                        text=[
+                            f"merged (enhanced)<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                            for snr, cz, ra, dec in zip(near_catred_data['SNR_CLUSTER'], 
+                                                      near_catred_data['Z_CLUSTER'], 
+                                                      near_catred_data['RIGHT_ASCENSION_CLUSTER'], 
+                                                      near_catred_data['DECLINATION_CLUSTER'])
+                        ],
+                        customdata=[[snr, z] for snr, z in zip(near_catred_data['SNR_CLUSTER'], near_catred_data['Z_CLUSTER'])],
+                        hoverinfo='text',
+                        hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
+                    )
+                    data_traces.append(enhanced_trace)
+                    
+                    print(f"Debug: Enhanced {len(near_catred_data)} merged clusters near MER data, {len(away_from_catred_data)} normal")
     
     def _create_tile_traces_and_polygons(self, data: Dict[str, Any], polygon_traces: List,
                                         show_polygons: bool, show_mer_tiles: bool,
@@ -597,12 +800,38 @@ class TraceCreator:
         """Create individual tile traces with proximity-based enhancement."""
         tile_traces = []
         
-        for tileid, value in data['data_detcluster_by_cltile'].items():
+        # Track if we've shown the algorithm legend entry
+        shown_algorithm_legend = {'PZWAV': False, 'AMICO': False}
+        
+        for tile_key, value in data['data_detcluster_by_cltile'].items():
             data_detcluster_by_cltile = value['detfits_data']
+            
+            # Get the original tile ID (for display) and algorithm
+            tileid = value.get('tile_id', tile_key)  # Fallback to tile_key for backward compatibility
+            tile_algorithm = value.get('algorithm', None)
+            
+            # Determine symbol based on algorithm
+            symbol = 'x-thin'  # Default for PZWAV
+            if tile_algorithm == 'AMICO':
+                symbol = 'cross-thin'
             
             # Apply SNR filtering to tile data
             datamod_detcluster_by_cltile = self._apply_snr_filtering(data_detcluster_by_cltile, snr_threshold_lower, snr_threshold_upper)
             datamod_detcluster_by_cltile = self._apply_redshift_filtering(datamod_detcluster_by_cltile, z_threshold_lower, z_threshold_upper)
+
+            # Configure legend behavior for BOTH algorithm case
+            if data['algorithm'] == 'BOTH' and tile_algorithm:
+                # Use legendgroup to organize by algorithm
+                legend_group = f"tiles_{tile_algorithm}"
+                # Only show first trace of each algorithm in legend
+                show_in_legend = not shown_algorithm_legend[tile_algorithm]
+                shown_algorithm_legend[tile_algorithm] = True
+                trace_name = f"{tile_algorithm} Tiles"
+            else:
+                # Single algorithm mode - show each tile separately
+                legend_group = None
+                show_in_legend = True
+                trace_name = f'Tile {tileid}'
 
             if catred_points is None:
                 # No CATRED data - create single trace with normal markers
@@ -610,10 +839,12 @@ class TraceCreator:
                     x=datamod_detcluster_by_cltile['RIGHT_ASCENSION_CLUSTER'],
                     y=datamod_detcluster_by_cltile['DECLINATION_CLUSTER'],
                     mode='markers',
-                    marker=dict(size=10, opacity=1, symbol='x-thin', line=dict(width=2, color=self.colors_list[int(tileid)])),
-                    name=f'Tile {tileid}',
+                    marker=dict(size=10, opacity=1, symbol=symbol, line=dict(width=2, color=self.colors_list[int(tileid)])),
+                    name=trace_name,
+                    legendgroup=legend_group,
+                    showlegend=show_in_legend,
                     text=[
-                        f"TileID: {tileid}<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                        f"TileID: {tileid}{f' ({tile_algorithm})' if tile_algorithm and data['algorithm'] == 'BOTH' else ''}<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
                         for snr, cz, ra, dec in zip(datamod_detcluster_by_cltile['SNR_CLUSTER'], datamod_detcluster_by_cltile['Z_CLUSTER'], 
                                                   datamod_detcluster_by_cltile['RIGHT_ASCENSION_CLUSTER'], datamod_detcluster_by_cltile['DECLINATION_CLUSTER'])
                     ],
@@ -639,10 +870,12 @@ class TraceCreator:
                         x=away_from_catred_data['RIGHT_ASCENSION_CLUSTER'],
                         y=away_from_catred_data['DECLINATION_CLUSTER'],
                         mode='markers',
-                        marker=dict(size=10, opacity=1, symbol='x-thin', line=dict(width=2, color=self.colors_list[int(tileid)])),
-                        name=f'Tile {tileid}',
+                        marker=dict(size=10, opacity=1, symbol=symbol, line=dict(width=2, color=self.colors_list[int(tileid)])),
+                        name=trace_name,
+                        legendgroup=legend_group,
+                        showlegend=show_in_legend,
                         text=[
-                            f"TileID: {tileid}<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                            f"TileID: {tileid}{f' ({tile_algorithm})' if tile_algorithm and data['algorithm'] == 'BOTH' else ''}<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
                             for snr, cz, ra, dec in zip(away_from_catred_data['SNR_CLUSTER'], away_from_catred_data['Z_CLUSTER'], 
                                                       away_from_catred_data['RIGHT_ASCENSION_CLUSTER'], away_from_catred_data['DECLINATION_CLUSTER'])
                         ],
@@ -654,12 +887,13 @@ class TraceCreator:
 
                 # Create trace for markers near CATRED region (enhanced size with highlight)
                 if len(near_catred_data) > 0:
-                    # Add glow effect trace first (background)
+                    # Add glow effect trace first (background) - use square for PZWAV, diamond for AMICO
+                    glow_shape = 'square' if tile_algorithm == 'PZWAV' else 'diamond'
                     glow_trace = self._create_glow_trace(
                         near_catred_data['RIGHT_ASCENSION_CLUSTER'],
                         near_catred_data['DECLINATION_CLUSTER'],
                         20,
-                        shape='square'
+                        shape=glow_shape
                     )
                     tile_traces.append(glow_trace)
                     
@@ -671,14 +905,15 @@ class TraceCreator:
                         marker=dict(
                             size=10, 
                             opacity=1, 
-                            symbol='x-thin', 
+                            symbol=symbol, 
                             # color=self.colors_list[int(tileid)],
                             line=dict(width=2, color=self.colors_list[int(tileid)])  # Yellow highlight for 'x' symbols
                         ),
                         name=f'Tile {tileid} (Enhanced)',
-                        showlegend=False,  # Avoid duplicate legend entries
+                        legendgroup=legend_group,
+                        showlegend=False,  # Never show enhanced traces in legend to avoid clutter
                         text=[
-                            f"TileID: {tileid} (enhanced)<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                            f"TileID: {tileid}{f' ({tile_algorithm})' if tile_algorithm and data['algorithm'] == 'BOTH' else ''} (enhanced)<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
                             for snr, cz, ra, dec in zip(near_catred_data['SNR_CLUSTER'], near_catred_data['Z_CLUSTER'], 
                                                       near_catred_data['RIGHT_ASCENSION_CLUSTER'], near_catred_data['DECLINATION_CLUSTER'])
                         ],

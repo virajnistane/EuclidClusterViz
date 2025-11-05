@@ -86,70 +86,136 @@ class Config:
         # Read paths from configuration
         self._base_workspace = self._expand_path(self.config_parser.get('paths', 'base_workspace'))
         self._cvmfs_eden_path = self._expand_path(self.config_parser.get('paths', 'eden_path'))
+        self._data_base_dir = self._expand_path(self.config_parser.get('paths', 'data_base_dir'))
+
+        # LE3 input data directories
         
-        # Main data directories
-        self.mergedetcat_dir = self._expand_path(self.config_parser.get('paths', 'mergedetcat_dir'))
-        self.mergedetcat_data_dir = os.path.join(self.mergedetcat_dir, 'data')
-        self.mergedetcat_inputs_dir = os.path.join(self.mergedetcat_dir, 'inputs')
-        
-        # Downloads directory
-        self.rr2_downloads_dir = self._expand_path(self.config_parser.get('paths', 'rr2_downloads_dir'))
-        
-        # Catalog and mask directories (check paths section first, then files section for backward compatibility)
         if self.config_parser.has_option('paths', 'catred_dir'):
             self.catred_dir = self._expand_path(self.config_parser.get('paths', 'catred_dir'))
         else:
-            self.catred_dir = os.path.join(self.rr2_downloads_dir, 'DpdLE3clFullInputCat')
+            self.catred_dir = None
             
         if self.config_parser.has_option('paths', 'effcov_mask_dir'):
             self.effcov_mask_dir = self._expand_path(self.config_parser.get('paths', 'effcov_mask_dir'))
         else:
-            self.effcov_mask_dir = os.path.join(self.rr2_downloads_dir, 'DpdHealpixEffectiveCoverageVMPZ')
+            self.effcov_mask_dir = None
         
         if self.config_parser.has_option('paths', 'mosaic_dir'):
             self.mosaic_dir = self._expand_path(self.config_parser.get('paths', 'mosaic_dir'))
         else:
-            self.mosaic_dir = os.path.join(self.rr2_downloads_dir, 'DpdMerBksMosaic')
+            self.mosaic_dir = None
+
+        # LE3 PFs working directories
+
+        if self.config_parser.has_option('paths', 'detintile_workdir'):
+            self.detintile_workdir = self._expand_path(self.config_parser.get('paths', 'detintile_workdir'))
+        else:
+            self.detintile_workdir = None
+
+        if self.config_parser.has_option('paths', 'mergedetcat_workdir'):
+            self.mergedetcat_workdir = self._expand_path(self.config_parser.get('paths', 'mergedetcat_workdir'))
+        else:
+            self.mergedetcat_workdir = None
+
+        if self.config_parser.has_option('paths', 'gluematchcat_workdir'):
+            self.gluematchcat_workdir = self._expand_path(self.config_parser.get('paths', 'gluematchcat_workdir'))
+        else:
+            self.gluematchcat_workdir = None
+
+        if self.config_parser.has_option('paths', 'characterization_workdir'):
+            self.characterization_workdir = self._expand_path(self.config_parser.get('paths', 'characterization_workdir'))
+        else:
+            self.characterization_workdir = None
 
         # Environment paths
         self.eden_path = self._cvmfs_eden_path
         
         # Project paths - use auto-detected git repository root
         self.project_root = self._detected_project_root
-    
-    def get_mergedetcat_xml(self, algorithm):
-        """Get algorithm-specific output directory"""
-        algorithm_lower = algorithm.lower()
-        if algorithm_lower == 'pzwav':
-            xmlname = self.config_parser.get('files', 'pzwav_merged_xml')
-        elif algorithm_lower == 'amico':
-            xmlname = self.config_parser.get('files', 'amico_merged_xml')
-        else:
-            raise ValueError(f"Unknown algorithm: {algorithm}. Supported: PZWAV, AMICO")
-        
-        # Check if it's an absolute path
-        expanded_path = self._expand_path(xmlname)
-        if os.path.isabs(expanded_path):
-            return expanded_path
-        else:
-            return os.path.join(self.mergedetcat_dir, xmlname)
 
-    def get_detfiles_list(self, algorithm):
-        """Get path to detection files list for given algorithm"""
-        algorithm_lower = algorithm.lower()
-        if algorithm_lower == 'pzwav':
-            filename = self.config_parser.get('files', 'pzwav_detfiles_list')
-        elif algorithm_lower == 'amico':
-            filename = self.config_parser.get('files', 'amico_detfiles_list')
+    def get_gluematchcat_clusters_xml(self):
+        """Get path to GlueMatchCat clusters XML file"""
+        if self.config_parser.has_option('files', 'gluematchcat_clusters'):
+            xmlname = self.config_parser.get('files', 'gluematchcat_clusters')
+            if not xmlname:
+                return None
+            expanded_path = self._expand_path(xmlname)
+            if os.path.isabs(expanded_path):
+                return expanded_path
+            else:
+                if self.gluematchcat_workdir:
+                    return os.path.join(self.gluematchcat_workdir, xmlname)
+                else:
+                    return None
         else:
-            raise ValueError(f"Unknown algorithm: {algorithm}. Supported: PZWAV, AMICO")
-        
-        # Check if it's an absolute path
-        expanded_path = self._expand_path(filename)
-        if os.path.isabs(expanded_path):
-            return expanded_path
-        else:
-            return os.path.join(self.mergedetcat_dir, filename)
+            return None
+    
+    def has_gluematchcat(self):
+        """Check if gluematchcat file is available"""
+        gluematchcat_xml = self.get_gluematchcat_clusters_xml()
+        return gluematchcat_xml is not None and os.path.exists(gluematchcat_xml)
+
+    def get_detintile_list_files(self, det_algorithm):
+        """
+        Get path to detection files list for selected algorithm
+        args:
+            algorithm (str): 'PZWAV' or 'AMICO' or 'BOTH'
+        """
+        detintile_key_map = {
+            'pzwav': 'detintile_pzwav_list',
+            'amico': 'detintile_amico_list',
+            'both': [ 'detintile_pzwav_list', 'detintile_amico_list' ]
+        }
+        algorithm_lower = det_algorithm.lower()
+        if algorithm_lower not in detintile_key_map:
+            raise ValueError(f"Unknown algorithm: {det_algorithm}. Supported: PZWAV, AMICO, BOTH")
+
+        filename_keys = detintile_key_map[algorithm_lower]
+        if not isinstance(filename_keys, list):
+            filename_keys = [filename_keys]
+
+        files_list_dict = {}
+        for key in filename_keys:
+            if self.config_parser.has_option('files', key):
+                filename = self.config_parser.get('files', key)
+                expanded_path = self._expand_path(filename)
+                if os.path.isabs(expanded_path):
+                    files_list_dict[key] = expanded_path
+                else:
+                    files_list_dict[key] = os.path.join(self.mergedetcat_workdir, filename)
+
+        return files_list_dict
+
+    def get_mergedetcat_xml_files(self, det_algorithm):
+        """Get paths to mergedetcat XML files for both algorithms"""
+        mergedetcat_key_map = {
+            'pzwav': 'mergedetcat_pzwav',
+            'amico': 'mergedetcat_amico',
+            'both': [ 'mergedetcat_pzwav', 'mergedetcat_amico' ]
+        }
+        algorithm_lower = det_algorithm.lower()
+        if algorithm_lower not in mergedetcat_key_map:
+            raise ValueError(f"Unknown algorithm: {det_algorithm}. Supported: PZWAV, AMICO, BOTH")
+
+        filename_keys = mergedetcat_key_map[algorithm_lower]
+        if not isinstance(filename_keys, list):
+            filename_keys = [filename_keys]
+
+        files = {}
+        for key in filename_keys:
+            if self.config_parser.has_option('files', key):
+                filename = self.config_parser.get('files', key)
+                expanded_path = self._expand_path(filename)
+                if os.path.isabs(expanded_path):
+                    files[key] = expanded_path
+                else:
+                    files[key] = os.path.join(self.mergedetcat_workdir, filename)
+
+        return files
+    
+    def get_characterization_xml_files(self, char_type, det_algorithm):
+        pass
+
     
     def get_catred_fileinfo_csv(self):
         """Get path to catred file info CSV (hardcoded filename in catred_dir)"""
@@ -173,10 +239,7 @@ class Config:
         # Check critical directories
         critical_dirs = [
             ('Base workspace', self._base_workspace),
-            ('MergeDetCat directory', self.mergedetcat_dir),
-            ('Data directory', self.mergedetcat_data_dir),
-            ('Inputs directory', self.mergedetcat_inputs_dir),
-            ('RR2 downloads directory', self.rr2_downloads_dir)
+            ('Base Data directory', self._data_base_dir),
         ]
         
         for name, path in critical_dirs:
@@ -189,7 +252,11 @@ class Config:
         optional_dirs = [
             ('CATRED directory', self.catred_dir),
             ('Effective coverage mask directory', self.effcov_mask_dir),
-            ('EDEN environment', self.eden_path)
+            ('Mosaic directory', self.mosaic_dir),
+            ('DetIntile working directory', self.detintile_workdir),
+            ('MergeDetCat working directory', self.mergedetcat_workdir),
+            ('GlueMatchCat working directory', self.gluematchcat_workdir),
+            ('Characterization working directory', self.characterization_workdir),
         ]
         
         for name, path in optional_dirs:
@@ -216,10 +283,16 @@ class Config:
         print(f"Project root (auto-detected): {self.project_root}")
         print("")
         print("Data directories:")
-        print(f"  MergeDetCat: {self.mergedetcat_dir}")
-        print(f"  RR2 downloads: {self.rr2_downloads_dir}")
-        print(f"  CATRED: {self.catred_dir}")
+        print(f"  CATRED directory: {self.catred_dir}")
+        print(f"  Effective coverage mask directory: {self.effcov_mask_dir}")
+        print(f"  Mosaic directory: {self.mosaic_dir}")
         print("")
+        print("Working directories:")
+        print(f"  DetIntile workdir: {self.detintile_workdir}")
+        print(f"  MergeDetCat workdir: {self.mergedetcat_workdir}")
+        print(f"  GlueMatchCat workdir: {self.gluematchcat_workdir}")
+        print(f"  Characterization workdir: {self.characterization_workdir}")
+        print("===========================================")
 
 # Global configuration instance
 config = Config()
