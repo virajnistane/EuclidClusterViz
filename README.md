@@ -116,9 +116,23 @@ source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 # 🎯 Recommended: Universal launcher with auto-setup
 ./launch.sh
 
+# 🔧 With custom configuration file
+./launch.sh --config /path/to/custom_config.ini
+
 # Alternative: Direct execution
 python cluster_visualization/src/cluster_dash_app.py
+
+# With custom config
+python cluster_visualization/src/cluster_dash_app.py --config my_config.ini
+
+# With custom config and external access
+python cluster_visualization/src/cluster_dash_app.py --config my_config.ini --external
+
+# View all available options
+python cluster_visualization/src/cluster_dash_app.py --help
 ```
+
+**💡 Tip**: Use `--config` to quickly switch between different datasets or testing/production environments without modifying your default configuration.
 
 ### 3. **Remote Access (Automatic SSH Tunnel Setup)**
 When running on a remote server, the app automatically provides connection guidance:
@@ -150,6 +164,14 @@ The app opens with highlighted control sections:
 
 The application uses an INI-based configuration system for easy customization. The configuration specifies all data paths and settings.
 
+### Configuration Priority
+
+The application loads configuration files in the following priority order:
+
+1. **Custom config file** (if specified via `--config` argument)
+2. **`config_local.ini`** (personal configuration, gitignored)
+3. **`config.ini`** (default configuration, tracked in git)
+
 ### Quick Setup
 
 1. **Automatic setup** (recommended):
@@ -167,13 +189,47 @@ The application uses an INI-based configuration system for easy customization. T
 3. **Test configuration**:
    ```bash
    python config.py
+   
+   # Or test with custom config
+   python cluster_visualization/src/cluster_dash_app.py --config test_config.ini
    ```
+
+### Using Custom Configuration Files
+
+You can specify a custom configuration file when launching the application:
+
+```bash
+# Using root launcher
+./launch.sh --config /path/to/custom_config.ini
+
+# Using scripts directory launcher
+./cluster_visualization/scripts/launch.sh --config my_config.ini
+
+# Using virtual environment script
+./cluster_visualization/scripts/run_dash_app_venv.sh --config custom.ini
+
+# Using remote access script
+./cluster_visualization/scripts/run_remote_dash.sh --config custom.ini
+
+# Direct Python execution
+python cluster_visualization/src/cluster_dash_app.py --config custom.ini
+
+# Show all command-line options
+python cluster_visualization/src/cluster_dash_app.py --help
+```
+
+**Benefits of custom config files:**
+- 📁 **Multiple datasets**: Easily switch between different data directories
+- 🧪 **Testing**: Use test datasets without modifying main configuration
+- 👥 **Team sharing**: Share project-specific configs via version control
+- 🔄 **Quick switching**: Rapidly change between production/development/test setups
 
 ### Configuration Files
 
 - `config.ini` - Default configuration (tracked in git)
 - `config_local.ini` - Your personal configuration (gitignored, takes precedence)
 - `config_example.ini` - Example with common configuration patterns
+- **Custom configs** - Any INI file can be specified via `--config` argument
 
 ### Key Configuration Sections
 
@@ -193,6 +249,56 @@ pip install -r requirements.txt
 - `healpy` - HEALPix operations for masked CATRED data
 - `dash` - Web application framework
 - `dash-bootstrap-components` - Enhanced UI components
+
+## 🎛️ Command-Line Options
+
+The application supports several command-line arguments for flexible deployment:
+
+### Available Options
+
+```bash
+python cluster_visualization/src/cluster_dash_app.py [OPTIONS]
+
+Options:
+  --config PATH    Path to custom configuration file (default: auto-detect config_local.ini or config.ini)
+  --external       Allow external access (binds to 0.0.0.0 instead of 127.0.0.1)
+  --remote         Alias for --external (for backward compatibility)
+  --help           Show help message and exit
+```
+
+### Usage Examples
+
+```bash
+# Default configuration with local access
+python cluster_visualization/src/cluster_dash_app.py
+
+# Custom configuration file
+python cluster_visualization/src/cluster_dash_app.py --config /path/to/my_config.ini
+
+# External access (for network deployment)
+python cluster_visualization/src/cluster_dash_app.py --external
+
+# Combined: custom config with external access
+python cluster_visualization/src/cluster_dash_app.py --config production.ini --external
+
+# All launch scripts support passing these arguments:
+./launch.sh --config test_config.ini
+./cluster_visualization/scripts/run_dash_app_venv.sh --config my.ini --external
+```
+
+### When to Use Each Option
+
+- **`--config`**: 
+  - Testing with different datasets
+  - Switching between production/development environments
+  - Using team-specific configuration files
+  - Running multiple instances with different data
+
+- **`--external`**:
+  - Accessing from other machines on the network
+  - Running on a server accessible to multiple users
+  - Container/cloud deployments
+  - **Note**: Use SSH tunneling for secure remote access (recommended)
 
 ## Remote Access & SSH Tunneling
 
