@@ -2,9 +2,30 @@
 
 # Universal Cluster Visualization Launcher
 # Provides standalone HTML visualization solutions
+#
+# Usage:
+#   ./launch.sh                              # Default config
+#   ./launch.sh --config /path/to/custom.ini # Custom config
 
 echo "=== Cluster Visualization Launcher ==="
 echo "Testing available solutions..."
+
+# Parse command line arguments for config file
+CONFIG_ARG=""
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --config)
+            CONFIG_ARG="--config $2"
+            echo "Using custom config: $2"
+            shift 2
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Usage: $0 [--config /path/to/config.ini]"
+            exit 1
+            ;;
+    esac
+done
 
 # Check and activate EDEN environment if needed
 check_eden_environment() {
@@ -68,8 +89,11 @@ launch_dash_venv() {
     echo "This will automatically install missing modules if needed"
     echo "Features: Algorithm switching, interactive plotting, real-time updates"
     echo "The app will automatically open in your browser"
+    if [ -n "$CONFIG_ARG" ]; then
+        echo "Config: $CONFIG_ARG"
+    fi
     echo ""
-    ./cluster_visualization/scripts/run_dash_app_venv.sh
+    ./cluster_visualization/scripts/run_dash_app_venv.sh $CONFIG_ARG
 }
 
 # Function to test all dependencies

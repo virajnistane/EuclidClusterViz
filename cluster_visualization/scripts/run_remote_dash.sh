@@ -2,15 +2,38 @@
 
 # Remote Access Launcher for Cluster Visualization Dash App
 # This script helps you run the app on a remote server for local browser access
+#
+# Usage:
+#   ./run_remote_dash.sh                              # Default config
+#   ./run_remote_dash.sh --config /path/to/custom.ini # Custom config
 
 echo "=== Cluster Visualization - Remote Access Setup ==="
 echo ""
+
+# Parse command line arguments for config file
+CONFIG_ARG=""
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --config)
+            CONFIG_ARG="--config $2"
+            shift 2
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Usage: $0 [--config /path/to/config.ini]"
+            exit 1
+            ;;
+    esac
+done
 
 # Get server info
 HOSTNAME=$(hostname -f 2>/dev/null || hostname)
 USERNAME=$(whoami)
 
 echo "Server: $USERNAME@$HOSTNAME"
+if [ -n "$CONFIG_ARG" ]; then
+    echo "Config: $CONFIG_ARG"
+fi
 echo ""
 
 echo "Choose your access method:"
@@ -53,11 +76,11 @@ case $choice in
             echo "Using virtual environment..."
             cd "$PROJECT_ROOT"
             source venv/bin/activate
-            python cluster_visualization/src/cluster_dash_app.py
+            python cluster_visualization/src/cluster_dash_app.py $CONFIG_ARG
         elif [ -f "$PROJECT_ROOT/cluster_visualization/src/cluster_dash_app.py" ]; then
             echo "Using EDEN environment..."
             cd "$PROJECT_ROOT"
-            python cluster_visualization/src/cluster_dash_app.py
+            python cluster_visualization/src/cluster_dash_app.py $CONFIG_ARG
         else
             echo "Error: Cannot find cluster_dash_app.py"
             echo "Project root: $PROJECT_ROOT"
@@ -90,11 +113,11 @@ case $choice in
             echo "Using virtual environment..."
             cd "$PROJECT_ROOT"
             source venv/bin/activate
-            python cluster_visualization/src/cluster_dash_app.py --external
+            python cluster_visualization/src/cluster_dash_app.py --external $CONFIG_ARG
         elif [ -f "$PROJECT_ROOT/cluster_visualization/src/cluster_dash_app.py" ]; then
             echo "Using EDEN environment..."
             cd "$PROJECT_ROOT"
-            python cluster_visualization/src/cluster_dash_app.py --external
+            python cluster_visualization/src/cluster_dash_app.py --external $CONFIG_ARG
         else
             echo "Error: Cannot find cluster_dash_app.py"
             echo "Checking paths:"

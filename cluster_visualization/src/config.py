@@ -71,6 +71,7 @@ class Config:
         else:
             if not os.path.exists(config_file):
                 raise FileNotFoundError(f"Configuration file not found: {config_file}")
+            print(f"📋 Loading configuration from: {config_file}")
             self.config_parser.read(config_file)
             self._config_file_used = config_file
     
@@ -294,16 +295,36 @@ class Config:
         print(f"  Characterization workdir: {self.characterization_workdir}")
         print("===========================================")
 
-# Global configuration instance
-config = Config()
+# Global configuration instance (lazy initialization)
+_config = None
 
-def get_config():
-    """Get the global configuration instance"""
-    return config
+def get_config(config_file=None):
+    """Get the global configuration instance or create a new one with custom config file"""
+    global _config
+    
+    if config_file:
+        # Return a new instance with custom config file (don't update global)
+        return Config(config_file)
+    
+    # Return or create the global instance
+    if _config is None:
+        _config = Config()
+    return _config
+
+# Create a property-like access for backward compatibility
+# This will be evaluated lazily when first accessed
+class _ConfigProxy:
+    """Proxy object for lazy config initialization"""
+    def __getattr__(self, name):
+        return getattr(get_config(), name)
+    def __dir__(self):
+        return dir(get_config())
+
+config = _ConfigProxy()
 
 def validate_environment():
     """Validate the current environment and return status"""
-    return config.validate_paths()
+    return get_config().validate_paths()
 
 # Environment variables fallback
 def from_env(var_name, default_value):

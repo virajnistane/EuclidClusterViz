@@ -12,10 +12,17 @@ Features:
 - MER tile display (only available with outline polygons for better visibility)
 - Configurable aspect ratio: free (flexible zoom, default) or equal (astronomical accuracy)
 - Responsive plot sizing with 1200x900 dimensions
+- Custom configuration file support via command-line argument
 
 REQUIREMENTS:
 - Must activate EDEN environment first: source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 - This provides required packages: astropy, plotly, pandas, numpy, shapely, dash
+
+USAGE:
+- Default config: python cluster_dash_app.py
+- Custom config:  python cluster_dash_app.py --config /path/to/custom_config.ini
+- External access: python cluster_dash_app.py --external
+- Combined:        python cluster_dash_app.py --config /path/to/config.ini --external
 """
 
 import os
@@ -32,6 +39,7 @@ import time
 import getpass
 import socket
 from datetime import datetime, timedelta
+import argparse
 
 import dash
 from dash import dcc, html, Input, Output, State, callback
@@ -106,7 +114,48 @@ if src_path not in sys.path:
 
 # Import configuration
 from config import get_config
-config = get_config()
+
+def parse_arguments():
+    """Parse command-line arguments"""
+    parser = argparse.ArgumentParser(
+        description='Cluster Visualization Dash App',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s                                    # Use default config (config_local.ini or config.ini)
+  %(prog)s --config /path/to/custom.ini       # Use custom config file
+  %(prog)s --external                         # Allow external access (0.0.0.0)
+  %(prog)s --config custom.ini --external     # Custom config with external access
+        """
+    )
+    parser.add_argument(
+        '--config',
+        type=str,
+        default=None,
+        help='Path to custom configuration file (default: auto-detect config_local.ini or config.ini)'
+    )
+    parser.add_argument(
+        '--external',
+        action='store_true',
+        help='Allow external access to the app (binds to 0.0.0.0 instead of 127.0.0.1)'
+    )
+    parser.add_argument(
+        '--remote',
+        action='store_true',
+        help='Alias for --external (for backward compatibility)'
+    )
+    return parser.parse_args()
+
+# Parse arguments first
+args = parse_arguments()
+
+# Load configuration with custom file if specified
+if args.config:
+    print(f"📋 Using custom configuration file: {args.config}")
+    config = get_config(config_file=args.config)
+else:
+    print("📋 Using default configuration (auto-detect)")
+    config = get_config()
 print("✓ Configuration loaded successfully")
 
 # Add local data modules path
@@ -358,13 +407,15 @@ class ClusterVisualizationApp:
     
 def main():
     """Main function to run the app"""
-    import sys
+    # Arguments are already parsed globally as 'args'
     
-    # Check for external access flag using modular core if available
-    if ClusterVisualizationCore:
-        external_access = ClusterVisualizationCore.check_command_line_args()
+    # Check for external access flag
+    external_access = args.external or args.remote
+    
+    if external_access:
+        print("🌐 External access enabled (binding to 0.0.0.0)")
     else:
-        external_access = '--external' in sys.argv or '--remote' in sys.argv
+        print("🔒 Local access only (binding to 127.0.0.1)")
     
     app = ClusterVisualizationApp()
     

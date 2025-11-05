@@ -125,10 +125,11 @@ echo "  • Interactive plotting with zoom/pan"
 echo "  • Polygon fill toggle"
 echo "  • MER tile display option"
 echo "  • Free aspect ratio zoom (default)"
+echo "  • Custom config file support (use --config /path/to/config.ini)"
 echo ""
 echo "Press Ctrl+C to stop the server"
 echo ""
 
-# Run the Dash app
+# Pass all arguments to the Python script (allows --config, --external, etc.)
 cd "$PROJECT_DIR"
-python cluster_visualization/src/cluster_dash_app.py
+python cluster_visualization/src/cluster_dash_app.py "$@"
