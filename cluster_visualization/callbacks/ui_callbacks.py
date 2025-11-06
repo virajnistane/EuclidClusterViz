@@ -108,6 +108,18 @@ class UICallbacks:
             print(f"🔄 Mosaic switch callback: mosaic_enabled={mosaic_enabled}, button_disabled={not mosaic_enabled}")
             return not mosaic_enabled  # Button is enabled when switch is True
 
+        @self.app.callback(
+            Output('matching-clusters-switch', 'disabled'),
+            [Input('algorithm-dropdown', 'value')],
+            prevent_initial_call=False
+        )
+        def toggle_matching_clusters_switch(algorithm):
+            """Enable matching-clusters-switch only when algorithm is BOTH"""
+            # Enable the switch only when algorithm is 'BOTH'
+            is_disabled = algorithm != 'BOTH'
+            print(f"🔄 Algorithm dropdown callback: algorithm={algorithm}, matching-switch-disabled={is_disabled}")
+            return is_disabled
+
     def _setup_catred_visibility_callback(self):
         """Setup clientside callback to show/hide CATRED controls based on catred-mode-switch"""
         self.app.clientside_callback(

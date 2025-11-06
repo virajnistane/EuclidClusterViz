@@ -177,6 +177,34 @@ class AppLayout:
         ])
     
     @staticmethod
+    def _create_cluster_matching_section():
+        """Create cluster matching section with enhanced styling"""
+        return html.Div([
+            # Enhanced switch options with beautiful cards
+            dbc.Card([
+                dbc.CardBody([
+                    html.Div([
+                        html.I(className="fas fa-object-group me-2 text-primary"),
+                        dbc.Switch(
+                            id="matching-clusters-switch",
+                            label="Show matched clusters (CAT-CL)",
+                            value=False,
+                            disabled=True,
+                            className="ms-2"
+                        )
+                    ], className="d-flex align-items-center mb-2"),
+                    html.Small([
+                        html.I(className="fas fa-info-circle me-1"),
+                        "Only in PZWAV+AMICO mode"
+                    ], className="text-muted ms-4")
+                ])
+            ], className="mb-3 border-0 shadow-sm", style={
+                'background': 'linear-gradient(45deg, #f0f8ff, #ffffff)',
+                'border-radius': '10px'
+            })
+        ])
+    
+    @staticmethod
     def _create_snr_section():
         """Create SNR filtering section with enhanced styling"""
         return html.Div([
@@ -717,6 +745,7 @@ class AppLayout:
                 "core-settings",
                 [
                     AppLayout._create_algorithm_section(),
+                    AppLayout._create_cluster_matching_section(),
                     AppLayout._create_snr_section(),
                     AppLayout._create_redshift_section(),
                 ],

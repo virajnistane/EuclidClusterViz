@@ -43,7 +43,7 @@ class TraceCreator:
                      existing_mosaic_traces: Optional[List] = None,
                      snr_threshold_lower: Optional[float] = None, snr_threshold_upper: Optional[float] = None, 
                      z_threshold_lower: Optional[float] = None, z_threshold_upper: Optional[float] = None,
-                     threshold: float = 0.8, maglim: Optional[float] = None, show_merged_clusters: bool = True) -> List:
+                     threshold: float = 0.8, maglim: Optional[float] = None, show_merged_clusters: bool = True, matching_clusters: bool = False) -> List:
         """
         Create all Plotly traces for the visualization.
         
@@ -99,7 +99,7 @@ class TraceCreator:
 
         # Add cluster traces to separate list (top layer) - conditionally based on toggle
         if show_merged_clusters:
-            self._add_merged_cluster_trace(cluster_traces, datamod_detcluster_mergedcat, data['algorithm'], catred_points)
+            self._add_merged_cluster_trace(cluster_traces, datamod_detcluster_mergedcat, data['algorithm'], matching_clusters, catred_points)
         
         # Create tile traces and polygons
         tile_traces = self._create_tile_traces_and_polygons(
@@ -493,7 +493,79 @@ class TraceCreator:
             hovertemplate=None  # Explicitly disable hover template
         )
 
-    def _add_merged_cluster_trace(self, data_traces: List, datamod_detcluster_mergedcat: np.ndarray, algorithm: str, catred_points: Optional[List] = None) -> None:
+    def _create_oval_for_cluster_pair(self, pzwav_cluster, amico_cluster, color: str = 'rgba(0, 255, 0, 0.3)') -> go.Scatter:
+        """
+        Create an oval shape connecting a matched PZWAV-AMICO cluster pair.
+        
+        Args:
+            pzwav_cluster: PZWAV cluster data (numpy record)
+            amico_cluster: AMICO cluster data (numpy record or array)
+            color: Color for the oval (default: semi-transparent green)
+            
+        Returns:
+            Plotly Scatter trace representing an oval
+        """
+        # Extract coordinates
+        if len(amico_cluster) == 0:
+            print(f"Warning: No matching AMICO cluster found for PZWAV cluster")
+            return None
+            
+        # Get first match if multiple matches exist
+        if hasattr(amico_cluster, '__len__') and len(amico_cluster) > 1:
+            amico_cluster = amico_cluster[0]
+        
+        ra1 = pzwav_cluster['RIGHT_ASCENSION_CLUSTER']
+        dec1 = pzwav_cluster['DECLINATION_CLUSTER']
+        
+        # Handle both numpy array and single record
+        if hasattr(amico_cluster, '__len__') and len(amico_cluster) == 1:
+            ra2 = amico_cluster[0]['RIGHT_ASCENSION_CLUSTER']
+            dec2 = amico_cluster[0]['DECLINATION_CLUSTER']
+        else:
+            ra2 = amico_cluster['RIGHT_ASCENSION_CLUSTER']
+            dec2 = amico_cluster['DECLINATION_CLUSTER']
+        
+        # Calculate center and semi-axes
+        center_ra = (ra1 + ra2) / 2
+        center_dec = (dec1 + dec2) / 2
+        
+        # Semi-major axis (distance between points / 2) + padding
+        distance = np.sqrt((ra2 - ra1)**2 + (dec2 - dec1)**2)
+        semi_major = distance / 2 + 0.01  # Add padding
+        semi_minor = semi_major * 0.5  # Make it elliptical
+        
+        # Calculate rotation angle
+        if ra2 != ra1:
+            angle = np.arctan2(dec2 - dec1, ra2 - ra1)
+        else:
+            angle = np.pi / 2
+        
+        # Generate oval points
+        theta = np.linspace(0, 2 * np.pi, 100)
+        x_oval = semi_major * np.cos(theta)
+        y_oval = semi_minor * np.sin(theta)
+        
+        # Rotate and translate
+        x_rotated = center_ra + x_oval * np.cos(angle) - y_oval * np.sin(angle)
+        y_rotated = center_dec + x_oval * np.sin(angle) + y_oval * np.cos(angle)
+        
+        # Create oval trace
+        oval_trace = go.Scatter(
+            x=x_rotated,
+            y=y_rotated,
+            mode='lines',
+            fill='toself',
+            fillcolor=color,
+            line=dict(color='green', width=1, dash='dot'),
+            name='Matched Pair',
+            showlegend=False,
+            hoverinfo='skip',
+            hovertemplate=None
+        )
+        
+        return oval_trace
+
+    def _add_merged_cluster_trace(self, data_traces: List, datamod_detcluster_mergedcat: np.ndarray, algorithm: str, matching_clusters: bool, catred_points: Optional[List] = None) -> None:
         """Add merged cluster detection trace with proximity-based enhancement."""
         
         # Determine symbol based on algorithm
@@ -509,7 +581,22 @@ class TraceCreator:
                 
                 pzwav_data = datamod_detcluster_mergedcat[pzwav_mask]
                 amico_data = datamod_detcluster_mergedcat[amico_mask]
-                
+
+                if matching_clusters:
+                    # Apply matching logic for clusters
+                    pzwav_data = pzwav_data[np.logical_not(np.isnan(pzwav_data['CROSS_ID_CLUSTER']))]
+                    amico_data = amico_data[np.logical_not(np.isnan(amico_data['CROSS_ID_CLUSTER']))]
+
+                    match_cluster_pairs = [[cluster, amico_data[amico_data['ID_DET_CLUSTER']==cluster['CROSS_ID_CLUSTER']]] for cluster in pzwav_data]
+
+                    # Create oval traces for matched pairs
+                    print(f"Debug: Creating ovals for {len(match_cluster_pairs)} matched cluster pairs")
+                    for pzwav_cluster, amico_match in match_cluster_pairs:
+                        if len(amico_match) > 0:
+                            oval_trace = self._create_oval_for_cluster_pair(pzwav_cluster, amico_match)
+                            if oval_trace:
+                                data_traces.append(oval_trace)
+
                 # PZWAV trace
                 if len(pzwav_data) > 0:
                     pzwav_trace = go.Scattergl(

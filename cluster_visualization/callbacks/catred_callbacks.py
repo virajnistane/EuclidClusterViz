@@ -81,6 +81,7 @@ class CATREDCallbacks:
              Output('status-info', 'children', allow_duplicate=True)],
             [Input('catred-render-button', 'n_clicks')],
             [State('algorithm-dropdown', 'value'),
+             State('matching-clusters-switch', 'value'),
              State('snr-range-slider', 'value'),
              State('polygon-switch', 'value'),
              State('mer-switch', 'value'),
@@ -94,7 +95,7 @@ class CATREDCallbacks:
             prevent_initial_call=True
         )
         def manual_render_catred_data(catred_n_clicks, 
-                                      algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, 
+                                      algorithm, matching_clusters, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, 
                                       show_merged_clusters, catred_masked, threshold, maglim, relayout_data, current_figure):
             if catred_n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update
@@ -128,7 +129,7 @@ class CATREDCallbacks:
                     existing_catred_traces=existing_catred_traces,
                     existing_mosaic_traces=existing_mosaic_traces,  # 🆕 PASS MOSAIC TRACES
                     snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper,
-                    threshold=threshold, show_merged_clusters=show_merged_clusters
+                    threshold=threshold, show_merged_clusters=show_merged_clusters, matching_clusters=matching_clusters
                 )
 
                 # Update the CATRED traces cache with the new trace count
@@ -178,6 +179,7 @@ class CATREDCallbacks:
              Output('status-info', 'children', allow_duplicate=True)],
             [Input('catred-clear-button', 'n_clicks')],
             [State('algorithm-dropdown', 'value'),
+             State('matching-clusters-switch', 'value'),
              State('snr-range-slider', 'value'),  # 🔧 FIX: Use range slider instead
              State('redshift-range-slider', 'value'),  # 🔧 FIX: Add redshift slider
              State('polygon-switch', 'value'),
@@ -190,7 +192,7 @@ class CATREDCallbacks:
              State('render-button', 'n_clicks')],
             prevent_initial_call=True
         )
-        def clear_catred_data(clear_n_clicks, algorithm, snr_range, redshift_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_merged_clusters, catred_masked, relayout_data, current_figure, render_n_clicks):
+        def clear_catred_data(clear_n_clicks, algorithm, matching_clusters, snr_range, redshift_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_merged_clusters, catred_masked, relayout_data, current_figure, render_n_clicks):
             if clear_n_clicks == 0 or render_n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update
             
@@ -228,7 +230,7 @@ class CATREDCallbacks:
                                           existing_mosaic_traces=existing_mosaic_traces,  # 🆕 PRESERVE MOSAIC TRACES
                                           snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper,
                                           z_threshold_lower=z_lower, z_threshold_upper=z_upper,  # 🔧 ADD REDSHIFT PARAMS
-                                          show_merged_clusters=show_merged_clusters)
+                                          show_merged_clusters=show_merged_clusters, matching_clusters=matching_clusters)
                 
                 # Create figure
                 fig = self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio) if self.figure_manager else self._create_fallback_figure(traces, algorithm, free_aspect_ratio)
@@ -280,14 +282,15 @@ class CATREDCallbacks:
     def create_traces(self, data, show_polygons, show_mer_tiles, relayout_data, catred_masked, 
                      existing_catred_traces=None, existing_mosaic_traces=None, manual_catred_data=None, 
                      snr_threshold_lower=None, snr_threshold_upper=None, 
-                     z_threshold_lower=None, z_threshold_upper=None, threshold=0.8, show_merged_clusters=True):
+                     z_threshold_lower=None, z_threshold_upper=None, threshold=0.8, show_merged_clusters=True, matching_clusters=False):
         """Create traces using modular or fallback method"""
         if self.trace_creator:
             return self.trace_creator.create_traces(
                 data, show_polygons, show_mer_tiles, relayout_data, catred_masked,
                 existing_catred_traces=existing_catred_traces, existing_mosaic_traces=existing_mosaic_traces, manual_catred_data=manual_catred_data,
                 snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, 
-                z_threshold_lower=z_threshold_lower, z_threshold_upper=z_threshold_upper, threshold=threshold, show_merged_clusters=show_merged_clusters
+                z_threshold_lower=z_threshold_lower, z_threshold_upper=z_threshold_upper, threshold=threshold, show_merged_clusters=show_merged_clusters,
+                matching_clusters=matching_clusters
             )
         else:
             # Fallback to inline trace creation
@@ -296,8 +299,9 @@ class CATREDCallbacks:
                                               existing_mosaic_traces=existing_mosaic_traces,  # 🆕 ADD MOSAIC TRACES
                                               manual_catred_data=manual_catred_data,
                                               snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, 
-                                              z_threshold_lower=z_threshold_lower, z_threshold_upper=z_threshold_upper, threshold=threshold, show_merged_clusters=show_merged_clusters)
-    
+                                              z_threshold_lower=z_threshold_lower, z_threshold_upper=z_threshold_upper, threshold=threshold, 
+                                              show_merged_clusters=show_merged_clusters, matching_clusters=matching_clusters)
+
     # Helper methods
     def _extract_zoom_ranges(self, relayout_data):
         """Extract RA and Dec ranges from relayout data"""
