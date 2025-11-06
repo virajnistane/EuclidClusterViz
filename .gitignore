@@ -5,6 +5,9 @@ fix_syntax.py
 
 # Local configuration file (user-specific paths)
 config_local.ini
+*_config.ini
+*_config_*.ini
+config_*.ini
 
 venv/
 
