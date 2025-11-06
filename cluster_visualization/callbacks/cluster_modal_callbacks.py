@@ -429,6 +429,7 @@ class ClusterModalCallbacks:
              #
             [State('algorithm-dropdown', 'value'),
              State('snr-range-slider', 'value'),
+             State('redshift-range-slider', 'value'),
              State('polygon-switch', 'value'),
              State('mer-switch', 'value'),
              State('aspect-ratio-switch', 'value'),
@@ -455,7 +456,7 @@ class ClusterModalCallbacks:
             prevent_initial_call=True
         )
         def handle_tab_actions(cutout_clicks, phz_clicks, catred_box_clicks, export_clicks,
-                               algorithm, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_merged_clusters,
+                               algorithm, snr_range, redshift_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_merged_clusters,
                                cutout_size, cutout_type, cutout_opacity, cutout_colorscale,
                                catred_box_size, catred_redshift_bin_width, catred_mask_threshold, catred_maglim, catred_marker_size_option, catred_marker_size_custom, catred_marker_color,
                                catred_masked, threshold, maglim, relayout_data, current_figure):
@@ -616,6 +617,10 @@ class ClusterModalCallbacks:
                 snr_lower = snr_range[0] if snr_range and len(snr_range) == 2 else None
                 snr_upper = snr_range[1] if snr_range and len(snr_range) == 2 else None
 
+                # Extract redshift values from redshift range slider 
+                redshift_lower = redshift_range[0] if redshift_range and len(redshift_range) == 2 else None
+                redshift_upper = redshift_range[1] if redshift_range and len(redshift_range) == 2 else None
+
                 # Extract existing CATRED traces from current figure to preserve them
                 existing_catred_traces = self._extract_existing_catred_traces(current_figure)
                 existing_mosaic_traces = self._extract_existing_mosaic_traces(current_figure)
@@ -624,6 +629,7 @@ class ClusterModalCallbacks:
                 box_params = self.catred_handler._extract_box_data_from_cluster_click(
                     click_data={'ra': cluster['ra'], 'dec': cluster['dec'],
                                 'redshift': cluster['redshift'],
+                                'redshift_lim_lower': redshift_lower, 'redshift_lim_upper': redshift_upper,
                                 'catred_box_size': catred_box_size/60,  # Convert arcmin to degrees
                                 'catred_redshift_bin_width': catred_redshift_bin_width,
                                 'trace_marker': {'size_option': catred_marker_size_option,  # 'set_size_custom' or 'set_size_kron'

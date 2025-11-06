@@ -720,8 +720,8 @@ class CATREDHandler:
         ra_max = click_data['ra'] + click_data['catred_box_size'] / 2
         dec_min = click_data['dec'] - click_data['catred_box_size'] / 2
         dec_max = click_data['dec'] + click_data['catred_box_size'] / 2
-        z_min = click_data['redshift'] - click_data['catred_redshift_bin_width'] / 2
-        z_max = click_data['redshift'] + click_data['catred_redshift_bin_width'] / 2
+        z_min = max(click_data['redshift'] - click_data['catred_redshift_bin_width'] / 2, click_data['redshift_lim_lower'])
+        z_max = min(click_data['redshift'] + click_data['catred_redshift_bin_width'] / 2, click_data['redshift_lim_upper'])
 
         if 'trace_marker' in click_data:
             if click_data['trace_marker']['size_option'] == 'set_size_custom':

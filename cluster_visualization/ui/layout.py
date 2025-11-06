@@ -1173,7 +1173,7 @@ class AppLayout:
                                         type="number",
                                         value=0.5,
                                         min=0,
-                                        max=1.0,
+                                        max=3.0,
                                         step=0.1,
                                         className="mb-2"
                                     )
