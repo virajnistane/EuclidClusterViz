@@ -1084,8 +1084,8 @@ class AppLayout:
                                     dbc.Input(
                                         id="tab-cutout-size",
                                         type="number",
-                                        value=1.0,
-                                        min=0.1,
+                                        value=2.0,
+                                        min=0.0,
                                         max=20.0,
                                         step=1.0,
                                         className="mb-2"
@@ -1159,7 +1159,7 @@ class AppLayout:
                                     dbc.Input(
                                         id="tab-catred-box-size",
                                         type="number",
-                                        value=1.0,
+                                        value=2.0,
                                         min=1.0,
                                         max=10.0,
                                         step=1.0,
@@ -1171,8 +1171,8 @@ class AppLayout:
                                     dbc.Input(
                                         id="tab-catred-redshift-bin-width",
                                         type="number",
-                                        value=0.1,
-                                        min=0.01,
+                                        value=0.5,
+                                        min=0,
                                         max=1.0,
                                         step=0.1,
                                         className="mb-2"
