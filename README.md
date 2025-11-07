@@ -28,21 +28,25 @@ source venv/bin/activate
 
 **Core Dependencies**: `astropy`, `plotly`, `pandas`, `numpy`, `shapely`, `healpy`, `dash`, `dash-bootstrap-components`
 
-## � Key Features
+## 🎯 Key Features
 
 ### 🔬 **Advanced Data Analysis**
-- **Algorithm Comparison**: Real-time switching between PZWAV and AMICO detection algorithms
+- **Algorithm Comparison**: Real-time switching between PZWAV, AMICO, and BOTH algorithms
+- **Cluster Matching**: Visual overlay showing matched PZWAV-AMICO cluster pairs with connecting ovals (BOTH mode only)
 - **Smart Filtering**: Client-side SNR and redshift filtering with preserved zoom states
 - **CATRED Integration**: High-resolution masked data with effective coverage thresholding
 - **Mosaic Visualization**: Dynamic MER tile mosaic loading with opacity controls
+- **HEALPix Mask Overlay**: Effective coverage footprint visualization with configurable opacity
 - **PHZ Analysis**: Interactive photometric redshift probability distribution plots
 
-### �️ **Professional UI Controls**
+### 🖥️ **Professional UI Controls**
 - **Highlighted Section Headers**: Clear visual hierarchy with Bootstrap styling
 - **Dynamic Visibility**: Context-aware control hiding/showing based on user selections
+- **Algorithm-Based Toggle Control**: Matching clusters toggle enabled only in BOTH mode
 - **Real-time Updates**: Live button text updates showing click counts and status
 - **Responsive Design**: Optimized layout for different screen sizes and zoom levels
 - **Intuitive Workflow**: Guided user experience with helpful tooltips and status indicators
+- **Mosaic & Mask Management**: Separate controls for background images and HEALPix footprint overlays
 
 ### 🌐 **Enterprise Remote Access**
 - **SSH Tunnel Monitoring**: Automatic detection and setup guidance for remote connections
@@ -52,9 +56,10 @@ source venv/bin/activate
 
 ### ⚡ **Performance Optimization**
 - **Client-side Filtering**: Real-time SNR/redshift filtering without server round-trips
-- **Layered Rendering**: Optimized trace ordering (polygons → mosaics → CATRED → clusters)
+- **Layered Rendering**: Optimized trace ordering (polygons → mosaics → mask overlays → CATRED → clusters)
 - **Preserved State**: Zoom levels and filter settings maintained during updates
 - **Efficient Caching**: Smart data caching with trace preservation for smooth interactions
+- **Trace Preservation**: Mosaic and mask overlay traces retained across data updates
 - **Color-coded tiles** for easy identification
 - **Aspect ratio controls** for optimal viewing
 - **Plot size adjustment** for different screen sizes
@@ -78,8 +83,10 @@ cluster_visualization/
 ├── callbacks/
 │   ├── main_plot.py                # 🎯 Core plotting callbacks
 │   ├── catred_callbacks.py         # 🔬 CATRED-specific callbacks
+│   ├── mosaic_callback.py          # 🖼️ Mosaic & mask overlay callbacks
 │   ├── ui_callbacks.py             # 🎛️ UI control callbacks
-│   └── phz_callbacks.py            # 📊 PHZ analysis callbacks
+│   ├── phz_callbacks.py            # 📊 PHZ analysis callbacks
+│   └── cluster_modal_callbacks.py  # 🔍 Cluster detail modal callbacks
 ├── ui/
 │   └── layout.py                   # 🖥️ Dash layout components
 ├── core/
@@ -153,12 +160,14 @@ When running on a remote server, the app automatically provides connection guida
 
 ### 4. **Application Interface**
 The app opens with highlighted control sections:
-- 🔵 **Algorithm**: Switch between PZWAV/AMICO
+- 🔵 **Algorithm**: Switch between PZWAV/AMICO/BOTH
+- 🔵 **Cluster Matching**: Enable matched cluster visualization (available in BOTH mode only)
 - 🔵 **SNR Filtering**: Real-time signal-to-noise filtering  
 - 🔵 **Redshift Filtering**: Photometric redshift constraints
 - 🔵 **Display Options**: Polygon fills, MER tiles, aspect ratio
 - 🔵 **High-res CATRED data**: Advanced catalog integration with dynamic controls
 - 🔵 **Mosaic Image Controls**: Background image overlays with opacity control
+- 🔵 **HEALPix Mask Overlay**: Effective coverage footprint visualization
 
 ## Configuration
 
@@ -300,6 +309,62 @@ python cluster_visualization/src/cluster_dash_app.py --config production.ini --e
   - Container/cloud deployments
   - **Note**: Use SSH tunneling for secure remote access (recommended)
 
+## 🎮 Feature Usage Guide
+
+### **Cluster Matching Visualization**
+To visualize matched PZWAV-AMICO cluster pairs:
+
+1. **Select BOTH Algorithm**: Set the algorithm dropdown to "BOTH"
+2. **Enable Matching**: The "Show matched clusters (CAT-CL)" switch becomes enabled automatically
+3. **Toggle On**: Activate the switch to see green ovals connecting matched pairs
+4. **Visual Indicators**:
+   - 🟦 **Square markers**: PZWAV detected clusters
+   - 🔷 **Diamond markers**: AMICO detected clusters  
+   - 🟢 **Green ovals**: Visual connections between matched pairs
+5. **Filter & Zoom**: Use SNR/redshift filters and zoom - matching ovals update in real-time
+
+**Note**: The matching switch is automatically disabled when using PZWAV or AMICO individually.
+
+### **HEALPix Mask Overlay**
+To visualize the effective survey coverage:
+
+1. **Zoom In**: Zoom to a region smaller than 2° × 2° (button becomes enabled)
+2. **Click "Render HEALPix Mask Overlay"**: Loads footprint data for visible tiles
+3. **Adjust Opacity**: Use the opacity slider to control mask transparency (0.0-1.0)
+4. **Interpret Colors**: 
+   - **Yellow/Green**: High coverage (weight ≥ 0.95)
+   - **Blue/Purple**: Lower coverage (weight 0.80-0.95)
+5. **Independent Control**: Mask overlay is independent of mosaic images
+
+**Performance**: Limited to 5 tiles per zoom with 30-second timeout for responsiveness.
+
+### **Mosaic Image Background**
+To add astronomical background images:
+
+1. **Enable Mosaic**: Activate the "Enable MER-MOSAIC loading" switch
+2. **Zoom In**: Zoom to a region smaller than 2° × 2° 
+3. **Click "Render MER-MOSAIC images"**: Loads background images for visible tiles
+4. **Adjust Opacity**: Use the mosaic opacity slider (0.0-1.0)
+5. **Multiple Layers**: Mosaics and masks can be displayed simultaneously
+
+### **Layer Management**
+The application maintains proper layering automatically:
+
+```
+Bottom → Top Layer Order:
+1. Tile Polygons (CORE/LEV1 boundaries)
+2. Mosaic Images (background astronomy)
+3. HEALPix Mask Overlay (coverage footprint)
+4. CATRED Data Points (high-res catalog)
+5. Cluster Markers & Matching Ovals (detections)
+```
+
+**Smart Preservation**: All overlay layers are retained when:
+- Switching algorithms (PZWAV ↔ AMICO ↔ BOTH)
+- Applying SNR/redshift filters
+- Rendering/clearing CATRED data
+- Zooming or panning the view
+
 ## Remote Access & SSH Tunneling
 
 ### Automatic SSH Tunnel Detection
@@ -354,7 +419,7 @@ The application follows a sophisticated modular architecture enabling clean sepa
 ClusterVisualizationApp
 ├── DataLoader           # 📊 FITS/HDF5 data processing with caching
 ├── CATREDHandler       # 🗺️  HEALPix masked catalog integration  
-├── MOSAICHandler       # 🖼️  Background image overlays with opacity control
+├── MOSAICHandler       # 🖼️  Background image overlays and HEALPix mask visualization
 ├── TraceCreator        # 📈 Plotly trace generation and optimization
 └── FigureManager       # 🎨 Layout composition and client-side callbacks
 ```
@@ -374,23 +439,27 @@ UI_CONFIG = {
     'ASPECT_RATIO': 'free',
     'DEFAULT_SNR_THRESHOLD': 4.0,
     'CATRED_COVERAGE_THRESHOLD': 0.05,
-    'TRACE_LAYER_ORDER': ['polygons', 'mosaics', 'catred', 'clusters']
+    'TRACE_LAYER_ORDER': ['polygons', 'mosaics', 'mask_overlays', 'catred', 'clusters']
 }
 ```
 
 ### **Performance Optimizations**
 - **Client-side Filtering**: Real-time SNR/redshift updates without server round-trips
-- **Lazy Loading**: CATRED and MOSAIC data loaded on-demand with progress indicators
-- **Optimized Trace Layering**: Strategic rendering order (polygons → mosaics → CATRED → clusters)
+- **Lazy Loading**: CATRED, MOSAIC, and HEALPix mask data loaded on-demand with progress indicators
+- **Optimized Trace Layering**: Strategic rendering order (polygons → mosaics → mask overlays → CATRED → clusters)
 - **Memory Management**: Efficient HEALPix processing with masked arrays (NSIDE=16384)
 - **Smart Caching**: Intelligent data caching for algorithm switching and view changes
+- **Trace Preservation**: Mosaic and mask overlay traces retained across CATRED/filter updates
 
 ### **Advanced Features**
 - **SSH Tunnel Monitoring**: Automatic connection detection with real-time guidance
 - **Dynamic UI Controls**: CATRED controls auto-hide/show based on switch state
+- **Cluster Matching Visualization**: Oval shapes connecting matched PZWAV-AMICO cluster pairs (BOTH mode)
+- **HEALPix Mask Overlay**: Effective coverage footprint visualization with configurable opacity
 - **PHZ PDF Integration**: Interactive photometric redshift probability plots
 - **Responsive Layout**: Bootstrap-styled UI with highlighted section organization
-- **Multi-algorithm Support**: Seamless PZWAV ↔ AMICO switching with data preservation
+- **Multi-algorithm Support**: Seamless PZWAV ↔ AMICO ↔ BOTH switching with data preservation
+- **Trace Management**: Intelligent preservation of mosaic and mask overlay layers across updates
 
 ## 🛠️ Development Environment
 
@@ -414,9 +483,17 @@ cluster_visualization/src/
 │   ├── main_plot.py       #     Primary plot generation
 │   ├── ui_callbacks.py    #     UI control management  
 │   ├── catred_callbacks.py#     CATRED data handling
+│   ├── mosaic_callback.py #     Mosaic & HEALPix mask overlay
 │   └── phz_callbacks.py   #     PHZ PDF visualization
 ├── components/            # 🧩 Reusable UI components
 │   └── layout.py         #     Main layout with highlighted sections
+├── data/                 # 📊 Data handlers
+│   ├── loader.py        #     FITS/HDF5 data loading
+│   ├── catred_handler.py#     CATRED catalog processing
+│   └── mermosaic.py     #     Mosaic & mask visualization
+├── visualization/        # 📈 Plotting components
+│   ├── traces.py        #     Trace creation (clusters, ovals, overlays)
+│   └── figures.py       #     Figure layout management
 └── utils/                # 🔧 Core utilities
     ├── myutils.py        #     Data processing utilities
     └── colordefinitions.py#     Color scheme management
@@ -448,9 +525,11 @@ cluster_visualization/src/
 
 ### **Interactive Data Exploration**
 - **Smart Filtering**: Client-side SNR and redshift filtering without server delays
-- **Dynamic Layering**: Optimized trace rendering (polygons → mosaics → CATRED → clusters)
+- **Dynamic Layering**: Optimized trace rendering (polygons → mosaics → mask overlays → CATRED → clusters)
 - **Spatial Navigation**: Advanced zoom/pan with coordinate system preservation
 - **Hover Analytics**: Detailed cluster properties, tile information, and metadata
+- **Cluster Matching**: Visual indication of PZWAV-AMICO cross-matched clusters with connecting ovals
+- **Coverage Visualization**: HEALPix footprint overlays showing effective survey coverage
 
 ### **Remote Collaboration Features**
 - **SSH Tunnel Auto-Setup**: Intelligent connection monitoring with real-time guidance
@@ -462,15 +541,18 @@ cluster_visualization/src/
 - **Aspect Ratio Management**: Equal vs free aspect ratio with proper coordinate scaling
 - **Polygon Fill Toggle**: Dynamic CORE region visibility control
 - **Mosaic Image Overlays**: Background astronomical images with opacity control
+- **HEALPix Mask Overlays**: Effective coverage footprint with independent opacity settings
 - **MER Tile Visualization**: 1,935 tile polygons with unique color coding
+- **Cluster Matching Toggle**: Enable/disable matched cluster pair visualization (BOTH mode only)
 
 ## 🚀 Performance & Scalability
 
 ### **Optimization Features**
 - **Client-side Processing**: Real-time filtering without server round-trips
-- **Lazy Loading Architecture**: On-demand data loading for CATRED and MOSAIC components
+- **Lazy Loading Architecture**: On-demand data loading for CATRED, MOSAIC, and HEALPix mask components
 - **Memory Efficiency**: Smart caching system for algorithm switching
-- **Trace Management**: Optimized layer ordering for smooth rendering
+- **Trace Management**: Optimized layer ordering and intelligent trace preservation across updates
+- **Independent Overlays**: Separate control of mosaic images and HEALPix mask layers
 
 ### **Large Dataset Handling**
 - **Sparse HEALPix Support**: Efficient processing of NSIDE=16384 astronomical data
@@ -530,6 +612,38 @@ export PYTHONPATH="${PYTHONPATH}:/path/to/cluster_visualization"
 - **Network Latency**: Use local SSH tunnel, avoid direct server access
 ## 💼 Enterprise Benefits & Comparison
 
+### **New Visualization Capabilities**
+
+#### **🔗 Cluster Matching Visualization (BOTH Mode)**
+When using the "BOTH" algorithm mode, the application can display matched PZWAV-AMICO cluster pairs:
+- **Visual Matching**: Semi-transparent green ovals connect each PZWAV cluster (square marker) with its matched AMICO cluster (diamond marker)
+- **Smart Activation**: The matching clusters toggle is automatically enabled only when algorithm is set to "BOTH"
+- **Cross-Identification**: Uses `CROSS_ID_CLUSTER` field to link detections between algorithms
+- **Interactive Overlay**: Ovals are rendered with proper layering and can be toggled on/off without losing mosaic or mask data
+
+#### **🗺️ HEALPix Mask Overlay**
+Visualize the effective survey coverage using HEALPix footprint data:
+- **Coverage Visualization**: Display HEALPix pixels (NSIDE=16384) showing effective coverage weight
+- **Independent Control**: Separate button and opacity slider for mask overlays (independent of mosaic images)
+- **Color-Coded Weights**: Viridis colormap showing coverage quality (0.8-1.0 weight range)
+- **Zoom-Dependent Loading**: Automatically loads mask data for visible tiles when zoomed in
+- **Performance Optimized**: Limits to 5 tiles per zoom with 30-second timeout for responsiveness
+- **Trace Preservation**: Mask overlays are retained when switching algorithms or updating CATRED data
+
+#### **🖼️ Multi-Layer Overlay System**
+The application now supports independent control of multiple overlay layers:
+1. **Base Layer**: Tile polygons (CORE/LEV1 regions)
+2. **Mosaic Layer**: Background astronomical images with opacity control
+3. **Mask Layer**: HEALPix effective coverage footprint with separate opacity
+4. **CATRED Layer**: High-resolution catalog data points
+5. **Cluster Layer**: Detection markers with matching ovals (BOTH mode)
+
+**Layer Management**:
+- Each layer can be independently toggled on/off
+- Opacity controls for mosaic and mask layers
+- Intelligent trace preservation across data updates
+- Optimized rendering order for proper visual stacking
+
 ### **Advantages over Traditional Jupyter Notebooks**
 1. **🔒 Production Reliability**: No widget display issues in VS Code or remote environments
 2. **⚡ Enhanced Performance**: Optimized for web browsers with client-side processing
@@ -537,12 +651,15 @@ export PYTHONPATH="${PYTHONPATH}:/path/to/cluster_visualization"
 4. **📱 Responsive Design**: Adaptive interface works across devices and screen sizes
 5. **📦 Self-contained Deployment**: Standalone HTML exports work without server dependencies
 6. **🎯 Superior Interactivity**: Real-time zoom, pan, and filtering operations
-7. **🔄 Algorithm Comparison**: Seamless switching between PZWAV and AMICO with preserved settings
-8. **🚀 Production Ready**: Scalable web service deployment with monitoring capabilities
-9. **🔐 Secure Remote Access**: Built-in SSH tunnel monitoring and connection validation
-10. **📊 Advanced Analytics**: CATRED masked data integration with interactive PHZ visualization
-11. **🔍 Intelligent Monitoring**: Automatic detection and resolution of connectivity issues
-12. **📋 Professional UI**: Bootstrap-styled interface with highlighted sections and guided workflows
+7. **🔄 Algorithm Comparison**: Seamless switching between PZWAV, AMICO, and BOTH with preserved settings
+8. **🔗 Visual Cross-Matching**: Geometric overlay showing matched cluster pairs across algorithms
+9. **🗺️ Multi-Layer Visualization**: Independent control of mosaics, masks, CATRED, and clusters
+10. **🚀 Production Ready**: Scalable web service deployment with monitoring capabilities
+11. **🔐 Secure Remote Access**: Built-in SSH tunnel monitoring and connection validation
+12. **📊 Advanced Analytics**: CATRED masked data integration with interactive PHZ visualization
+13. **🔍 Intelligent Monitoring**: Automatic detection and resolution of connectivity issues
+14. **📋 Professional UI**: Bootstrap-styled interface with highlighted sections and guided workflows
+15. **💾 State Preservation**: Smart trace management retains overlays across all data operations
 
 ### **Professional Development Features**
 - **Modular Architecture**: Clean separation of concerns with maintainable codebase
@@ -565,10 +682,17 @@ export PYTHONPATH="${PYTHONPATH}:/path/to/cluster_visualization"
 - ✅ **Dynamic UI Controls**: CATRED section auto-hide/show based on switch state
 - ✅ **UI Layout Refactoring**: Professional highlighting with modular section organization
 
+### **November 2025: Mosaic & Matching Enhancements**
+- ✅ **HEALPix Mask Overlay**: Effective coverage footprint visualization with independent controls
+- ✅ **Cluster Matching Visualization**: Oval shapes connecting matched PZWAV-AMICO pairs (BOTH mode)
+- ✅ **Algorithm-Based Toggle Control**: Matching clusters switch enabled only in BOTH mode
+- ✅ **Trace Preservation System**: Intelligent retention of mosaic and mask overlay layers
+- ✅ **Optimized Layer Management**: Refined rendering order (polygons → mosaics → masks → CATRED → clusters)
+
 ### **Current State: Enterprise-Grade Platform**
-- ✅ **Fallback Mechanism Removal**: Clean codebase without redundant fallback options
-- ✅ **Individual Button Callbacks**: Robust UI control system with proper text updates
-- ✅ **Optimized Layer Ordering**: Strategic trace positioning for optimal visualization
+- ✅ **Multi-Layer Visualization**: Independent control of mosaics, masks, CATRED, and cluster overlays
+- ✅ **Advanced Matching Analysis**: Visual cluster cross-matching with geometric overlays
+- ✅ **Robust State Management**: Preserved traces and settings across all data operations
 - ✅ **Professional Documentation**: Comprehensive README reflecting sophisticated architecture
 
 ## 📊 Technical Specifications & Data Insights

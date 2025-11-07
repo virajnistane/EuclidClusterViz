@@ -662,7 +662,7 @@ class AppLayout:
                                 "always_visible": False,
                                 "style": {"fontSize": "12px"}
                             },
-                            disabled=True,
+                            disabled=False,
                             className="custom-slider"
                         )
                     ], style={
