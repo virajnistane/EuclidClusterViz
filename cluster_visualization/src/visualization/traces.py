@@ -41,6 +41,7 @@ class TraceCreator:
                      catred_box_data: Optional[Dict] = None,
                      existing_catred_traces: Optional[List] = None, 
                      existing_mosaic_traces: Optional[List] = None,
+                     existing_mask_overlay_traces: Optional[List] = None,
                      snr_threshold_lower: Optional[float] = None, snr_threshold_upper: Optional[float] = None, 
                      z_threshold_lower: Optional[float] = None, z_threshold_upper: Optional[float] = None,
                      threshold: float = 0.8, maglim: Optional[float] = None, show_merged_clusters: bool = True, matching_clusters: bool = False) -> List:
@@ -115,9 +116,14 @@ class TraceCreator:
         if mosaic_traces:
             print(f"Debug: Preserving {len(mosaic_traces)} existing mosaic traces in layer order")
         
+        # Prepare mask overlay traces (preserve existing ones)
+        mask_overlay_traces = existing_mask_overlay_traces or []
+        if mask_overlay_traces:
+            print(f"Debug: Preserving {len(mask_overlay_traces)} existing mask overlay traces in layer order")
+
         # Combine in proper layer order: polygons (bottom) → mosaics → CATRED → clusters (top)
         # This ensures cluster traces are always on top of mosaic and CATRED traces
-        return traces + mosaic_traces + catred_traces + cluster_traces
+        return traces + mosaic_traces + mask_overlay_traces + catred_traces + cluster_traces
 
     def _get_catred_data_points(self, manual_catred_data: Optional[Dict], existing_catred_traces: Optional[List], catred_box_data: Optional[Dict]) -> Optional[List]:
         """Get all CATRED data points for proximity-based enhancement."""

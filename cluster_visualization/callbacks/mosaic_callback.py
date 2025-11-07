@@ -216,11 +216,11 @@ class MOSAICCallbacks:
             [Input('healpix-mask-button', 'n_clicks')],
             [State('cluster-plot', 'figure'),
              State('cluster-plot', 'relayoutData'),
-             State('mosaic-enable-switch', 'value'),
+             State('mask-opacity-slider', 'value'),
              State('algorithm-dropdown', 'value')],
             prevent_initial_call=True
         )
-        def render_mask_overlay(n_clicks, current_figure, relayout_data, mosaic_enabled, algorithm):
+        def render_mask_overlay(n_clicks, current_figure, relayout_data, mask_opacity, algorithm):
             """Render mosaic images when button is clicked"""
             try:
                 print(f"🔍 Mask overlay callback triggered! n_clicks={n_clicks}")
@@ -244,7 +244,7 @@ class MOSAICCallbacks:
                         mask_footprint_traces = self.mosaic_handler.load_mask_overlay_traces_in_zoom(
                             data, 
                             relayout_data, 
-                            opacity=0.4, 
+                            opacity=mask_opacity, 
                             colorscale='viridis'
                             )
                         print(f"   -> Mask footprint traces result: {len(mask_footprint_traces) if mask_footprint_traces else 0} traces")

@@ -520,6 +520,7 @@ class ClusterModalCallbacks:
                                 # Separate traces by type to maintain proper layering order
                                 polygon_traces = []
                                 mosaic_traces = []
+                                mask_overlay_traces = []
                                 catred_traces = []
                                 cluster_traces = []
                                 other_traces = []
@@ -530,6 +531,8 @@ class ClusterModalCallbacks:
                                         polygon_traces.append(trace)
                                     elif 'Mosaic' in trace_name:
                                         mosaic_traces.append(trace)
+                                    elif 'Mask overlay' in trace_name:
+                                        mask_overlay_traces.append(trace)
                                     elif 'CATRED' in trace_name:
                                         catred_traces.append(trace)
                                     elif any(keyword in trace_name for keyword in ['Merged Data', 'Tile', 'clusters']):
@@ -538,11 +541,14 @@ class ClusterModalCallbacks:
                                         other_traces.append(trace)
                                 
                                 # Layer order: polygons (bottom) → mosaic → CATRED → other → cluster traces (top)
-                                new_data = polygon_traces + mosaic_traces + [mosaic_cutout_trace] + catred_traces + other_traces + cluster_traces
+                                new_data = polygon_traces + mosaic_traces + [mosaic_cutout_trace] + mask_overlay_traces + catred_traces + other_traces + cluster_traces
                                 current_figure['data'] = new_data
                                 
                                 print(f"✓ Added mosaic cutout trace as 2nd layer from bottom")
-                                print(f"   -> Layer order: {len(polygon_traces)} polygons, {len(mosaic_traces)} mosaics, 1 mosaic cutout, {len(catred_traces)} CATRED, {len(other_traces)} other, {len(cluster_traces)} clusters (top)")
+                                print(f"   -> Layer order: {len(polygon_traces)} polygons, "
+                                      f"{len(mosaic_traces)} mosaics, 1 mosaic cutout, "
+                                      f"{len(mask_overlay_traces)} Mask overlay, {len(catred_traces)} CATRED, "
+                                      f"{len(other_traces)} other, {len(cluster_traces)} clusters (top)")
                             else:
                                 print("⚠️  No current figure data to update")
                         else:
@@ -624,6 +630,7 @@ class ClusterModalCallbacks:
                 # Extract existing CATRED traces from current figure to preserve them
                 existing_catred_traces = self._extract_existing_catred_traces(current_figure)
                 existing_mosaic_traces = self._extract_existing_mosaic_traces(current_figure)
+                existing_mask_overlay_traces = self._extract_existing_mask_overlay_traces(current_figure)
 
                 # Load CATRED Box data
                 box_params = self.catred_handler._extract_box_data_from_cluster_click(
@@ -650,6 +657,7 @@ class ClusterModalCallbacks:
                         catred_box_data=catred_box_data, 
                         existing_catred_traces=existing_catred_traces,
                         existing_mosaic_traces=existing_mosaic_traces,
+                        existing_mask_overlay_traces=existing_mask_overlay_traces,
                         snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, 
                         threshold=catred_mask_threshold, show_merged_clusters=show_merged_clusters
                         )
@@ -761,6 +769,47 @@ class ClusterModalCallbacks:
                     existing_mosaic_traces.append(existing_trace)
                     print(f"Debug: Preserved existing mosaic trace: {trace['name']} (type: {trace_type})")
         return existing_mosaic_traces
+    
+    def _extract_existing_mask_overlay_traces(self, current_figure):
+        """Extract existing mask overlay traces from current figure"""
+        existing_mask_overlay_traces = []
+        if current_figure and 'data' in current_figure:
+            for trace in current_figure['data']:
+                if (isinstance(trace, dict) and 
+                    'name' in trace and 
+                    trace['name'] and 
+                    'Mask overlay' in trace['name']):
+                    # Preserve the original trace type (Image, Heatmap, etc.)
+                    trace_type = trace.get('type', 'image')
+                    
+                    if trace_type == 'image':
+                        existing_trace = go.Image(
+                            source=trace.get('source'),
+                            x0=trace.get('x0'),
+                            y0=trace.get('y0'),
+                            dx=trace.get('dx'),
+                            dy=trace.get('dy'),
+                            name=trace.get('name', 'Mosaic Image'),
+                            opacity=trace.get('opacity', 1.0),
+                            layer=trace.get('layer', 'below')
+                        )
+                    elif trace_type == 'heatmap':
+                        existing_trace = go.Heatmap(
+                            z=trace.get('z'),
+                            x=trace.get('x'),
+                            y=trace.get('y'),
+                            name=trace.get('name', 'Mosaic Image'),
+                            opacity=trace.get('opacity', 1.0),
+                            colorscale=trace.get('colorscale', 'gray'),
+                            showscale=trace.get('showscale', False)
+                        )
+                    else:
+                        # Keep original trace as-is for unknown types
+                        existing_trace = trace
+
+                    existing_mask_overlay_traces.append(existing_trace)
+                    print(f"Debug: Preserved existing mask overlay trace: {trace['name']} (type: {trace_type})")
+        return existing_mask_overlay_traces
     
     def _create_fallback_figure(self, traces, algorithm, free_aspect_ratio):
         """Fallback figure creation method"""

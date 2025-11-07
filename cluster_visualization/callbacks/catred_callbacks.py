@@ -119,15 +119,20 @@ class CATREDCallbacks:
                 # 🆕 EXTRACT EXISTING MOSAIC TRACES TO PRESERVE THEM
                 existing_mosaic_traces = self._extract_existing_mosaic_traces(current_figure)
                 
+                # 🆕 EXTRACT EXISTING MASK OVERLAY TRACES TO PRESERVE THEM
+                existing_mask_overlay_traces = self._extract_existing_mask_overlay_traces(current_figure)
+
                 print(f"Debug: Found {len(existing_catred_traces)} existing CATRED traces to preserve")
                 print(f"Debug: Found {len(existing_mosaic_traces)} existing mosaic traces to preserve")
-                
+                print(f"Debug: Found {len(existing_mask_overlay_traces)} existing mask overlay traces to preserve")
+
                 # Create traces with the manually loaded CATRED data and existing traces
                 traces = self.create_traces(
                     data, show_polygons, show_mer_tiles, relayout_data, catred_masked,
                     manual_catred_data=catred_scatter_data,
                     existing_catred_traces=existing_catred_traces,
                     existing_mosaic_traces=existing_mosaic_traces,  # 🆕 PASS MOSAIC TRACES
+                    existing_mask_overlay_traces=existing_mask_overlay_traces,  # 🆕 PASS MASK OVERLAY TRACES
                     snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper,
                     threshold=threshold, show_merged_clusters=show_merged_clusters, matching_clusters=matching_clusters
                 )
@@ -221,13 +226,17 @@ class CATREDCallbacks:
                 # 🆕 EXTRACT EXISTING MOSAIC TRACES TO PRESERVE THEM
                 existing_mosaic_traces = self._extract_existing_mosaic_traces(current_figure)
                 print(f"Debug: Clear CATRED - preserving {len(existing_mosaic_traces)} existing mosaic traces")
-                
+
+                existing_mask_overlay_traces = self._extract_existing_mask_overlay_traces(current_figure)
+                print(f"Debug: Clear CATRED - preserving {len(existing_mask_overlay_traces)} existing mask overlay traces")
+
                 # Load data for selected algorithm
                 data = self.load_data(algorithm)
                 
                 # Create traces without any CATRED data, but preserve mosaic traces
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, catred_masked='none',
                                           existing_mosaic_traces=existing_mosaic_traces,  # 🆕 PRESERVE MOSAIC TRACES
+                                          existing_mask_overlay_traces=existing_mask_overlay_traces,  # 🆕 PRESERVE MASK OVERLAY TRACES
                                           snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper,
                                           z_threshold_lower=z_lower, z_threshold_upper=z_upper,  # 🔧 ADD REDSHIFT PARAMS
                                           show_merged_clusters=show_merged_clusters, matching_clusters=matching_clusters)
@@ -280,15 +289,15 @@ class CATREDCallbacks:
             return self._load_catred_scatter_data_fallback(data, relayout_data)
     
     def create_traces(self, data, show_polygons, show_mer_tiles, relayout_data, catred_masked, 
-                     existing_catred_traces=None, existing_mosaic_traces=None, manual_catred_data=None, 
-                     snr_threshold_lower=None, snr_threshold_upper=None, 
+                     existing_catred_traces=None, existing_mosaic_traces=None, existing_mask_overlay_traces=None,
+                     manual_catred_data=None, snr_threshold_lower=None, snr_threshold_upper=None, 
                      z_threshold_lower=None, z_threshold_upper=None, threshold=0.8, show_merged_clusters=True, matching_clusters=False):
         """Create traces using modular or fallback method"""
         if self.trace_creator:
             return self.trace_creator.create_traces(
                 data, show_polygons, show_mer_tiles, relayout_data, catred_masked,
-                existing_catred_traces=existing_catred_traces, existing_mosaic_traces=existing_mosaic_traces, manual_catred_data=manual_catred_data,
-                snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, 
+                existing_catred_traces=existing_catred_traces, existing_mosaic_traces=existing_mosaic_traces, existing_mask_overlay_traces=existing_mask_overlay_traces,
+                manual_catred_data=manual_catred_data, snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, 
                 z_threshold_lower=z_threshold_lower, z_threshold_upper=z_threshold_upper, threshold=threshold, show_merged_clusters=show_merged_clusters,
                 matching_clusters=matching_clusters
             )
@@ -297,6 +306,7 @@ class CATREDCallbacks:
             return self._create_traces_fallback(data, show_polygons, show_mer_tiles, relayout_data, catred_masked,
                                               existing_catred_traces=existing_catred_traces, 
                                               existing_mosaic_traces=existing_mosaic_traces,  # 🆕 ADD MOSAIC TRACES
+                                              existing_mask_overlay_traces=existing_mask_overlay_traces,
                                               manual_catred_data=manual_catred_data,
                                               snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, 
                                               z_threshold_lower=z_threshold_lower, z_threshold_upper=z_threshold_upper, threshold=threshold, 
@@ -384,7 +394,48 @@ class CATREDCallbacks:
                     existing_mosaic_traces.append(existing_trace)
                     print(f"Debug: Preserved existing mosaic trace: {trace['name']} (type: {trace_type})")
         return existing_mosaic_traces
-    
+
+    def _extract_existing_mask_overlay_traces(self, current_figure):
+        """Extract existing mask overlay traces from current figure"""
+        existing_mask_overlay_traces = []
+        if current_figure and 'data' in current_figure:
+            for trace in current_figure['data']:
+                if (isinstance(trace, dict) and 
+                    'name' in trace and 
+                    trace['name'] and 
+                    'Mask overlay' in trace['name']):
+                    # Preserve the original trace type (Image, Heatmap, etc.)
+                    trace_type = trace.get('type', 'image')
+                    
+                    if trace_type == 'image':
+                        existing_trace = go.Image(
+                            source=trace.get('source'),
+                            x0=trace.get('x0'),
+                            y0=trace.get('y0'),
+                            dx=trace.get('dx'),
+                            dy=trace.get('dy'),
+                            name=trace.get('name', 'Mosaic Image'),
+                            opacity=trace.get('opacity', 1.0),
+                            layer=trace.get('layer', 'below')
+                        )
+                    elif trace_type == 'heatmap':
+                        existing_trace = go.Heatmap(
+                            z=trace.get('z'),
+                            x=trace.get('x'),
+                            y=trace.get('y'),
+                            name=trace.get('name', 'Mosaic Image'),
+                            opacity=trace.get('opacity', 1.0),
+                            colorscale=trace.get('colorscale', 'gray'),
+                            showscale=trace.get('showscale', False)
+                        )
+                    else:
+                        # Keep original trace as-is for unknown types
+                        existing_trace = trace
+
+                    existing_mask_overlay_traces.append(existing_trace)
+                    print(f"Debug: Preserved existing mask overlay trace: {trace['name']} (type: {trace_type})")
+        return existing_mask_overlay_traces
+
     def _create_empty_phz_plot(self, message="Click on a CATRED data point to view its PHZ_PDF"):
         """Create empty PHZ_PDF plot with message"""
         empty_phz_fig = go.Figure()
@@ -425,8 +476,8 @@ class CATREDCallbacks:
         return {'ra': [], 'dec': [], 'phz_pdf': [], 'phz_mode_1': []}
     
     def _create_traces_fallback(self, data, show_polygons, show_mer_tiles, relayout_data, catred_masked,
-                               existing_catred_traces=None, existing_mosaic_traces=None, manual_catred_data=None, 
-                               snr_threshold_lower=None, snr_threshold_upper=None, 
+                               existing_catred_traces=None, existing_mosaic_traces=None, existing_mask_overlay_traces=None,
+                               manual_catred_data=None, snr_threshold_lower=None, snr_threshold_upper=None, 
                                z_threshold_lower=None, z_threshold_upper=None, threshold=0.8, show_merged_clusters=True):
         """Fallback trace creation method"""
         # This would contain the original inline trace creation logic

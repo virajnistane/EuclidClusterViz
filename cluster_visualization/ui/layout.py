@@ -704,6 +704,46 @@ class AppLayout:
             dbc.Card([
                 dbc.CardHeader([
                     html.Div([
+                        html.I(className="fas fa-adjust me-2"),
+                        html.H6("Mask Opacity", className="mb-0")
+                    ], className="d-flex align-items-center")
+                ], className="border-0", style={
+                    'background': 'linear-gradient(45deg, #74b9ff, #0984e3)',
+                    'color': 'white',
+                    'border-radius': '8px 8px 0 0'
+                }),
+                dbc.CardBody([
+                    html.Div([
+                        dcc.Slider(
+                            id="mask-opacity-slider",
+                            min=0.1,
+                            max=1.0,
+                            step=0.1,
+                            value=0.4,
+                            marks={
+                                0.1: {"label": '10%', "style": {"color": "#666", "fontSize": "12px"}},
+                                0.5: {"label": '50%', "style": {"color": "#0984e3", "font-weight": "bold", "fontSize": "13px"}},
+                                1.0: {"label": '100%', "style": {"color": "#666", "fontSize": "12px"}}
+                            },
+                            tooltip={
+                                "placement": "bottom", 
+                                "always_visible": False,
+                                "style": {"fontSize": "12px"}
+                            },
+                            disabled=False,
+                            className="custom-slider"
+                        )
+                    ], style={
+                        'padding': '5px 10px', 
+                        'margin': '0',
+                        'minHeight': '50px'
+                    })
+                ], className="p-2")
+            ], className="mb-3 border-0 shadow-sm", style={'border-radius': '12px'}),
+            
+            dbc.Card([
+                dbc.CardHeader([
+                    html.Div([
                         html.I(className="fas fa-layer-group me-2"),
                         html.H6("Healpix Mask Overlay", className="mb-0")
                     ], className="d-flex align-items-center")
