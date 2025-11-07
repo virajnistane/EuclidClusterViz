@@ -11,11 +11,13 @@ from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits
+from astropy.table import Table
 from astropy import wcs
 import plotly.graph_objs as go
 from typing import Dict, List, Any, Optional, Tuple
 from shapely.geometry import box
 from typing import Union
+import healpy as hp
 
 try:
     from cluster_visualization.src import config
@@ -24,6 +26,10 @@ except ImportError:
     from cluster_visualization.src.config import Config
     config = Config()
 
+try:
+    from cluster_visualization.src.data.loader import DataLoader
+except ImportError:
+    raise ImportError("DataLoader module not found in cluster_visualization.src.data.loader")
 
 class MOSAICHandler:
     """Handler for MER mosaic image data, similar to CATREDHandler."""
@@ -33,6 +39,9 @@ class MOSAICHandler:
         self.traces_cache = {}  # Change to dict for better caching by mertileid
         self.current_mosaic_data = None
         self.config = config if config else Config() 
+
+        self.effcovmask_fileinfo_df = self.config.get_effcovmask_fileinfo_csv()
+
 
         self.mosaic_header = None
         self.mosaic_data = None
@@ -715,6 +724,99 @@ class MOSAICHandler:
         
         return trace
 
+    def create_mask_overlay_trace(
+            self, mertileid: int, 
+            opacity: float = 0.6, colorscale: str = 'viridis'
+            ) -> Optional[go.Heatmap]:
+        """Create a Plotly heatmap trace for a mask overlay."""
+    
+        # Load mosaic data for this tile
+        mosaic_info = self.get_mosaic_fits_data_by_mertile(mertileid)
+        if not mosaic_info:
+            print(f"Warning: Could not load mosaic data for MER tile {mertileid}")
+            return None
+        mosaic_data = mosaic_info['data']
+        wcs_mosaic = mosaic_info['wcs']
+
+        # Get the full mosaic WCS and shape
+        print(f"Full mask overlay array shape: {mosaic_data.shape}")
+        print(f"Full mosaic WCS: {wcs_mosaic}")
+
+        # Get RA/Dec limits from the full mosaic
+        ny, nx = mosaic_data.shape
+        corners = wcs_mosaic.pixel_to_world([0, nx-1, nx-1, 0], [0, 0, ny-1, ny-1])
+        ra_min_mosaic, ra_max_mosaic = corners.ra.deg.min(), corners.ra.deg.max()
+        dec_min_mosaic, dec_max_mosaic = corners.dec.deg.min(), corners.dec.deg.max()
+
+        print(f"RA range: {ra_min_mosaic:.4f} to {ra_max_mosaic:.4f}")
+        print(f"Dec range: {dec_min_mosaic:.4f} to {dec_max_mosaic:.4f}")
+
+        # Load the effective coverage mask for this MER tile
+        hpmask_fits = self.effcovmask_fileinfo_df['fits_file'].loc[mertileid]
+        print(f"Loading effective coverage mask from: {hpmask_fits}")
+        footprint = Table.read(hpmask_fits)
+        footprint['ra'], footprint['dec'] = hp.pix2ang(nside=16384, 
+                                                       ipix=footprint['PIXEL'], 
+                                                       nest=True, 
+                                                       lonlat=True)
+
+        # Filter footprint pixels to the full MER tile region
+        _pix_mask = (
+            (footprint['WEIGHT'] > 0)
+            & (footprint['ra'] >= ra_min_mosaic - 0.01)
+            & (footprint['ra'] <= ra_max_mosaic + 0.01)
+            & (footprint['dec'] >= dec_min_mosaic - 0.01)
+            & (footprint['dec'] <= dec_max_mosaic + 0.01)
+        )
+
+        print(f"Total footprint pixels: {len(footprint)}")
+        print(f"Footprint pixels in full mosaic: {_pix_mask.sum()}")
+        if _pix_mask.sum() > 0:
+            print(f"Weight range: {footprint['WEIGHT'][_pix_mask].min():.3f} to {footprint['WEIGHT'][_pix_mask].max():.3f}")
+
+        # Create traces for HEALPix footprint polygons
+        footprint_traces = []
+        weight_min, weight_max = 0.8, 1.0
+
+        if _pix_mask.sum() > 0:
+            print(f"Creating {_pix_mask.sum()} HEALPix polygon traces...")
+            
+            for idx, (pix, weight) in enumerate(zip(footprint['PIXEL'][_pix_mask], footprint['WEIGHT'][_pix_mask])):
+                # Get pixel boundaries
+                rapix, decpix = self.get_healpix_boundaries(pix, nside=16384, nest=True, step=2)
+                rapix = np.append(rapix, rapix[0])  # Close the polygon
+                decpix = np.append(decpix, decpix[0])  # Close the polygon
+
+                ra, dec = wcs_mosaic.wcs_pix2world(rapix, decpix, 0)
+
+                # Normalize weight for colorscale
+                weight_norm = (weight - weight_min) / (weight_max - weight_min)
+                try:
+                    colormap = getattr(plt.cm, colorscale)
+                    color = colormap(weight_norm)  # RGBA
+                except AttributeError:
+                    print(f"Warning: Invalid colorscale '{colorscale}', defaulting to 'viridis'")
+                    colormap = plt.cm.viridis
+                    color = colormap(weight_norm)
+
+                footprint_traces.append(
+                    go.Scatter(
+                        x=list(ra),
+                        y=list(dec),
+                        mode='lines',
+                        fill='toself',
+                        fillcolor=f'rgba({int(color[0]*255)},{int(color[1]*255)},{int(color[2]*255)},{opacity})',
+                        line=dict(width=0.5, color='yellow'),
+                        name=f'Footprint pixel {pix}',
+                        showlegend=False,
+                        hovertext=f'HEALPix {pix}<br>Weight: {weight:.3f}',
+                        hoverinfo='text',
+                        customdata=[[weight]],
+                    )
+                )
+
+        return footprint_traces
+
     def create_mosaic_cutout_trace(
             self, data: Dict[str, Any], clickdata: Dict[str, Any], 
             opacity: float = 1, colorscale: str = 'viridis'
@@ -877,6 +979,71 @@ class MOSAICHandler:
         
         return traces
 
+    def load_mask_overlay_traces_in_zoom(
+            self,
+            data: Dict[str, Any],
+            relayout_data: Optional[Dict],
+            opacity: float = 0.6,
+            colorscale: str = 'viridis'
+        ) -> List[go.Scatter]:
+        """
+        Load mask overlay traces with strict performance limits and timing
+        """
+        start_time = time.time()
+        mask_traces = []
+        if not relayout_data:
+            print("Debug: No relayout data available for mask overlay loading")
+            return mask_traces
+
+        # Extract zoom ranges from relayout data
+        zoom_ranges = self._extract_zoom_ranges(relayout_data)
+        if not zoom_ranges:
+            print("Debug: Could not extract zoom ranges for mask overlay loading")
+            return mask_traces
+        
+        ra_min, ra_max, dec_min, dec_max = zoom_ranges
+        print(f"Debug: Loading mask overlays for zoom area: RA({ra_min:.3f}, {ra_max:.3f}), "
+              f"Dec({dec_min:.3f}, {dec_max:.3f})")
+        
+        # Find intersecting tiles
+        mertiles_to_load = self._find_intersecting_tiles(data, ra_min, ra_max, dec_min, dec_max)
+        if not mertiles_to_load:
+            print("Debug: No MER tiles with mosaics found in zoom area")
+            return mask_traces
+        
+        # PERFORMANCE LIMITS: Strict limits for interactive experience
+        max_masks = 5 # Maximum 5 mask overlays per zoom
+        max_processing_time = 30  # Maximum 30 seconds total processing time    
+        if len(mertiles_to_load) > max_masks:
+            print(f"Debug: Limiting to first {max_masks} mask overlays for performance")
+            mertiles_to_load = mertiles_to_load[:max_masks]
+        # Create traces for each mask overlay with timing checks
+        for i, mertileid in enumerate(mertiles_to_load):
+            # Check if we're running out of time
+            elapsed_time = time.time() - start_time
+            if elapsed_time > max_processing_time:
+                print(f"[TIMEOUT] Stopping mask overlay loading after {elapsed_time:.2f}s")
+                break
+            
+            print(f"[PROGRESS] Processing mask overlay {i+1}/{len(mertiles_to_load)}: tile {mertileid}")
+            
+            try:
+                trace_start = time.time()
+                footprint_traces = self.create_mask_overlay_trace(mertileid, opacity, colorscale)
+                trace_time = time.time() - trace_start
+                
+                if footprint_traces:
+                    mask_traces.extend(footprint_traces)
+                    print(f"[SUCCESS] Created mask overlay traces for MER tile {mertileid} in {trace_time:.2f}s")
+                else:
+                    print(f"[WARNING] No mask overlay traces created for MER tile {mertileid}")
+                    
+            except Exception as e:
+                print(f"[ERROR] Failed to create mask overlay traces for tile {mertileid}: {e}")
+        total_time = time.time() - start_time
+        print(f"[TIMING] Total mask overlay loading completed in {total_time:.2f}s")
+        return mask_traces
+
     def clear_traces_cache(self):
         """Clear the mosaic traces cache and free memory."""
         cache_size = len(self.traces_cache)
@@ -916,7 +1083,46 @@ class MOSAICHandler:
         
         return trace
 
-    
+    def get_healpix_boundaries(self, pixel_id, nside=16384, nest=True, step=4, mertileid=None, wcs_mosaic=None):
+        """
+        Get the boundaries of a HEALPix pixel in RA/Dec and convert to image coordinates.
+
+        Parameters:
+        -----------
+        pixel_id : int
+            HEALPix pixel index
+        nside : int
+            HEALPix NSIDE parameter
+        nest : bool
+            Whether to use nested ordering
+        step : int
+            Number of boundary points per edge (4 edges total)
+        
+        Returns:
+        --------
+        x_pix, y_pix : arrays
+            Pixel coordinates in the image
+        """
+        
+        if wcs_mosaic is None:
+            try:
+                # Load mosaic data for this tile
+                mosaic_info = self.get_mosaic_fits_data_by_mertile(mertileid)
+                if not mosaic_info:
+                    print(f"Warning: Could not load mosaic data for MER tile {mertileid}")
+                    return None, None
+                wcs_mosaic = mosaic_info['wcs']
+            except Exception as e:
+                print(f"Warning: Exception while loading mosaic WCS for MER tile {mertileid}: {e}")
+                return None, None
+        
+        ra, dec = hp.vec2ang(hp.boundaries(nside, pixel_id, step=step, nest=nest).T, lonlat=True)
+        
+        # Convert RA/Dec to pixel coordinates
+        x_pix, y_pix = wcs_mosaic.wcs_world2pix(ra, dec,0)
+        
+        return x_pix, y_pix
+        
 # Example usage and testing code (can be removed in production)
 if __name__ == "__main__":
     # Test the MOSAICHandler

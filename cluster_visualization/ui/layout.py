@@ -622,6 +622,7 @@ class AppLayout:
                             id="mosaic-enable-switch",
                             label="Enable mosaic images",
                             value=True,
+                            disabled=True,
                             className="ms-2"
                         )
                     ], className="d-flex align-items-center")
@@ -661,14 +662,15 @@ class AppLayout:
                                 "always_visible": False,
                                 "style": {"fontSize": "12px"}
                             },
+                            disabled=True,
                             className="custom-slider"
                         )
                     ], style={
-                        'padding': '10px 15px', 
-                        'margin': '5px 0',
-                        'minHeight': '60px'
+                        'padding': '5px 10px', 
+                        'margin': '0',
+                        'minHeight': '50px'
                     })
-                ])
+                ], className="p-2")
             ], className="mb-3 border-0 shadow-sm", style={'border-radius': '12px'}),
             
             # Load mosaic button
@@ -694,10 +696,39 @@ class AppLayout:
                         "Load mosaic images for visible MER tiles"
                     ], className="text-muted d-block text-center")
                 ], className="p-3")
-            ], className="border-0 shadow-sm", style={
+            ], className="mb-3 border-0 shadow-sm", style={
                 'background': 'linear-gradient(45deg, #e8f4f8, #ffffff)',
                 'border-radius': '12px'
+            }),
+
+            dbc.Card([
+                dbc.CardHeader([
+                    html.Div([
+                        html.I(className="fas fa-layer-group me-2"),
+                        html.H6("Healpix Mask Overlay", className="mb-0")
+                    ], className="d-flex align-items-center")
+                ], className="border-0", style={
+                    'background': 'linear-gradient(45deg, #74b9ff, #0984e3)',
+                    'color': 'white',
+                    'border-radius': '8px 8px 0 0'
+                }),
+                dbc.CardBody([
+                    html.Div([
+                        # html.I(className="fas fa-layer-group me-2 text-info"),
+                        dbc.Switch(
+                            id="healpix-mask-switch",
+                            label="Display Healpix Mask Overlay",
+                            value=False,
+                            disabled=True,
+                            className="ms-2"
+                        )
+                    ], className="d-flex align-items-center")
+                ])
+            ], className="border-0 shadow-sm", style={
+                # 'background': 'linear-gradient(45deg, #e8f4f8, #ffffff)',
+                'border-radius': '10px'
             })
+
         ])
     
     @staticmethod
