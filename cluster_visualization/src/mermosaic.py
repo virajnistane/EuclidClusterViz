@@ -755,8 +755,8 @@ class MOSAICHandler:
 
         # Load the effective coverage mask for this MER tile
         hpmask_fits = self.effcovmask_fileinfo_df['fits_file'].loc[mertileid]
-        print(f"Loading effective coverage mask from: {hpmask_fits}")
         footprint = Table.read(hpmask_fits, format='fits', hdu=1)
+        print(f"Loaded HEALPix footprint with {len(footprint)} pixels from {hpmask_fits}")
         footprint['ra'], footprint['dec'] = hp.pix2ang(nside=16384, 
                                                        ipix=footprint['PIXEL'], 
                                                        nest=True, 
@@ -771,7 +771,6 @@ class MOSAICHandler:
             & (footprint['dec'] <= dec_max_mosaic + 0.01)
         )
 
-        print(f"Total footprint pixels: {len(footprint)}")
         print(f"Footprint pixels in full mosaic: {_pix_mask.sum()}")
         if _pix_mask.sum() > 0:
             print(f"Weight range: {footprint['WEIGHT'][_pix_mask].min():.3f} to {footprint['WEIGHT'][_pix_mask].max():.3f}")

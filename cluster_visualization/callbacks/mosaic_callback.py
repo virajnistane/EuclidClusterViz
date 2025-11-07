@@ -173,11 +173,13 @@ class MOSAICCallbacks:
                                         other_traces.append(trace)
                                 
                                 # Layer order: polygons (bottom) → mosaic → CATRED → other → cluster traces (top)
-                                new_data = polygon_traces + mosaic_traces + catred_traces + other_traces + cluster_traces
+                                new_data = polygon_traces + mosaic_traces + mask_overlay_traces + catred_traces + other_traces + cluster_traces
                                 current_figure['data'] = new_data
                                 
                                 print(f"✓ Added {len(mosaic_traces)} mosaic image traces as 2nd layer from bottom")
-                                print(f"   -> Layer order: {len(polygon_traces)} polygons, {len(mosaic_traces)} mosaics, {len(catred_traces)} CATRED, {len(other_traces)} other, {len(cluster_traces)} clusters (top)")
+                                print(f"   -> Layer order: {len(polygon_traces)} polygons, {len(mosaic_traces)} mosaics, "
+                                      f"{len(mask_overlay_traces)} mask overlays, {len(catred_traces)} CATRED, "
+                                      f"{len(other_traces)} other, {len(cluster_traces)} clusters (top)")
                             else:
                                 print("⚠️  No current figure data to update")
                         else:
@@ -250,9 +252,9 @@ class MOSAICCallbacks:
                         if mask_footprint_traces and len(mask_footprint_traces) > 0:
                             # Add mosaic traces to current figure with proper layering
                             if current_figure and 'data' in current_figure:
-                                # Remove existing mosaic traces first
+                                # Remove only existing mask overlay traces (keep mosaic traces)
                                 existing_traces = [trace for trace in current_figure['data'] 
-                                                 if not (trace.get('name', '').startswith('Mosaic'))]
+                                                 if not (trace.get('name', '').startswith('Mask overlay'))]
                                 
                                 # Separate traces by type to maintain proper layering order
                                 polygon_traces = []
@@ -268,7 +270,7 @@ class MOSAICCallbacks:
                                         polygon_traces.append(trace)
                                     elif 'MER-Mosaic cutout' in trace_name:
                                         mosaic_cutout_traces.append(trace)
-                                    elif 'Mosaic' in trace_name and mosaic_enabled:
+                                    elif trace_name.startswith('Mosaic'):
                                         mosaic_traces.append(trace)
                                     elif 'CATRED' in trace_name:
                                         catred_traces.append(trace)
