@@ -178,6 +178,7 @@ print("✓ Visualization modules loaded successfully")
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from callbacks.main_plot import MainPlotCallbacks
 from callbacks.catred_callbacks import CATREDCallbacks
+from callbacks.mosaic_callback import MOSAICCallbacks
 from callbacks.ui_callbacks import UICallbacks
 from callbacks.phz_callbacks import PHZCallbacks
 from callbacks.cluster_modal_callbacks import ClusterModalCallbacks
@@ -359,7 +360,7 @@ class ClusterVisualizationApp:
             # Initialize callback handlers
             self.main_plot_callbacks = MainPlotCallbacks(
                 self.app, self.data_loader, self.catred_handler, 
-                self.trace_creator, self.figure_manager, self.mosaic_handler
+                self.trace_creator, self.figure_manager
             )
             
             self.catred_callbacks = CATREDCallbacks(
@@ -367,6 +368,11 @@ class ClusterVisualizationApp:
                 self.trace_creator, self.figure_manager
             )
             
+            self.mosaic_callbacks = MOSAICCallbacks(
+                self.app, self.data_loader, self.mosaic_handler, 
+                self.trace_creator, self.figure_manager
+            )
+
             self.ui_callbacks = UICallbacks(self.app)
             
             self.phz_callbacks = PHZCallbacks(self.app, self.catred_handler)

@@ -18,6 +18,7 @@ from typing import Dict, List, Any, Optional, Tuple
 from shapely.geometry import box
 from typing import Union
 import healpy as hp
+import pandas as pd
 
 try:
     from cluster_visualization.src import config
@@ -40,7 +41,8 @@ class MOSAICHandler:
         self.current_mosaic_data = None
         self.config = config if config else Config() 
 
-        self.effcovmask_fileinfo_df = self.config.get_effcovmask_fileinfo_csv()
+        effcovmask_fileinfo_path = self.config.get_effcovmask_fileinfo_csv()
+        self.effcovmask_fileinfo_df = pd.read_csv(effcovmask_fileinfo_path,  index_col='tileid')
 
 
         self.mosaic_header = None
@@ -740,7 +742,7 @@ class MOSAICHandler:
 
         # Get the full mosaic WCS and shape
         print(f"Full mask overlay array shape: {mosaic_data.shape}")
-        print(f"Full mosaic WCS: {wcs_mosaic}")
+        # print(f"Full mosaic WCS: {wcs_mosaic}")
 
         # Get RA/Dec limits from the full mosaic
         ny, nx = mosaic_data.shape
@@ -754,7 +756,7 @@ class MOSAICHandler:
         # Load the effective coverage mask for this MER tile
         hpmask_fits = self.effcovmask_fileinfo_df['fits_file'].loc[mertileid]
         print(f"Loading effective coverage mask from: {hpmask_fits}")
-        footprint = Table.read(hpmask_fits)
+        footprint = Table.read(hpmask_fits, format='fits', hdu=1)
         footprint['ra'], footprint['dec'] = hp.pix2ang(nside=16384, 
                                                        ipix=footprint['PIXEL'], 
                                                        nest=True, 
@@ -783,7 +785,10 @@ class MOSAICHandler:
             
             for idx, (pix, weight) in enumerate(zip(footprint['PIXEL'][_pix_mask], footprint['WEIGHT'][_pix_mask])):
                 # Get pixel boundaries
-                rapix, decpix = self.get_healpix_boundaries(pix, nside=16384, nest=True, step=2)
+                rapix, decpix = self.get_healpix_boundaries(pix, nside=16384, 
+                                                            nest=True, step=2, 
+                                                            mertileid=mertileid, 
+                                                            wcs_mosaic=wcs_mosaic)
                 rapix = np.append(rapix, rapix[0])  # Close the polygon
                 decpix = np.append(decpix, decpix[0])  # Close the polygon
 
@@ -807,7 +812,7 @@ class MOSAICHandler:
                         fill='toself',
                         fillcolor=f'rgba({int(color[0]*255)},{int(color[1]*255)},{int(color[2]*255)},{opacity})',
                         line=dict(width=0.5, color='yellow'),
-                        name=f'Footprint pixel {pix}',
+                        name=f'Mask overlay pixel {pix}',
                         showlegend=False,
                         hovertext=f'HEALPix {pix}<br>Weight: {weight:.3f}',
                         hoverinfo='text',

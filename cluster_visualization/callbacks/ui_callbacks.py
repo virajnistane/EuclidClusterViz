@@ -99,39 +99,6 @@ class UICallbacks:
             return disabled, disabled
 
         @self.app.callback(
-            [Output('mosaic-enable-switch', 'disabled'),
-             Output('healpix-mask-switch', 'disabled')],
-            [Input('render-button', 'n_clicks')],
-            prevent_initial_call=False
-        )
-        def enable_mosaic_and_mask_switches(n_clicks):
-            """Enable mosaic and healpix mask switches after initial render"""
-            n_clicks = n_clicks or 0
-            disabled = n_clicks == 0
-            return disabled, disabled
-        
-        @self.app.callback(
-            [Output('mosaic-opacity-slider', 'disabled'),
-             Output('mosaic-render-button', 'disabled')],
-            [Input('mosaic-enable-switch', 'value')],
-            prevent_initial_call=False
-        )
-        def toggle_mosaic_controls(mosaic_enabled):
-            """Enable/disable mosaic opacity slider and render button based on switch state"""
-            print(f"🔄 Mosaic switch callback: mosaic_enabled={mosaic_enabled}, controls_disabled={not mosaic_enabled}")
-            return not mosaic_enabled, not mosaic_enabled  # Controls are enabled when switch is True
-
-        @self.app.callback(
-            Output('mosaic-render-button', 'disabled'),
-            [Input('mosaic-enable-switch', 'value')],
-            prevent_initial_call=False
-        )
-        def toggle_mosaic_button(mosaic_enabled):
-            """Enable/disable mosaic render button based on switch state"""
-            print(f"🔄 Mosaic switch callback: mosaic_enabled={mosaic_enabled}, button_disabled={not mosaic_enabled}")
-            return not mosaic_enabled  # Button is enabled when switch is True
-
-        @self.app.callback(
             Output('matching-clusters-switch', 'disabled'),
             [Input('algorithm-dropdown', 'value')],
             prevent_initial_call=False

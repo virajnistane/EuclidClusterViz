@@ -622,7 +622,7 @@ class AppLayout:
                             id="mosaic-enable-switch",
                             label="Enable mosaic images",
                             value=True,
-                            disabled=True,
+                            disabled=False,
                             className="ms-2"
                         )
                     ], className="d-flex align-items-center")
@@ -714,14 +714,21 @@ class AppLayout:
                 }),
                 dbc.CardBody([
                     html.Div([
-                        # html.I(className="fas fa-layer-group me-2 text-info"),
-                        dbc.Switch(
-                            id="healpix-mask-switch",
-                            label="Display Healpix Mask Overlay",
-                            value=False,
+                        dbc.Button([
+                            html.I(className="fas fa-download me-2"),
+                            "🖼️ Healpix Mask in Zoom"
+                        ],
+                            id="healpix-mask-button",
+                            color="info",
+                            size="sm",
+                            className="w-100 mb-2 shadow-sm btn-enhanced",
+                            n_clicks=0,
                             disabled=True,
-                            className="ms-2"
-                        )
+                            style={
+                                'border-radius': '8px',
+                                'font-weight': '600'
+                            }
+                        ),
                     ], className="d-flex align-items-center")
                 ])
             ], className="border-0 shadow-sm", style={
