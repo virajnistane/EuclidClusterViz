@@ -45,7 +45,7 @@ class Mask:
     
     def read_msk(self):
         """Read the sparse HEALPix mask from FITS file."""
-        with fits.open(self.in_file) as hpfile:
+        with fits.open(self.in_file, mode='readonly') as hpfile:
             self.hdr = hpfile[1].header
             
             # Get NSIDE from header (sparse HEALPix format)
@@ -90,7 +90,7 @@ def get_masked_catred(tile_id, effcovmask_info, catred_info, maglim=24.0, thresh
         
         # Load CATRED data
         catred_file = catred_info.loc[tile_id]['fits_file']
-        with fits.open(catred_file) as catred_hdu:
+        with fits.open(catred_file, mode='readonly') as catred_hdu:
             src = Table(catred_hdu[1].data)
             
         # Get HEALPix cells for each source (using proper column names)
@@ -230,7 +230,7 @@ class CATREDHandler:
     
     def _load_fits_data(self, fits_path: str, maglim: float = 24.0) -> Dict[str, List]:
         """Load MER data from FITS file with magnitude filtering."""
-        with fits.open(fits_path) as hdul:
+        with fits.open(fits_path, mode='readonly') as hdul:
             fits_data = hdul[1].data
             
             # Apply magnitude filtering if available

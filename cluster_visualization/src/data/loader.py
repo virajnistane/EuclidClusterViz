@@ -188,7 +188,7 @@ class DataLoader:
             fitsfile = os.path.join(paths['gluematchcat_data_dir'], fits_filename)
             
             print(f"Loading clusters from GlueMatchCat: {os.path.basename(fitsfile)}")
-            with fits.open(fitsfile) as hdul:
+            with fits.open(fitsfile, mode='readonly') as hdul:
                 data_all = hdul[1].data
             
             # Filter by algorithm if not BOTH
@@ -220,7 +220,7 @@ class DataLoader:
                     fitsfile = os.path.join(paths['mergedetcat_data_dir'], fits_filename)
                     
                     print(f"Loading merged catalog from: {os.path.basename(fitsfile)}")
-                    with fits.open(fitsfile) as hdul:
+                    with fits.open(fitsfile, mode='readonly') as hdul:
                         all_data.append(hdul[1].data)
                 
                 # Combine arrays
@@ -236,7 +236,7 @@ class DataLoader:
                 fitsfile = os.path.join(paths['mergedetcat_data_dir'], fits_filename)
                 
                 print(f"Loading merged catalog from: {os.path.basename(fitsfile)}")
-                with fits.open(fitsfile) as hdul:
+                with fits.open(fitsfile, mode='readonly') as hdul:
                     data_merged = hdul[1].data
                 
                 print(f"Loaded {len(data_merged)} {algorithm} merged clusters")
@@ -314,8 +314,8 @@ class DataLoader:
                 if not os.path.exists(fits_path):
                     print(f"Warning: FITS file not found: {fits_path}")
                     continue
-                    
-                with fits.open(fits_path) as hdul:
+
+                with fits.open(fits_path, mode='readonly') as hdul:
                     tile_data = hdul[1].data
                 
                 data_by_tile[tile_key] = {

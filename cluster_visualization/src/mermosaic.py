@@ -165,7 +165,7 @@ class MOSAICHandler:
                 start_time = time.time()
                 
                 # Use memmap=False to avoid memory mapping issues with compressed files
-                with fits.open(fits_file, ignore_missing_simple=True, memmap=False) as hdul:
+                with fits.open(fits_file, mode='readonly', ignore_missing_simple=True, memmap=False) as hdul:
                     primary_hdu = hdul[0]
                     header = primary_hdu.header.copy()
                     # Create a copy of the data to avoid issues with file closure
