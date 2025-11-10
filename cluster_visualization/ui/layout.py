@@ -440,28 +440,6 @@ class AppLayout:
     def _create_display_options_section():
         """Create display options section with enhanced styling"""
         return html.Div([
-            # Enhanced switch options with beautiful cards
-            # dbc.Card([
-            #     dbc.CardBody([
-            #         html.Div([
-            #             html.I(className="fas fa-layer-group me-2 text-primary"),
-            #             dbc.Switch(
-            #                 id="merged-clusters-switch",
-            #                 label="Show merged catalog members",
-            #                 value=False,
-            #                 className="ms-2"
-            #             )
-            #         ], className="d-flex align-items-center mb-2"),
-            #         html.Small([
-            #             html.I(className="fas fa-info-circle me-1"),
-            #             "Toggle to access individual tile clusters underneath"
-            #         ], className="text-muted ms-4")
-            #     ])
-            # ], className="mb-3 border-0 shadow-sm", style={
-            #     'background': 'linear-gradient(45deg, #f0f8ff, #ffffff)',
-            #     'border-radius': '10px'
-            # }),
-            # 
             dbc.Card([
                 dbc.CardBody([
                     html.Div([
@@ -1209,13 +1187,13 @@ class AppLayout:
                     dbc.Col([
                         dbc.Button(
                             [html.I(className="fas fa-layer-group me-2"), "Healpix Mask Cutout"],
-                            id="tab-healpix-mask-button",
+                            id="tab-mask-cutout-button",
                             color="info",
-                            disabled=True,
+                            disabled=False,
                             className="w-100 mb-2",
                             n_clicks=0
                         ),
-                        html.Small("Coming soon ...", className="text-muted d-block text-center")
+                        html.Small("Click to see options", className="text-muted d-block text-center")
                     ], width=6),
 
                     dbc.Col([
@@ -1415,6 +1393,53 @@ class AppLayout:
                         ])
                     ])
                 ], id="tab-catred-box-options", is_open=False, className="mb-3"),
+
+                # Mask cutout options (expandable)
+                dbc.Collapse([
+                    dbc.Card([
+                        dbc.CardHeader([
+                            html.H6([
+                                html.I(className="fas fa-cog me-2"),
+                                "Healpix Mask Cutout Options"
+                            ], className="mb-0")
+                        ]),
+                        dbc.CardBody([
+                            dbc.Row([
+                                dbc.Col([
+                                    html.Label("Size (arcmin):", className="form-label"),
+                                    dbc.Input(
+                                        id="tab-mask-cutout-size",
+                                        type="number",
+                                        value=2.0,
+                                        min=0.0,
+                                        max=20.0,
+                                        step=1.0,
+                                        className="mb-2"
+                                    )
+                                ], width=6),
+                                dbc.Col([
+                                    html.Label("Opacity (0 to 1):", className="form-label"),
+                                    dbc.Input(
+                                        id="tab-mask-cutout-opacity",
+                                        type="number",
+                                        value=0.3,
+                                        min=0.0,
+                                        max=1.0,
+                                        step=0.1,
+                                        className="mb-2"
+                                    )
+                                ], width=6)
+                            ]),
+                            dbc.Button(
+                                [html.I(className="fas fa-play me-2"), "Generate Mask Cutout"],
+                                id="tab-generate-mask-cutout",
+                                color="primary",
+                                className="w-100",
+                                n_clicks=0
+                            )
+                        ])
+                    ])
+                ], id="tab-mask-cutout-options", is_open=False, className="mb-3"),
                 
                 # Analysis results area
                 html.Div([

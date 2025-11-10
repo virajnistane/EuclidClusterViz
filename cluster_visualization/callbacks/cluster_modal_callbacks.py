@@ -416,6 +416,19 @@ class ClusterModalCallbacks:
                 return not is_open
             return is_open
         
+        # Toggle cutout options in tab
+        @self.app.callback(
+            Output('tab-mask-cutout-options', 'is_open'),
+            [Input('tab-mask-cutout-button', 'n_clicks')],
+            [State('tab-mask-cutout-options', 'is_open')],
+            prevent_initial_call=True
+        )
+        def toggle_tab_mask_cutout_options(n_clicks, is_open):
+            """Toggle tab mask cutout options"""
+            if n_clicks:
+                return not is_open
+            return is_open
+        
         # Handle tab action buttons
         @self.app.callback(
             [Output('cluster-plot', 'figure', allow_duplicate=True), 
@@ -424,7 +437,7 @@ class ClusterModalCallbacks:
              Output('status-info', 'children', allow_duplicate=True)],
             [Input('tab-generate-cutout', 'n_clicks'),
              Input('tab-view-catred-box', 'n_clicks'),
-             Input('tab-healpix-mask-button', 'n_clicks'),
+             Input('tab-generate-mask-cutout', 'n_clicks'),
              Input('tab-export-button', 'n_clicks')],
              #
             [State('algorithm-dropdown', 'value'),
@@ -449,6 +462,9 @@ class ClusterModalCallbacks:
              State('tab-catred-marker-size-custom', 'value'),
              State('tab-catred-marker-color-picker', 'value'),
              #
+             State('tab-mask-cutout-size', 'value'),
+             State('tab-mask-cutout-opacity', 'value'),
+             #
              State('catred-mode-switch', 'value'),
              State('catred-threshold-slider', 'value'),
              State('magnitude-limit-slider', 'value'),
@@ -456,10 +472,11 @@ class ClusterModalCallbacks:
              State('cluster-plot', 'figure')],
             prevent_initial_call=True
         )
-        def handle_tab_actions(cutout_clicks, catred_box_clicks, healpix_mask_clicks, export_clicks,
+        def handle_tab_actions(cutout_clicks, catred_box_clicks, mask_cutout_clicks, export_clicks,
                                algorithm, snr_range_pzwav, snr_range_amico, redshift_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_merged_clusters,
                                cutout_size, cutout_type, cutout_opacity, cutout_colorscale,
                                catred_box_size, catred_redshift_bin_width, catred_mask_threshold, catred_maglim, catred_marker_size_option, catred_marker_size_custom, catred_marker_color,
+                               mask_cutout_size, mask_cutout_opacity,
                                catred_masked, threshold, maglim, relayout_data, current_figure):
             """Handle tab action button clicks"""
             ctx = callback_context
@@ -503,13 +520,15 @@ class ClusterModalCallbacks:
                 clickdata = {'cluster_ra': cluster['ra'], 'cluster_dec': cluster['dec'],
                              'cutout_size': cutout_size,  # cutout size in arcmin
                              'cutout_type': cutout_type,
-                             'cutout_opacity': cutout_opacity,
-                             'cutout_colorscale': cutout_colorscale,
+                            #  'cutout_opacity': cutout_opacity,
+                            #  'cutout_colorscale': cutout_colorscale,
                              'nclicks': cutout_clicks}
 
                 if cutout_type == 'mermosaic':
                     if self.mosaic_handler:
-                        mosaic_cutout_trace = self.mosaic_handler.create_mosaic_cutout_trace(data, clickdata)
+                        mosaic_cutout_trace = self.mosaic_handler.create_mosaic_cutout_trace(
+                            data=data, clickdata=clickdata, opacity=cutout_opacity, colorscale=cutout_colorscale
+                        )
 
                         if mosaic_cutout_trace:
                             # Add mosaic traces to current figure with proper layering
@@ -670,7 +689,7 @@ class ClusterModalCallbacks:
 
                 return fig, empty_phz_fig, results_content, status_msg
 
-            elif button_id == 'tab-healpix-mask-button':
+            elif button_id == 'tab-generate-mask-cutout':
                 results_content = dbc.Card([
                     dbc.CardHeader([
                         html.H6([html.I(className="fas fa-layer-group me-2"), "Healpix Mask Cutout"], className="mb-0 text-success")
@@ -686,12 +705,91 @@ class ClusterModalCallbacks:
                     ])
                 ])
                 
+                clickdata = {'cluster_ra': cluster['ra'], 'cluster_dec': cluster['dec'],
+                             'mask_cutout_size': mask_cutout_size,  # cutout size in arcmin
+                            #  'mask_cutout_opacity': cutout_opacity,
+                             'nclicks': cutout_clicks}
+                
+                if self.mosaic_handler:
+                    if current_figure and 'data' in current_figure:
+
+                        mask_overlay_traces = [
+                            trace for trace in current_figure['data'] 
+                            if trace.get('name', '').startswith('Mask overlay')
+                            ]
+
+                        if len(mask_overlay_traces) > 0:
+                            print(f"✓ Preserving {len(mask_overlay_traces)} existing Mask overlay traces")
+                        else:
+                            print("✓ No existing Mask overlay traces to preserve")
+                            mask_cutout_traces = self.mosaic_handler.create_mask_overlay_cutout_trace(
+                                data, clickdata, opacity=mask_cutout_opacity)
+
+                        # Add mask overlay traces to current figure with proper layering
+                        if mask_cutout_traces:
+                            # Remove existing mask overlay traces first
+                            existing_traces = [trace for trace in current_figure['data']
+                                                if not (trace.get('name', '').startswith('Mask (cutout) overlay'))]
+                            
+                            # Separate traces by type to maintain proper layering order
+                            polygon_traces = []
+                            mosaic_traces = []
+                            mosaic_cutout_traces = []
+                            mask_overlay_traces = []
+                            catred_traces = []
+                            cluster_traces = []
+                            other_traces = []
+                            
+                            for trace in existing_traces:
+                                trace_name = trace.get('name', '')
+                                if 'Tile' in trace_name and ('CORE' in trace_name or 'LEV1' in trace_name or 'MerTile' in trace_name):
+                                    polygon_traces.append(trace)
+                                elif 'Mosaic' in trace_name and not trace_name.startswith('MER-Mosaic cutout'):
+                                    mosaic_traces.append(trace)
+                                elif 'Mosaic' in trace_name and trace_name.startswith('MER-Mosaic cutout'):
+                                    mosaic_cutout_traces.append(trace)
+                                elif 'Mask overlay' in trace_name:
+                                    mask_overlay_traces.append(trace)
+                                elif 'CATRED' in trace_name:
+                                    catred_traces.append(trace)
+                                elif any(keyword in trace_name for keyword in ['Merged Data', 'Tile', 'clusters']):
+                                    cluster_traces.append(trace)
+                                else:
+                                    other_traces.append(trace)
+                            
+                            if len(mask_overlay_traces) > 0:
+                                print(f"✓ Kept {len(mask_overlay_traces)} existing Mask overlay traces")
+                            else:
+                                print("✓ No existing Mask overlay traces to preserve")
+                                mask_overlay_traces.extend(mask_cutout_traces)
+
+                            # Layer order: polygons (bottom) → mosaic → CATRED → other → cluster traces (top)
+                            new_data = polygon_traces + mosaic_traces + mosaic_cutout_traces + mask_overlay_traces + catred_traces + other_traces + cluster_traces
+                            current_figure['data'] = new_data
+
+                            print(f"✓ Added mask overlay cutout trace as 4th layer from bottom")
+                            print(f"   -> Layer order: {len(polygon_traces)} polygons, "
+                                  f"{len(mosaic_traces)} mosaics, {len(mosaic_cutout_traces)} mosaic cutouts, "
+                                  f"{len(mask_overlay_traces)} Mask overlay, {len(catred_traces)} CATRED, "
+                                  f"{len(other_traces)} other, {len(cluster_traces)} clusters (top)")
+                        
+                        else:
+                            print("ℹ️  No mask overlay found for current selected cluster")
+                            
+                    else:
+                        print("⚠️  No current figure data to update")
+                    
+                else:
+                    print("❌ No mosaic handler available")
+
+                empty_phz_fig = self._create_empty_phz_plot()
+
                 status_msg = dbc.Alert([
                     html.H6("🗺️ Healpix Mask Cutout Complete", className="mb-2"),
                     html.P(f"🎯 z={cluster['redshift']} | SNR={cluster['snr']}")
                 ], color="success")
 
-                return dash.no_update, dash.no_update, results_content, status_msg
+                return current_figure, empty_phz_fig, results_content, status_msg
 
             elif button_id == 'tab-export-button':
                 results_content = dbc.Card([

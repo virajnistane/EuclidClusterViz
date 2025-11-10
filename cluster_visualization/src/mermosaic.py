@@ -896,8 +896,8 @@ class MOSAICHandler:
             z=processed_image,
             x=x_coords,
             y=y_coords,
-            opacity=clickdata.get('cutout_opacity', opacity),
-            colorscale=clickdata.get('cutout_colorscale', colorscale),
+            opacity=opacity,
+            colorscale=colorscale,
             showscale=False,  # Don't show colorbar
             name=f"MER-Mosaic cutout #{clickdata.get('nclicks', 1)}",
             hovertemplate=(
@@ -912,6 +912,127 @@ class MOSAICHandler:
         
         return trace
     
+    def create_mask_overlay_cutout_trace(
+            self, data: Dict[str, Any], clickdata: Dict[str, Any], 
+            opacity: float = 0.6, colorscale: str = 'viridis'
+            ) -> List[go.Scatter]:
+        """Create Plotly scatter traces for a mask overlay cutout."""
+        
+        ra_cen, dec_cen = clickdata['cluster_ra'], clickdata['cluster_dec']
+
+        ra_min, ra_max = ra_cen-1e-4, ra_cen+1e-4       # Small box around click
+        dec_min, dec_max = dec_cen-1e-4, dec_cen+1e-4   # Small box around click
+
+        # Find which MER tiles intersect with the cutout region
+        mertiles_to_load = self._find_intersecting_tiles(data, ra_min, ra_max, dec_min, dec_max)
+        if len(mertiles_to_load) != 1:
+            print("Warning: Multiple MER tiles intersect with cutout region, returning empty list")
+            return []
+        else:
+            mertileid = mertiles_to_load[0]
+
+        # Load mosaic data for this tile
+        try:
+            data_cutout, wcs_cutout, hdr_cutout = self.get_mosaic_cutout(
+                mertileid=mertileid,
+                racen=ra_cen,
+                deccen=dec_cen,
+                size=clickdata.get('mask_cutout_size', 1), # size in arcmin
+            )
+        except Exception as e:
+            print(f"Warning: Exception while getting cutout for MER tile {mertileid}: {e}")
+            return None
+        
+        if data_cutout is None:
+            print(f"Warning: Could not get cutout for MER tile {mertileid}")
+            print("Returning full mask overlay traces instead")
+            # Create mask overlay traces for full tile instead
+            mask_traces = self.create_mask_overlay_trace(
+                mertileid=mertileid,
+                opacity=opacity
+            )
+            return mask_traces
+        
+        # Get the full mosaic WCS and shape
+        print(f"Full mask overlay array shape: {data_cutout.shape}")
+        # print(f"Full mosaic WCS: {wcs_mosaic}")
+
+        # Get RA/Dec limits from the full mosaic
+        ny, nx = data_cutout.shape
+        corners = wcs_cutout.pixel_to_world([0, nx-1, nx-1, 0], [0, 0, ny-1, ny-1])
+        ra_min_mosaic, ra_max_mosaic = corners.ra.deg.min(), corners.ra.deg.max()
+        dec_min_mosaic, dec_max_mosaic = corners.dec.deg.min(), corners.dec.deg.max()
+
+        print(f"RA range: {ra_min_mosaic:.4f} to {ra_max_mosaic:.4f}")
+        print(f"Dec range: {dec_min_mosaic:.4f} to {dec_max_mosaic:.4f}")
+
+        # Load the effective coverage mask for this MER tile
+        hpmask_fits = self.effcovmask_fileinfo_df['fits_file'].loc[mertileid]
+        footprint = Table.read(hpmask_fits, format='fits', hdu=1)
+        print(f"Loaded HEALPix footprint with {len(footprint)} pixels from {hpmask_fits}")
+        footprint['ra'], footprint['dec'] = hp.pix2ang(nside=16384, 
+                                                       ipix=footprint['PIXEL'], 
+                                                       nest=True, 
+                                                       lonlat=True)
+
+        # Filter footprint pixels to the full MER tile region
+        _pix_mask = (
+            (footprint['WEIGHT'] > 0)
+            & (footprint['ra'] >= ra_min_mosaic - 0.01)
+            & (footprint['ra'] <= ra_max_mosaic + 0.01)
+            & (footprint['dec'] >= dec_min_mosaic - 0.01)
+            & (footprint['dec'] <= dec_max_mosaic + 0.01)
+        )
+
+        print(f"Footprint pixels in selected (mosaic) area: {_pix_mask.sum()}")
+        if _pix_mask.sum() > 0:
+            print(f"Weight range: {footprint['WEIGHT'][_pix_mask].min():.3f} to {footprint['WEIGHT'][_pix_mask].max():.3f}")
+
+        # Create traces for HEALPix footprint polygons
+        footprint_traces = []
+        weight_min, weight_max = 0.8, 1.0
+        
+        if _pix_mask.sum() > 0:
+            print(f"Creating {_pix_mask.sum()} HEALPix polygon traces...")
+            
+            for idx, (pix, weight) in enumerate(zip(footprint['PIXEL'][_pix_mask], footprint['WEIGHT'][_pix_mask])):
+                # Get pixel boundaries
+                rapix, decpix = self.get_healpix_boundaries(pixel_id=pix, nside=16384, 
+                                                            nest=True, step=2, 
+                                                            mertileid=mertileid, 
+                                                            wcs_mosaic=wcs_cutout)
+                rapix = np.append(rapix, rapix[0])  # Close the polygon
+                decpix = np.append(decpix, decpix[0])  # Close the polygon
+
+                ra, dec = wcs_cutout.wcs_pix2world(rapix, decpix, 0)
+                # Normalize weight for colorscale
+                weight_norm = (weight - weight_min) / (weight_max - weight_min)
+                try:
+                    colormap = getattr(plt.cm, colorscale)
+                    color = colormap(weight_norm)  # RGBA
+                except AttributeError:
+                    print(f"Warning: Invalid colorscale '{colorscale}', defaulting to 'viridis'")
+                    colormap = plt.cm.viridis
+                    color = colormap(weight_norm)
+
+                footprint_traces.append(
+                    go.Scatter(
+                        x=list(ra),
+                        y=list(dec),
+                        mode='lines',
+                        fill='toself',
+                        fillcolor=f'rgba({int(color[0]*255)},{int(color[1]*255)},{int(color[2]*255)},{opacity})',
+                        line=dict(width=0.5, color='yellow'),
+                        name=f'Mask (cutout) overlay pixel {pix}',
+                        showlegend=False,
+                        hovertext=f'HEALPix {pix}<br>Weight: {weight:.3f}',
+                        hoverinfo='text',
+                        customdata=[[weight]],
+                    )
+                )
+
+        return footprint_traces
+
     def load_mosaic_traces_in_zoom(
             self,
             data: Dict[str, Any],
