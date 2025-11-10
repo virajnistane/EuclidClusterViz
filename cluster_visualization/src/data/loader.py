@@ -76,17 +76,17 @@ class DataLoader:
         # Validate critical paths
         self._validate_paths(paths)
         
-        # Load data components - check for gluematchcat first, fallback to separate files
-        data_detcluster_mergedcat = self._load_data_detcluster_mergedcat(paths, select_algorithm)
+        # Load data components and calculate SNR ranges - check for gluematchcat first, fallback to separate files
+        data_detcluster_mergedcat, snr_min_pzwav, snr_max_pzwav, snr_min_amico, snr_max_amico = self._load_data_detcluster_mergedcat_with_minmax_snr(paths, select_algorithm)
         data_detcluster_by_cltile = self._load_data_detcluster_by_cltile(paths, select_algorithm)
 
         catred_fileinfo_df = self._load_catred_info(paths)
         effcovmask_fileinfo_df = self._load_effcovmask_info(paths)
         
-        # Calculate SNR range for UI slider
-        snr_min = float(data_detcluster_mergedcat['SNR_CLUSTER'].min())
-        snr_max = float(data_detcluster_mergedcat['SNR_CLUSTER'].max())
-        print(f"SNR range: {snr_min:.3f} to {snr_max:.3f}")
+        # # Calculate SNR range for UI slider
+        # snr_min = float(data_detcluster_mergedcat['SNR_CLUSTER'].min())
+        # snr_max = float(data_detcluster_mergedcat['SNR_CLUSTER'].max())
+        # print(f"SNR range: {snr_min:.3f} to {snr_max:.3f}")
 
         # Calculate redshift range for UI slider
         z_min = float(data_detcluster_mergedcat['Z_CLUSTER'].min())
@@ -102,8 +102,10 @@ class DataLoader:
             'algorithm': select_algorithm,
             'snr_threshold_lower': None,  # Will be set by UI
             'snr_threshold_upper': None,  # Will be set by UI
-            'snr_min': snr_min,
-            'snr_max': snr_max,
+            'snr_min_pzwav': snr_min_pzwav,
+            'snr_max_pzwav': snr_max_pzwav,
+            'snr_min_amico': snr_min_amico,
+            'snr_max_amico': snr_max_amico,
             'z_min': z_min,
             'z_max': z_max,
         }
@@ -175,7 +177,7 @@ class DataLoader:
                 if not os.path.exists(path):
                     raise FileNotFoundError(f"{path_key.replace('_', ' ').title()} not found: {path}")
     
-    def _load_data_detcluster_mergedcat(self, paths: Dict[str, str], algorithm: str) -> np.ndarray:
+    def _load_data_detcluster_mergedcat_with_minmax_snr(self, paths: Dict[str, str], algorithm: str) -> np.ndarray:
         """Load merged detection catalog from XML and FITS files."""
         if paths.get('use_gluematchcat'):
             # Load from gluematchcat
@@ -194,6 +196,10 @@ class DataLoader:
             # Filter by algorithm if not BOTH
             if algorithm == 'BOTH':
                 data_merged = data_all
+                snr_min_pzwav = float(data_merged[data_merged['DET_CODE_NB'] == 2]['SNR_CLUSTER'].min())
+                snr_max_pzwav = float(data_merged[data_merged['DET_CODE_NB'] == 2]['SNR_CLUSTER'].max())
+                snr_min_amico = float(data_merged[data_merged['DET_CODE_NB'] == 1]['SNR_CLUSTER'].min())
+                snr_max_amico = float(data_merged[data_merged['DET_CODE_NB'] == 1]['SNR_CLUSTER'].max())
                 print(f"Loaded {len(data_merged)} total clusters (PZWAV + AMICO)")
             else:
                 # Filter by DET_CODE_NB or ID_DET_AMICO columns
@@ -201,10 +207,18 @@ class DataLoader:
                     # Keep rows where DET_CODE_NB is 2
                     data_merged = data_all[data_all['DET_CODE_NB'] == 2]
                     print(f"Loaded {len(data_merged)} PZWAV clusters from GlueMatchCat")
+                    snr_min_pzwav = float(data_merged['SNR_CLUSTER'].min())
+                    snr_max_pzwav = float(data_merged['SNR_CLUSTER'].max())
+                    snr_min_amico = None
+                    snr_max_amico = None
                 elif algorithm == 'AMICO':
                     # Keep rows where DET_CODE_NB is 1
                     data_merged = data_all[data_all['DET_CODE_NB'] == 1]
                     print(f"Loaded {len(data_merged)} AMICO clusters from GlueMatchCat")
+                    snr_min_pzwav = None
+                    snr_max_pzwav = None
+                    snr_min_amico = float(data_merged['SNR_CLUSTER'].min())
+                    snr_max_amico = float(data_merged['SNR_CLUSTER'].max())
         else:
             # Load from separate mergedetcat files
             mergedetcat_xml_files_dict = paths['mergedetcat_xml_files_dict']
@@ -222,7 +236,21 @@ class DataLoader:
                     print(f"Loading merged catalog from: {os.path.basename(fitsfile)}")
                     with fits.open(fitsfile, mode='readonly') as hdul:
                         all_data.append(hdul[1].data)
-                
+
+                    if det_xml_key == 'mergedetcat_pzwav':
+                        print(f"Loaded {len(all_data[-1])} PZWAV merged clusters")
+                        snr_min_pzwav = float(all_data[-1]['SNR_CLUSTER'].min())
+                        snr_max_pzwav = float(all_data[-1]['SNR_CLUSTER'].max())
+                    elif det_xml_key == 'mergedetcat_amico':
+                        print(f"Loaded {len(all_data[-1])} AMICO merged clusters")
+                        snr_min_amico = float(all_data[-1]['SNR_CLUSTER'].min())
+                        snr_max_amico = float(all_data[-1]['SNR_CLUSTER'].max())
+                    else:
+                        snr_min_pzwav = None
+                        snr_max_pzwav = None
+                        snr_min_amico = None
+                        snr_max_amico = None
+
                 # Combine arrays
                 data_merged = np.concatenate(all_data)
                 print(f"Loaded {len(data_merged)} total merged clusters (combined)")
@@ -240,8 +268,19 @@ class DataLoader:
                     data_merged = hdul[1].data
                 
                 print(f"Loaded {len(data_merged)} {algorithm} merged clusters")
+
+                if algorithm == 'PZWAV':
+                    snr_min_pzwav = float(data_merged['SNR_CLUSTER'].min())
+                    snr_max_pzwav = float(data_merged['SNR_CLUSTER'].max())
+                    snr_min_amico = None
+                    snr_max_amico = None
+                elif algorithm == 'AMICO':
+                    snr_min_pzwav = None
+                    snr_max_pzwav = None
+                    snr_min_amico = float(data_merged['SNR_CLUSTER'].min())
+                    snr_max_amico = float(data_merged['SNR_CLUSTER'].max())
         
-        return data_merged
+        return data_merged, snr_min_pzwav, snr_max_pzwav, snr_min_amico, snr_max_amico
     
     def _load_data_detcluster_by_cltile(self, paths: Dict[str, str], algorithm: str) -> Dict[str, Dict[str, Any]]:
         """Load individual tile detection data from separate detintile files."""

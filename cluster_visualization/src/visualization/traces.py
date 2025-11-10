@@ -35,16 +35,16 @@ class TraceCreator:
         # For fallback when no CATRED handler is available
         self.current_catred_data = None
     
-    def create_traces(self, data: Dict[str, Any], show_polygons: bool = True, 
-                     show_mer_tiles: bool = False, relayout_data: Optional[Dict] = None,
-                     catred_masked: bool = False, manual_catred_data: Optional[Dict] = None, 
-                     catred_box_data: Optional[Dict] = None,
-                     existing_catred_traces: Optional[List] = None, 
-                     existing_mosaic_traces: Optional[List] = None,
-                     existing_mask_overlay_traces: Optional[List] = None,
-                     snr_threshold_lower: Optional[float] = None, snr_threshold_upper: Optional[float] = None, 
-                     z_threshold_lower: Optional[float] = None, z_threshold_upper: Optional[float] = None,
-                     threshold: float = 0.8, maglim: Optional[float] = None, show_merged_clusters: bool = True, matching_clusters: bool = False) -> List:
+    def create_traces(
+            self, data: Dict[str, Any], show_polygons: bool = True, 
+            show_mer_tiles: bool = False, relayout_data: Optional[Dict] = None,
+            catred_masked: bool = False, manual_catred_data: Optional[Dict] = None, 
+            catred_box_data: Optional[Dict] = None,
+            existing_catred_traces: Optional[List] = None, existing_mosaic_traces: Optional[List] = None, existing_mask_overlay_traces: Optional[List] = None,
+            snr_threshold_lower_pzwav: Optional[float] = None, snr_threshold_upper_pzwav: Optional[float] = None, 
+            snr_threshold_lower_amico: Optional[float] = None, snr_threshold_upper_amico: Optional[float] = None,
+            z_threshold_lower: Optional[float] = None, z_threshold_upper: Optional[float] = None,
+            threshold: float = 0.8, maglim: Optional[float] = None, show_merged_clusters: bool = True, matching_clusters: bool = False) -> List:
         """
         Create all Plotly traces for the visualization.
         
@@ -67,8 +67,14 @@ class TraceCreator:
         traces = []  # Polygon traces (bottom layer)
         
         # Apply SNR filtering to merged data
-        datamod_detcluster_mergedcat = self._apply_snr_filtering(data['data_detcluster_mergedcat'], snr_threshold_lower, snr_threshold_upper)
-        datamod_detcluster_mergedcat = self._apply_redshift_filtering(datamod_detcluster_mergedcat, z_threshold_lower, z_threshold_upper)
+        # if data['algorithm'] == 'PZWAV':
+        #     datamod_detcluster_mergedcat = self._apply_snr_filtering(data['data_detcluster_mergedcat'], algorithm=data['algorithm'], 
+        #                                                              snr_threshold_lower=snr_threshold_lower_pzwav, snr_threshold_upper=snr_threshold_upper_pzwav)
+        # elif data['algorithm'] == 'AMICO':
+        #     datamod_detcluster_mergedcat = self._apply_snr_filtering(data['data_detcluster_mergedcat'], algorithm=data['algorithm'], 
+        #                                                              snr_threshold_lower=snr_threshold_lower_amico, snr_threshold_upper=snr_threshold_upper_amico)
+            
+        datamod_detcluster_mergedcat = self._apply_redshift_filtering(data['data_detcluster_mergedcat'], z_threshold_lower, z_threshold_upper)
 
         # Check zoom threshold for CATRED data display
         zoom_threshold_met = self._check_zoom_threshold(relayout_data, show_mer_tiles)
@@ -100,12 +106,17 @@ class TraceCreator:
 
         # Add cluster traces to separate list (top layer) - conditionally based on toggle
         if show_merged_clusters:
-            self._add_merged_cluster_trace(cluster_traces, datamod_detcluster_mergedcat, data['algorithm'], matching_clusters, catred_points)
+            self._add_merged_cluster_trace(cluster_traces, datamod_detcluster_mergedcat, data['algorithm'], matching_clusters, 
+                                           snr_threshold_lower_pzwav=snr_threshold_lower_pzwav, snr_threshold_upper_pzwav=snr_threshold_upper_pzwav,
+                                           snr_threshold_lower_amico=snr_threshold_lower_amico, snr_threshold_upper_amico=snr_threshold_upper_amico,
+                                           catred_points = catred_points)
         
         # Create tile traces and polygons
         tile_traces = self._create_tile_traces_and_polygons(
             data, traces, show_polygons, show_mer_tiles, 
-            snr_threshold_lower, snr_threshold_upper, z_threshold_lower, z_threshold_upper, catred_points
+            snr_threshold_lower_pzwav, snr_threshold_upper_pzwav, 
+            snr_threshold_lower_amico, snr_threshold_upper_amico,
+            z_threshold_lower, z_threshold_upper, catred_points
         )
         
         # Add tile cluster traces to top layer
@@ -571,7 +582,10 @@ class TraceCreator:
         
         return oval_trace
 
-    def _add_merged_cluster_trace(self, data_traces: List, datamod_detcluster_mergedcat: np.ndarray, algorithm: str, matching_clusters: bool, catred_points: Optional[List] = None) -> None:
+    def _add_merged_cluster_trace(self, data_traces: List, datamod_detcluster_mergedcat: np.ndarray, algorithm: str, matching_clusters: bool, 
+                                  snr_threshold_lower_pzwav: Optional[float] = None, snr_threshold_upper_pzwav: Optional[float] = None, 
+                                  snr_threshold_lower_amico: Optional[float] = None, snr_threshold_upper_amico: Optional[float] = None,
+                                  catred_points: Optional[List] = None) -> None:
         """Add merged cluster detection trace with proximity-based enhancement."""
         
         # Determine symbol based on algorithm
@@ -587,6 +601,9 @@ class TraceCreator:
                 
                 pzwav_data = datamod_detcluster_mergedcat[pzwav_mask]
                 amico_data = datamod_detcluster_mergedcat[amico_mask]
+            
+                pzwav_data = self._apply_snr_filtering(pzwav_data, snr_threshold_lower_pzwav, snr_threshold_upper_pzwav)
+                amico_data = self._apply_snr_filtering(amico_data, snr_threshold_lower_amico, snr_threshold_upper_amico)
 
                 if matching_clusters:
                     # Apply matching logic for clusters
@@ -619,7 +636,7 @@ class TraceCreator:
                                                       pzwav_data['RIGHT_ASCENSION_CLUSTER'], 
                                                       pzwav_data['DECLINATION_CLUSTER'])
                         ],
-                        customdata=[[snr, z] for snr, z in zip(pzwav_data['SNR_CLUSTER'], pzwav_data['Z_CLUSTER'])],
+                        customdata=[[snr, z, det_code] for snr, z, det_code in zip(pzwav_data['SNR_CLUSTER'], pzwav_data['Z_CLUSTER'], pzwav_data['DET_CODE_NB'])],
                         hoverinfo='text',
                         hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
                     )
@@ -641,7 +658,7 @@ class TraceCreator:
                                                       amico_data['RIGHT_ASCENSION_CLUSTER'], 
                                                       amico_data['DECLINATION_CLUSTER'])
                         ],
-                        customdata=[[snr, z] for snr, z in zip(amico_data['SNR_CLUSTER'], amico_data['Z_CLUSTER'])],
+                        customdata=[[snr, z, det_code] for snr, z, det_code in zip(amico_data['SNR_CLUSTER'], amico_data['Z_CLUSTER'], amico_data['DET_CODE_NB'])],
                         hoverinfo='text',
                         hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
                     )
@@ -649,6 +666,14 @@ class TraceCreator:
             else:
                 # Single algorithm or no DET_CODE_NB column
                 symbol = {'amico': 'diamond-open', 'pzwav': 'square-open'}.get(algorithm.lower())
+
+                if algorithm.lower() == 'pzwav':
+                    datamod_detcluster_mergedcat = self._apply_snr_filtering(
+                        datamod_detcluster_mergedcat, snr_threshold_lower_pzwav, snr_threshold_upper_pzwav)
+                elif algorithm.lower() == 'amico':
+                    datamod_detcluster_mergedcat = self._apply_snr_filtering(
+                        datamod_detcluster_mergedcat, snr_threshold_lower_amico, snr_threshold_upper_amico)
+
                 merged_trace = go.Scattergl(
                     x=datamod_detcluster_mergedcat['RIGHT_ASCENSION_CLUSTER'],
                     y=datamod_detcluster_mergedcat['DECLINATION_CLUSTER'],
@@ -662,7 +687,11 @@ class TraceCreator:
                                                   datamod_detcluster_mergedcat['RIGHT_ASCENSION_CLUSTER'], 
                                                   datamod_detcluster_mergedcat['DECLINATION_CLUSTER'])
                     ],
-                    customdata=[[snr, z] for snr, z in zip(datamod_detcluster_mergedcat['SNR_CLUSTER'], datamod_detcluster_mergedcat['Z_CLUSTER'])],
+                    customdata=[[snr, z, det_code] for snr, z, det_code in zip(
+                        datamod_detcluster_mergedcat['SNR_CLUSTER'], 
+                        datamod_detcluster_mergedcat['Z_CLUSTER'], 
+                        datamod_detcluster_mergedcat['DET_CODE_NB'] if has_det_code else [2 if algorithm.lower() == 'pzwav' else 1] * len(datamod_detcluster_mergedcat)
+                    )],
                     hoverinfo='text',
                     hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
                 )
@@ -687,6 +716,9 @@ class TraceCreator:
                     
                     pzwav_away = away_from_catred_data[pzwav_mask_away]
                     amico_away = away_from_catred_data[amico_mask_away]
+
+                    pzwav_away = self._apply_snr_filtering(pzwav_away, snr_threshold_lower_pzwav, snr_threshold_upper_pzwav)
+                    amico_away = self._apply_snr_filtering(amico_away, snr_threshold_lower_amico, snr_threshold_upper_amico)
                     
                     # PZWAV away trace
                     if len(pzwav_away) > 0:
@@ -705,7 +737,7 @@ class TraceCreator:
                                                           pzwav_away['RIGHT_ASCENSION_CLUSTER'], 
                                                           pzwav_away['DECLINATION_CLUSTER'])
                             ],
-                            customdata=[[snr, z] for snr, z in zip(pzwav_away['SNR_CLUSTER'], pzwav_away['Z_CLUSTER'])],
+                            customdata=[[snr, z, det_code] for snr, z, det_code in zip(pzwav_away['SNR_CLUSTER'], pzwav_away['Z_CLUSTER'], pzwav_away['DET_CODE_NB'])],
                             hoverinfo='text',
                             hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
                         )
@@ -728,7 +760,7 @@ class TraceCreator:
                                                           amico_away['RIGHT_ASCENSION_CLUSTER'], 
                                                           amico_away['DECLINATION_CLUSTER'])
                             ],
-                            customdata=[[snr, z] for snr, z in zip(amico_away['SNR_CLUSTER'], amico_away['Z_CLUSTER'])],
+                            customdata=[[snr, z, det_code] for snr, z, det_code in zip(amico_away['SNR_CLUSTER'], amico_away['Z_CLUSTER'], amico_away['DET_CODE_NB'])],
                             hoverinfo='text',
                             hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
                         )
@@ -736,6 +768,14 @@ class TraceCreator:
                 else:
                     # Single algorithm
                     symbol = 'diamond-open' if algorithm == 'AMICO' else 'square-open'
+
+                    if algorithm.lower() == 'pzwav':
+                        away_from_catred_data = self._apply_snr_filtering(
+                            away_from_catred_data, snr_threshold_lower_pzwav, snr_threshold_upper_pzwav)
+                    elif algorithm.lower() == 'amico':
+                        away_from_catred_data = self._apply_snr_filtering(
+                            away_from_catred_data, snr_threshold_lower_amico, snr_threshold_upper_amico)
+
                     normal_trace = go.Scattergl(
                         x=away_from_catred_data['RIGHT_ASCENSION_CLUSTER'],
                         y=away_from_catred_data['DECLINATION_CLUSTER'],
@@ -749,7 +789,11 @@ class TraceCreator:
                                                       away_from_catred_data['RIGHT_ASCENSION_CLUSTER'], 
                                                       away_from_catred_data['DECLINATION_CLUSTER'])
                         ],
-                        customdata=[[snr, z] for snr, z in zip(away_from_catred_data['SNR_CLUSTER'], away_from_catred_data['Z_CLUSTER'])],
+                        customdata=[[snr, z, det_code] for snr, z, det_code in zip(
+                            away_from_catred_data['SNR_CLUSTER'], 
+                            away_from_catred_data['Z_CLUSTER'], 
+                            away_from_catred_data['DET_CODE_NB'] if has_det_code else [2 if algorithm.lower() == 'pzwav' else 1] * len(away_from_catred_data)
+                        )],
                         hoverinfo='text',
                         hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
                     )
@@ -764,6 +808,9 @@ class TraceCreator:
                     
                     pzwav_near = near_catred_data[pzwav_mask_near]
                     amico_near = near_catred_data[amico_mask_near]
+
+                    pzwav_away = self._apply_snr_filtering(pzwav_near, snr_threshold_lower_pzwav, snr_threshold_upper_pzwav)
+                    amico_away = self._apply_snr_filtering(amico_near, snr_threshold_lower_amico, snr_threshold_upper_amico)
                     
                     # PZWAV enhanced traces
                     if len(pzwav_near) > 0:
@@ -796,7 +843,7 @@ class TraceCreator:
                                                           pzwav_near['RIGHT_ASCENSION_CLUSTER'], 
                                                           pzwav_near['DECLINATION_CLUSTER'])
                             ],
-                            customdata=[[snr, z] for snr, z in zip(pzwav_near['SNR_CLUSTER'], pzwav_near['Z_CLUSTER'])],
+                            customdata=[[snr, z, det_code] for snr, z, det_code in zip(pzwav_near['SNR_CLUSTER'], pzwav_near['Z_CLUSTER'], pzwav_near['DET_CODE_NB'])],
                             hoverinfo='text',
                             hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
                         )
@@ -833,7 +880,7 @@ class TraceCreator:
                                                           amico_near['RIGHT_ASCENSION_CLUSTER'], 
                                                           amico_near['DECLINATION_CLUSTER'])
                             ],
-                            customdata=[[snr, z] for snr, z in zip(amico_near['SNR_CLUSTER'], amico_near['Z_CLUSTER'])],
+                            customdata=[[snr, z, det_code] for snr, z, det_code in zip(amico_near['SNR_CLUSTER'], amico_near['Z_CLUSTER'], amico_near['DET_CODE_NB'])],
                             hoverinfo='text',
                             hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
                         )
@@ -844,6 +891,13 @@ class TraceCreator:
                     # Single algorithm
                     symbol = 'diamond-open' if algorithm == 'AMICO' else 'square-open'
                     glow_shape = 'diamond' if algorithm == 'AMICO' else 'square'
+
+                    if algorithm.lower() == 'pzwav':
+                        near_catred_data = self._apply_snr_filtering(
+                            near_catred_data, snr_threshold_lower_pzwav, snr_threshold_upper_pzwav)
+                    elif algorithm.lower() == 'amico':
+                        near_catred_data = self._apply_snr_filtering(
+                            near_catred_data, snr_threshold_lower_amico, snr_threshold_upper_amico)
                     
                     # Add glow effect trace first (background)
                     glow_trace = self._create_glow_trace(
@@ -875,7 +929,11 @@ class TraceCreator:
                                                       near_catred_data['RIGHT_ASCENSION_CLUSTER'], 
                                                       near_catred_data['DECLINATION_CLUSTER'])
                         ],
-                        customdata=[[snr, z] for snr, z in zip(near_catred_data['SNR_CLUSTER'], near_catred_data['Z_CLUSTER'])],
+                        customdata=[[snr, z, det_code] for snr, z, det_code in zip(
+                            near_catred_data['SNR_CLUSTER'], 
+                            near_catred_data['Z_CLUSTER'], 
+                            near_catred_data['DET_CODE_NB'] if has_det_code else [2 if algorithm.lower() == 'pzwav' else 1] * len(near_catred_data)
+                        )],
                         hoverinfo='text',
                         hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
                     )
@@ -885,8 +943,10 @@ class TraceCreator:
     
     def _create_tile_traces_and_polygons(self, data: Dict[str, Any], polygon_traces: List,
                                         show_polygons: bool, show_mer_tiles: bool,
-                                        snr_threshold_lower: Optional[float], 
-                                        snr_threshold_upper: Optional[float],
+                                        snr_threshold_lower_pzwav: Optional[float], 
+                                        snr_threshold_upper_pzwav: Optional[float],
+                                        snr_threshold_lower_amico: Optional[float],
+                                        snr_threshold_upper_amico: Optional[float],
                                         z_threshold_lower: Optional[float],
                                         z_threshold_upper: Optional[float],
                                         catred_points: Optional[List] = None) -> List:
@@ -899,6 +959,9 @@ class TraceCreator:
         for tile_key, value in data['data_detcluster_by_cltile'].items():
             data_detcluster_by_cltile = value['detfits_data']
             
+            # Check if DET_CODE_NB exists in tile data
+            has_det_code = 'DET_CODE_NB' in data_detcluster_by_cltile.dtype.names if len(data_detcluster_by_cltile) > 0 else False
+            
             # Get the original tile ID (for display) and algorithm
             tileid = value.get('tile_id', tile_key)  # Fallback to tile_key for backward compatibility
             tile_algorithm = value.get('algorithm', None)
@@ -909,7 +972,12 @@ class TraceCreator:
                 symbol = 'cross-thin'
             
             # Apply SNR filtering to tile data
-            datamod_detcluster_by_cltile = self._apply_snr_filtering(data_detcluster_by_cltile, snr_threshold_lower, snr_threshold_upper)
+            if tile_algorithm == 'PZWAV':
+                datamod_detcluster_by_cltile = self._apply_snr_filtering(data_detcluster_by_cltile, snr_threshold_lower_pzwav, snr_threshold_upper_pzwav)
+            elif tile_algorithm == 'AMICO':
+                datamod_detcluster_by_cltile = self._apply_snr_filtering(data_detcluster_by_cltile, snr_threshold_lower_amico, snr_threshold_upper_amico)
+
+            # Apply redshift filtering to tile data
             datamod_detcluster_by_cltile = self._apply_redshift_filtering(datamod_detcluster_by_cltile, z_threshold_lower, z_threshold_upper)
 
             # Configure legend behavior for BOTH algorithm case
@@ -941,7 +1009,11 @@ class TraceCreator:
                         for snr, cz, ra, dec in zip(datamod_detcluster_by_cltile['SNR_CLUSTER'], datamod_detcluster_by_cltile['Z_CLUSTER'], 
                                                   datamod_detcluster_by_cltile['RIGHT_ASCENSION_CLUSTER'], datamod_detcluster_by_cltile['DECLINATION_CLUSTER'])
                     ],
-                    customdata=[[snr, z] for snr, z in zip(datamod_detcluster_by_cltile['SNR_CLUSTER'], datamod_detcluster_by_cltile['Z_CLUSTER'])],
+                    customdata=[[snr, z, det_code] for snr, z, det_code in zip(
+                        datamod_detcluster_by_cltile['SNR_CLUSTER'], 
+                        datamod_detcluster_by_cltile['Z_CLUSTER'], 
+                        datamod_detcluster_by_cltile['DET_CODE_NB'] if has_det_code else [2 if tile_algorithm == 'PZWAV' else 1] * len(datamod_detcluster_by_cltile)
+                    )],
                     hoverinfo='text',
                     hoverlabel=dict(bgcolor="lightyellow", font_size=12, font_family="Arial")
                 )
@@ -972,7 +1044,11 @@ class TraceCreator:
                             for snr, cz, ra, dec in zip(away_from_catred_data['SNR_CLUSTER'], away_from_catred_data['Z_CLUSTER'], 
                                                       away_from_catred_data['RIGHT_ASCENSION_CLUSTER'], away_from_catred_data['DECLINATION_CLUSTER'])
                         ],
-                        customdata=[[snr, z] for snr, z in zip(away_from_catred_data['SNR_CLUSTER'], away_from_catred_data['Z_CLUSTER'])],
+                        customdata=[[snr, z, det_code] for snr, z, det_code in zip(
+                            away_from_catred_data['SNR_CLUSTER'], 
+                            away_from_catred_data['Z_CLUSTER'], 
+                            away_from_catred_data['DET_CODE_NB'] if has_det_code else [2 if tile_algorithm == 'PZWAV' else 1] * len(away_from_catred_data)
+                        )],
                         hoverinfo='text',
                         hoverlabel=dict(bgcolor="lightyellow", font_size=12, font_family="Arial")
                     )
@@ -1010,7 +1086,11 @@ class TraceCreator:
                             for snr, cz, ra, dec in zip(near_catred_data['SNR_CLUSTER'], near_catred_data['Z_CLUSTER'], 
                                                       near_catred_data['RIGHT_ASCENSION_CLUSTER'], near_catred_data['DECLINATION_CLUSTER'])
                         ],
-                        customdata=[[snr, z] for snr, z in zip(near_catred_data['SNR_CLUSTER'], near_catred_data['Z_CLUSTER'])],
+                        customdata=[[snr, z, det_code] for snr, z, det_code in zip(
+                            near_catred_data['SNR_CLUSTER'], 
+                            near_catred_data['Z_CLUSTER'], 
+                            near_catred_data['DET_CODE_NB'] if has_det_code else [2 if tile_algorithm == 'PZWAV' else 1] * len(near_catred_data)
+                        )],
                         hoverinfo='text',
                         hoverlabel=dict(bgcolor="lightyellow", font_size=12, font_family="Arial")
                     )

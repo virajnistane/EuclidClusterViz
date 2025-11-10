@@ -428,7 +428,8 @@ class ClusterModalCallbacks:
              Input('tab-export-button', 'n_clicks')],
              #
             [State('algorithm-dropdown', 'value'),
-             State('snr-range-slider', 'value'),
+             State('snr-range-slider-pzwav', 'value'),
+             State('snr-range-slider-amico', 'value'),
              State('redshift-range-slider', 'value'),
              State('polygon-switch', 'value'),
              State('mer-switch', 'value'),
@@ -456,7 +457,7 @@ class ClusterModalCallbacks:
             prevent_initial_call=True
         )
         def handle_tab_actions(cutout_clicks, catred_box_clicks, healpix_mask_clicks, export_clicks,
-                               algorithm, snr_range, redshift_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_merged_clusters,
+                               algorithm, snr_range_pzwav, snr_range_amico, redshift_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_merged_clusters,
                                cutout_size, cutout_type, cutout_opacity, cutout_colorscale,
                                catred_box_size, catred_redshift_bin_width, catred_mask_threshold, catred_maglim, catred_marker_size_option, catred_marker_size_custom, catred_marker_color,
                                catred_masked, threshold, maglim, relayout_data, current_figure):
@@ -596,9 +597,19 @@ class ClusterModalCallbacks:
                     ])
                 ])
 
-                # Extract SNR values from range slider
-                snr_lower = snr_range[0] if snr_range and len(snr_range) == 2 else None
-                snr_upper = snr_range[1] if snr_range and len(snr_range) == 2 else None
+                # Extract separate SNR values from range sliders
+                snr_pzwav_lower = snr_range_pzwav[0] if snr_range_pzwav and len(snr_range_pzwav) == 2 else None
+                snr_pzwav_upper = snr_range_pzwav[1] if snr_range_pzwav and len(snr_range_pzwav) == 2 else None
+                snr_amico_lower = snr_range_amico[0] if snr_range_amico and len(snr_range_amico) == 2 else None
+                snr_amico_upper = snr_range_amico[1] if snr_range_amico and len(snr_range_amico) == 2 else None
+                
+                # Determine which SNR to use based on algorithm
+                if algorithm == 'PZWAV':
+                    snr_lower, snr_upper = snr_pzwav_lower, snr_pzwav_upper
+                elif algorithm == 'AMICO':
+                    snr_lower, snr_upper = snr_amico_lower, snr_amico_upper
+                else:  # BOTH - use PZWAV SNR (could also use both, but for simplicity)
+                    snr_lower, snr_upper = snr_pzwav_lower, snr_pzwav_upper
 
                 # Extract redshift values from redshift range slider 
                 redshift_lower = redshift_range[0] if redshift_range and len(redshift_range) == 2 else None

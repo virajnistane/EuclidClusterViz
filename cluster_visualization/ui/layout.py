@@ -233,71 +233,137 @@ class AppLayout:
     @staticmethod
     def _create_snr_section():
         """Create SNR filtering section with enhanced styling"""
+
+        snr_pzwav_tab = dbc.Card([
+            dbc.CardBody([
+                # Range display with beautiful styling
+                dbc.Badge(
+                    id="snr-range-display-pzwav",
+                    color="light",
+                    className="w-100 mb-3 p-2 fs-6 badge-enhanced status-indicator",
+                    style={
+                        'background': 'linear-gradient(45deg, #e8f5e8, #f0f8f0)',
+                        'color': '#2d5a2d',
+                        'border-radius': '8px',
+                        'border': '1px solid rgba(46, 204, 113, 0.3)'
+                    }
+                ),
+                
+                # Enhanced range slider
+                html.Div([
+                    dcc.RangeSlider(
+                        id='snr-range-slider-pzwav',
+                        min=0,
+                        max=100,
+                        step=0.1,
+                        marks={},
+                        value=[0, 100],
+                        tooltip={
+                            "placement": "bottom", 
+                            "always_visible": False,
+                            "style": {"fontSize": "12px"}
+                        },
+                        allowCross=False,
+                        className="custom-range-slider"
+                    )
+                ], className="mb-1", style={
+                    'padding': '10px 15px', 
+                    'margin': '5px 0',
+                    'minHeight': '60px'
+                }),
+                
+                # Enhanced apply button
+                dbc.Button([
+                    html.I(className="fas fa-filter me-2"),
+                    "Apply SNR Filter (PZWAV)"
+                ],
+                    id="snr-render-button-pzwav",
+                    color="success",
+                    size="sm",
+                    className="w-100 shadow-sm btn-enhanced",
+                    n_clicks=0,
+                    disabled=True,
+                    style={
+                        'border-radius': '8px',
+                        'font-weight': '600'
+                    }
+                )
+            ], className="p-3")
+        ], className="border-0 shadow-sm mb-3", style={
+            'background': 'linear-gradient(135deg, #f0fff0, #ffffff)',
+            'border-radius': '12px'
+        })
+
+        snr_amico_tab = dbc.Card([
+            dbc.CardBody([
+                # Range display with beautiful styling
+                dbc.Badge(
+                    id="snr-range-display-amico",
+                    color="light",
+                    className="w-100 mb-3 p-2 fs-6 badge-enhanced status-indicator",
+                    style={
+                        'background': 'linear-gradient(45deg, #e8f5e8, #f0f8f0)',
+                        'color': '#2d5a2d',
+                        'border-radius': '8px',
+                        'border': '1px solid rgba(46, 204, 113, 0.3)'
+                    }
+                ),
+                
+                # Enhanced range slider
+                html.Div([
+                    dcc.RangeSlider(
+                        id='snr-range-slider-amico',
+                        min=0,
+                        max=100,
+                        step=0.1,
+                        marks={},
+                        value=[0, 100],
+                        tooltip={
+                            "placement": "bottom", 
+                            "always_visible": False,
+                            "style": {"fontSize": "12px"}
+                        },
+                        allowCross=False,
+                        className="custom-range-slider"
+                    )
+                ], className="mb-1", style={
+                    'padding': '10px 15px', 
+                    'margin': '5px 0',
+                    'minHeight': '60px'
+                }),
+                
+                # Enhanced apply button
+                dbc.Button([
+                    html.I(className="fas fa-filter me-2"),
+                    "Apply SNR Filter (AMICO)"
+                ],
+                    id="snr-render-button-amico",
+                    color="success",
+                    size="sm",
+                    className="w-100 shadow-sm btn-enhanced",
+                    n_clicks=0,
+                    disabled=True,
+                    style={
+                        'border-radius': '8px',
+                        'font-weight': '600'
+                    }
+                )
+            ], className="p-3")
+        ], className="border-0 shadow-sm mb-3", style={
+            'background': 'linear-gradient(135deg, #f0fff0, #ffffff)',
+            'border-radius': '12px'
+        })
+
         return html.Div([
             html.Div([
                 html.I(className="fas fa-signal me-1 text-success"),
                 html.Label("SNR Filtering:", className="fw-bold mb-1")
             ], className="d-flex align-items-left mb-0"),
             
-            dbc.Card([
-                dbc.CardBody([
-                    # Range display with beautiful styling
-                    dbc.Badge(
-                        id="snr-range-display",
-                        color="light",
-                        className="w-100 mb-3 p-2 fs-6 badge-enhanced status-indicator",
-                        style={
-                            'background': 'linear-gradient(45deg, #e8f5e8, #f0f8f0)',
-                            'color': '#2d5a2d',
-                            'border-radius': '8px',
-                            'border': '1px solid rgba(46, 204, 113, 0.3)'
-                        }
-                    ),
-                    
-                    # Enhanced range slider
-                    html.Div([
-                        dcc.RangeSlider(
-                            id='snr-range-slider',
-                            min=0,
-                            max=100,
-                            step=0.1,
-                            marks={},
-                            value=[0, 100],
-                            tooltip={
-                                "placement": "bottom", 
-                                "always_visible": False,
-                                "style": {"fontSize": "12px"}
-                            },
-                            allowCross=False,
-                            className="custom-range-slider"
-                        )
-                    ], className="mb-1", style={
-                        'padding': '10px 15px', 
-                        'margin': '5px 0',
-                        'minHeight': '60px'
-                    }),
-                    
-                    # Enhanced apply button
-                    dbc.Button([
-                        html.I(className="fas fa-filter me-2"),
-                        "Apply SNR Filter"
-                    ],
-                        id="snr-render-button",
-                        color="success",
-                        size="sm",
-                        className="w-100 shadow-sm btn-enhanced",
-                        n_clicks=0,
-                        disabled=True,
-                        style={
-                            'border-radius': '8px',
-                            'font-weight': '600'
-                        }
-                    )
-                ], className="p-3")
-            ], className="border-0 shadow-sm mb-3", style={
-                'background': 'linear-gradient(135deg, #f0fff0, #ffffff)',
-                'border-radius': '12px'
-            })
+            dbc.Tabs([
+                dbc.Tab(label="PZWAV", children=[snr_pzwav_tab]),
+                dbc.Tab(label="AMICO", children=[snr_amico_tab])
+            ])
         ])
     
     @staticmethod

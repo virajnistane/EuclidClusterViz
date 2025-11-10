@@ -24,7 +24,8 @@ def test_implementation():
             ("CATRED cache preservation", "Only reset CATRED traces cache if algorithm changed" in content),
             ("SNR client-side callback setup", "_setup_snr_clientside_callback" in content),
             ("Redshift client-side callback setup", "_setup_redshift_clientside_callback" in content),
-            ("SNR range slider input", "Input('snr-range-slider', 'value')" in content),
+            ("SNR PZWAV range slider input", "Input('snr-range-slider-pzwav', 'value')" in content),
+            ("SNR AMICO range slider input", "Input('snr-range-slider-amico', 'value')" in content),
             ("Redshift range slider input", "Input('redshift-range-slider', 'value')" in content),
         ]
         
@@ -69,7 +70,8 @@ def test_implementation():
     print("• User experience: Real-time filtering without loading delays")
     
     print("\n🔧 Technical Implementation:")
-    print("• JavaScript callbacks for snr-range-slider and redshift-range-slider")
+    print("• JavaScript callbacks for snr-range-slider-pzwav, snr-range-slider-amico, and redshift-range-slider")
+    print("• Separate SNR filtering for PZWAV and AMICO data")
     print("• customdata[0] = SNR value for cluster filtering")  
     print("• customdata[1] = redshift value for cluster filtering")
     print("• Original data preservation for bidirectional filtering")

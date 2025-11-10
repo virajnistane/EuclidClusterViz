@@ -52,15 +52,32 @@ class UICallbacks:
             return f"🔍 Render CATRED Data ({catred_n_clicks})" if catred_n_clicks > 0 else "🔍 Render CATRED Data"
 
         @self.app.callback(
-            Output('snr-render-button', 'children'),
-            [Input('snr-render-button', 'n_clicks')],
+            Output('snr-render-button-pzwav', 'children'),
+            [Input('snr-render-button-pzwav', 'n_clicks')],
             prevent_initial_call=False
         )
-        def update_snr_button_text(snr_n_clicks):
-            """Update SNR button text"""
+        def update_snr_pzwav_button_text(snr_n_clicks):
+            """Update PZWAV SNR button text"""
             if snr_n_clicks is None:
                 snr_n_clicks = 0
-            return f"🎯 Update SNR Filter ({snr_n_clicks})" if snr_n_clicks > 0 else "🎯 Update SNR Filter"
+            return [
+                html.I(className="fas fa-filter me-2"),
+                f"Apply SNR Filter (PZWAV) ({snr_n_clicks})" if snr_n_clicks > 0 else "Apply SNR Filter (PZWAV)"
+            ]
+
+        @self.app.callback(
+            Output('snr-render-button-amico', 'children'),
+            [Input('snr-render-button-amico', 'n_clicks')],
+            prevent_initial_call=False
+        )
+        def update_snr_amico_button_text(snr_n_clicks):
+            """Update AMICO SNR button text"""
+            if snr_n_clicks is None:
+                snr_n_clicks = 0
+            return [
+                html.I(className="fas fa-filter me-2"),
+                f"Apply SNR Filter (AMICO) ({snr_n_clicks})" if snr_n_clicks > 0 else "Apply SNR Filter (AMICO)"
+            ]
 
         @self.app.callback(
             Output('redshift-render-button', 'children'),
@@ -86,7 +103,8 @@ class UICallbacks:
     def _setup_button_state_callbacks(self):
         """Setup callbacks to enable/disable buttons based on conditions"""
         @self.app.callback(
-            [Output('snr-render-button', 'disabled'),
+            [Output('snr-render-button-pzwav', 'disabled'),
+             Output('snr-render-button-amico', 'disabled'),
              Output('redshift-render-button', 'disabled')],
             [Input('render-button', 'n_clicks')],
             prevent_initial_call=False
@@ -96,7 +114,7 @@ class UICallbacks:
             # Disable both buttons until initial render is clicked
             n_clicks = n_clicks or 0
             disabled = n_clicks == 0
-            return disabled, disabled
+            return disabled, disabled, disabled
 
         @self.app.callback(
             Output('matching-clusters-switch', 'disabled'),

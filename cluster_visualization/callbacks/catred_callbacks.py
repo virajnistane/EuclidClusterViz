@@ -82,7 +82,8 @@ class CATREDCallbacks:
             [Input('catred-render-button', 'n_clicks')],
             [State('algorithm-dropdown', 'value'),
              State('matching-clusters-switch', 'value'),
-             State('snr-range-slider', 'value'),
+             State('snr-range-slider-pzwav', 'value'),
+             State('snr-range-slider-amico', 'value'),
              State('polygon-switch', 'value'),
              State('mer-switch', 'value'),
              State('aspect-ratio-switch', 'value'),
@@ -95,7 +96,7 @@ class CATREDCallbacks:
             prevent_initial_call=True
         )
         def manual_render_catred_data(catred_n_clicks, 
-                                      algorithm, matching_clusters, snr_range, show_polygons, show_mer_tiles, free_aspect_ratio, 
+                                      algorithm, matching_clusters, snr_range_pzwav, snr_range_amico, show_polygons, show_mer_tiles, free_aspect_ratio, 
                                       show_merged_clusters, catred_masked, threshold, maglim, relayout_data, current_figure):
             if catred_n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update
@@ -103,9 +104,23 @@ class CATREDCallbacks:
             print(f"Debug: Manual CATRED render button clicked (click #{catred_n_clicks}) with threshold={threshold}, maglim={maglim}")
             
             try:
-                # Extract SNR values from range slider
-                snr_lower = snr_range[0] if snr_range and len(snr_range) == 2 else None
-                snr_upper = snr_range[1] if snr_range and len(snr_range) == 2 else None
+                # Extract SNR values from range sliders (separate for PZWAV and AMICO)
+                snr_pzwav_lower = snr_range_pzwav[0] if snr_range_pzwav and len(snr_range_pzwav) == 2 else None
+                snr_pzwav_upper = snr_range_pzwav[1] if snr_range_pzwav and len(snr_range_pzwav) == 2 else None
+                
+                snr_amico_lower = snr_range_amico[0] if snr_range_amico and len(snr_range_amico) == 2 else None
+                snr_amico_upper = snr_range_amico[1] if snr_range_amico and len(snr_range_amico) == 2 else None
+                
+                # Determine which SNR range to use based on algorithm
+                if algorithm == 'PZWAV':
+                    snr_lower = snr_pzwav_lower
+                    snr_upper = snr_pzwav_upper
+                elif algorithm == 'AMICO':
+                    snr_lower = snr_amico_lower
+                    snr_upper = snr_amico_upper
+                else:  # BOTH
+                    snr_lower = (snr_pzwav_lower, snr_amico_lower)
+                    snr_upper = (snr_pzwav_upper, snr_amico_upper)
                 
                 # Load data for selected algorithm
                 data = self.load_data(algorithm)
@@ -133,7 +148,8 @@ class CATREDCallbacks:
                     existing_catred_traces=existing_catred_traces,
                     existing_mosaic_traces=existing_mosaic_traces,  # 🆕 PASS MOSAIC TRACES
                     existing_mask_overlay_traces=existing_mask_overlay_traces,  # 🆕 PASS MASK OVERLAY TRACES
-                    snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper,
+                    snr_threshold_lower_pzwav=snr_pzwav_lower, snr_threshold_upper_pzwav=snr_pzwav_upper,
+                    snr_threshold_lower_amico=snr_amico_lower, snr_threshold_upper_amico=snr_amico_upper,
                     threshold=threshold, show_merged_clusters=show_merged_clusters, matching_clusters=matching_clusters
                 )
 
@@ -185,28 +201,43 @@ class CATREDCallbacks:
             [Input('catred-clear-button', 'n_clicks')],
             [State('algorithm-dropdown', 'value'),
              State('matching-clusters-switch', 'value'),
-             State('snr-range-slider', 'value'),  # 🔧 FIX: Use range slider instead
-             State('redshift-range-slider', 'value'),  # 🔧 FIX: Add redshift slider
+             State('snr-range-slider-pzwav', 'value'),
+             State('snr-range-slider-amico', 'value'),
+             State('redshift-range-slider', 'value'),
              State('polygon-switch', 'value'),
              State('mer-switch', 'value'),
              State('aspect-ratio-switch', 'value'),
              State('merged-clusters-switch', 'value'),
-             State('catred-mode-switch', 'value'),  # 🔧 FIX: Use correct parameter name
+             State('catred-mode-switch', 'value'),
              State('cluster-plot', 'relayoutData'),
-             State('cluster-plot', 'figure'),  # 🆕 ADD CURRENT FIGURE STATE
+             State('cluster-plot', 'figure'),
              State('render-button', 'n_clicks')],
             prevent_initial_call=True
         )
-        def clear_catred_data(clear_n_clicks, algorithm, matching_clusters, snr_range, redshift_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_merged_clusters, catred_masked, relayout_data, current_figure, render_n_clicks):
+        def clear_catred_data(clear_n_clicks, algorithm, matching_clusters, snr_range_pzwav, snr_range_amico, redshift_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_merged_clusters, catred_masked, relayout_data, current_figure, render_n_clicks):
             if clear_n_clicks == 0 or render_n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update
             
             print(f"Debug: Clear CATRED data button clicked (click #{clear_n_clicks})")
             
             try:
-                # Extract SNR values from range slider
-                snr_lower = snr_range[0] if snr_range and len(snr_range) == 2 else None
-                snr_upper = snr_range[1] if snr_range and len(snr_range) == 2 else None
+                # Extract SNR values from range sliders (separate for PZWAV and AMICO)
+                snr_pzwav_lower = snr_range_pzwav[0] if snr_range_pzwav and len(snr_range_pzwav) == 2 else None
+                snr_pzwav_upper = snr_range_pzwav[1] if snr_range_pzwav and len(snr_range_pzwav) == 2 else None
+                
+                snr_amico_lower = snr_range_amico[0] if snr_range_amico and len(snr_range_amico) == 2 else None
+                snr_amico_upper = snr_range_amico[1] if snr_range_amico and len(snr_range_amico) == 2 else None
+                
+                # Determine which SNR range to use based on algorithm
+                if algorithm == 'PZWAV':
+                    snr_lower = snr_pzwav_lower
+                    snr_upper = snr_pzwav_upper
+                elif algorithm == 'AMICO':
+                    snr_lower = snr_amico_lower
+                    snr_upper = snr_amico_upper
+                else:  # BOTH
+                    snr_lower = (snr_pzwav_lower, snr_amico_lower)
+                    snr_upper = (snr_pzwav_upper, snr_amico_upper)
                 
                 # Extract redshift values from range slider
                 z_lower = redshift_range[0] if redshift_range and len(redshift_range) == 2 else None
@@ -237,7 +268,8 @@ class CATREDCallbacks:
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, catred_masked='none',
                                           existing_mosaic_traces=existing_mosaic_traces,  # 🆕 PRESERVE MOSAIC TRACES
                                           existing_mask_overlay_traces=existing_mask_overlay_traces,  # 🆕 PRESERVE MASK OVERLAY TRACES
-                                          snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper,
+                                          snr_threshold_lower_pzwav=snr_pzwav_lower, snr_threshold_upper_pzwav=snr_pzwav_upper,
+                                          snr_threshold_lower_amico=snr_amico_lower, snr_threshold_upper_amico=snr_amico_upper,
                                           z_threshold_lower=z_lower, z_threshold_upper=z_upper,  # 🔧 ADD REDSHIFT PARAMS
                                           show_merged_clusters=show_merged_clusters, matching_clusters=matching_clusters)
                 
@@ -290,14 +322,14 @@ class CATREDCallbacks:
     
     def create_traces(self, data, show_polygons, show_mer_tiles, relayout_data, catred_masked, 
                      existing_catred_traces=None, existing_mosaic_traces=None, existing_mask_overlay_traces=None,
-                     manual_catred_data=None, snr_threshold_lower=None, snr_threshold_upper=None, 
+                     manual_catred_data=None, snr_threshold_lower_pzwav=None, snr_threshold_upper_pzwav=None, snr_threshold_lower_amico=None, snr_threshold_upper_amico=None, 
                      z_threshold_lower=None, z_threshold_upper=None, threshold=0.8, show_merged_clusters=True, matching_clusters=False):
         """Create traces using modular or fallback method"""
         if self.trace_creator:
             return self.trace_creator.create_traces(
                 data, show_polygons, show_mer_tiles, relayout_data, catred_masked,
-                existing_catred_traces=existing_catred_traces, existing_mosaic_traces=existing_mosaic_traces, existing_mask_overlay_traces=existing_mask_overlay_traces,
-                manual_catred_data=manual_catred_data, snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, 
+                existing_catred_traces=existing_catred_traces, existing_mosaic_traces=existing_mosaic_traces, existing_mask_overlay_traces=existing_mask_overlay_traces, manual_catred_data=manual_catred_data, 
+                snr_threshold_lower_pzwav=snr_threshold_lower_pzwav, snr_threshold_upper_pzwav=snr_threshold_upper_pzwav, snr_threshold_lower_amico=snr_threshold_lower_amico, snr_threshold_upper_amico=snr_threshold_upper_amico, 
                 z_threshold_lower=z_threshold_lower, z_threshold_upper=z_threshold_upper, threshold=threshold, show_merged_clusters=show_merged_clusters,
                 matching_clusters=matching_clusters
             )
@@ -308,7 +340,8 @@ class CATREDCallbacks:
                                               existing_mosaic_traces=existing_mosaic_traces,  # 🆕 ADD MOSAIC TRACES
                                               existing_mask_overlay_traces=existing_mask_overlay_traces,
                                               manual_catred_data=manual_catred_data,
-                                              snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, 
+                                              snr_threshold_lower_pzwav=snr_threshold_lower_pzwav, snr_threshold_upper_pzwav=snr_threshold_upper_pzwav, 
+                                              snr_threshold_lower_amico=snr_threshold_lower_amico, snr_threshold_upper_amico=snr_threshold_upper_amico, 
                                               z_threshold_lower=z_threshold_lower, z_threshold_upper=z_threshold_upper, threshold=threshold, 
                                               show_merged_clusters=show_merged_clusters, matching_clusters=matching_clusters)
 
@@ -477,7 +510,8 @@ class CATREDCallbacks:
     
     def _create_traces_fallback(self, data, show_polygons, show_mer_tiles, relayout_data, catred_masked,
                                existing_catred_traces=None, existing_mosaic_traces=None, existing_mask_overlay_traces=None,
-                               manual_catred_data=None, snr_threshold_lower=None, snr_threshold_upper=None, 
+                               manual_catred_data=None, snr_threshold_lower_pzwav=None, snr_threshold_upper_pzwav=None, 
+                               snr_threshold_lower_amico=None, snr_threshold_upper_amico=None, 
                                z_threshold_lower=None, z_threshold_upper=None, threshold=0.8, show_merged_clusters=True):
         """Fallback trace creation method"""
         # This would contain the original inline trace creation logic

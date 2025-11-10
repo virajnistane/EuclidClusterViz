@@ -9,6 +9,7 @@ import dash
 from dash import Input, Output, State, html
 import plotly.graph_objs as go
 import pandas as pd
+import numpy as np
 import dash_bootstrap_components as dbc
 
 
@@ -41,31 +42,33 @@ class MainPlotCallbacks:
     
     def setup_callbacks(self):
         """Setup all main plot callbacks"""
-        self._setup_snr_slider_callback()
+        self._setup_snr_slider_pzwav_callback()
+        self._setup_snr_slider_amico_callback()
         self._setup_redshift_slider_callback()
         self._setup_main_render_callback()
         self._setup_options_update_callback()
         self._setup_threshold_clientside_callback()
-        self._setup_snr_clientside_callback()
+        self._setup_snr_pzwav_clientside_callback()
+        self._setup_snr_amico_clientside_callback()
         self._setup_redshift_clientside_callback()
     
-    def _setup_snr_slider_callback(self):
+    def _setup_snr_slider_pzwav_callback(self):
         """Setup SNR slider initialization callback"""
         @self.app.callback(
-            [Output('snr-range-slider', 'min'),
-             Output('snr-range-slider', 'max'),
-             Output('snr-range-slider', 'value'),
-             Output('snr-range-slider', 'marks'),
-             Output('snr-range-display', 'children')],
+            [Output('snr-range-slider-pzwav', 'min'),
+             Output('snr-range-slider-pzwav', 'max'),
+             Output('snr-range-slider-pzwav', 'value'),
+             Output('snr-range-slider-pzwav', 'marks'),
+             Output('snr-range-display-pzwav', 'children')],
             [Input('algorithm-dropdown', 'value')],
             prevent_initial_call=False
         )
-        def update_snr_slider(algorithm):
+        def update_snr_slider_pzwav(algorithm):
             try:
                 # Load data to get SNR range
                 data = self.load_data(algorithm)
-                snr_min = data['snr_min']
-                snr_max = data['snr_max']
+                snr_min = data['snr_min_pzwav']
+                snr_max = data['snr_max_pzwav']
                 
                 # Create marks at key points
                 marks = {
@@ -87,6 +90,44 @@ class MainPlotCallbacks:
                 # Fallback values if data loading fails
                 return 0, 100, [0, 100], {0: '0', 100: '100'}, html.Small("SNR data not available", className="text-muted")
     
+    def _setup_snr_slider_amico_callback(self):
+        """Setup SNR slider initialization callback"""
+        @self.app.callback(
+            [Output('snr-range-slider-amico', 'min'),
+             Output('snr-range-slider-amico', 'max'),
+             Output('snr-range-slider-amico', 'value'),
+             Output('snr-range-slider-amico', 'marks'),
+             Output('snr-range-display-amico', 'children')],
+            [Input('algorithm-dropdown', 'value')],
+            prevent_initial_call=False
+        )
+        def update_snr_slider_amico(algorithm):
+            try:
+                # Load data to get SNR range
+                data = self.load_data(algorithm)
+                snr_min = data['snr_min_amico']
+                snr_max = data['snr_max_amico']
+                
+                # Create marks at key points
+                marks = {
+                    snr_min: f'{snr_min:.1f}',
+                    snr_max: f'{snr_max:.1f}'
+                }
+                
+                # Default to full range
+                default_value = [snr_min, snr_max]
+                
+                display_text = html.Div([
+                    html.Small(f"SNR Range: {snr_min:.2f} to {snr_max:.2f}", className="text-muted"),
+                    html.Small(" | Move sliders to set filter range", className="text-muted")
+                ])
+                
+                return snr_min, snr_max, default_value, marks, display_text
+                
+            except Exception as e:
+                # Fallback values if data loading fails
+                return 0, 100, [0, 100], {0: '0', 100: '100'}, html.Small("SNR data not available", className="text-muted")
+            
     def _setup_redshift_slider_callback(self):
         """Setup redshift slider initialization callback"""
         @self.app.callback(
@@ -133,12 +174,14 @@ class MainPlotCallbacks:
              Output('status-info', 'children')
              ],
             [Input('render-button', 'n_clicks'),
-             Input('snr-render-button', 'n_clicks'),
+             Input('snr-render-button-pzwav', 'n_clicks'),
+             Input('snr-render-button-amico', 'n_clicks'),
              Input('redshift-render-button', 'n_clicks')
              ],
             [State('algorithm-dropdown', 'value'),
              State('matching-clusters-switch', 'value'),
-             State('snr-range-slider', 'value'),
+             State('snr-range-slider-pzwav', 'value'),
+             State('snr-range-slider-amico', 'value'),
              State('redshift-range-slider', 'value'),
              State('polygon-switch', 'value'),
              State('mer-switch', 'value'),
@@ -150,17 +193,20 @@ class MainPlotCallbacks:
              State('cluster-plot', 'relayoutData')
              ]
         )
-        def update_plot(n_clicks, snr_n_clicks, redshift_n_clicks, 
-                        algorithm, matching_clusters, snr_range, redshift_range, show_polygons, show_mer_tiles, 
+        def update_plot(n_clicks, snr_pzwav_n_clicks, snr_amico_n_clicks, redshift_n_clicks, 
+                        algorithm, matching_clusters, snr_range_pzwav, snr_range_amico, redshift_range, show_polygons, show_mer_tiles, 
                         free_aspect_ratio, show_merged_clusters, catred_masked, threshold, maglim, relayout_data):
             # Only render if button has been clicked at least once
-            if n_clicks == 0 and snr_n_clicks == 0 and redshift_n_clicks == 0:
+            if n_clicks == 0 and snr_pzwav_n_clicks == 0 and snr_amico_n_clicks == 0 and redshift_n_clicks == 0:
                 return self._create_initial_empty_plots(free_aspect_ratio)
             
             try:
-                # Extract SNR values from range slider
-                snr_lower = snr_range[0] if snr_range and len(snr_range) == 2 else None
-                snr_upper = snr_range[1] if snr_range and len(snr_range) == 2 else None
+                # Extract SNR values from range sliders (separate for PZWAV and AMICO)
+                snr_pzwav_lower = snr_range_pzwav[0] if snr_range_pzwav and len(snr_range_pzwav) == 2 else None
+                snr_pzwav_upper = snr_range_pzwav[1] if snr_range_pzwav and len(snr_range_pzwav) == 2 else None
+                
+                snr_amico_lower = snr_range_amico[0] if snr_range_amico and len(snr_range_amico) == 2 else None
+                snr_amico_upper = snr_range_amico[1] if snr_range_amico and len(snr_range_amico) == 2 else None
                 
                 # Extract redshift values from range slider
                 z_lower = redshift_range[0] if redshift_range and len(redshift_range) == 2 else None
@@ -173,9 +219,10 @@ class MainPlotCallbacks:
                 # CATRED data doesn't have SNR and shouldn't be affected by cluster-level filtering
                 # Note: This preserves CATRED data when only SNR/redshift filters change
                 
-                # Create traces
+                # Create traces with separate SNR thresholds
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, catred_masked, 
-                                            snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, 
+                                            snr_threshold_lower_pzwav=snr_pzwav_lower, snr_threshold_upper_pzwav=snr_pzwav_upper,
+                                            snr_threshold_lower_amico=snr_amico_lower, snr_threshold_upper_amico=snr_amico_upper,
                                             z_threshold_lower=z_lower, z_threshold_upper=z_upper, 
                                             threshold=threshold, maglim=maglim, show_merged_clusters=show_merged_clusters, matching_clusters=matching_clusters)
 
@@ -188,11 +235,27 @@ class MainPlotCallbacks:
                 else:
                     self._preserve_zoom_state_fallback(fig, relayout_data)
                 
-                # Calculate filtered cluster counts for status
-                filtered_merged_count = self._calculate_filtered_count(data['data_detcluster_mergedcat'], snr_lower, snr_upper, z_lower, z_upper)
+                # Calculate filtered cluster counts for status (use appropriate SNR values for display)
+                if algorithm == 'BOTH':
+                    # For BOTH mode, we'll show combined count
+                    filtered_merged_count = self._calculate_filtered_count_both(data['data_detcluster_mergedcat'], 
+                                                                                snr_pzwav_lower, snr_pzwav_upper,
+                                                                                snr_amico_lower, snr_amico_upper,
+                                                                                z_lower, z_upper)
+                    # For status display in BOTH mode, show both SNR ranges
+                    snr_lower_display = f"PZWAV: {snr_pzwav_lower:.2f}, AMICO: {snr_amico_lower:.2f}" if snr_pzwav_lower is not None and snr_amico_lower is not None else None
+                    snr_upper_display = f"PZWAV: {snr_pzwav_upper:.2f}, AMICO: {snr_amico_upper:.2f}" if snr_pzwav_upper is not None and snr_amico_upper is not None else None
+                elif algorithm == 'PZWAV':
+                    filtered_merged_count = self._calculate_filtered_count(data['data_detcluster_mergedcat'], snr_pzwav_lower, snr_pzwav_upper, z_lower, z_upper)
+                    snr_lower_display = snr_pzwav_lower
+                    snr_upper_display = snr_pzwav_upper
+                else:  # AMICO
+                    filtered_merged_count = self._calculate_filtered_count(data['data_detcluster_mergedcat'], snr_amico_lower, snr_amico_upper, z_lower, z_upper)
+                    snr_lower_display = snr_amico_lower
+                    snr_upper_display = snr_amico_upper
                 
                 # Create status info
-                status = self._create_status_info(algorithm, data, filtered_merged_count, snr_lower, snr_upper, 
+                status = self._create_status_info(algorithm, data, filtered_merged_count, snr_lower_display, snr_upper_display, 
                                                 z_lower, z_upper, show_polygons, show_mer_tiles, free_aspect_ratio, "success")
                 
                 # Create empty PHZ_PDF plot
@@ -217,7 +280,8 @@ class MainPlotCallbacks:
              Input('catred-mode-switch', 'value')],
             [State('render-button', 'n_clicks'),
              State('matching-clusters-switch', 'value'),
-             State('snr-range-slider', 'value'),
+             State('snr-range-slider-pzwav', 'value'),
+             State('snr-range-slider-amico', 'value'),
              State('redshift-range-slider', 'value'),
              State('catred-threshold-slider', 'value'),
              State('magnitude-limit-slider', 'value'),
@@ -227,16 +291,30 @@ class MainPlotCallbacks:
         )
         def update_plot_options(
             algorithm, show_polygons, show_mer_tiles, free_aspect_ratio, show_merged_clusters, catred_masked, 
-            n_clicks, matching_clusters, snr_range, redshift_range, threshold, maglim, relayout_data, current_figure
+            n_clicks, matching_clusters, snr_range_pzwav, snr_range_amico, redshift_range, threshold, maglim, relayout_data, current_figure
             ):
             # Only update if render button has been clicked at least once
             if n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update
             
             try:
-                # Extract SNR values from range slider
-                snr_lower = snr_range[0] if snr_range and len(snr_range) == 2 else None
-                snr_upper = snr_range[1] if snr_range and len(snr_range) == 2 else None
+                # Extract SNR values from range sliders (separate for PZWAV and AMICO)
+                snr_pzwav_lower = snr_range_pzwav[0] if snr_range_pzwav and len(snr_range_pzwav) == 2 else None
+                snr_pzwav_upper = snr_range_pzwav[1] if snr_range_pzwav and len(snr_range_pzwav) == 2 else None
+                
+                snr_amico_lower = snr_range_amico[0] if snr_range_amico and len(snr_range_amico) == 2 else None
+                snr_amico_upper = snr_range_amico[1] if snr_range_amico and len(snr_range_amico) == 2 else None
+                
+                # Determine which SNR range to use based on algorithm
+                if algorithm == 'PZWAV':
+                    snr_lower = snr_pzwav_lower
+                    snr_upper = snr_pzwav_upper
+                elif algorithm == 'AMICO':
+                    snr_lower = snr_amico_lower
+                    snr_upper = snr_amico_upper
+                else:  # BOTH
+                    snr_lower = (snr_pzwav_lower, snr_amico_lower)
+                    snr_upper = (snr_pzwav_upper, snr_amico_upper)
                 
                 # Extract redshift values from range slider
                 z_lower = redshift_range[0] if redshift_range and len(redshift_range) == 2 else None
@@ -252,11 +330,12 @@ class MainPlotCallbacks:
                 print(f"Debug: Options update - preserving {len(existing_catred_traces)} CATRED traces")
                 print(f"Debug: Options update - preserving {len(existing_mosaic_traces)} Mosaic traces")
 
-                # Create traces with existing CATRED traces preserved
+                # Create traces with existing CATRED traces preserved and separate SNR thresholds
                 traces = self.create_traces(data, show_polygons, show_mer_tiles, relayout_data, catred_masked, 
                                             existing_catred_traces=existing_catred_traces, 
                                             existing_mosaic_traces=existing_mosaic_traces,
-                                            snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, 
+                                            snr_threshold_lower_pzwav=snr_pzwav_lower, snr_threshold_upper_pzwav=snr_pzwav_upper,
+                                            snr_threshold_lower_amico=snr_amico_lower, snr_threshold_upper_amico=snr_amico_upper,
                                             z_threshold_lower=z_lower, z_threshold_upper=z_upper,
                                             threshold=threshold, maglim=maglim, show_merged_clusters=show_merged_clusters, matching_clusters=matching_clusters)
                 
@@ -269,11 +348,26 @@ class MainPlotCallbacks:
                 else:
                     self._preserve_zoom_state_fallback(fig, relayout_data, current_figure)
                 
-                # Calculate filtered cluster counts for status
-                filtered_merged_count = self._calculate_filtered_count(data['data_detcluster_mergedcat'], snr_lower, snr_upper, z_lower, z_upper)
+                # Calculate filtered cluster counts for status (use appropriate SNR values for display)
+                if algorithm == 'BOTH':
+                    filtered_merged_count = self._calculate_filtered_count_both(data['data_detcluster_mergedcat'], 
+                                                                                snr_pzwav_lower, snr_pzwav_upper,
+                                                                                snr_amico_lower, snr_amico_upper,
+                                                                                z_lower, z_upper)
+                    # For status display in BOTH mode, show both SNR ranges
+                    snr_lower_display = f"PZWAV: {snr_pzwav_lower:.2f}, AMICO: {snr_amico_lower:.2f}" if snr_pzwav_lower is not None and snr_amico_lower is not None else None
+                    snr_upper_display = f"PZWAV: {snr_pzwav_upper:.2f}, AMICO: {snr_amico_upper:.2f}" if snr_pzwav_upper is not None and snr_amico_upper is not None else None
+                elif algorithm == 'PZWAV':
+                    filtered_merged_count = self._calculate_filtered_count(data['data_detcluster_mergedcat'], snr_pzwav_lower, snr_pzwav_upper, z_lower, z_upper)
+                    snr_lower_display = snr_pzwav_lower
+                    snr_upper_display = snr_pzwav_upper
+                else:  # AMICO
+                    filtered_merged_count = self._calculate_filtered_count(data['data_detcluster_mergedcat'], snr_amico_lower, snr_amico_upper, z_lower, z_upper)
+                    snr_lower_display = snr_amico_lower
+                    snr_upper_display = snr_amico_upper
 
                 # Create status info
-                status = self._create_status_info(algorithm, data, filtered_merged_count, snr_lower, snr_upper, 
+                status = self._create_status_info(algorithm, data, filtered_merged_count, snr_lower_display, snr_upper_display, 
                                                 z_lower, z_upper, show_polygons, show_mer_tiles, free_aspect_ratio, "info", is_update=True)
                 
                 # Create empty PHZ_PDF plot
@@ -383,8 +477,8 @@ class MainPlotCallbacks:
             prevent_initial_call=True
         )
     
-    def _setup_snr_clientside_callback(self):
-        """Setup client-side SNR filtering callback"""
+    def _setup_snr_pzwav_clientside_callback(self):
+        """Setup client-side SNR filtering callback for PZWAV data only (DET_CODE_NB == 2)"""
         self.app.clientside_callback(
             """
             function(snrRange, figure) {
@@ -399,7 +493,7 @@ class MainPlotCallbacks:
                 for (let i = 0; i < newFigure.data.length; i++) {
                     let trace = newFigure.data[i];
                     
-                    // Only filter cluster traces with actual cluster data (have customdata with SNR/Z)
+                    // Only filter cluster traces with actual cluster data (have customdata with SNR/Z/DET_CODE)
                     // Skip polygon traces like "Tile X LEV1", "Tile X CORE", "MerTile X"
                     if (trace.name && (trace.name.includes('Merged') || 
                         (trace.name.includes('Tile') && !trace.name.includes('LEV1') && 
@@ -427,13 +521,21 @@ class MainPlotCallbacks:
                         let currentZRange = trace._currentZRange || [0, 999]; // Default wide range
                         
                         for (let j = 0; j < originalData.x.length; j++) {
-                            // Get SNR and redshift values
+                            // Get SNR, redshift, and algorithm type (DET_CODE_NB) values
                             let snrValue = originalData.customdata[j] ? originalData.customdata[j][0] : null;
                             let zValue = originalData.customdata[j] ? originalData.customdata[j][1] : null;
+                            let detCode = originalData.customdata[j] ? originalData.customdata[j][2] : null;
                             
-                            // Apply both SNR and redshift filters together
-                            let passesSnrFilter = (snrValue !== null && snrValue !== undefined && 
+                            // Only filter PZWAV clusters (DET_CODE_NB == 2)
+                            // For other algorithms, keep the cluster unchanged
+                            let passesSnrFilter = true;
+                            if (detCode === 2) {
+                                // This is a PZWAV cluster - apply PZWAV SNR filter
+                                passesSnrFilter = (snrValue !== null && snrValue !== undefined && 
                                                  snrValue >= snrLower && snrValue <= snrUpper);
+                            }
+                            // For AMICO (detCode === 1) or other, passesSnrFilter stays true
+                            
                             let passesZFilter = (zValue !== null && zValue !== undefined &&
                                                zValue >= currentZRange[0] && zValue <= currentZRange[1]);
                             
@@ -473,11 +575,114 @@ class MainPlotCallbacks:
             }
             """,
             Output('cluster-plot', 'figure', allow_duplicate=True),
-            [Input('snr-range-slider', 'value')],
+            [Input('snr-range-slider-pzwav', 'value')],
             [State('cluster-plot', 'figure')],
             prevent_initial_call=True
         )
     
+    def _setup_snr_amico_clientside_callback(self):
+        """Setup client-side SNR filtering callback for AMICO data only (DET_CODE_NB == 1)"""
+        self.app.clientside_callback(
+            """
+            function(snrRange, figure) {
+                if (!figure || !figure.data || !snrRange || snrRange.length !== 2) {
+                    return figure;
+                }
+                
+                let snrLower = snrRange[0];
+                let snrUpper = snrRange[1];
+                let newFigure = JSON.parse(JSON.stringify(figure));
+                
+                for (let i = 0; i < newFigure.data.length; i++) {
+                    let trace = newFigure.data[i];
+                    
+                    // Only filter cluster traces with actual cluster data (have customdata with SNR/Z/DET_CODE)
+                    // Skip polygon traces like "Tile X LEV1", "Tile X CORE", "MerTile X"
+                    if (trace.name && (trace.name.includes('Merged') || 
+                        (trace.name.includes('Tile') && !trace.name.includes('LEV1') && 
+                         !trace.name.includes('CORE') && !trace.name.includes('MerTile'))) &&
+                        trace.customdata && trace.customdata.length > 0) {
+                        
+                        // Store original data if not already stored
+                        if (!trace._originalClusterData) {
+                            trace._originalClusterData = {
+                                x: [...trace.x],
+                                y: [...trace.y],
+                                text: trace.text ? [...trace.text] : [],
+                                customdata: trace.customdata ? [...trace.customdata] : []
+                            };
+                        }
+                        
+                        // Always filter from original data
+                        let originalData = trace._originalClusterData;
+                        let filteredX = [];
+                        let filteredY = [];
+                        let filteredText = [];
+                        let filteredCustomdata = [];
+                        
+                        // Get current redshift filter from trace if it exists
+                        let currentZRange = trace._currentZRange || [0, 999]; // Default wide range
+                        
+                        for (let j = 0; j < originalData.x.length; j++) {
+                            // Get SNR, redshift, and algorithm type (DET_CODE_NB) values
+                            let snrValue = originalData.customdata[j] ? originalData.customdata[j][0] : null;
+                            let zValue = originalData.customdata[j] ? originalData.customdata[j][1] : null;
+                            let detCode = originalData.customdata[j] ? originalData.customdata[j][2] : null;
+                            
+                            // Only filter AMICO clusters (DET_CODE_NB == 1)
+                            // For other algorithms, keep the cluster unchanged
+                            let passesSnrFilter = true;
+                            if (detCode === 1) {
+                                // This is an AMICO cluster - apply AMICO SNR filter
+                                passesSnrFilter = (snrValue !== null && snrValue !== undefined && 
+                                                 snrValue >= snrLower && snrValue <= snrUpper);
+                            }
+                            // For PZWAV (detCode === 2) or other, passesSnrFilter stays true
+                            
+                            let passesZFilter = (zValue !== null && zValue !== undefined &&
+                                               zValue >= currentZRange[0] && zValue <= currentZRange[1]);
+                            
+                            // Include point only if it passes both filters
+                            if (passesSnrFilter && passesZFilter) {
+                                filteredX.push(originalData.x[j]);
+                                filteredY.push(originalData.y[j]);
+                                if (originalData.text && originalData.text[j]) {
+                                    filteredText.push(originalData.text[j]);
+                                }
+                                if (originalData.customdata && originalData.customdata[j]) {
+                                    filteredCustomdata.push(originalData.customdata[j]);
+                                }
+                            }
+                        }
+                        
+                        // Update trace data with filtered results
+                        newFigure.data[i].x = filteredX;
+                        newFigure.data[i].y = filteredY;
+                        if (originalData.text && originalData.text.length > 0) {
+                            newFigure.data[i].text = filteredText;
+                        }
+                        if (originalData.customdata && originalData.customdata.length > 0) {
+                            newFigure.data[i].customdata = filteredCustomdata;
+                        }
+                        
+                        // Store current SNR range and preserve original data references
+                        newFigure.data[i]._currentSnrRange = [snrLower, snrUpper];
+                        newFigure.data[i]._originalClusterData = originalData;
+                        if (trace._currentZRange) {
+                            newFigure.data[i]._currentZRange = trace._currentZRange;
+                        }
+                    }
+                }
+                
+                return newFigure;
+            }
+            """,
+            Output('cluster-plot', 'figure', allow_duplicate=True),
+            [Input('snr-range-slider-amico', 'value')],
+            [State('cluster-plot', 'figure')],
+            prevent_initial_call=True
+        )
+
     def _setup_redshift_clientside_callback(self):
         """Setup client-side redshift filtering callback"""
         self.app.clientside_callback(
@@ -583,7 +788,8 @@ class MainPlotCallbacks:
 
     def create_traces(self, data, show_polygons, show_mer_tiles, relayout_data, catred_masked,
                      existing_catred_traces=None, existing_mosaic_traces=None, manual_catred_data=None,
-                     snr_threshold_lower=None, snr_threshold_upper=None,
+                     snr_threshold_lower_pzwav=None, snr_threshold_upper_pzwav=None,
+                     snr_threshold_lower_amico=None, snr_threshold_upper_amico=None,
                      z_threshold_lower=None, z_threshold_upper=None,
                      threshold=0.8, maglim=None, show_merged_clusters=True, matching_clusters=False):
         """Create traces using modular or fallback method"""
@@ -592,7 +798,8 @@ class MainPlotCallbacks:
                 data, show_polygons, show_mer_tiles, relayout_data, catred_masked,
                 existing_catred_traces=existing_catred_traces, existing_mosaic_traces=existing_mosaic_traces, 
                 manual_catred_data=manual_catred_data,
-                snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, 
+                snr_threshold_lower_pzwav=snr_threshold_lower_pzwav, snr_threshold_upper_pzwav=snr_threshold_upper_pzwav, 
+                snr_threshold_lower_amico=snr_threshold_lower_amico, snr_threshold_upper_amico=snr_threshold_upper_amico,
                 z_threshold_lower=z_threshold_lower, z_threshold_upper=z_threshold_upper, 
                 threshold=threshold, maglim=maglim, show_merged_clusters=show_merged_clusters, matching_clusters=matching_clusters
             )
@@ -600,7 +807,8 @@ class MainPlotCallbacks:
             # Fallback to inline trace creation
             return self._create_traces_fallback(data, show_polygons, show_mer_tiles, relayout_data, catred_masked,
                                               existing_mer_traces=existing_catred_traces, manual_mer_data=manual_catred_data,
-                                              snr_threshold_lower=snr_threshold_lower, snr_threshold_upper=snr_threshold_upper, 
+                                              snr_threshold_lower_pzwav=snr_threshold_lower_pzwav, snr_threshold_upper_pzwav=snr_threshold_upper_pzwav, 
+                                              snr_threshold_lower_amico=snr_threshold_lower_amico, snr_threshold_upper_amico=snr_threshold_upper_amico,
                                               z_threshold_lower=z_threshold_lower, z_threshold_upper=z_threshold_upper, 
                                               threshold=threshold, show_merged_clusters=show_merged_clusters, matching_clusters=matching_clusters)
 
@@ -787,10 +995,48 @@ class MainPlotCallbacks:
         elif z_lower is not None and z_upper is None:
             return len(cluster_data_1[cluster_data_1['Z_CLUSTER'] >= z_lower])
 
+    def _calculate_filtered_count_both(self, cluster_data, snr_pzwav_lower, snr_pzwav_upper, 
+                                      snr_amico_lower, snr_amico_upper, z_lower, z_upper):
+        """Calculate filtered cluster count for BOTH mode with separate SNR ranges"""
+        # Filter PZWAV clusters (DET_CODE_NB == 2)
+        pzwav_data = cluster_data[cluster_data['DET_CODE_NB'] == 2]
+        if snr_pzwav_lower is not None and snr_pzwav_upper is not None:
+            pzwav_data = pzwav_data[
+                (pzwav_data['SNR_CLUSTER'] >= snr_pzwav_lower) & 
+                (pzwav_data['SNR_CLUSTER'] <= snr_pzwav_upper)
+            ]
+        
+        # Filter AMICO clusters (DET_CODE_NB == 1)
+        amico_data = cluster_data[cluster_data['DET_CODE_NB'] == 1]
+        if snr_amico_lower is not None and snr_amico_upper is not None:
+            amico_data = amico_data[
+                (amico_data['SNR_CLUSTER'] >= snr_amico_lower) & 
+                (amico_data['SNR_CLUSTER'] <= snr_amico_upper)
+            ]
+        
+        # Combine filtered data
+        combined_data = np.concatenate([pzwav_data, amico_data])
+        
+        # Apply redshift filter
+        if z_lower is not None and z_upper is not None:
+            combined_data = combined_data[
+                (combined_data['Z_CLUSTER'] >= z_lower) & 
+                (combined_data['Z_CLUSTER'] <= z_upper)
+            ]
+        elif z_lower is not None:
+            combined_data = combined_data[combined_data['Z_CLUSTER'] >= z_lower]
+        elif z_upper is not None:
+            combined_data = combined_data[combined_data['Z_CLUSTER'] <= z_upper]
+        
+        return len(combined_data)
 
     def _create_status_info(self, algorithm, data, filtered_merged_count, snr_lower, snr_upper, 
                            z_lower, z_upper, show_polygons, show_mer_tiles, free_aspect_ratio, alert_color, is_update=False):
-        """Create status information display"""
+        """Create status information display
+        
+        Note: snr_lower and snr_upper can be either single float values or formatted strings
+        (e.g., "PZWAV: 4.50, AMICO: 3.20") for BOTH mode.
+        """
         # Status info
         mer_status = ""
         if show_mer_tiles and not show_polygons:
@@ -804,7 +1050,17 @@ class MainPlotCallbacks:
         
         # Format SNR filter status
         snr_filter_text = "No SNR filtering"
-        if snr_lower is not None and snr_upper is not None:
+        
+        # Check if snr_lower/snr_upper are already formatted strings (for BOTH mode)
+        if isinstance(snr_lower, str) or isinstance(snr_upper, str):
+            # Already formatted for BOTH mode
+            if snr_lower is not None and snr_upper is not None:
+                snr_filter_text = f"{snr_lower} ≤ SNR ≤ {snr_upper}"
+            elif snr_lower is not None:
+                snr_filter_text = f"SNR ≥ {snr_lower}"
+            elif snr_upper is not None:
+                snr_filter_text = f"SNR ≤ {snr_upper}"
+        elif snr_lower is not None and snr_upper is not None:
             snr_filter_text = f"{snr_lower:.3f} ≤ SNR ≤ {snr_upper:.3f}"
         elif snr_lower is not None:
             snr_filter_text = f"SNR ≥ {snr_lower:.3f}"
@@ -851,8 +1107,8 @@ class MainPlotCallbacks:
         }
 
     def _create_traces_fallback(self, data, show_polygons, show_mer_tiles, relayout_data, catred_masked,
-                               existing_mer_traces=None, existing_mosaic_traces=None,
-                               manual_mer_data=None, snr_threshold_lower=None, snr_threshold_upper=None,
+                               existing_mer_traces=None, existing_mosaic_traces=None, manual_mer_data=None, 
+                               snr_threshold_lower_pzwav=None, snr_threshold_upper_pzwav=None, snr_threshold_lower_amico=None, snr_threshold_upper_amico=None,
                                z_threshold_lower=None, z_threshold_upper=None, threshold=0.8, show_merged_clusters=True, matching_clusters=False):
         """Fallback trace creation method"""
         # This would contain the original inline trace creation logic
