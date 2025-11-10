@@ -423,8 +423,8 @@ class ClusterModalCallbacks:
              Output('cluster-analysis-results', 'children'),
              Output('status-info', 'children', allow_duplicate=True)],
             [Input('tab-generate-cutout', 'n_clicks'),
-             Input('tab-phz-button', 'n_clicks'),
              Input('tab-view-catred-box', 'n_clicks'),
+             Input('tab-healpix-mask-button', 'n_clicks'),
              Input('tab-export-button', 'n_clicks')],
              #
             [State('algorithm-dropdown', 'value'),
@@ -455,7 +455,7 @@ class ClusterModalCallbacks:
              State('cluster-plot', 'figure')],
             prevent_initial_call=True
         )
-        def handle_tab_actions(cutout_clicks, phz_clicks, catred_box_clicks, export_clicks,
+        def handle_tab_actions(cutout_clicks, catred_box_clicks, healpix_mask_clicks, export_clicks,
                                algorithm, snr_range, redshift_range, show_polygons, show_mer_tiles, free_aspect_ratio, show_merged_clusters,
                                cutout_size, cutout_type, cutout_opacity, cutout_colorscale,
                                catred_box_size, catred_redshift_bin_width, catred_mask_threshold, catred_maglim, catred_marker_size_option, catred_marker_size_custom, catred_marker_color,
@@ -578,29 +578,6 @@ class ClusterModalCallbacks:
                 print(f"🔬 Tab cutout: RA={cluster['ra']}, Dec={cluster['dec']}, Size={cutout_size}, Type={cutout_type}")
                 return current_figure, empty_phz_fig, results_content, status_msg
 
-            elif button_id == 'tab-healpix-mask-button':
-                results_content = dbc.Card([
-                    dbc.CardHeader([
-                        html.H6([html.I(className="fas fa-layer-group me-2"), "Healpix Mask Cutout"], className="mb-0 text-success")
-                    ]),
-                    dbc.CardBody([
-                        html.P([
-                            html.Strong("Current z: "), f"{cluster['redshift']}",
-                            html.Br(),
-                            html.Strong("SNR: "), f"{cluster['snr']}",
-                            html.Br(),
-                            html.Strong("Status: "), html.Span("Analysis Complete", className="text-success")
-                        ])
-                    ])
-                ])
-                
-                status_msg = dbc.Alert([
-                    html.H6("🗺️ Healpix Mask Cutout Complete", className="mb-2"),
-                    html.P(f"🎯 z={cluster['redshift']} | SNR={cluster['snr']}")
-                ], color="success")
-
-                return dash.no_update, dash.no_update, results_content, status_msg
-
             elif button_id == 'tab-view-catred-box':
                 results_content = dbc.Card([
                     dbc.CardHeader([
@@ -681,6 +658,29 @@ class ClusterModalCallbacks:
                 ], color="primary")
 
                 return fig, empty_phz_fig, results_content, status_msg
+
+            elif button_id == 'tab-healpix-mask-button':
+                results_content = dbc.Card([
+                    dbc.CardHeader([
+                        html.H6([html.I(className="fas fa-layer-group me-2"), "Healpix Mask Cutout"], className="mb-0 text-success")
+                    ]),
+                    dbc.CardBody([
+                        html.P([
+                            html.Strong("Current z: "), f"{cluster['redshift']}",
+                            html.Br(),
+                            html.Strong("SNR: "), f"{cluster['snr']}",
+                            html.Br(),
+                            html.Strong("Status: "), html.Span("Analysis Complete", className="text-success")
+                        ])
+                    ])
+                ])
+                
+                status_msg = dbc.Alert([
+                    html.H6("🗺️ Healpix Mask Cutout Complete", className="mb-2"),
+                    html.P(f"🎯 z={cluster['redshift']} | SNR={cluster['snr']}")
+                ], color="success")
+
+                return dash.no_update, dash.no_update, results_content, status_msg
 
             elif button_id == 'tab-export-button':
                 results_content = dbc.Card([
