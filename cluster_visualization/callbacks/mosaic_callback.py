@@ -43,6 +43,12 @@ class MOSAICCallbacks:
         self._setup_healpix_mask_button_state_callback()
         self._setup_mosaic_render_callback()
         self._setup_mask_overlay_callback()
+        self._setup_mosaic_visibility_toggle_callback()
+        self._setup_mosaic_delete_callback()
+        self._setup_mosaic_control_buttons_state_callback()
+        self._setup_mask_visibility_toggle_callback()
+        self._setup_mask_delete_callback()
+        self._setup_mask_control_buttons_state_callback()
 
     def _setup_mosaic_button_state_callback(self):
         """Setup callback to enable/disable MOSAIC render button based on zoom level"""
@@ -314,6 +320,212 @@ class MOSAICCallbacks:
                 import traceback
                 traceback.print_exc()
                 return current_figure
+
+    def _setup_mosaic_visibility_toggle_callback(self):
+        """Setup clientside callback to toggle mosaic trace visibility without deleting from memory"""
+        self.app.clientside_callback(
+            """
+            function(n_clicks, figure) {
+                if (!n_clicks || !figure || !figure.data) {
+                    return [figure, window.dash_clientside.no_update];
+                }
+                
+                let newFigure = JSON.parse(JSON.stringify(figure));
+                let hasMosaicTraces = false;
+                let allMosaicsHidden = true;
+                
+                // First pass: check if there are mosaic traces and their visibility state
+                for (let i = 0; i < newFigure.data.length; i++) {
+                    let trace = newFigure.data[i];
+                    if (trace.name && trace.name.startsWith('Mosaic')) {
+                        hasMosaicTraces = true;
+                        if (trace.visible !== false && trace.visible !== 'legendonly') {
+                            allMosaicsHidden = false;
+                        }
+                    }
+                }
+                
+                if (!hasMosaicTraces) {
+                    return [figure, window.dash_clientside.no_update];
+                }
+                
+                // Toggle visibility: if all hidden, show them; otherwise hide them
+                let newVisibility = allMosaicsHidden ? true : 'legendonly';
+                
+                for (let i = 0; i < newFigure.data.length; i++) {
+                    let trace = newFigure.data[i];
+                    if (trace.name && trace.name.startsWith('Mosaic')) {
+                        newFigure.data[i].visible = newVisibility;
+                    }
+                }
+                
+                // Update button text and icon
+                let buttonContent = allMosaicsHidden ? 
+                    [{"namespace": "dash_html_components", "type": "I", "props": {"className": "fas fa-eye me-1"}}, "Hide Mosaic"] :
+                    [{"namespace": "dash_html_components", "type": "I", "props": {"className": "fas fa-eye-slash me-1"}}, "Show Mosaic"];
+                
+                return [newFigure, buttonContent];
+            }
+            """,
+            [Output('cluster-plot', 'figure', allow_duplicate=True),
+             Output('mosaic-toggle-visibility-button', 'children')],
+            [Input('mosaic-toggle-visibility-button', 'n_clicks')],
+            [State('cluster-plot', 'figure')],
+            prevent_initial_call=True
+        )
+
+    def _setup_mosaic_delete_callback(self):
+        """Setup server-side callback to delete mosaic traces from memory"""
+        @self.app.callback(
+            Output('cluster-plot', 'figure', allow_duplicate=True),
+            [Input('mosaic-delete-button', 'n_clicks')],
+            [State('cluster-plot', 'figure')],
+            prevent_initial_call=True
+        )
+        def delete_mosaic_traces(n_clicks, current_figure):
+            """Delete all mosaic traces from the figure"""
+            if not n_clicks or not current_figure or 'data' not in current_figure:
+                return current_figure
+            
+            # Filter out all mosaic traces
+            filtered_traces = [trace for trace in current_figure['data'] 
+                             if not (trace.get('name', '').startswith('Mosaic'))]
+            
+            current_figure['data'] = filtered_traces
+            print(f"🗑️ Deleted mosaic traces from memory. Remaining traces: {len(filtered_traces)}")
+            
+            return current_figure
+
+    def _setup_mosaic_control_buttons_state_callback(self):
+        """Setup callback to enable/disable mosaic control buttons based on presence of mosaic traces"""
+        self.app.clientside_callback(
+            """
+            function(figure) {
+                if (!figure || !figure.data) {
+                    return [true, true];  // Both disabled
+                }
+                
+                // Check if there are any mosaic traces
+                let hasMosaicTraces = false;
+                for (let i = 0; i < figure.data.length; i++) {
+                    if (figure.data[i].name && figure.data[i].name.startsWith('Mosaic')) {
+                        hasMosaicTraces = true;
+                        break;
+                    }
+                }
+                
+                // Enable buttons if mosaic traces exist
+                return [!hasMosaicTraces, !hasMosaicTraces];
+            }
+            """,
+            [Output('mosaic-toggle-visibility-button', 'disabled'),
+             Output('mosaic-delete-button', 'disabled')],
+            [Input('cluster-plot', 'figure')],
+            prevent_initial_call=True
+        )
+
+    def _setup_mask_visibility_toggle_callback(self):
+        """Setup clientside callback to toggle mask overlay trace visibility without deleting from memory"""
+        self.app.clientside_callback(
+            """
+            function(n_clicks, figure) {
+                if (!n_clicks || !figure || !figure.data) {
+                    return [figure, window.dash_clientside.no_update];
+                }
+                
+                let newFigure = JSON.parse(JSON.stringify(figure));
+                let hasMaskTraces = false;
+                let allMasksHidden = true;
+                
+                // First pass: check if there are mask overlay traces and their visibility state
+                for (let i = 0; i < newFigure.data.length; i++) {
+                    let trace = newFigure.data[i];
+                    if (trace.name && trace.name.startsWith('Mask overlay')) {
+                        hasMaskTraces = true;
+                        if (trace.visible !== false && trace.visible !== 'legendonly') {
+                            allMasksHidden = false;
+                        }
+                    }
+                }
+                
+                if (!hasMaskTraces) {
+                    return [figure, window.dash_clientside.no_update];
+                }
+                
+                // Toggle visibility: if all hidden, show them; otherwise hide them
+                let newVisibility = allMasksHidden ? true : 'legendonly';
+                
+                for (let i = 0; i < newFigure.data.length; i++) {
+                    let trace = newFigure.data[i];
+                    if (trace.name && trace.name.startsWith('Mask overlay')) {
+                        newFigure.data[i].visible = newVisibility;
+                    }
+                }
+                
+                // Update button text and icon
+                let buttonContent = allMasksHidden ? 
+                    [{"namespace": "dash_html_components", "type": "I", "props": {"className": "fas fa-eye me-1"}}, "Hide Mask"] :
+                    [{"namespace": "dash_html_components", "type": "I", "props": {"className": "fas fa-eye-slash me-1"}}, "Show Mask"];
+                
+                return [newFigure, buttonContent];
+            }
+            """,
+            [Output('cluster-plot', 'figure', allow_duplicate=True),
+             Output('mask-toggle-visibility-button', 'children')],
+            [Input('mask-toggle-visibility-button', 'n_clicks')],
+            [State('cluster-plot', 'figure')],
+            prevent_initial_call=True
+        )
+
+    def _setup_mask_delete_callback(self):
+        """Setup server-side callback to delete mask overlay traces from memory"""
+        @self.app.callback(
+            Output('cluster-plot', 'figure', allow_duplicate=True),
+            [Input('mask-delete-button', 'n_clicks')],
+            [State('cluster-plot', 'figure')],
+            prevent_initial_call=True
+        )
+        def delete_mask_traces(n_clicks, current_figure):
+            """Delete all mask overlay traces from the figure"""
+            if not n_clicks or not current_figure or 'data' not in current_figure:
+                return current_figure
+            
+            # Filter out all mask overlay traces
+            filtered_traces = [trace for trace in current_figure['data'] 
+                             if not (trace.get('name', '').startswith('Mask overlay'))]
+            
+            current_figure['data'] = filtered_traces
+            print(f"🗑️ Deleted mask overlay traces from memory. Remaining traces: {len(filtered_traces)}")
+            
+            return current_figure
+
+    def _setup_mask_control_buttons_state_callback(self):
+        """Setup callback to enable/disable mask control buttons based on presence of mask traces"""
+        self.app.clientside_callback(
+            """
+            function(figure) {
+                if (!figure || !figure.data) {
+                    return [true, true];  // Both disabled
+                }
+                
+                // Check if there are any mask overlay traces
+                let hasMaskTraces = false;
+                for (let i = 0; i < figure.data.length; i++) {
+                    if (figure.data[i].name && figure.data[i].name.startsWith('Mask overlay')) {
+                        hasMaskTraces = true;
+                        break;
+                    }
+                }
+                
+                // Enable buttons if mask traces exist
+                return [!hasMaskTraces, !hasMaskTraces];
+            }
+            """,
+            [Output('mask-toggle-visibility-button', 'disabled'),
+             Output('mask-delete-button', 'disabled')],
+            [Input('cluster-plot', 'figure')],
+            prevent_initial_call=True
+        )
         
     # Helper methods
     def _extract_zoom_ranges(self, relayout_data):

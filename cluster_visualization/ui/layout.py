@@ -764,7 +764,42 @@ class AppLayout:
                     html.Small([
                         html.I(className="fas fa-image me-1"),
                         "Load mosaic images for visible MER tiles"
-                    ], className="text-muted d-block text-left mb-0")
+                    ], className="text-muted d-block text-left mb-2"),
+                    
+                    # Mosaic visibility and delete controls
+                    html.Div([
+                        dbc.Button([
+                            html.I(className="fas fa-eye me-1"),
+                            "Hide Mosaic"
+                        ],
+                            id="mosaic-toggle-visibility-button",
+                            color="secondary",
+                            size="sm",
+                            outline=True,
+                            className="me-1",
+                            n_clicks=0,
+                            disabled=True,
+                            style={
+                                'border-radius': '6px',
+                                'font-size': '0.85rem'
+                            }
+                        ),
+                        dbc.Button([
+                            html.I(className="fas fa-trash me-1"),
+                            "Delete"
+                        ],
+                            id="mosaic-delete-button",
+                            color="danger",
+                            size="sm",
+                            outline=True,
+                            n_clicks=0,
+                            disabled=True,
+                            style={
+                                'border-radius': '6px',
+                                'font-size': '0.85rem'
+                            }
+                        )
+                    ], className="d-flex justify-content-between")
                 ], className="p-3")
             ], className="mb-3 border-0 shadow-sm", style={
                 'background': 'linear-gradient(45deg, #e8f4f8, #ffffff)',
@@ -831,7 +866,42 @@ class AppLayout:
                     html.Small([
                         html.I(className="fas fa-image me-1"),
                         "Load healpix mask overlay for visible MER tiles"
-                    ], className="text-muted d-block text-left mb-0")
+                    ], className="text-muted d-block text-left mb-2"),
+                    
+                    # Healpix mask visibility and delete controls
+                    html.Div([
+                        dbc.Button([
+                            html.I(className="fas fa-eye me-1"),
+                            "Hide Mask"
+                        ],
+                            id="mask-toggle-visibility-button",
+                            color="secondary",
+                            size="sm",
+                            outline=True,
+                            className="me-1",
+                            n_clicks=0,
+                            disabled=True,
+                            style={
+                                'border-radius': '6px',
+                                'font-size': '0.85rem'
+                            }
+                        ),
+                        dbc.Button([
+                            html.I(className="fas fa-trash me-1"),
+                            "Delete"
+                        ],
+                            id="mask-delete-button",
+                            color="danger",
+                            size="sm",
+                            outline=True,
+                            n_clicks=0,
+                            disabled=True,
+                            style={
+                                'border-radius': '6px',
+                                'font-size': '0.85rem'
+                            }
+                        )
+                    ], className="d-flex justify-content-between")
                 ], className="p-3")
             ], className="mb-3 border-0 shadow-sm", style={
                 'background': 'linear-gradient(45deg, #e8f4f8, #ffffff)',
