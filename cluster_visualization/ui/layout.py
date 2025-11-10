@@ -944,8 +944,8 @@ class AppLayout:
                 dbc.Row([
                     dbc.Col([
                         dbc.Button(
-                            [html.I(className="fas fa-chart-line me-2"), "Analyze PHZ"],
-                            id="cluster-phz-button", 
+                            [html.I(className="fas fa-layer-group me-2"), "Healpix Mask Cutout"],
+                            id="cluster-healpix-mask-button", 
                             color="info",
                             disabled=True,
                             className="w-100 mb-2",
@@ -1142,8 +1142,8 @@ class AppLayout:
                 dbc.Row([
                     dbc.Col([
                         dbc.Button(
-                            [html.I(className="fas fa-chart-line me-2"), "PHZ Analysis"],
-                            id="tab-phz-button",
+                            [html.I(className="fas fa-layer-group me-2"), "Healpix Mask Cutout"],
+                            id="tab-healpix-mask-button",
                             color="info",
                             disabled=True,
                             className="w-100 mb-2",

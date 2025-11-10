@@ -578,10 +578,10 @@ class ClusterModalCallbacks:
                 print(f"🔬 Tab cutout: RA={cluster['ra']}, Dec={cluster['dec']}, Size={cutout_size}, Type={cutout_type}")
                 return current_figure, empty_phz_fig, results_content, status_msg
 
-            elif button_id == 'tab-phz-button':
+            elif button_id == 'tab-healpix-mask-button':
                 results_content = dbc.Card([
                     dbc.CardHeader([
-                        html.H6([html.I(className="fas fa-chart-line me-2"), "PHZ Analysis"], className="mb-0 text-success")
+                        html.H6([html.I(className="fas fa-layer-group me-2"), "Healpix Mask Cutout"], className="mb-0 text-success")
                     ]),
                     dbc.CardBody([
                         html.P([
@@ -595,7 +595,7 @@ class ClusterModalCallbacks:
                 ])
                 
                 status_msg = dbc.Alert([
-                    html.H6("📈 PHZ Analysis Complete", className="mb-2"),
+                    html.H6("🗺️ Healpix Mask Cutout Complete", className="mb-2"),
                     html.P(f"🎯 z={cluster['redshift']} | SNR={cluster['snr']}")
                 ], color="success")
 
