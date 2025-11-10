@@ -170,8 +170,34 @@ class AppLayout:
                         }
                     )
                 ], className="p-2")
-            ], className="border-0 shadow-sm", style={
+            ], className="border-0 shadow-sm mb-3", style={
                 'background': 'linear-gradient(45deg, #f8f9ff, #ffffff)',
+                'border-radius': '10px'
+            })
+        ])
+    
+
+    @staticmethod
+    def _create_merged_clusters_section():
+        return html.Div([
+            dbc.Card([
+                dbc.CardBody([
+                    html.Div([
+                        html.I(className="fas fa-layer-group me-0 text-primary"),
+                        dbc.Switch(
+                            id="merged-clusters-switch",
+                            label="Show merged catalog members",
+                            value=False,
+                            className="ms-0"
+                        )
+                    ], className="d-flex align-items-left mb-0"),
+                    html.Small([
+                        html.I(className="fas fa-info-circle me-0"),
+                        "Cluster detections from Merge_Cl code, merged over Cluster-Tiles"
+                    ], className="text-muted ms-0")
+                ])
+            ], className="mb-3 border-0 shadow-sm", style={
+                'background': 'linear-gradient(45deg, #f0f8ff, #ffffff)',
                 'border-radius': '10px'
             })
         ])
@@ -184,19 +210,19 @@ class AppLayout:
             dbc.Card([
                 dbc.CardBody([
                     html.Div([
-                        html.I(className="fas fa-object-group me-2 text-primary"),
+                        html.I(className="fas fa-object-group me-0 text-primary"),
                         dbc.Switch(
                             id="matching-clusters-switch",
                             label="Show matched clusters (CAT-CL)",
                             value=False,
                             disabled=True,
-                            className="ms-2"
+                            className="ms-0"
                         )
-                    ], className="d-flex align-items-center mb-2"),
+                    ], className="d-flex align-items-left mb-0"),
                     html.Small([
-                        html.I(className="fas fa-info-circle me-1"),
+                        html.I(className="fas fa-info-circle me-0"),
                         "Only in PZWAV+AMICO mode"
-                    ], className="text-muted ms-4")
+                    ], className="text-muted ms-0")
                 ])
             ], className="mb-3 border-0 shadow-sm", style={
                 'background': 'linear-gradient(45deg, #f0f8ff, #ffffff)',
@@ -209,9 +235,9 @@ class AppLayout:
         """Create SNR filtering section with enhanced styling"""
         return html.Div([
             html.Div([
-                html.I(className="fas fa-signal me-2 text-success"),
-                html.Label("SNR Filtering:", className="fw-bold mb-0")
-            ], className="d-flex align-items-center mb-3"),
+                html.I(className="fas fa-signal me-1 text-success"),
+                html.Label("SNR Filtering:", className="fw-bold mb-1")
+            ], className="d-flex align-items-left mb-0"),
             
             dbc.Card([
                 dbc.CardBody([
@@ -245,7 +271,7 @@ class AppLayout:
                             allowCross=False,
                             className="custom-range-slider"
                         )
-                    ], className="mb-3", style={
+                    ], className="mb-1", style={
                         'padding': '10px 15px', 
                         'margin': '5px 0',
                         'minHeight': '60px'
@@ -268,7 +294,7 @@ class AppLayout:
                         }
                     )
                 ], className="p-3")
-            ], className="border-0 shadow-sm", style={
+            ], className="border-0 shadow-sm mb-3", style={
                 'background': 'linear-gradient(135deg, #f0fff0, #ffffff)',
                 'border-radius': '12px'
             })
@@ -279,9 +305,9 @@ class AppLayout:
         """Create redshift filtering section with enhanced styling"""
         return html.Div([
             html.Div([
-                html.I(className="fas fa-expand-arrows-alt me-2 text-danger"),
-                html.Label("Redshift Filtering:", className="fw-bold mb-0")
-            ], className="d-flex align-items-center mb-3"),
+                html.I(className="fas fa-expand-arrows-alt me-1 text-danger"),
+                html.Label("Redshift Filtering:", className="fw-bold mb-1")
+            ], className="d-flex align-items-left mb-0"),
             
             dbc.Card([
                 dbc.CardBody([
@@ -315,7 +341,7 @@ class AppLayout:
                             allowCross=False,
                             className="custom-range-slider"
                         )
-                    ], className="mb-3", style={
+                    ], className="mb-1", style={
                         'padding': '10px 15px', 
                         'margin': '5px 0',
                         'minHeight': '60px'
@@ -349,38 +375,38 @@ class AppLayout:
         """Create display options section with enhanced styling"""
         return html.Div([
             # Enhanced switch options with beautiful cards
+            # dbc.Card([
+            #     dbc.CardBody([
+            #         html.Div([
+            #             html.I(className="fas fa-layer-group me-2 text-primary"),
+            #             dbc.Switch(
+            #                 id="merged-clusters-switch",
+            #                 label="Show merged catalog members",
+            #                 value=False,
+            #                 className="ms-2"
+            #             )
+            #         ], className="d-flex align-items-center mb-2"),
+            #         html.Small([
+            #             html.I(className="fas fa-info-circle me-1"),
+            #             "Toggle to access individual tile clusters underneath"
+            #         ], className="text-muted ms-4")
+            #     ])
+            # ], className="mb-3 border-0 shadow-sm", style={
+            #     'background': 'linear-gradient(45deg, #f0f8ff, #ffffff)',
+            #     'border-radius': '10px'
+            # }),
+            # 
             dbc.Card([
                 dbc.CardBody([
                     html.Div([
-                        html.I(className="fas fa-layer-group me-2 text-primary"),
-                        dbc.Switch(
-                            id="merged-clusters-switch",
-                            label="Show merged catalog members",
-                            value=False,
-                            className="ms-2"
-                        )
-                    ], className="d-flex align-items-center mb-2"),
-                    html.Small([
-                        html.I(className="fas fa-info-circle me-1"),
-                        "Toggle to access individual tile clusters underneath"
-                    ], className="text-muted ms-4")
-                ])
-            ], className="mb-3 border-0 shadow-sm", style={
-                'background': 'linear-gradient(45deg, #f0f8ff, #ffffff)',
-                'border-radius': '10px'
-            }),
-            
-            dbc.Card([
-                dbc.CardBody([
-                    html.Div([
-                        html.I(className="fas fa-shapes me-2 text-info"),
+                        html.I(className="fas fa-shapes me-0 text-info"),
                         dbc.Switch(
                             id="polygon-switch", 
                             label="Fill CL-tiles (CORE) polygons",
                             value=False,
-                            className="ms-2"
+                            className="ms-0"
                         )
-                    ], className="d-flex align-items-center")
+                    ], className="d-flex align-items-left mb-1")
                 ])
             ], className="mb-3 border-0 shadow-sm", style={
                 'background': 'linear-gradient(45deg, #e8f8f8, #ffffff)',
@@ -390,18 +416,18 @@ class AppLayout:
             dbc.Card([
                 dbc.CardBody([
                     html.Div([
-                        html.I(className="fas fa-th me-2 text-warning"),
+                        html.I(className="fas fa-th me-0 text-warning"),
                         dbc.Switch(
                             id="mer-switch",
                             label="Show MER tiles (up to LEV2 in CL-tiles)",
                             value=True,
-                            className="ms-2"
+                            className="ms-0"
                         )
-                    ], className="d-flex align-items-center mb-2"),
+                    ], className="d-flex align-items-left mb-1"),
                     html.Small([
                         html.I(className="fas fa-info-circle me-1"),
-                        "Only with unfilled cluster-tile polygons"
-                    ], className="text-muted ms-4")
+                        "Only with open cluster-tile polygons"
+                    ], className="text-muted ms-0")
                 ])
             ], className="mb-3 border-0 shadow-sm", style={
                 'background': 'linear-gradient(45deg, #fff8e1, #ffffff)',
@@ -411,18 +437,18 @@ class AppLayout:
             dbc.Card([
                 dbc.CardBody([
                     html.Div([
-                        html.I(className="fas fa-expand me-2 text-success"),
+                        html.I(className="fas fa-expand me-0 text-success"),
                         dbc.Switch(
                             id="aspect-ratio-switch",
                             label="Free aspect ratio",
                             value=True,
-                            className="ms-2"
+                            className="ms-0"
                         )
-                    ], className="d-flex align-items-center mb-2"),
+                    ], className="d-flex align-items-left mb-1"),
                     html.Small([
                         html.I(className="fas fa-info-circle me-1"),
                         "Default: maintain astronomical aspect"
-                    ], className="text-muted ms-4")
+                    ], className="text-muted ms-0")
                 ])
             ], className="border-0 shadow-sm", style={
                 'background': 'linear-gradient(45deg, #e8f5e8, #ffffff)',
@@ -438,14 +464,14 @@ class AppLayout:
             dbc.Card([
                 dbc.CardBody([
                     html.Div([
-                        html.I(className="fas fa-microscope me-2 text-warning"),
+                        html.I(className="fas fa-microscope me-0 text-warning"),
                         dbc.Switch(
                             id="catred-mode-switch",
                             label="Masked CATRED data",
                             value=True,
-                            className="ms-2"
+                            className="ms-1"
                         )
-                    ], className="d-flex align-items-center mb-2"),
+                    ], className="d-flex align-items-center mb-0"),
                     dbc.Badge([
                         html.I(className="fas fa-zoom-in me-1"),
                         "When zoomed < 2°"
@@ -460,7 +486,7 @@ class AppLayout:
             dbc.Card([
                 dbc.CardHeader([
                     html.Div([
-                        html.I(className="fas fa-sliders-h me-2"),
+                        html.I(className="fas fa-sliders-h me-0"),
                         html.H6("Coverage Threshold", className="mb-0")
                     ], className="d-flex align-items-center")
                 ], className="border-0", style={
@@ -490,7 +516,7 @@ class AppLayout:
                             },
                             className="custom-slider"
                         )
-                    ], id="catred-threshold-container", className="mb-3", 
+                    ], id="catred-threshold-container", className="mb-0", 
                        style={
                            'padding': '10px 15px', 
                            'margin': '5px 0',
@@ -498,7 +524,7 @@ class AppLayout:
                        }),
                     html.Small([
                         html.I(className="fas fa-info-circle me-1"),
-                        "For masked CATRED data filtering"
+                        "For masked CATRED filtering"
                     ], className="text-muted")
                 ])
             ], className="mb-3 border-0 shadow-sm", style={'border-radius': '12px'}),
@@ -539,7 +565,7 @@ class AppLayout:
                             },
                             className="custom-slider"
                         )
-                    ], id="magnitude-limit-container", className="mb-3", 
+                    ], id="magnitude-limit-container", className="mb-0", 
                        style={
                            'padding': '10px 15px', 
                            'margin': '5px 0',
@@ -556,7 +582,7 @@ class AppLayout:
             dbc.Card([
                 dbc.CardHeader([
                     html.Div([
-                        html.I(className="fas fa-tools me-2"),
+                        html.I(className="fas fa-tools me-0"),
                         html.H6("CATRED Data Controls", className="mb-0")
                     ], className="d-flex align-items-center")
                 ], className="border-0", style={
@@ -573,7 +599,7 @@ class AppLayout:
                         id="catred-render-button",
                         color="info",
                         size="sm", 
-                        className="w-100 mb-3 shadow-sm btn-enhanced",
+                        className="w-100 mb-0 shadow-sm btn-enhanced",
                         n_clicks=0,
                         disabled=True,
                         style={
@@ -582,9 +608,9 @@ class AppLayout:
                         }
                     ),
                     html.Small([
-                        html.I(className="fas fa-search-plus me-1"),
+                        html.I(className="fas fa-search-plus me-0"),
                         "Zoom in first, then click"
-                    ], className="text-muted d-block text-center mb-3"),
+                    ], className="text-muted d-block text-left mb-3"),
                     
                     # Clear button
                     dbc.Button([
@@ -617,15 +643,15 @@ class AppLayout:
             dbc.Card([
                 dbc.CardBody([
                     html.Div([
-                        html.I(className="fas fa-images me-2 text-info"),
+                        html.I(className="fas fa-images me-0 text-info"),
                         dbc.Switch(
                             id="mosaic-enable-switch",
                             label="Enable mosaic images",
                             value=True,
                             disabled=False,
-                            className="ms-2"
+                            className="ms-1"
                         )
-                    ], className="d-flex align-items-center")
+                    ], className="d-flex align-items-left mb-0"),
                 ])
             ], className="mb-3 border-0 shadow-sm", style={
                 'background': 'linear-gradient(45deg, #e8f4f8, #ffffff)',
@@ -671,7 +697,7 @@ class AppLayout:
                         'minHeight': '50px'
                     })
                 ], className="p-2")
-            ], className="mb-3 border-0 shadow-sm", style={'border-radius': '12px'}),
+            ], className="mb-1 border-0 shadow-sm", style={'border-radius': '12px'}),
             
             # Load mosaic button
             dbc.Card([
@@ -694,7 +720,7 @@ class AppLayout:
                     html.Small([
                         html.I(className="fas fa-image me-1"),
                         "Load mosaic images for visible MER tiles"
-                    ], className="text-muted d-block text-center")
+                    ], className="text-muted d-block text-left mb-0")
                 ], className="p-3")
             ], className="mb-3 border-0 shadow-sm", style={
                 'background': 'linear-gradient(45deg, #e8f4f8, #ffffff)',
@@ -739,42 +765,34 @@ class AppLayout:
                         'minHeight': '50px'
                     })
                 ], className="p-2")
-            ], className="mb-3 border-0 shadow-sm", style={'border-radius': '12px'}),
+            ], className="mb-1 border-0 shadow-sm", style={'border-radius': '12px'}),
             
             dbc.Card([
-                dbc.CardHeader([
-                    html.Div([
-                        html.I(className="fas fa-layer-group me-2"),
-                        html.H6("Healpix Mask Overlay", className="mb-0")
-                    ], className="d-flex align-items-center")
-                ], className="border-0", style={
-                    'background': 'linear-gradient(45deg, #74b9ff, #0984e3)',
-                    'color': 'white',
-                    'border-radius': '8px 8px 0 0'
-                }),
                 dbc.CardBody([
-                    html.Div([
-                        dbc.Button([
-                            html.I(className="fas fa-download me-2"),
-                            "🖼️ Healpix Mask in Zoom"
-                        ],
-                            id="healpix-mask-button",
-                            color="info",
-                            size="sm",
-                            className="w-100 mb-2 shadow-sm btn-enhanced",
-                            n_clicks=0,
-                            disabled=True,
-                            style={
-                                'border-radius': '8px',
-                                'font-weight': '600'
-                            }
-                        ),
-                    ], className="d-flex align-items-center")
-                ])
-            ], className="border-0 shadow-sm", style={
-                # 'background': 'linear-gradient(45deg, #e8f4f8, #ffffff)',
-                'border-radius': '10px'
-            })
+                    dbc.Button([
+                        html.I(className="fas fa-download me-2"),
+                        "🖼️ Healpix Mask in Zoom"
+                    ],
+                        id="healpix-mask-button",
+                        color="info",
+                        size="sm",
+                        className="w-100 mb-2 shadow-sm btn-enhanced",
+                        n_clicks=0,
+                        disabled=True,
+                        style={
+                            'border-radius': '8px',
+                            'font-weight': '600'
+                        }
+                    ),
+                    html.Small([
+                        html.I(className="fas fa-image me-1"),
+                        "Load healpix mask overlay for visible MER tiles"
+                    ], className="text-muted d-block text-left mb-0")
+                ], className="p-3")
+            ], className="mb-3 border-0 shadow-sm", style={
+                'background': 'linear-gradient(45deg, #e8f4f8, #ffffff)',
+                'border-radius': '12px'
+            }),
 
         ])
     
@@ -819,10 +837,11 @@ class AppLayout:
         return html.Div([
             # Core Settings Section
             AppLayout._create_collapsible_card(
-                "🎯 Core Settings",
-                "core-settings",
+                "🎯 Detected Clusters",
+                "clusters-settings",
                 [
                     AppLayout._create_algorithm_section(),
+                    AppLayout._create_merged_clusters_section(),
                     AppLayout._create_cluster_matching_section(),
                     AppLayout._create_snr_section(),
                     AppLayout._create_redshift_section(),
@@ -831,19 +850,10 @@ class AppLayout:
                 color="primary"
             ),
             
-            # Display Options Section  
-            AppLayout._create_collapsible_card(
-                "🎨 Display Options",
-                "display-options",
-                [AppLayout._create_display_options_section()],
-                is_open=False,
-                color="success"
-            ),
-            
             # Advanced Data Section
             AppLayout._create_collapsible_card(
-                "🔬 Advanced Data",
-                "advanced-data", 
+                "🔬 CatRed Sources",
+                "catred-data", 
                 [AppLayout._create_catred_data_section()],
                 is_open=False,
                 color="warning"
@@ -851,11 +861,20 @@ class AppLayout:
             
             # Image Controls Section
             AppLayout._create_collapsible_card(
-                "🖼️ Image Controls",
+                "🖼️ Mosaic / Healpix Mask",
                 "image-controls",
                 [AppLayout._create_mosaic_controls_section()],
                 is_open=False,
                 color="info"
+            ),
+
+            # Display Options Section  
+            AppLayout._create_collapsible_card(
+                "🎨 Display Options",
+                "display-options",
+                [AppLayout._create_display_options_section()],
+                is_open=False,
+                color="success"
             )
         ])
 

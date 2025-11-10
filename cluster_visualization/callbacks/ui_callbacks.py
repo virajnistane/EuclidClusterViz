@@ -100,14 +100,15 @@ class UICallbacks:
 
         @self.app.callback(
             Output('matching-clusters-switch', 'disabled'),
-            [Input('algorithm-dropdown', 'value')],
+            [Input('algorithm-dropdown', 'value'),
+             Input('merged-clusters-switch', 'disabled')],
             prevent_initial_call=False
         )
-        def toggle_matching_clusters_switch(algorithm):
-            """Enable matching-clusters-switch only when algorithm is BOTH"""
-            # Enable the switch only when algorithm is 'BOTH'
-            is_disabled = algorithm != 'BOTH'
-            print(f"🔄 Algorithm dropdown callback: algorithm={algorithm}, matching-switch-disabled={is_disabled}")
+        def toggle_matching_clusters_switch(algorithm, merged_clusters):
+            """Enable matching-clusters-switch only when algorithm is BOTH and merged_clusters is enabled"""
+            # Enable the switch only when algorithm is 'BOTH' and merged_clusters is True
+            is_disabled = (algorithm != 'BOTH') and (not merged_clusters)
+            print(f"🔄 Algorithm dropdown callback: algorithm={algorithm}, merged_clusters={merged_clusters}, matching-switch-disabled={is_disabled}")
             return is_disabled
 
     def _setup_catred_visibility_callback(self):
@@ -135,26 +136,26 @@ class UICallbacks:
     
     def _setup_collapsible_callbacks(self):
         """Setup callbacks for collapsible sections"""
-        # Core Settings Section
+        # Detected Clusters Section
         @self.app.callback(
-            [Output('core-settings-collapse', 'is_open'),
-             Output('core-settings-toggle', 'children')],
-            [Input('core-settings-toggle', 'n_clicks')],
+            [Output('clusters-settings-collapse', 'is_open'),
+             Output('clusters-settings-toggle', 'children')],
+            [Input('clusters-settings-toggle', 'n_clicks')],
             prevent_initial_call=False
         )
-        def toggle_core_settings(n_clicks):
-            """Toggle core settings section"""
+        def toggle_clusters_settings(n_clicks):
+            """Toggle clusters settings section"""
             if n_clicks is None:
                 return False, [  # 🔧 Changed from True to False
                     html.I(className="fas fa-chevron-right me-2"),  # 🔧 Changed to right arrow
-                    "🎯 Core Settings"
+                    "🎯 Detected Clusters"
                 ]
             
             is_open = (n_clicks % 2) == 1
             icon = "fas fa-chevron-up" if is_open else "fas fa-chevron-down"
             return is_open, [
                 html.I(className=f"{icon} me-2"),
-                "🎯 Core Settings"
+                "🎯 Detected Clusters"
             ]
         
         # Display Options Section
@@ -179,29 +180,29 @@ class UICallbacks:
                 "🎨 Display Options"
             ]
         
-        # Advanced Data Section
+        # CatRed Sources Section
         @self.app.callback(
-            [Output('advanced-data-collapse', 'is_open'),
-             Output('advanced-data-toggle', 'children')],
-            [Input('advanced-data-toggle', 'n_clicks')],
+            [Output('catred-data-collapse', 'is_open'),
+             Output('catred-data-toggle', 'children')],
+            [Input('catred-data-toggle', 'n_clicks')],
             prevent_initial_call=False
         )
-        def toggle_advanced_data(n_clicks):
-            """Toggle advanced data section"""
+        def toggle_catred_data(n_clicks):
+            """Toggle CatRed data section"""
             if n_clicks is None:
                 return False, [
                     html.I(className="fas fa-chevron-right me-2"),
-                    "🔬 Advanced Data"
+                    "🔬 CatRed Sources"
                 ]
             
             is_open = (n_clicks % 2) == 1
             icon = "fas fa-chevron-up" if is_open else "fas fa-chevron-down"
             return is_open, [
                 html.I(className=f"{icon} me-2"),
-                "🔬 Advanced Data"
+                "🔬 CatRed Sources"
             ]
         
-        # Image Controls Section
+        # Mosaic / Healpix Mask Section
         @self.app.callback(
             [Output('image-controls-collapse', 'is_open'),
              Output('image-controls-toggle', 'children')],
@@ -213,12 +214,12 @@ class UICallbacks:
             if n_clicks is None:
                 return False, [
                     html.I(className="fas fa-chevron-right me-2"),
-                    "🖼️ Image Controls"
+                    "🖼️ Mosaic / Healpix Mask"
                 ]
             
             is_open = (n_clicks % 2) == 1
             icon = "fas fa-chevron-up" if is_open else "fas fa-chevron-down"
             return is_open, [
                 html.I(className=f"{icon} me-2"),
-                "🖼️ Image Controls"
+                "🖼️ Mosaic / Healpix Mask"
             ]
