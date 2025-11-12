@@ -664,6 +664,54 @@ class MOSAICHandler:
             'dec_size_deg': dec_size
         }
 
+    def _create_mask_colorbar_trace(
+            self, weight_min: float, weight_max: float, 
+            colorscale: str = 'viridis', title: str = "Weight"
+            ) -> go.Heatmap:
+        """
+        Create an invisible heatmap trace that only displays a colorbar for mask overlays.
+        
+        This trace provides a visual reference for the weight values of HEALPix mask pixels
+        without adding any visible data to the plot.
+        """
+        # Create a minimal 2x2 array with the weight range
+        z_colorbar = np.array([[weight_min, weight_max], [weight_min, weight_max]])
+        
+        # Create the colorbar trace
+        colorbar_trace = go.Heatmap(
+            z=z_colorbar,
+            x=[0, 1],  # Minimal coordinates (won't be visible)
+            y=[0, 1],
+            colorscale=colorscale,
+            showscale=True,  # Show the colorbar
+            visible=True,
+            opacity=0,  # Make the heatmap itself invisible
+            hoverinfo='skip',  # Don't show hover info for this trace
+            showlegend=False,
+            name='Mask Colorbar',
+            colorbar=dict(
+                title=dict(
+                    text=title,
+                    side='right',
+                    font=dict(size=12)
+                ),
+                thickness=15,
+                len=0.5,  # 50% of plot height
+                x=1.02,  # Position slightly to the right of the plot
+                xanchor='left',
+                y=0.5,  # Center vertically
+                yanchor='middle',
+                tickmode='linear',
+                tick0=weight_min,
+                dtick=(weight_max - weight_min) / 5,  # 5 ticks
+                tickfont=dict(size=10),
+                outlinewidth=1,
+                outlinecolor='gray'
+            )
+        )
+        
+        return colorbar_trace
+
     def create_mosaic_image_trace(
             self, mertileid: int, 
             opacity: float = 0.5, colorscale: str = 'gray'
@@ -728,7 +776,8 @@ class MOSAICHandler:
 
     def create_mask_overlay_trace(
             self, mertileid: int, 
-            opacity: float = 0.6, colorscale: str = 'viridis'
+            opacity: float = 0.6, colorscale: str = 'viridis',
+            add_colorbar: bool = True
             ) -> Optional[go.Heatmap]:
         """Create a Plotly heatmap trace for a mask overlay."""
     
@@ -818,6 +867,14 @@ class MOSAICHandler:
                         customdata=[[weight]],
                     )
                 )
+
+        # Add a colorbar trace (invisible heatmap that only shows the colorbar)
+        if footprint_traces and add_colorbar:
+            colorbar_trace = self._create_mask_colorbar_trace(
+                weight_min, weight_max, colorscale, 
+                title="Coverage<br>Weight"
+            )
+            footprint_traces.append(colorbar_trace)
 
         return footprint_traces
 
@@ -914,7 +971,8 @@ class MOSAICHandler:
     
     def create_mask_overlay_cutout_trace(
             self, data: Dict[str, Any], clickdata: Dict[str, Any], 
-            opacity: float = 0.6, colorscale: str = 'viridis'
+            opacity: float = 0.6, colorscale: str = 'viridis',
+            add_colorbar: bool = True
             ) -> List[go.Scatter]:
         """Create Plotly scatter traces for a mask overlay cutout."""
         
@@ -1030,6 +1088,14 @@ class MOSAICHandler:
                         customdata=[[weight]],
                     )
                 )
+
+        # Add a colorbar trace (invisible heatmap that only shows the colorbar)
+        if footprint_traces and add_colorbar:
+            colorbar_trace = self._create_mask_colorbar_trace(
+                weight_min, weight_max, colorscale, 
+                title="Coverage<br>Weight"
+            )
+            footprint_traces.append(colorbar_trace)
 
         return footprint_traces
 
@@ -1154,7 +1220,10 @@ class MOSAICHandler:
             
             try:
                 trace_start = time.time()
-                footprint_traces = self.create_mask_overlay_trace(mertileid, opacity, colorscale)
+                # Don't add colorbar for each tile, we'll add one at the end
+                footprint_traces = self.create_mask_overlay_trace(
+                    mertileid, opacity, colorscale, add_colorbar=False
+                )
                 trace_time = time.time() - trace_start
                 
                 if footprint_traces:
@@ -1165,6 +1234,16 @@ class MOSAICHandler:
                     
             except Exception as e:
                 print(f"[ERROR] Failed to create mask overlay traces for tile {mertileid}: {e}")
+        
+        # Add a single colorbar for all mask overlays
+        if mask_traces:
+            weight_min, weight_max = 0.8, 1.0
+            colorbar_trace = self._create_mask_colorbar_trace(
+                weight_min, weight_max, colorscale, 
+                title="Coverage<br>Weight"
+            )
+            mask_traces.append(colorbar_trace)
+        
         total_time = time.time() - start_time
         print(f"[TIMING] Total mask overlay loading completed in {total_time:.2f}s")
         return mask_traces

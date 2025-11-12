@@ -490,12 +490,13 @@ class MOSAICCallbacks:
             if not n_clicks or not current_figure or 'data' not in current_figure:
                 return current_figure
             
-            # Filter out all mask overlay traces
+            # Filter out all mask overlay traces AND the colorbar
             filtered_traces = [trace for trace in current_figure['data'] 
-                             if not (trace.get('name', '').startswith('Mask overlay'))]
+                             if not (trace.get('name', '').startswith('Mask overlay') or 
+                                   trace.get('name', '') == 'Mask Colorbar')]
             
             current_figure['data'] = filtered_traces
-            print(f"🗑️ Deleted mask overlay traces from memory. Remaining traces: {len(filtered_traces)}")
+            print(f"🗑️ Deleted mask overlay traces and colorbar from memory. Remaining traces: {len(filtered_traces)}")
             
             return current_figure
 
