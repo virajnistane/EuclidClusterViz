@@ -656,25 +656,40 @@ class AppLayout:
                         "Zoom in first, then click"
                     ], className="text-muted d-block text-left mb-3"),
                     
-                    # Clear button
-                    dbc.Button([
-                        html.I(className="fas fa-trash-alt me-2"), 
-                        "🗑️ Clear All CATRED Data"
-                    ],
-                        id="catred-clear-button",
-                        color="warning",
-                        size="sm",
-                        className="w-100 shadow-sm btn-enhanced",
-                        n_clicks=0,
-                        style={
-                            'border-radius': '8px',
-                            'font-weight': '600'
-                        }
-                    ),
-                    html.Small([
-                        html.I(className="fas fa-eraser me-1"),
-                        "Remove all CATRED traces"
-                    ], className="text-muted d-block text-center")
+                    # CATRED visibility and delete controls
+                    html.Div([
+                        dbc.Button([
+                            html.I(className="fas fa-eye me-1"),
+                            "Hide"
+                        ],
+                            id="catred-toggle-visibility-button",
+                            color="secondary",
+                            size="sm",
+                            outline=True,
+                            className="me-1",
+                            n_clicks=0,
+                            disabled=True,
+                            style={
+                                'border-radius': '6px',
+                                'font-size': '0.85rem'
+                            }
+                        ),
+                        dbc.Button([
+                            html.I(className="fas fa-trash-alt me-1"), 
+                            "Clear"
+                        ],
+                            id="catred-clear-button",
+                            color="danger",
+                            size="sm",
+                            outline=True,
+                            n_clicks=0,
+                            disabled=True,
+                            style={
+                                'border-radius': '6px',
+                                'font-size': '0.85rem'
+                            }
+                        )
+                    ], className="d-flex justify-content-between")
                 ], className="p-3")
             ], id="catred-controls-container", className="border-0 shadow-sm", style={'border-radius': '12px'})
         ])

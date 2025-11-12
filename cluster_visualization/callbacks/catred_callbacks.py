@@ -42,6 +42,8 @@ class CATREDCallbacks:
         self._setup_catred_button_state_callback()
         self._setup_manual_catred_render_callback()
         self._setup_clear_catred_callback()
+        self._setup_catred_visibility_toggle_callback()
+        self._setup_catred_control_buttons_state_callback()
     
     def _setup_catred_button_state_callback(self):
         """Setup callback to enable/disable CATRED render button based on zoom level"""
@@ -560,7 +562,89 @@ class CATREDCallbacks:
         )
         
         return fig
+
+    def _setup_catred_visibility_toggle_callback(self):
+        """Setup clientside callback to toggle CATRED trace visibility without deleting from memory"""
+        self.app.clientside_callback(
+            """
+            function(n_clicks, figure) {
+                if (!n_clicks || !figure || !figure.data) {
+                    return [figure, window.dash_clientside.no_update];
+                }
+                
+                let newFigure = JSON.parse(JSON.stringify(figure));
+                let hasCatredTraces = false;
+                let allCatredHidden = true;
+                
+                // First pass: check if there are CATRED traces and their visibility state
+                for (let i = 0; i < newFigure.data.length; i++) {
+                    let trace = newFigure.data[i];
+                    if (trace.name && (trace.name.includes('CATRED') || trace.name.includes('MER High-Res Data'))) {
+                        hasCatredTraces = true;
+                        if (trace.visible !== false && trace.visible !== 'legendonly') {
+                            allCatredHidden = false;
+                        }
+                    }
+                }
+                
+                if (!hasCatredTraces) {
+                    return [figure, window.dash_clientside.no_update];
+                }
+                
+                // Toggle visibility: if all hidden, show them; otherwise hide them
+                let newVisibility = allCatredHidden ? true : 'legendonly';
+                
+                for (let i = 0; i < newFigure.data.length; i++) {
+                    let trace = newFigure.data[i];
+                    if (trace.name && (trace.name.includes('CATRED') || trace.name.includes('MER High-Res Data'))) {
+                        newFigure.data[i].visible = newVisibility;
+                    }
+                }
+                
+                // Update button text and icon
+                let buttonContent = allCatredHidden ? 
+                    [{"namespace": "dash_html_components", "type": "I", "props": {"className": "fas fa-eye me-1"}}, "Hide"] :
+                    [{"namespace": "dash_html_components", "type": "I", "props": {"className": "fas fa-eye-slash me-1"}}, "Show"];
+                
+                return [newFigure, buttonContent];
+            }
+            """,
+            [Output('cluster-plot', 'figure', allow_duplicate=True),
+             Output('catred-toggle-visibility-button', 'children')],
+            [Input('catred-toggle-visibility-button', 'n_clicks')],
+            [State('cluster-plot', 'figure')],
+            prevent_initial_call=True
+        )
+
+    def _setup_catred_control_buttons_state_callback(self):
+        """Setup callback to enable/disable CATRED control buttons based on presence of CATRED traces"""
+        self.app.clientside_callback(
+            """
+            function(figure) {
+                if (!figure || !figure.data) {
+                    return [true, true];  // Both disabled
+                }
+                
+                // Check if there are any CATRED traces
+                let hasCatredTraces = false;
+                for (let i = 0; i < figure.data.length; i++) {
+                    if (figure.data[i].name && (figure.data[i].name.includes('CATRED') || figure.data[i].name.includes('MER High-Res Data'))) {
+                        hasCatredTraces = true;
+                        break;
+                    }
+                }
+                
+                // Enable buttons if CATRED traces exist
+                return [!hasCatredTraces, !hasCatredTraces];
+            }
+            """,
+            [Output('catred-toggle-visibility-button', 'disabled'),
+             Output('catred-clear-button', 'disabled')],
+            [Input('cluster-plot', 'figure')],
+            prevent_initial_call=True
+        )
     
+    # Fallback methods for backward compatibility
     def _preserve_zoom_state_fallback(self, fig, relayout_data):
         """Fallback zoom state preservation method"""
         if relayout_data:
