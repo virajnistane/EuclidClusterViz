@@ -39,9 +39,10 @@ class PHZCallbacks:
         @self.app.callback(
             Output('phz-pdf-plot', 'figure', allow_duplicate=True),
             [Input('cluster-plot', 'clickData')],
+            [dash.dependencies.State('cluster-plot', 'figure')],  # Add figure state to get trace names
             prevent_initial_call=True
         )
-        def update_phz_pdf_plot(clickData):
+        def update_phz_pdf_plot(clickData, current_figure):
             print("=== PHZ CALLBACK TRIGGERED ===")
             print(f"Debug: Click callback triggered with clickData: {clickData}")
             print(f"Debug: clickData type: {type(clickData)}")
@@ -84,8 +85,20 @@ class PHZCallbacks:
                 clicked_point = clickData['points'][0]
                 print(f"Debug: Clicked point: {clicked_point}")
                 
-                # Get the trace name that was clicked
-                clicked_trace_name = clicked_point.get('traceName', 'Unknown')
+                # Get the trace name using curveNumber (Scattergl doesn't provide traceName)
+                curve_number = clicked_point.get('curveNumber', None)
+                clicked_trace_name = 'Unknown'
+                
+                # Retrieve trace name from figure state using curveNumber
+                if current_figure and curve_number is not None:
+                    try:
+                        traces = current_figure.get('data', [])
+                        if curve_number < len(traces):
+                            clicked_trace_name = traces[curve_number].get('name', 'Unknown')
+                            print(f"Debug: Retrieved trace name from figure using curveNumber {curve_number}: '{clicked_trace_name}'")
+                    except Exception as e:
+                        print(f"Warning: Could not retrieve trace name from figure: {e}")
+                
                 print(f"Debug: Clicked trace name: '{clicked_trace_name}'")
                 
                 # Get coordinates for matching
@@ -93,16 +106,16 @@ class PHZCallbacks:
                 clicked_y = clicked_point.get('y')
                 print(f"Debug: Clicked coordinates: ({clicked_x}, {clicked_y})")
                 
-                # Get custom data (point index) if available
+                # Get point index from pointNumber (more reliable than customdata)
+                point_number = clicked_point.get('pointNumber', None)
                 custom_data = clicked_point.get('customdata', None)
-                print(f"Debug: Custom data: {custom_data}")
+                print(f"Debug: Point number (index in trace): {point_number}")
+                print(f"Debug: Custom data (may be coverage value, not index): {custom_data}")
                 
                 # Additional click data debugging
                 print(f"Debug: All click data keys: {list(clicked_point.keys())}")
                 if 'curveNumber' in clicked_point:
                     print(f"Debug: Curve number: {clicked_point['curveNumber']}")
-                if 'pointNumber' in clicked_point:
-                    print(f"Debug: Point number: {clicked_point['pointNumber']}")
                 
                 # Search through stored CATRED data to find the matching trace
                 found_catred_data = None
@@ -116,12 +129,12 @@ class PHZCallbacks:
                     catred_data = current_catred_data[clicked_trace_name]
                     print(f"Debug: Direct match found for clicked trace '{clicked_trace_name}' with {len(catred_data['ra'])} points")
                     
-                    # Use custom_data if available (most reliable)
-                    if custom_data is not None and isinstance(custom_data, int) and custom_data < len(catred_data['ra']):
+                    # Use pointNumber (most reliable - it's the index in the trace array)
+                    if point_number is not None and point_number < len(catred_data['ra']):
                         found_catred_data = catred_data
-                        point_index = custom_data
-                        print(f"Debug: Using custom data index: {point_index}")
-                    # Fallback to coordinate matching
+                        point_index = point_number
+                        print(f"Debug: Using pointNumber as index: {point_index}")
+                    # Fallback to coordinate matching if pointNumber not available
                     elif clicked_x is not None and clicked_y is not None:
                         print(f"Debug: Attempting coordinate matching for ({clicked_x}, {clicked_y})")
                         for i, (x, y) in enumerate(zip(catred_data['ra'], catred_data['dec'])):
@@ -140,14 +153,14 @@ class PHZCallbacks:
                         print(f"Debug: Checking trace: '{trace_name}'")
                         
                         # Check if this is a CATRED trace (updated for new naming scheme)
-                        if 'CATRED' in trace_name and ('Data' in trace_name or 'High-Res' in trace_name):
+                        if 'CATRED' in trace_name: # and ('Data' in trace_name or 'High-Res' in trace_name):
                             print(f"Debug: Found CATRED trace '{trace_name}' with {len(catred_data['ra'])} points")
                             
-                            # Method 1: Use custom_data if available (most reliable)
-                            if custom_data is not None and isinstance(custom_data, int) and custom_data < len(catred_data['ra']):
+                            # Method 1: Use pointNumber if available (most reliable)
+                            if point_number is not None and point_number < len(catred_data['ra']):
                                 found_catred_data = catred_data
-                                point_index = custom_data
-                                print(f"Debug: Using custom data index: {point_index}")
+                                point_index = point_number
+                                print(f"Debug: Using pointNumber as index: {point_index}")
                                 break
                             
                             # Method 2: Match coordinates with relaxed tolerance (fallback)
@@ -169,15 +182,6 @@ class PHZCallbacks:
                                     break
                                 else:
                                     print(f"Debug: No coordinate match found in trace '{trace_name}'")
-                            
-                            # Method 3: Try using point index from click data (alternative approach)
-                            elif 'pointIndex' in clicked_point:
-                                point_idx = clicked_point['pointIndex']
-                                if point_idx < len(catred_data['ra']):
-                                    found_catred_data = catred_data
-                                    point_index = point_idx
-                                    print(f"Debug: Using pointIndex from click data: {point_index}")
-                                    break
                         else:
                             print(f"Debug: Skipping non-CATRED trace: '{trace_name}'")
                 

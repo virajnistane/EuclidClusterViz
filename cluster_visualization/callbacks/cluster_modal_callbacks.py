@@ -665,7 +665,8 @@ class ClusterModalCallbacks:
                         existing_catred_traces=existing_catred_traces,
                         existing_mosaic_traces=existing_mosaic_traces,
                         existing_mask_overlay_traces=existing_mask_overlay_traces,
-                        snr_threshold_lower=snr_lower, snr_threshold_upper=snr_upper, 
+                        snr_threshold_lower_pzwav=snr_pzwav_lower, snr_threshold_upper_pzwav=snr_pzwav_upper, 
+                        snr_threshold_lower_amico=snr_amico_lower, snr_threshold_upper_amico=snr_amico_upper,
                         threshold=catred_mask_threshold, show_merged_clusters=show_merged_clusters
                         )
 
