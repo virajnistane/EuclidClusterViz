@@ -1358,13 +1358,36 @@ class AppLayout:
                                     )
                                 ], width=6)
                             ]),
-                            dbc.Button(
-                                [html.I(className="fas fa-play me-2"), "Generate Cutout"],
-                                id="tab-generate-cutout",
-                                color="primary",
-                                className="w-100",
-                                n_clicks=0
-                            )
+                            # Cutout trace management buttons
+                            html.Div([
+                                dbc.Button(
+                                    [html.I(className="fas fa-play me-2"), "Generate Cutout"],
+                                    id="tab-generate-cutout",
+                                    color="primary",
+                                    className="w-50 mb-2 me-2",
+                                    n_clicks=0
+                                ),
+                                dbc.Button(
+                                    [html.I(className="fas fa-eye me-2"), "Hide"],
+                                    id="tab-cutout-toggle-visibility",
+                                    color="secondary",
+                                    # size="sm",
+                                    outline=True,
+                                    className="w-25 mb-2 me-2",
+                                    n_clicks=0,
+                                    disabled=True
+                                ),
+                                dbc.Button(
+                                    [html.I(className="fas fa-trash me-2"), "Clear"],
+                                    id="tab-cutout-clear",
+                                    color="danger",
+                                    # size="sm",
+                                    outline=True,
+                                    className="w-25 mb-2",
+                                    n_clicks=0,
+                                    disabled=True
+                                )
+                            ], className="d-flex justify-content-center")
                         ])
                     ])
                 ], id="tab-cutout-options", is_open=False, className="mb-3"),
@@ -1468,13 +1491,36 @@ class AppLayout:
                                     )
                                 ], width=4)
                             ]),
-                            dbc.Button(
-                                [html.I(className="fas fa-play me-2"), "View CATRED Box"],
-                                id="tab-view-catred-box",
-                                color="success",
-                                className="w-100",
-                                n_clicks=0
-                            )
+                            # CATRED box trace management buttons
+                            html.Div([
+                                dbc.Button(
+                                    [html.I(className="fas fa-play me-2"), "View CATRED Box"],
+                                    id="tab-view-catred-box",
+                                    color="success",
+                                    className="w-50 mb-2 me-2",
+                                    n_clicks=0
+                                ),
+                                dbc.Button(
+                                    [html.I(className="fas fa-eye me-2"), "Hide"],
+                                    id="tab-catred-box-toggle-visibility",
+                                    color="secondary",
+                                    # size="sm",
+                                    outline=True,
+                                    className="w-25 mb-2 me-2",
+                                    n_clicks=0,
+                                    disabled=True
+                                ),
+                                dbc.Button(
+                                    [html.I(className="fas fa-trash me-2"), "Clear"],
+                                    id="tab-catred-box-clear",
+                                    color="danger",
+                                    # size="sm",
+                                    outline=True,
+                                    className="w-25 mb-2",
+                                    n_clicks=0,
+                                    disabled=True
+                                )
+                            ], className="d-flex justify-content-center")
                         ])
                     ])
                 ], id="tab-catred-box-options", is_open=False, className="mb-3"),
@@ -1515,13 +1561,36 @@ class AppLayout:
                                     )
                                 ], width=6)
                             ]),
-                            dbc.Button(
-                                [html.I(className="fas fa-play me-2"), "Generate Mask Cutout"],
-                                id="tab-generate-mask-cutout",
-                                color="primary",
-                                className="w-100",
-                                n_clicks=0
-                            )
+                            # Mask cutout trace management buttons
+                            html.Div([
+                                dbc.Button(
+                                    [html.I(className="fas fa-play me-2"), "Generate Mask Cutout"],
+                                    id="tab-generate-mask-cutout",
+                                    color="primary",
+                                    className="w-50 mb-2 me-2",
+                                    n_clicks=0
+                                ),
+                                dbc.Button(
+                                    [html.I(className="fas fa-eye me-1"), "Hide"],
+                                    id="tab-mask-cutout-toggle-visibility",
+                                    color="secondary",
+                                    # size="sm",
+                                    outline=True,
+                                    className="w-25 mb-2 me-2",
+                                    n_clicks=0,
+                                    disabled=True
+                                ),
+                                dbc.Button(
+                                    [html.I(className="fas fa-trash me-1"), "Clear"],
+                                    id="tab-mask-cutout-clear",
+                                    color="danger",
+                                    # size="sm",
+                                    outline=True,
+                                    className="w-25 mb-2",
+                                    n_clicks=0,
+                                    disabled=True
+                                )
+                            ], className="d-flex justify-content-center")
                         ])
                     ])
                 ], id="tab-mask-cutout-options", is_open=False, className="mb-3"),

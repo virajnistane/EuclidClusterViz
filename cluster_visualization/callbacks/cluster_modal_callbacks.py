@@ -48,6 +48,7 @@ class ClusterModalCallbacks:
         self._setup_sidebar_callbacks()
         self._setup_tab_callbacks()  # 🆕 Add tab callbacks
         self._setup_parameter_sync_callbacks()
+        self._setup_trace_management_callbacks()  # 🆕 Add trace management callbacks
     
     def _setup_cluster_click_callback(self):
         """Setup callback to detect cluster clicks and show in cluster tab"""
@@ -1049,3 +1050,243 @@ class ClusterModalCallbacks:
             if tab_value is not None:
                 return tab_value
             return dash.no_update
+    
+    def _setup_trace_management_callbacks(self):
+        """Setup callbacks for managing cluster modal traces (visibility and clear)"""
+        
+        # Mosaic Cutout visibility toggle
+        @self.app.callback(
+            [Output('cluster-plot', 'figure', allow_duplicate=True),
+             Output('tab-cutout-toggle-visibility', 'children'),
+             Output('tab-cutout-toggle-visibility', 'disabled')],
+            [Input('tab-cutout-toggle-visibility', 'n_clicks')],
+            [State('cluster-plot', 'figure')],
+            prevent_initial_call=True
+        )
+        def toggle_cutout_visibility(n_clicks, current_figure):
+            """Toggle visibility of mosaic cutout traces"""
+            if not current_figure or 'data' not in current_figure:
+                return dash.no_update, dash.no_update, dash.no_update
+            
+            # Find cutout traces
+            cutout_traces_exist = False
+            all_cutouts_visible = True
+            
+            for trace in current_figure['data']:
+                trace_name = trace.get('name', '')
+                if 'MER-Mosaic cutout' in trace_name:
+                    cutout_traces_exist = True
+                    if trace.get('visible', True) == False or trace.get('visible') == 'legendonly':
+                        all_cutouts_visible = False
+            
+            if not cutout_traces_exist:
+                return dash.no_update, dash.no_update, True
+            
+            # Toggle visibility
+            new_visibility = False if all_cutouts_visible else True
+            
+            for trace in current_figure['data']:
+                trace_name = trace.get('name', '')
+                if 'MER-Mosaic cutout' in trace_name:
+                    trace['visible'] = new_visibility
+            
+            # Update button text
+            button_text = [
+                html.I(className="fas fa-eye me-1"),
+                "Hide" if new_visibility else "Show"
+            ]
+            
+            return current_figure, button_text, False
+        
+        # Mosaic Cutout clear
+        @self.app.callback(
+            [Output('cluster-plot', 'figure', allow_duplicate=True),
+             Output('tab-cutout-toggle-visibility', 'disabled', allow_duplicate=True),
+             Output('tab-cutout-clear', 'disabled')],
+            [Input('tab-cutout-clear', 'n_clicks')],
+            [State('cluster-plot', 'figure')],
+            prevent_initial_call=True
+        )
+        def clear_cutout_traces(n_clicks, current_figure):
+            """Clear all mosaic cutout traces"""
+            if not current_figure or 'data' not in current_figure:
+                return dash.no_update, dash.no_update, dash.no_update
+            
+            # Filter out cutout traces
+            filtered_traces = [trace for trace in current_figure['data']
+                             if 'MER-Mosaic cutout' not in trace.get('name', '')]
+            
+            current_figure['data'] = filtered_traces
+            
+            # Disable both buttons since no cutouts exist
+            return current_figure, True, True
+        
+        # CATRED Box visibility toggle
+        @self.app.callback(
+            [Output('cluster-plot', 'figure', allow_duplicate=True),
+             Output('tab-catred-box-toggle-visibility', 'children'),
+             Output('tab-catred-box-toggle-visibility', 'disabled')],
+            [Input('tab-catred-box-toggle-visibility', 'n_clicks')],
+            [State('cluster-plot', 'figure')],
+            prevent_initial_call=True
+        )
+        def toggle_catred_box_visibility(n_clicks, current_figure):
+            """Toggle visibility of CATRED box traces"""
+            if not current_figure or 'data' not in current_figure:
+                return dash.no_update, dash.no_update, dash.no_update
+            
+            # Find CATRED box traces
+            catred_box_traces_exist = False
+            all_boxes_visible = True
+            
+            for trace in current_figure['data']:
+                trace_name = trace.get('name', '')
+                if 'CATRED' in trace_name and 'Boxed' in trace_name:
+                    catred_box_traces_exist = True
+                    if trace.get('visible', True) == False or trace.get('visible') == 'legendonly':
+                        all_boxes_visible = False
+            
+            if not catred_box_traces_exist:
+                return dash.no_update, dash.no_update, True
+            
+            # Toggle visibility
+            new_visibility = False if all_boxes_visible else True
+            
+            for trace in current_figure['data']:
+                trace_name = trace.get('name', '')
+                if 'CATRED' in trace_name and 'Boxed' in trace_name:
+                    trace['visible'] = new_visibility
+            
+            # Update button text
+            button_text = [
+                html.I(className="fas fa-eye me-1"),
+                "Hide" if new_visibility else "Show"
+            ]
+            
+            return current_figure, button_text, False
+        
+        # CATRED Box clear
+        @self.app.callback(
+            [Output('cluster-plot', 'figure', allow_duplicate=True),
+             Output('tab-catred-box-toggle-visibility', 'disabled', allow_duplicate=True),
+             Output('tab-catred-box-clear', 'disabled')],
+            [Input('tab-catred-box-clear', 'n_clicks')],
+            [State('cluster-plot', 'figure')],
+            prevent_initial_call=True
+        )
+        def clear_catred_box_traces(n_clicks, current_figure):
+            """Clear all CATRED box traces"""
+            if not current_figure or 'data' not in current_figure:
+                return dash.no_update, dash.no_update, dash.no_update
+            
+            # Filter out CATRED box traces
+            filtered_traces = [trace for trace in current_figure['data']
+                             if not ('CATRED' in trace.get('name', '') and 'Boxed' in trace.get('name', ''))]
+            
+            current_figure['data'] = filtered_traces
+            
+            # Disable both buttons since no CATRED boxes exist
+            return current_figure, True, True
+        
+        # Mask Cutout visibility toggle
+        @self.app.callback(
+            [Output('cluster-plot', 'figure', allow_duplicate=True),
+             Output('tab-mask-cutout-toggle-visibility', 'children'),
+             Output('tab-mask-cutout-toggle-visibility', 'disabled')],
+            [Input('tab-mask-cutout-toggle-visibility', 'n_clicks')],
+            [State('cluster-plot', 'figure')],
+            prevent_initial_call=True
+        )
+        def toggle_mask_cutout_visibility(n_clicks, current_figure):
+            """Toggle visibility of mask cutout traces"""
+            if not current_figure or 'data' not in current_figure:
+                return dash.no_update, dash.no_update, dash.no_update
+            
+            # Find mask cutout traces
+            mask_cutout_traces_exist = False
+            all_masks_visible = True
+            
+            for trace in current_figure['data']:
+                trace_name = trace.get('name', '')
+                if 'Mask overlay (cutout)' in trace_name or 'Mask Colorbar' in trace_name:
+                    mask_cutout_traces_exist = True
+                    if trace.get('visible', True) == False or trace.get('visible') == 'legendonly':
+                        all_masks_visible = False
+            
+            if not mask_cutout_traces_exist:
+                return dash.no_update, dash.no_update, True
+            
+            # Toggle visibility
+            new_visibility = False if all_masks_visible else True
+            
+            for trace in current_figure['data']:
+                trace_name = trace.get('name', '')
+                if 'Mask overlay (cutout)' in trace_name or 'Mask Colorbar' in trace_name:
+                    trace['visible'] = new_visibility
+            
+            # Update button text
+            button_text = [
+                html.I(className="fas fa-eye me-1"),
+                "Hide" if new_visibility else "Show"
+            ]
+            
+            return current_figure, button_text, False
+        
+        # Mask Cutout clear
+        @self.app.callback(
+            [Output('cluster-plot', 'figure', allow_duplicate=True),
+             Output('tab-mask-cutout-toggle-visibility', 'disabled', allow_duplicate=True),
+             Output('tab-mask-cutout-clear', 'disabled')],
+            [Input('tab-mask-cutout-clear', 'n_clicks')],
+            [State('cluster-plot', 'figure')],
+            prevent_initial_call=True
+        )
+        def clear_mask_cutout_traces(n_clicks, current_figure):
+            """Clear all mask cutout traces"""
+            if not current_figure or 'data' not in current_figure:
+                return dash.no_update, dash.no_update, dash.no_update
+            
+            # Filter out mask cutout traces (including colorbar)
+            filtered_traces = [trace for trace in current_figure['data']
+                             if not ('Mask overlay (cutout)' in trace.get('name', '') or 
+                                   'Mask Colorbar' in trace.get('name', ''))]
+            
+            current_figure['data'] = filtered_traces
+            
+            # Disable both buttons since no mask cutouts exist
+            return current_figure, True, True
+        
+        # Enable buttons when traces are generated
+        @self.app.callback(
+            [Output('tab-cutout-toggle-visibility', 'disabled', allow_duplicate=True),
+             Output('tab-cutout-clear', 'disabled', allow_duplicate=True),
+             Output('tab-catred-box-toggle-visibility', 'disabled', allow_duplicate=True),
+             Output('tab-catred-box-clear', 'disabled', allow_duplicate=True),
+             Output('tab-mask-cutout-toggle-visibility', 'disabled', allow_duplicate=True),
+             Output('tab-mask-cutout-clear', 'disabled', allow_duplicate=True)],
+            [Input('cluster-plot', 'figure')],
+            prevent_initial_call=True
+        )
+        def enable_trace_buttons(current_figure):
+            """Enable/disable trace management buttons based on trace existence"""
+            if not current_figure or 'data' not in current_figure:
+                return True, True, True, True, True, True
+            
+            has_cutouts = False
+            has_catred_boxes = False
+            has_mask_cutouts = False
+            
+            for trace in current_figure['data']:
+                trace_name = trace.get('name', '')
+                if 'MER-Mosaic cutout' in trace_name:
+                    has_cutouts = True
+                if 'CATRED' in trace_name and 'Boxed' in trace_name:
+                    has_catred_boxes = True
+                if 'Mask overlay (cutout)' in trace_name:
+                    has_mask_cutouts = True
+            
+            return (
+                not has_cutouts, not has_cutouts,  # cutout buttons
+                not has_catred_boxes, not has_catred_boxes,  # CATRED box buttons
+                not has_mask_cutouts, not has_mask_cutouts  # mask cutout buttons
+            )
