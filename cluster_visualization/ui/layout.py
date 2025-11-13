@@ -1245,7 +1245,7 @@ class AppLayout:
                 dbc.Row([
                     dbc.Col([
                         dbc.Button(
-                            [html.I(className="fas fa-crop me-2"), "Generate Cutout"],
+                            [html.I(className="fas fa-crop me-2"), "Generate Cutout ..."],
                             id="tab-cutout-button",
                             color="primary",
                             disabled=False,
@@ -1253,32 +1253,32 @@ class AppLayout:
                             n_clicks=0
                         ),
                         # html.Small("Click to see options", className="text-muted d-block text-center")
-                        html.Small("Click to see options", className="text-muted d-block text-center")
+                        html.Small("Click to see cutout options", className="text-muted d-block text-center")
                     ], width=6),
 
                     dbc.Col([
                         dbc.Button(
-                            [html.I(className="fas fa-magnifying-glass me-2"), "CATRED data box"],
+                            [html.I(className="fas fa-magnifying-glass me-2"), "CATRED Data Box ..."],
                             id="tab-catred-box-button",
                             color="success",
                             className="w-100 mb-2",
                             n_clicks=0
                         ),
-                        html.Small("CATRED data in selected box", className="text-muted d-block text-center")
+                        html.Small("Click to see box options", className="text-muted d-block text-center")
                     ], width=6),
                 ], className="mb-3"),
                 
                 dbc.Row([
                     dbc.Col([
                         dbc.Button(
-                            [html.I(className="fas fa-layer-group me-2"), "Healpix Mask Cutout"],
+                            [html.I(className="fas fa-layer-group me-2"), "Healpix Mask Cutout ..."],
                             id="tab-mask-cutout-button",
                             color="info",
                             disabled=False,
                             className="w-100 mb-2",
                             n_clicks=0
                         ),
-                        html.Small("Click to see options", className="text-muted d-block text-center")
+                        html.Small("Click to see mask cutout options", className="text-muted d-block text-center")
                     ], width=6),
 
                     dbc.Col([

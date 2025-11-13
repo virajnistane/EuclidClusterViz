@@ -1081,7 +1081,7 @@ class MOSAICHandler:
                         fill='toself',
                         fillcolor=f'rgba({int(color[0]*255)},{int(color[1]*255)},{int(color[2]*255)},{opacity})',
                         line=dict(width=0.5, color='yellow'),
-                        name=f'Mask (cutout) overlay pixel {pix}',
+                        name=f'Mask overlay (cutout) pixel {pix}',
                         showlegend=False,
                         hovertext=f'HEALPix {pix}<br>Weight: {weight:.3f}',
                         hoverinfo='text',

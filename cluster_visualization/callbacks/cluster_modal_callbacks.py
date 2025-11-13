@@ -390,44 +390,39 @@ class ClusterModalCallbacks:
                 return {'display': 'none'}, {'display': 'block'}
             return dash.no_update, dash.no_update
         
-        # Toggle cutout options in tab
+        # Toggle tab options - only one collapse open at a time
         @self.app.callback(
-            Output('tab-cutout-options', 'is_open'),
-            [Input('tab-cutout-button', 'n_clicks')],
-            [State('tab-cutout-options', 'is_open')],
+            [Output('tab-cutout-options', 'is_open'),
+             Output('tab-catred-box-options', 'is_open'),
+             Output('tab-mask-cutout-options', 'is_open')],
+            [Input('tab-cutout-button', 'n_clicks'),
+             Input('tab-catred-box-button', 'n_clicks'),
+             Input('tab-mask-cutout-button', 'n_clicks')],
+            [State('tab-cutout-options', 'is_open'),
+             State('tab-catred-box-options', 'is_open'),
+             State('tab-mask-cutout-options', 'is_open')],
             prevent_initial_call=True
         )
-        def toggle_tab_cutout_options(n_clicks, is_open):
-            """Toggle tab cutout options"""
-            if n_clicks:
-                return not is_open
-            return is_open
-        
-        # Toggle CATRED box options in tab
-        @self.app.callback(
-            Output('tab-catred-box-options', 'is_open'),
-            [Input('tab-catred-box-button', 'n_clicks')],
-            [State('tab-catred-box-options', 'is_open')],
-            prevent_initial_call=True
-        )
-        def toggle_tab_catred_box_options(n_clicks, is_open):
-            """Toggle tab CATRED box options"""
-            if n_clicks:
-                return not is_open
-            return is_open
-        
-        # Toggle cutout options in tab
-        @self.app.callback(
-            Output('tab-mask-cutout-options', 'is_open'),
-            [Input('tab-mask-cutout-button', 'n_clicks')],
-            [State('tab-mask-cutout-options', 'is_open')],
-            prevent_initial_call=True
-        )
-        def toggle_tab_mask_cutout_options(n_clicks, is_open):
-            """Toggle tab mask cutout options"""
-            if n_clicks:
-                return not is_open
-            return is_open
+        def toggle_tab_options(cutout_clicks, catred_clicks, mask_clicks,
+                               cutout_open, catred_open, mask_open):
+            """Toggle tab options - only one collapse open at a time"""
+            ctx = dash.callback_context
+            if not ctx.triggered:
+                return cutout_open, catred_open, mask_open
+            
+            button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+            
+            if button_id == 'tab-cutout-button':
+                # Toggle cutout, close others
+                return not cutout_open, False, False
+            elif button_id == 'tab-catred-box-button':
+                # Toggle CATRED box, close others
+                return False, not catred_open, False
+            elif button_id == 'tab-mask-cutout-button':
+                # Toggle mask cutout, close others
+                return False, False, not mask_open
+            
+            return cutout_open, catred_open, mask_open
         
         # Handle tab action buttons
         @self.app.callback(
@@ -730,7 +725,7 @@ class ClusterModalCallbacks:
                         if mask_cutout_traces:
                             # Remove existing mask overlay traces first
                             existing_traces = [trace for trace in current_figure['data']
-                                                if not (trace.get('name', '').startswith('Mask (cutout) overlay'))]
+                                                if not (trace.get('name', '').startswith('Mask overlay (cutout)'))]
                             
                             # Separate traces by type to maintain proper layering order
                             polygon_traces = []
@@ -899,7 +894,7 @@ class ClusterModalCallbacks:
                             y0=trace.get('y0'),
                             dx=trace.get('dx'),
                             dy=trace.get('dy'),
-                            name=trace.get('name', 'Mosaic Image'),
+                            name=trace.get('name', 'Mask overlay'),
                             opacity=trace.get('opacity', 1.0),
                             layer=trace.get('layer', 'below')
                         )
@@ -908,7 +903,12 @@ class ClusterModalCallbacks:
                             z=trace.get('z'),
                             x=trace.get('x'),
                             y=trace.get('y'),
-                            name=trace.get('name', 'Mosaic Image'),
+                            name=trace.get('name', 'Mask overlay'),
+                            fillcolor=trace.get('fillcolor', 'rgba(0,0,0,0)'),
+                            line=trace.get('line', {}),
+                            fillpattern=trace.get('fillpattern', {}),
+                            customdata=trace.get('customdata', []),
+                            hoverinfo=trace.get('hoverinfo', 'text'),
                             opacity=trace.get('opacity', 1.0),
                             colorscale=trace.get('colorscale', 'gray'),
                             showscale=trace.get('showscale', False)
