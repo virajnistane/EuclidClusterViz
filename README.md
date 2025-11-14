@@ -98,18 +98,21 @@ This tool provides a professional-grade visualization solution for Euclid cluste
 
 ## 🔧 Environment Requirements
 
-**Primary Environment**: EDEN-3.1 scientific Python environment (recommended)
+**Required Setup**: Virtual environment with all dependencies
+
+The EDEN-3.1 environment lacks several critical modules (`healpy`, `dash`, `plotly`, etc.), so a virtual environment is required:
 
 ```bash
-source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
-```
-
-**Alternative**: Virtual environment with requirements.txt
-```bash
-# Use included virtual environment setup
+# Set up virtual environment with all dependencies
 ./setup_venv.sh
 source venv/bin/activate
 ```
+
+**Note**: While EDEN-3.1 provides base astronomical libraries, the application requires additional packages:
+- `healpy` - HEALPix operations for masked CATRED data
+- `dash` & `plotly` - Interactive web application framework
+- `dash-bootstrap-components` - Enhanced UI components
+- Plus: `shapely`, and other visualization dependencies
 
 **Core Dependencies**: `astropy`, `plotly`, `pandas`, `numpy`, `shapely`, `healpy`, `dash`, `dash-bootstrap-components`
 
@@ -207,11 +210,12 @@ cluster_visualization/
 
 ### 1. **Environment Setup**
 ```bash
-# Option A: EDEN Environment (Recommended for EUCLID systems)
-source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
+# Required: Set up and activate virtual environment
+./setup_venv.sh
+source venv/bin/activate
 
-# Option B: Virtual Environment (Universal)
-./setup_venv.sh && source venv/bin/activate
+# Note: EDEN-3.1 alone is insufficient (missing healpy, dash, etc.)
+# The setup script will install all required dependencies
 ```
 
 ### 2. **Launch Application**
