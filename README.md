@@ -2,6 +2,39 @@
 
 An advanced interactive web-based visualization platform for astronomical cluster detection data from the ESA Euclid Mission. This sophisticated Dash application provides real-time analysis capabilities with comprehensive data integration, advanced filtering controls, interactive cluster analysis tools, and seamless remote access support.
 
+## 📑 Table of Contents
+
+- [Quick Remote Access Setup](#-quick-remote-access-setup)
+- [Overview](#-overview)
+- [Environment Requirements](#-environment-requirements)
+- [Key Features](#-key-features)
+  - [Advanced Data Analysis](#-advanced-data-analysis)
+  - [Cluster Analysis Tools](#-cluster-analysis-tools)
+  - [Professional UI Controls](#️-professional-ui-controls)
+  - [Enterprise Remote Access](#-enterprise-remote-access)
+  - [Performance Optimization](#-performance-optimization)
+- [Project Structure](#-project-structure)
+- [Quick Start](#-quick-start)
+- [Configuration](#configuration)
+- [Command-Line Options](#️-command-line-options)
+- [Feature Usage Guide](#-feature-usage-guide)
+  - [Cluster Analysis Workflow](#cluster-analysis-workflow)
+  - [PHZ Analysis](#phz-photometric-redshift-analysis)
+  - [Cluster Matching Visualization](#cluster-matching-visualization)
+  - [HEALPix Mask Overlay](#healpy-mask-overlay)
+  - [Mosaic Image Background](#mosaic-image-background)
+  - [Layer Management](#layer-management)
+- [Architecture & Technical Specifications](#️-architecture--technical-specifications)
+- [Development Environment](#️-development-environment)
+- [Advanced Capabilities & Data Analysis](#-advanced-capabilities--data-analysis)
+- [Performance & Scalability](#-performance--scalability)
+- [Troubleshooting & Support](#-troubleshooting--support)
+- [Enterprise Benefits & Comparison](#-enterprise-benefits--comparison)
+- [Recent Development Milestones](#-recent-development-milestones)
+- [Technical Specifications & Data Insights](#-technical-specifications--data-insights)
+
+---
+
 ## 🔗 Quick Remote Access Setup
 
 Access the application on a remote server using SSH port forwarding:
