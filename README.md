@@ -1,15 +1,67 @@
 # ESA Euclid Mission: Cluster Detection Visualization
 
-An advanced interactive web-based visualization platform for astronomical cluster detection data from the ESA Euclid Mission. This sophisticated Dash application provides real-time analysis capabilities with comprehensive data integration, advanced filtering controls, and seamless remote access support.
+An advanced interactive web-based visualization platform for astronomical cluster detection data from the ESA Euclid Mission. This sophisticated Dash application provides real-time analysis capabilities with comprehensive data integration, advanced filtering controls, interactive cluster analysis tools, and seamless remote access support.
+
+## 🔗 Quick Remote Access Setup
+
+Access the application on a remote server using SSH port forwarding:
+
+### **Step 1: Connect with Port Forwarding**
+From your **local machine**, run:
+
+```bash
+# Connect to remote server with port forwarding
+ssh -L 8050:localhost:8050 username@remote-server.domain
+
+# Example for CC-IN2P3 systems:
+ssh -L 8050:localhost:8050 vnistane@cca019.in2p3.fr
+```
+
+### **Step 2: Launch the Application**
+Once connected to the remote server, navigate to the project directory and launch:
+
+```bash
+cd /path/to/ClusterViz
+./launch.sh
+```
+
+### **Step 3: Access in Your Browser**
+Open your web browser on your **local machine** and navigate to:
+```
+http://localhost:8050
+```
+
+**Important**: Keep the SSH connection alive while using the application.
+
+### **Alternative Ports** (if 8050 is in use)
+```bash
+# Try alternative ports
+ssh -L 8051:localhost:8050 username@remote-server.domain  # Access: http://localhost:8051
+ssh -L 8052:localhost:8050 username@remote-server.domain  # Access: http://localhost:8052
+ssh -L 8053:localhost:8050 username@remote-server.domain  # Access: http://localhost:8053
+```
+
+### **Connection Verification**
+When successfully connected, you'll see:
+```
+✓ User successfully connected at 16:21:57
+  ✓ SSH tunnel appears to be working correctly
+  Browser: Mozilla/5.0 (...)
+  Connection from: 127.0.0.1
+```
+
+---
 
 ## 🌌 Overview
 
 This tool provides a professional-grade visualization solution for Euclid cluster detection algorithms (PZWAV/AMICO) with integrated support for:
-- **High-resolution CATRED data** with masked HEALPix processing
-- **Interactive mosaic imaging** with MER tile integration  
+- **Interactive Cluster Analysis Tab** with cutout generation, CATRED box views, and mask overlays
+- **High-resolution CATRED data** with masked HEALPix processing and PHZ analysis
+- **Interactive mosaic imaging** with MER tile integration and trace management
 - **Real-time filtering** by SNR and redshift with client-side performance
 - **Advanced UI controls** with dynamic visibility and responsive design
 - **Professional remote access** with SSH tunnel monitoring and automation
+- **Trace management** with hide/show and clear controls for all overlay types
 
 ## 🔧 Environment Requirements
 
@@ -33,13 +85,23 @@ source venv/bin/activate
 ### 🔬 **Advanced Data Analysis**
 - **Algorithm Comparison**: Real-time switching between PZWAV, AMICO, and BOTH algorithms
 - **Cluster Matching**: Visual overlay showing matched PZWAV-AMICO cluster pairs with connecting ovals (BOTH mode only)
+- **Interactive Cluster Analysis**: Dedicated tab with cutout generation, CATRED box views, and mask cutouts
 - **Smart Filtering**: Client-side SNR and redshift filtering with preserved zoom states
 - **CATRED Integration**: High-resolution masked data with effective coverage thresholding
 - **Mosaic Visualization**: Dynamic MER tile mosaic loading with opacity controls
 - **HEALPix Mask Overlay**: Effective coverage footprint visualization with configurable opacity
-- **PHZ Analysis**: Interactive photometric redshift probability distribution plots
+- **PHZ Analysis**: Interactive photometric redshift probability distribution plots with improved click detection
+
+### 🎨 **Cluster Analysis Tools**
+- **Cutout Generation**: Create MER mosaic cutouts centered on selected clusters with configurable size and opacity
+- **CATRED Box Views**: Load high-resolution catalog data in a box around clusters with customizable parameters
+- **Mask Cutouts**: Generate HEALPix mask cutouts showing coverage around selected clusters
+- **Trace Management**: Independent hide/show and clear controls for cutouts, CATRED boxes, and mask overlays
+- **Parameter Synchronization**: Unified controls between sidebar and cluster analysis tab
+- **Single-Section Expansion**: Only one options section visible at a time for cleaner interface
 
 ### 🖥️ **Professional UI Controls**
+- **Tabbed Interface**: Separate tabs for main visualization and cluster analysis
 - **Highlighted Section Headers**: Clear visual hierarchy with Bootstrap styling
 - **Dynamic Visibility**: Context-aware control hiding/showing based on user selections
 - **Algorithm-Based Toggle Control**: Matching clusters toggle enabled only in BOTH mode
@@ -47,6 +109,7 @@ source venv/bin/activate
 - **Responsive Design**: Optimized layout for different screen sizes and zoom levels
 - **Intuitive Workflow**: Guided user experience with helpful tooltips and status indicators
 - **Mosaic & Mask Management**: Separate controls for background images and HEALPix footprint overlays
+- **Collapsible Sections**: Organized controls with expandable/collapsible cards
 
 ### 🌐 **Enterprise Remote Access**
 - **SSH Tunnel Monitoring**: Automatic detection and setup guidance for remote connections
@@ -86,7 +149,7 @@ cluster_visualization/
 │   ├── mosaic_callback.py          # 🖼️ Mosaic & mask overlay callbacks
 │   ├── ui_callbacks.py             # 🎛️ UI control callbacks
 │   ├── phz_callbacks.py            # 📊 PHZ analysis callbacks
-│   └── cluster_modal_callbacks.py  # 🔍 Cluster detail modal callbacks
+│   └── cluster_modal_callbacks.py  # 🔍 Cluster analysis tab callbacks
 ├── ui/
 │   └── layout.py                   # 🖥️ Dash layout components
 ├── core/
@@ -141,33 +204,34 @@ python cluster_visualization/src/cluster_dash_app.py --help
 
 **💡 Tip**: Use `--config` to quickly switch between different datasets or testing/production environments without modifying your default configuration.
 
-### 3. **Remote Access (Automatic SSH Tunnel Setup)**
-When running on a remote server, the app automatically provides connection guidance:
+### 3. **Application Interface**
+The app opens with a tabbed interface:
 
-```bash
-🔗 SSH TUNNEL REQUIRED:
-   This app runs on a remote server. To access it:
-   1. Open a NEW terminal on your LOCAL machine
-   2. Run: ssh -L 8050:localhost:8050 vnistane@cca019.in2p3.fr
-   3. Keep that SSH connection alive
-   4. Open browser to: http://localhost:8050
-
-✓ User successfully connected at 16:21:57
-  ✓ SSH tunnel appears to be working correctly
-  Browser: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:143.0)
-  Connection from: 127.0.0.1
-```
-
-### 4. **Application Interface**
-The app opens with highlighted control sections:
+#### **Main Visualization Tab**
+Highlighted control sections:
 - 🔵 **Algorithm**: Switch between PZWAV/AMICO/BOTH
 - 🔵 **Cluster Matching**: Enable matched cluster visualization (available in BOTH mode only)
-- 🔵 **SNR Filtering**: Real-time signal-to-noise filtering  
+- 🔵 **SNR Filtering**: Real-time signal-to-noise filtering with separate controls for PZWAV/AMICO
 - 🔵 **Redshift Filtering**: Photometric redshift constraints
 - 🔵 **Display Options**: Polygon fills, MER tiles, aspect ratio
 - 🔵 **High-res CATRED data**: Advanced catalog integration with dynamic controls
 - 🔵 **Mosaic Image Controls**: Background image overlays with opacity control
 - 🔵 **HEALPix Mask Overlay**: Effective coverage footprint visualization
+
+#### **Cluster Analysis Tab**
+Interactive cluster-specific analysis:
+- 🎯 **Click-to-Select**: Click any cluster point on the main plot to select it
+- 🔬 **Generate Cutouts**: Create MER mosaic cutouts around selected clusters
+  - Configurable size (arcmin), opacity, and colorscale
+  - Hide/Show and Clear controls for trace management
+- 🔍 **CATRED Box Views**: Load high-resolution catalog data in a box
+  - Box size, redshift bin width, mask threshold, magnitude limit
+  - Marker size (constant or KRON radius) and color customization
+  - Independent trace management controls
+- 🗺️ **Mask Cutouts**: Generate HEALPix coverage cutouts
+  - Configurable size and opacity
+  - Separate trace visibility controls
+- 📊 **Analysis Results**: Display analysis outcomes and statistics
 
 ## Configuration
 
@@ -311,6 +375,39 @@ python cluster_visualization/src/cluster_dash_app.py --config production.ini --e
 
 ## 🎮 Feature Usage Guide
 
+### **Cluster Analysis Workflow**
+To analyze a specific cluster in detail:
+
+1. **Select a Cluster**: Click on any cluster point in the main visualization
+2. **Open Cluster Analysis Tab**: Switch to the "Cluster Analysis" tab
+3. **View Cluster Info**: See selected cluster's RA, Dec, Redshift, SNR details
+4. **Choose Analysis Type**:
+   - **Cutout**: Generate mosaic images centered on the cluster
+   - **CATRED Box**: Load high-resolution catalog data around the cluster
+   - **Mask Cutout**: Visualize coverage in the cluster region
+5. **Configure Parameters**: Expand the options section by clicking the action button
+6. **Generate**: Click the generate/view button to create the visualization
+7. **Manage Traces**: Use Hide/Show and Clear buttons to control visibility
+
+**Smart UI Features**:
+- Only one options section expands at a time (cutout, CATRED box, or mask)
+- Parameters sync between sidebar and cluster analysis tab
+- Trace management buttons enable automatically when traces exist
+- Hide button toggles between "Hide" and "Show" text
+
+### **PHZ (Photometric Redshift) Analysis**
+To view PHZ probability distributions:
+
+1. **Click on a CATRED Point**: Click any CATRED data point (when CATRED data is rendered)
+2. **View PHZ PDF Plot**: The PHZ-PDF panel updates showing the probability distribution
+3. **Analyze Redshift**: 
+   - Blue curve shows the probability distribution
+   - Red dashed line indicates PHZ_MODE_1 (most probable redshift)
+   - Green dotted line shows PHZ_MEDIAN
+4. **Coordinate Matching**: Uses `pointNumber` from clickData for accurate point identification
+
+**Technical Note**: PHZ callback uses `pointNumber` instead of `customdata` for reliable point indexing, as `customdata` may contain coverage values in masked mode.
+
 ### **Cluster Matching Visualization**
 To visualize matched PZWAV-AMICO cluster pairs:
 
@@ -355,8 +452,11 @@ Bottom → Top Layer Order:
 1. Tile Polygons (CORE/LEV1 boundaries)
 2. Mosaic Images (background astronomy)
 3. HEALPix Mask Overlay (coverage footprint)
-4. CATRED Data Points (high-res catalog)
-5. Cluster Markers & Matching Ovals (detections)
+4. Mosaic Cutouts (cluster-centered images)
+5. Mask Cutouts (cluster-centered coverage)
+6. CATRED Data Points (high-res catalog)
+7. CATRED Box Data (cluster-centered catalog)
+8. Cluster Markers & Matching Ovals (detections)
 ```
 
 **Smart Preservation**: All overlay layers are retained when:
@@ -365,49 +465,13 @@ Bottom → Top Layer Order:
 - Rendering/clearing CATRED data
 - Zooming or panning the view
 
-## Remote Access & SSH Tunneling
-
-### Automatic SSH Tunnel Detection
-The application includes built-in monitoring to help users set up SSH tunneling correctly:
-
-#### ✅ **What you'll see when starting the app:**
-```
-🔗 SSH TUNNEL REQUIRED:
-   This app runs on a remote server. To access it:
-   1. Open a NEW terminal on your LOCAL machine
-   2. Run: ssh -L 8050:localhost:8050 username@hostname
-   3. Keep that SSH connection alive
-   4. Open browser to: http://localhost:8050
-```
-
-#### ✅ **Successful connection confirmation:**
-```
-✓ User successfully connected at 09:02:31
-  ✓ SSH tunnel appears to be working correctly
-  Browser: Mozilla/5.0 (...)
-  Connection from: 127.0.0.1
-```
-
-#### ⚠️ **Automatic warnings (after 1 minute with no connections):**
-```
-⚠️  WARNING: No users have connected yet!
-   App has been running for 1.0 minute
-
-🔗 REQUIRED: SSH Tunnel Setup
-   This app runs on a remote server and requires SSH tunneling.
-   
-   1. Open a NEW terminal on your LOCAL machine
-   2. Run this command:
-      ssh -L 8050:localhost:8050 username@hostname
-   3. Keep that SSH connection alive
-   4. Open your browser to: http://localhost:8050
-```
-
-### Benefits
-- **Reduces support requests**: Clear instructions prevent common SSH setup errors
-- **Faster troubleshooting**: Immediate feedback if connection setup is incorrect  
-- **Better user experience**: Step-by-step guidance for remote access
-- **Automatic detection**: No manual intervention required
+**Trace Management**: Independent controls for:
+- Mosaic cutouts: Hide/Show and Clear buttons in Cluster Analysis tab
+- CATRED boxes: Hide/Show and Clear buttons in Cluster Analysis tab
+- Mask cutouts: Hide/Show and Clear buttons in Cluster Analysis tab
+- Global mosaics: Controls in main sidebar
+- Global masks: Controls in main sidebar
+- Global CATRED: Controls in main sidebar
 
 ## 🏗️ Architecture & Technical Specifications
 
@@ -562,26 +626,12 @@ cluster_visualization/src/
 
 ## 🔧 Troubleshooting & Support
 
-### **SSH Tunnel Connection Issues**
-The application includes intelligent connection monitoring with automatic guidance:
-
-```bash
-# ✅ Successful Connection
-✓ User successfully connected at 16:21:57
-  ✓ SSH tunnel appears to be working correctly
-  Browser: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:143.0)
-  Connection from: 127.0.0.1
-
-# ⚠️ Common Issues & Solutions
-Problem: "Connection refused" or app not accessible
-Solution: 1. Verify SSH tunnel: ssh -L 8050:localhost:8050 username@hostname
-         2. Keep SSH terminal alive 
-         3. Access via http://localhost:8050 (not server IP)
-
-Problem: "Port already in use"
-Solution: Use different port: ssh -L 8051:localhost:8050 username@hostname
-         Then access: http://localhost:8051
-```
+### **Connection Issues**
+If you can't access the application:
+- Verify SSH port forwarding is active (see Quick Remote Access Setup above)
+- Keep the SSH connection alive while using the app
+- Access via `http://localhost:8050` (not the server IP)
+- If port 8050 is in use, try alternative ports: 8051, 8052, 8053
 
 ### **Environment & Dependencies**
 ```bash
@@ -653,13 +703,16 @@ The application now supports independent control of multiple overlay layers:
 6. **🎯 Superior Interactivity**: Real-time zoom, pan, and filtering operations
 7. **🔄 Algorithm Comparison**: Seamless switching between PZWAV, AMICO, and BOTH with preserved settings
 8. **🔗 Visual Cross-Matching**: Geometric overlay showing matched cluster pairs across algorithms
-9. **🗺️ Multi-Layer Visualization**: Independent control of mosaics, masks, CATRED, and clusters
-10. **🚀 Production Ready**: Scalable web service deployment with monitoring capabilities
-11. **🔐 Secure Remote Access**: Built-in SSH tunnel monitoring and connection validation
-12. **📊 Advanced Analytics**: CATRED masked data integration with interactive PHZ visualization
-13. **🔍 Intelligent Monitoring**: Automatic detection and resolution of connectivity issues
-14. **📋 Professional UI**: Bootstrap-styled interface with highlighted sections and guided workflows
-15. **💾 State Preservation**: Smart trace management retains overlays across all data operations
+9. **🗺️ Multi-Layer Visualization**: Independent control of mosaics, masks, CATRED, cutouts, and clusters
+10. **🔬 Cluster Analysis Tools**: Dedicated interface for cutout generation, CATRED boxes, and mask overlays
+11. **🎛️ Trace Management**: Granular hide/show and clear controls for all overlay types
+12. **🚀 Production Ready**: Scalable web service deployment with monitoring capabilities
+13. **🔐 Secure Remote Access**: Built-in SSH tunnel monitoring and connection validation
+14. **📊 Advanced Analytics**: CATRED masked data integration with interactive PHZ visualization
+15. **🔍 Intelligent Monitoring**: Automatic detection and resolution of connectivity issues
+16. **📋 Professional UI**: Bootstrap-styled tabbed interface with organized sections
+17. **💾 State Preservation**: Smart trace management retains overlays across all data operations
+18. **🎨 Smart UI Sections**: Single-expansion sections for cleaner, more intuitive workflows
 
 ### **Professional Development Features**
 - **Modular Architecture**: Clean separation of concerns with maintainable codebase
@@ -689,11 +742,23 @@ The application now supports independent control of multiple overlay layers:
 - ✅ **Trace Preservation System**: Intelligent retention of mosaic and mask overlay layers
 - ✅ **Optimized Layer Management**: Refined rendering order (polygons → mosaics → masks → CATRED → clusters)
 
+### **November 2025 (Late): Cluster Analysis & Trace Management**
+- ✅ **Cluster Analysis Tab**: Dedicated interface for cluster-specific analysis with tabbed layout
+- ✅ **Cutout Generation**: MER mosaic cutouts with configurable parameters and trace management
+- ✅ **CATRED Box Views**: High-resolution catalog boxes around clusters with customization
+- ✅ **Mask Cutouts**: HEALPix coverage cutouts centered on selected clusters
+- ✅ **Trace Management System**: Hide/Show and Clear controls for all cutout types
+- ✅ **PHZ Callback Improvements**: Fixed point detection using `pointNumber` instead of `customdata`
+- ✅ **Smart UI Sections**: Only one options section expands at a time for cleaner interface
+- ✅ **Parameter Synchronization**: Unified controls between sidebar and cluster analysis tab
+
 ### **Current State: Enterprise-Grade Platform**
-- ✅ **Multi-Layer Visualization**: Independent control of mosaics, masks, CATRED, and cluster overlays
+- ✅ **Multi-Layer Visualization**: Independent control of mosaics, masks, CATRED, cutouts, and cluster overlays
 - ✅ **Advanced Matching Analysis**: Visual cluster cross-matching with geometric overlays
+- ✅ **Interactive Cluster Analysis**: Comprehensive tools for detailed cluster investigation
 - ✅ **Robust State Management**: Preserved traces and settings across all data operations
 - ✅ **Professional Documentation**: Comprehensive README reflecting sophisticated architecture
+- ✅ **Trace Management**: Granular control over visibility and clearing of all overlay types
 
 ## 📊 Technical Specifications & Data Insights
 

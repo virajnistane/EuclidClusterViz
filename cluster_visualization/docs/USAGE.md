@@ -7,6 +7,8 @@
 source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 ```
 
+**Remote Access**: If accessing from a remote server, see [Quick Remote Access Setup](../../../README.md#-quick-remote-access-setup) for SSH port forwarding instructions.
+
 ## 🎯 Interactive Dash Application
 
 **Solution**: Interactive HTML visualizations with algorithm comparison functionality.
@@ -43,11 +45,16 @@ source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Algorithm Comparison | ✅ **Working** | Switch between PZWAV and AMICO algorithms |
-| Interactive Dash App | ✅ **Working** | Real-time controls, no file generation needed |
+| Algorithm Comparison | ✅ **Working** | Switch between PZWAV, AMICO, and BOTH algorithms |
+| Cluster Matching | ✅ **Working** | Visual matching of PZWAV-AMICO pairs (BOTH mode) |
+| Cluster Analysis Tab | ✅ **Working** | Cutouts, CATRED boxes, mask overlays |
+| Trace Management | ✅ **Working** | Hide/show and clear controls for all overlays |
+| Interactive Dash App | ✅ **Working** | Real-time controls, tabbed interface |
+| CATRED Integration | ✅ **Working** | High-resolution catalog with PHZ analysis |
+| Mosaic Overlays | ✅ **Working** | Background images and mask visualization |
 | Polygon Fill Toggle | ✅ **Working** | Toggle CORE polygon fill on/off |
 | Interactive Controls | ✅ **Working** | Zoom, pan, aspect ratio, size adjustment |
-| Performance Optimization | ✅ **Working** | Basic vs Detailed view modes |
+| Performance Optimization | ✅ **Working** | Client-side filtering and smart caching |
 
 ## 🚀 Immediate Solution
 
@@ -57,13 +64,25 @@ source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 ./launch.sh
 ```
 
-All methods provide the same comprehensive visualization with:
-- ✅ **Algorithm Comparison**: PZWAV (7,437 clusters) vs AMICO (25,843 clusters)
-- ✅ **Basic View**: Fast overview with clusters and tile boundaries
-- ✅ **Detailed View**: Complete view with MER tile polygons
-- ✅ **Interactive controls**: Zoom, pan, polygon fill toggle, aspect ratio
-- ✅ **Hover information**: Detailed cluster and tile data
-- ✅ **Color-coded tiles**: Each tile has unique colors for identification
+All methods provide comprehensive visualization with:
+- ✅ **Algorithm Comparison**: PZWAV (7,437 clusters) vs AMICO (25,843 clusters) vs BOTH
+- ✅ **Cluster Matching**: Visual indication of matched PZWAV-AMICO pairs
+- ✅ **Cluster Analysis**: Dedicated tab for cutouts, CATRED boxes, and mask overlays
+- ✅ **CATRED Integration**: High-resolution catalog with PHZ probability plots
+- ✅ **Mosaic & Mask Overlays**: Background images and coverage visualization
+- ✅ **Trace Management**: Independent control of all overlay layers
+- ✅ **Interactive Controls**: Zoom, pan, polygon fill toggle, aspect ratio
+- ✅ **Smart Filtering**: Client-side SNR and redshift filtering
+- ✅ **Hover Information**: Detailed cluster, tile, and catalog data
+- ✅ **Color-coded Tiles**: Each tile has unique colors for identification
+
+## 📖 Detailed Feature Guides
+
+For in-depth information on specific features:
+- **[Cluster Analysis](CLUSTER_ANALYSIS_GUIDE.md)** - Cutouts, CATRED boxes, mask overlays, trace management
+- **[Configuration](CONFIGURATION_GUIDE.md)** - Setup and configuration options
+- **[Performance](PERFORMANCE_OPTIMIZATION_SUMMARY.md)** - Optimization details
+- **[Remote Access](../../../README.md#-quick-remote-access-setup)** - SSH port forwarding setup
 
 ## 🎉 Problem Solved
 
