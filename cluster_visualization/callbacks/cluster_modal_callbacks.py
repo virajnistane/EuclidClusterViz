@@ -80,8 +80,8 @@ class ClusterModalCallbacks:
                     # Extract cluster information from clicked point
                     ra = point.get('x', 'N/A')
                     dec = point.get('y', 'N/A')
-                    snr = round(customdata[0], 2) if len(customdata) > 0 else 'N/A'
-                    redshift = round(customdata[1], 2) if len(customdata) > 1 else 'N/A'
+                    snr = customdata[0] if len(customdata) > 0 else 'N/A'
+                    redshift = customdata[1] if len(customdata) > 1 else 'N/A'
                     
                     # Get trace name from hover text or use curve number
                     trace_name = f"Curve {curve_number}"

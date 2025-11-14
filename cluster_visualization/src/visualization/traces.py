@@ -630,7 +630,7 @@ class TraceCreator:
                         name=f'Merged PZWAV - {len(pzwav_data)} clusters',
                         legendgroup='merged_pzwav',
                         text=[
-                            f"merged (PZWAV)<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                            f"merged (PZWAV)<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
                             for snr, cz, ra, dec in zip(pzwav_data['SNR_CLUSTER'], 
                                                       pzwav_data['Z_CLUSTER'], 
                                                       pzwav_data['RIGHT_ASCENSION_CLUSTER'], 
@@ -652,7 +652,7 @@ class TraceCreator:
                         name=f'Merged AMICO - {len(amico_data)} clusters',
                         legendgroup='merged_amico',
                         text=[
-                            f"merged (AMICO)<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                            f"merged (AMICO)<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
                             for snr, cz, ra, dec in zip(amico_data['SNR_CLUSTER'], 
                                                       amico_data['Z_CLUSTER'], 
                                                       amico_data['RIGHT_ASCENSION_CLUSTER'], 
@@ -681,7 +681,7 @@ class TraceCreator:
                     marker=dict(size=20, symbol=symbol, line=dict(width=2), color='black'),
                     name=f'Merged Data ({algorithm}) - {len(datamod_detcluster_mergedcat)} clusters',
                     text=[
-                        f"merged<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                        f"merged<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
                         for snr, cz, ra, dec in zip(datamod_detcluster_mergedcat['SNR_CLUSTER'], 
                                                   datamod_detcluster_mergedcat['Z_CLUSTER'], 
                                                   datamod_detcluster_mergedcat['RIGHT_ASCENSION_CLUSTER'], 
@@ -731,7 +731,7 @@ class TraceCreator:
                             legendgroup='merged_pzwav',
                             showlegend=False,  # Hide to avoid duplicate with main trace
                             text=[
-                                f"merged (PZWAV)<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                                f"merged (PZWAV)<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
                                 for snr, cz, ra, dec in zip(pzwav_away['SNR_CLUSTER'], 
                                                           pzwav_away['Z_CLUSTER'], 
                                                           pzwav_away['RIGHT_ASCENSION_CLUSTER'], 
@@ -754,7 +754,7 @@ class TraceCreator:
                             legendgroup='merged_amico',
                             showlegend=False,  # Hide to avoid duplicate with main trace
                             text=[
-                                f"merged (AMICO)<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                                f"merged (AMICO)<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
                                 for snr, cz, ra, dec in zip(amico_away['SNR_CLUSTER'], 
                                                           amico_away['Z_CLUSTER'], 
                                                           amico_away['RIGHT_ASCENSION_CLUSTER'], 
@@ -783,7 +783,7 @@ class TraceCreator:
                         marker=dict(size=20, symbol=symbol, line=dict(width=2), color='black'),
                         name=f'Merged Data ({algorithm}) - {len(away_from_catred_data)} clusters',
                         text=[
-                            f"merged<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                            f"merged<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
                             for snr, cz, ra, dec in zip(away_from_catred_data['SNR_CLUSTER'], 
                                                       away_from_catred_data['Z_CLUSTER'], 
                                                       away_from_catred_data['RIGHT_ASCENSION_CLUSTER'], 
@@ -837,7 +837,7 @@ class TraceCreator:
                             legendgroup='merged_pzwav',
                             showlegend=False,
                             text=[
-                                f"merged PZWAV (enhanced)<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                                f"merged PZWAV (enhanced)<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
                                 for snr, cz, ra, dec in zip(pzwav_near['SNR_CLUSTER'], 
                                                           pzwav_near['Z_CLUSTER'], 
                                                           pzwav_near['RIGHT_ASCENSION_CLUSTER'], 
@@ -874,7 +874,7 @@ class TraceCreator:
                             legendgroup='merged_amico',
                             showlegend=False,
                             text=[
-                                f"merged AMICO (enhanced)<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                                f"merged AMICO (enhanced)<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
                                 for snr, cz, ra, dec in zip(amico_near['SNR_CLUSTER'], 
                                                           amico_near['Z_CLUSTER'], 
                                                           amico_near['RIGHT_ASCENSION_CLUSTER'], 
@@ -923,7 +923,7 @@ class TraceCreator:
                         name=f'Merged Data (Enhanced) - {len(near_catred_data)} clusters',
                         showlegend=False,
                         text=[
-                            f"merged (enhanced)<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                            f"merged (enhanced)<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
                             for snr, cz, ra, dec in zip(near_catred_data['SNR_CLUSTER'], 
                                                       near_catred_data['Z_CLUSTER'], 
                                                       near_catred_data['RIGHT_ASCENSION_CLUSTER'], 
@@ -1005,7 +1005,7 @@ class TraceCreator:
                     legendgroup=legend_group,
                     showlegend=show_in_legend,
                     text=[
-                        f"TileID: {tileid}{f' ({tile_algorithm})' if tile_algorithm and data['algorithm'] == 'BOTH' else ''}<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                        f"TileID: {tileid}{f' ({tile_algorithm})' if tile_algorithm and data['algorithm'] == 'BOTH' else ''}<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
                         for snr, cz, ra, dec in zip(datamod_detcluster_by_cltile['SNR_CLUSTER'], datamod_detcluster_by_cltile['Z_CLUSTER'], 
                                                   datamod_detcluster_by_cltile['RIGHT_ASCENSION_CLUSTER'], datamod_detcluster_by_cltile['DECLINATION_CLUSTER'])
                     ],
@@ -1040,7 +1040,7 @@ class TraceCreator:
                         legendgroup=legend_group,
                         showlegend=show_in_legend,
                         text=[
-                            f"TileID: {tileid}{f' ({tile_algorithm})' if tile_algorithm and data['algorithm'] == 'BOTH' else ''}<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                            f"TileID: {tileid}{f' ({tile_algorithm})' if tile_algorithm and data['algorithm'] == 'BOTH' else ''}<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
                             for snr, cz, ra, dec in zip(away_from_catred_data['SNR_CLUSTER'], away_from_catred_data['Z_CLUSTER'], 
                                                       away_from_catred_data['RIGHT_ASCENSION_CLUSTER'], away_from_catred_data['DECLINATION_CLUSTER'])
                         ],
@@ -1082,7 +1082,7 @@ class TraceCreator:
                         legendgroup=legend_group,
                         showlegend=False,  # Never show enhanced traces in legend to avoid clutter
                         text=[
-                            f"TileID: {tileid}{f' ({tile_algorithm})' if tile_algorithm and data['algorithm'] == 'BOTH' else ''} (enhanced)<br>SNR_CLUSTER: {snr}<br>Z_CLUSTER: {cz}<br>RA: {ra:.6f}<br>Dec: {dec:.6f}"
+                            f"TileID: {tileid}{f' ({tile_algorithm})' if tile_algorithm and data['algorithm'] == 'BOTH' else ''} (enhanced)<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
                             for snr, cz, ra, dec in zip(near_catred_data['SNR_CLUSTER'], near_catred_data['Z_CLUSTER'], 
                                                       near_catred_data['RIGHT_ASCENSION_CLUSTER'], near_catred_data['DECLINATION_CLUSTER'])
                         ],
