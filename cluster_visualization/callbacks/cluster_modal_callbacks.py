@@ -712,7 +712,7 @@ class ClusterModalCallbacks:
 
                         mask_overlay_traces = [
                             trace for trace in current_figure['data'] 
-                            if trace.get('name', '').startswith('Mask overlay')
+                            if trace.get('name', '').startswith('Mask overlay') and not '(cutout)' in trace.get('name', '')
                             ]
 
                         if len(mask_overlay_traces) > 0:

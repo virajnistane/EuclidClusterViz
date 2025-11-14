@@ -678,14 +678,14 @@ class MOSAICHandler:
         z_colorbar = np.array([[weight_min, weight_max], [weight_min, weight_max]])
         
         # Create the colorbar trace
+        # Use visible='legendonly' to prevent the dummy coordinates from affecting axis ranges
         colorbar_trace = go.Heatmap(
             z=z_colorbar,
-            x=[0, 1],  # Minimal coordinates (won't be visible)
+            x=[0, 1],  # Minimal coordinates (won't affect plot range)
             y=[0, 1],
             colorscale=colorscale,
             showscale=True,  # Show the colorbar
-            visible=True,
-            opacity=0,  # Make the heatmap itself invisible
+            visible='legendonly',  # Hide from plot but show colorbar
             hoverinfo='skip',  # Don't show hover info for this trace
             showlegend=False,
             name='Mask Colorbar',
@@ -1049,20 +1049,23 @@ class MOSAICHandler:
         # Create traces for HEALPix footprint polygons
         footprint_traces = []
         weight_min, weight_max = 0.8, 1.0
-        
+
         if _pix_mask.sum() > 0:
             print(f"Creating {_pix_mask.sum()} HEALPix polygon traces...")
             
             for idx, (pix, weight) in enumerate(zip(footprint['PIXEL'][_pix_mask], footprint['WEIGHT'][_pix_mask])):
                 # Get pixel boundaries
-                rapix, decpix = self.get_healpix_boundaries(pixel_id=pix, nside=16384, 
+                rapix, decpix = self.get_healpix_boundaries(pix, nside=16384, 
                                                             nest=True, step=2, 
                                                             mertileid=mertileid, 
                                                             wcs_mosaic=wcs_cutout)
-                rapix = np.append(rapix, rapix[0])  # Close the polygon
-                decpix = np.append(decpix, decpix[0])  # Close the polygon
-
+                
                 ra, dec = wcs_cutout.wcs_pix2world(rapix, decpix, 0)
+                
+                # Close the polygon
+                ra = np.append(ra, ra[0])
+                dec = np.append(dec, dec[0])
+
                 # Normalize weight for colorscale
                 weight_norm = (weight - weight_min) / (weight_max - weight_min)
                 try:
