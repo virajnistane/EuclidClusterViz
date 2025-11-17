@@ -142,7 +142,16 @@ class MOSAICHandler:
             return self.traces_cache[mertileid]
         
         mosaic_dir = self.config.mosaic_dir
-        fits_files = glob.glob(os.path.join(mosaic_dir, f'EUC_MER_BGSUB-MOSAIC-VIS_TILE{mertileid}*.fits.gz'))
+        try:
+            fits_files = glob.glob(os.path.join(mosaic_dir, f'EUC_MER_BGSUB-MOSAIC-VIS_TILE{mertileid}*.fits.gz'))
+        except:
+            print(f"Error accessing directory {mosaic_dir}, trying subdirectories...")
+            for subdir in os.listdir(mosaic_dir):
+                subdir_path = os.path.join(mosaic_dir, subdir)
+                if os.path.isdir(subdir_path):
+                    fits_files = glob.glob(os.path.join(subdir_path, f'EUC_MER_BGSUB-MOSAIC-VIS_TILE{mertileid}*.fits.gz'))
+                    if fits_files:
+                        break
         
         if not fits_files:
             print(f"Warning: No mosaic FITS file found for MER tile {mertileid}")
