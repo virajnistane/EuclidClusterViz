@@ -41,9 +41,10 @@ class MOSAICHandler:
         self.current_mosaic_data = None
         self.config = config if config else Config() 
 
-        effcovmask_fileinfo_path = self.config.get_effcovmask_fileinfo_csv()
-        self.effcovmask_fileinfo_df = pd.read_csv(effcovmask_fileinfo_path,  index_col='tileid')
-
+        dataloader = DataLoader(config=self.config)
+        paths = dataloader._get_paths(algorithm='PZWAV')
+        dataloader._validate_paths(paths)
+        self.effcovmask_fileinfo_df = dataloader._load_effcovmask_info(paths)
 
         self.mosaic_header = None
         self.mosaic_data = None

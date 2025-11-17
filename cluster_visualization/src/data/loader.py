@@ -17,6 +17,7 @@ import pandas as pd
 import numpy as np
 from astropy.io import fits
 from typing import Dict, Any, Optional
+import datetime
 
 
 class DataLoader:
@@ -376,12 +377,37 @@ class DataLoader:
         """Load CATRED file information and polygon data."""
         catred_fileinfo_csv = paths['catred_fileinfo_csv']
         catred_polygon_pkl = paths['catred_polygon_pkl']
+        regenerate = False
+
+        # Get catred directory from config
+        if self.config and hasattr(self.config, 'catred_dir'):
+            catred_dir = self.config.catred_dir
+        else:
+            # Fallback to rr2_downloads/DpdLE3clFullInputCat
+            catred_dir = os.path.join(os.path.dirname(paths['catred_fileinfo_csv']), 'DpdLE3clFullInputCat')
+
+        if not os.path.exists(catred_dir):
+            print(f"Warning: CATRED directory not found at {catred_dir}")
+            return pd.DataFrame()
+        
+        # Get list of XML files
+        catredxmlfiles = [i for i in os.listdir(catred_dir) if i.endswith('.xml')]
+        # Get xml files from each subdirectory (named for DSR) too
+        for subdir in os.listdir(catred_dir):
+            subdir_path = os.path.join(catred_dir, subdir)
+            if os.path.isdir(subdir_path):
+                subdir_xmlfiles = [i for i in os.listdir(subdir_path) if i.endswith('.xml')]
+                catredxmlfiles.extend([os.path.join(subdir, i) for i in subdir_xmlfiles])
         
         # Load CSV file info or generate it if it doesn't exist
         catred_fileinfo_df = pd.DataFrame()
         if os.path.exists(catred_fileinfo_csv):
             print(f'catred_fileinfo.csv already exists in {os.path.dirname(catred_fileinfo_csv)}')
             catred_fileinfo_df = pd.read_csv(catred_fileinfo_csv)
+            if len(catred_fileinfo_df) != len(catredxmlfiles):
+                print("Warning: Number of entries in catred_fileinfo.csv does not match number of CATRED XML files. Regenerating.")
+                regenerate = True
+                catred_fileinfo_df = self._generate_catred_fileinfo(paths, catredxmlfiles=catredxmlfiles)
             catred_fileinfo_df.set_index('tileid', inplace=True)
             print("Loaded catred file info")
         else:
@@ -395,7 +421,7 @@ class DataLoader:
                 catred_fileinfo_dict = pickle.load(f)
             catred_fileinfo_df['polygon'] = pd.Series(catred_fileinfo_dict)
             print("Loaded catred polygons")
-        elif not catred_fileinfo_df.empty:
+        elif not catred_fileinfo_df.empty or regenerate:
             print(f"catred polygons not found at {catred_polygon_pkl}")
             catred_fileinfo_df = self._generate_catred_polygons(catred_fileinfo_df, paths)
         else:
@@ -403,7 +429,7 @@ class DataLoader:
         
         return catred_fileinfo_df
     
-    def _generate_catred_fileinfo(self, paths: Dict[str, str]) -> pd.DataFrame:
+    def _generate_catred_fileinfo(self, paths: Dict[str, str], catredxmlfiles: list = None) -> pd.DataFrame:
         """Generate catred_fileinfo.csv from XML files. """
         print('Processing catred XML files to create catred_fileinfo dictionary')
         
@@ -418,8 +444,16 @@ class DataLoader:
             print(f"Warning: CATRED directory not found at {catred_dir}")
             return pd.DataFrame()
         
-        # Get list of XML files
-        catredxmlfiles = [i for i in os.listdir(catred_dir) if i.endswith('.xml')]
+        if catredxmlfiles is None:
+            # Get list of XML files
+            catredxmlfiles = [i for i in os.listdir(catred_dir) if i.endswith('.xml')]
+
+            # Get xml files from each subdirectory (named for DSR) too
+            for subdir in os.listdir(catred_dir):
+                subdir_path = os.path.join(catred_dir, subdir)
+                if os.path.isdir(subdir_path):
+                    subdir_xmlfiles = [i for i in os.listdir(subdir_path) if i.endswith('.xml')]
+                    catredxmlfiles.extend([os.path.join(subdir, i) for i in subdir_xmlfiles])
         
         if not catredxmlfiles:
             print(f"Warning: No XML files found in {catred_dir}")
@@ -445,6 +479,22 @@ class DataLoader:
                     'Data/Catalog/DataContainer/FileName'
                 ).text
                 catred_fileinfo[mertileid]['fits_file'] = os.path.join(catred_dir, catred_fitsfile)
+
+                # Extract dataset release version from XML
+                dataset_release = self.get_xml_element(
+                    os.path.join(catred_dir, catredxmlfile), 
+                    'Header/DataSetRelease'
+                ).text
+                catred_fileinfo[mertileid]['dataset_release'] = dataset_release
+
+                # Extract creation date from XML
+                creation_date = self.get_xml_element(
+                    os.path.join(catred_dir, catredxmlfile), 
+                    'Header/CreationDate'
+                ).text
+                catred_fileinfo[mertileid]['creation_date'] = datetime.datetime.strptime(
+                    creation_date[:-2], "%Y-%m-%dT%H:%M:%S.%f"
+                    ).date().isoformat()
                 
             except Exception as e:
                 print(f"Warning: Failed to process {catredxmlfile}: {e}")
@@ -458,7 +508,7 @@ class DataLoader:
         catred_fileinfo_df = pd.DataFrame.from_dict(catred_fileinfo, orient='index')
         catred_fileinfo_df.index.name = 'tileid'
         catred_fileinfo_df.index = catred_fileinfo_df.index.astype(int)
-        catred_fileinfo_df = catred_fileinfo_df[['xml_file', 'fits_file']]
+        catred_fileinfo_df = catred_fileinfo_df[['dataset_release', 'creation_date', 'xml_file', 'fits_file']]
         
         print(f"Generated catred_fileinfo for {len(catred_fileinfo_df)} tiles")
         
@@ -532,12 +582,36 @@ class DataLoader:
     def _load_effcovmask_info(self, paths: Dict[str, str]) -> pd.DataFrame:
         """Load effective coverage mask file info, generating if not exists (based on notebook cell 29)."""
         effcovmask_fileinfo_csv = paths['effcovmask_fileinfo_csv']
+
+        # Get effcov_mask_dir from config
+        if self.config and hasattr(self.config, 'effcov_mask_dir'):
+            effcov_mask_dir = self.config.effcov_mask_dir
+        else:
+            # Fallback to rr2_downloads/DpdHealpixEffectiveCoverageVMPZ
+            effcov_mask_dir = os.path.join(os.path.dirname(paths['effcovmask_fileinfo_csv']), 'DpdHealpixEffectiveCoverageVMPZ')
         
+        if not os.path.exists(effcov_mask_dir):
+            print(f"Warning: Effective coverage mask directory not found at {effcov_mask_dir}")
+            return pd.DataFrame()
+        
+        # Get list of XML files (based on notebook: files with 'DpdHealpixEffectiveCoverageVMPZ' in name)
+        effcovxmlfiles = [i for i in os.listdir(effcov_mask_dir) if i.endswith('.xml') and 'DpdHealpixEffectiveCoverageVMPZ' in i]
+        
+        # Get xml files from each subdirectory (named for DSR) too
+        for subdir in os.listdir(effcov_mask_dir):
+            subdir_path = os.path.join(effcov_mask_dir, subdir)
+            if os.path.isdir(subdir_path):
+                subdir_files = [os.path.join(subdir, f) for f in os.listdir(subdir_path) if f.endswith('.xml') and 'DpdHealpixEffectiveCoverageVMPZ' in f]
+                effcovxmlfiles.extend(subdir_files)
+
         # Check if CSV file exists
         if os.path.exists(effcovmask_fileinfo_csv):
             print(f"effcovmask_fileinfo.csv already exists in {os.path.dirname(effcovmask_fileinfo_csv)}")
             effcovmask_fileinfo_df = pd.read_csv(effcovmask_fileinfo_csv)
             effcovmask_fileinfo_df.set_index('tileid', inplace=True)
+            if len(effcovmask_fileinfo_df) != len(effcovxmlfiles):
+                print("Warning: Number of entries in effcovmask_fileinfo.csv does not match number of effective coverage XML files. Regenerating.")
+                effcovmask_fileinfo_df = self._generate_effcovmask_fileinfo(paths)
             print('effcovmask_fileinfo loaded from CSV file')
             return effcovmask_fileinfo_df
         else:
@@ -562,6 +636,13 @@ class DataLoader:
         # Get list of XML files (based on notebook: files with 'DpdHealpixEffectiveCoverageVMPZ' in name)
         effcovxmlfiles = [i for i in os.listdir(effcov_mask_dir) if i.endswith('.xml') and 'DpdHealpixEffectiveCoverageVMPZ' in i]
         
+        # Get xml files from each subdirectory (named for DSR) too
+        for subdir in os.listdir(effcov_mask_dir):
+            subdir_path = os.path.join(effcov_mask_dir, subdir)
+            if os.path.isdir(subdir_path):
+                subdir_files = [os.path.join(subdir, f) for f in os.listdir(subdir_path) if f.endswith('.xml') and 'DpdHealpixEffectiveCoverageVMPZ' in f]
+                effcovxmlfiles.extend(subdir_files)
+
         if not effcovxmlfiles:
             print(f"Warning: No effective coverage XML files found in {effcov_mask_dir}")
             return pd.DataFrame()
@@ -586,6 +667,22 @@ class DataLoader:
                     'Data/EffectiveCoverageMaskHealpix/DataContainer/FileName'
                 ).text
                 effcov_fileinfo[mertileid]['fits_file'] = os.path.join(effcov_mask_dir, effcov_fitsfile)
+
+                # Extract dataset release version from XML
+                dataset_release = self.get_xml_element(
+                    os.path.join(effcov_mask_dir, effcovxmlfile), 
+                    'Header/DataSetRelease'
+                ).text
+                effcov_fileinfo[mertileid]['dataset_release'] = dataset_release
+
+                # Extract creation date from XML
+                creation_date = self.get_xml_element(
+                    os.path.join(effcov_mask_dir, effcovxmlfile), 
+                    'Header/CreationDate'
+                ).text
+                effcov_fileinfo[mertileid]['creation_date'] = datetime.datetime.strptime(
+                    creation_date[:-2], "%Y-%m-%dT%H:%M:%S.%f"
+                    ).date().isoformat()
                 
             except Exception as e:
                 print(f"Warning: Failed to process {effcovxmlfile}: {e}")
@@ -599,7 +696,7 @@ class DataLoader:
         effcov_fileinfo_df = pd.DataFrame.from_dict(effcov_fileinfo, orient='index')
         effcov_fileinfo_df.index.name = 'tileid'
         effcov_fileinfo_df.index = effcov_fileinfo_df.index.astype(int)
-        effcov_fileinfo_df = effcov_fileinfo_df[['xml_file', 'fits_file']]
+        effcov_fileinfo_df = effcov_fileinfo_df[['dataset_release', 'creation_date', 'xml_file', 'fits_file']]
         
         print(f"Generated effcovmask_fileinfo for {len(effcov_fileinfo_df)} tiles")
         
@@ -610,54 +707,6 @@ class DataLoader:
         print(f"Saved effcovmask_fileinfo.csv to {output_csv}")
         
         return effcov_fileinfo_df
-    
-    def regenerate_catred_fileinfo(self, algorithm: str = 'PZWAV', force: bool = False) -> pd.DataFrame:
-        """
-        Manually regenerate catred_fileinfo.csv file.
-        
-        Args:
-            algorithm: Algorithm choice ('PZWAV' or 'AMICO')
-            force: If True, regenerate even if file already exists
-            
-        Returns:
-            Generated catred_fileinfo DataFrame
-        """
-        paths = self._get_paths(algorithm)
-        catred_fileinfo_csv = paths['catred_fileinfo_csv']
-        
-        if os.path.exists(catred_fileinfo_csv) and not force:
-            print(f"catred_fileinfo.csv already exists at {catred_fileinfo_csv}")
-            print("Use force=True to regenerate anyway")
-            return pd.read_csv(catred_fileinfo_csv).set_index('tileid')
-        
-        if force and os.path.exists(catred_fileinfo_csv):
-            print(f"Force regenerating catred_fileinfo.csv (overwriting existing file)")
-        
-        return self._generate_catred_fileinfo(paths)
-    
-    def regenerate_effcovmask_fileinfo(self, algorithm: str = 'PZWAV', force: bool = False) -> pd.DataFrame:
-        """
-        Manually regenerate effcovmask_fileinfo.csv file.
-        
-        Args:
-            algorithm: Algorithm choice ('PZWAV' or 'AMICO')
-            force: If True, regenerate even if file already exists
-            
-        Returns:
-            Generated effcovmask_fileinfo DataFrame
-        """
-        paths = self._get_paths(algorithm)
-        effcovmask_fileinfo_csv = paths['effcovmask_fileinfo_csv']
-        
-        if os.path.exists(effcovmask_fileinfo_csv) and not force:
-            print(f"effcovmask_fileinfo.csv already exists at {effcovmask_fileinfo_csv}")
-            print("Use force=True to regenerate anyway")
-            return pd.read_csv(effcovmask_fileinfo_csv).set_index('tileid')
-        
-        if force and os.path.exists(effcovmask_fileinfo_csv):
-            print(f"Force regenerating effcovmask_fileinfo.csv (overwriting existing file)")
-        
-        return self._generate_effcovmask_fileinfo(paths)
     
     def clear_cache(self) -> None:
         """Clear the data cache to free memory."""
