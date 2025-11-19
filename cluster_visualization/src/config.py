@@ -96,10 +96,10 @@ class Config:
         else:
             self.catred_dir = None
             
-        if self.config_parser.has_option('paths', 'effcov_mask_dir'):
-            self.effcov_mask_dir = self._expand_path(self.config_parser.get('paths', 'effcov_mask_dir'))
+        if self.config_parser.has_option('paths', 'effcovmask_dir'):
+            self.effcovmask_dir = self._expand_path(self.config_parser.get('paths', 'effcovmask_dir'))
         else:
-            self.effcov_mask_dir = None
+            self.effcovmask_dir = None
         
         if self.config_parser.has_option('paths', 'mosaic_dir'):
             self.mosaic_dir = self._expand_path(self.config_parser.get('paths', 'mosaic_dir'))
@@ -223,16 +223,30 @@ class Config:
         filename = 'catred_fileinfo.csv'
         return os.path.join(self.catred_dir, filename)
     
+    def get_catred_dsr(self):
+        """Get CATRED dataset release from configuration"""
+        if self.config_parser.has_option('paths', 'catred_ds_release'):
+            dsr = self.config_parser.get('paths', 'catred_ds_release')
+            return dsr.strip("'\"")  # Remove quotes if present
+        return None
+    
     def get_catred_polygons_pkl(self):
         """Get path to catred polygons pickle file (hardcoded filename in catred_dir)"""
         filename = 'catred_polygons_by_tileid.pkl'
         return os.path.join(self.catred_dir, filename)
     
     def get_effcovmask_fileinfo_csv(self):
-        """Get path to effective coverage mask file info CSV (hardcoded filename in effcov_mask_dir)"""
+        """Get path to effective coverage mask file info CSV (hardcoded filename in effcovmask_dir)"""
         filename = 'effcovmask_fileinfo.csv'
-        return os.path.join(self.effcov_mask_dir, filename)
+        return os.path.join(self.effcovmask_dir, filename)
     
+    def get_effcovmask_dsr(self):
+        """Get effective coverage mask dataset release from configuration"""
+        if self.config_parser.has_option('paths', 'effcovmask_ds_release'):
+            dsr = self.config_parser.get('paths', 'effcovmask_ds_release')
+            return dsr.strip("'\"")  # Remove quotes if present
+        return None
+
     def validate_paths(self):
         """Validate that critical paths exist and return status"""
         issues = []
@@ -252,7 +266,7 @@ class Config:
         # Check optional directories
         optional_dirs = [
             ('CATRED directory', self.catred_dir),
-            ('Effective coverage mask directory', self.effcov_mask_dir),
+            ('Effective coverage mask directory', self.effcovmask_dir),
             ('Mosaic directory', self.mosaic_dir),
             ('DetIntile working directory', self.detintile_workdir),
             ('MergeDetCat working directory', self.mergedetcat_workdir),
@@ -285,7 +299,7 @@ class Config:
         print("")
         print("Data directories:")
         print(f"  CATRED directory: {self.catred_dir}")
-        print(f"  Effective coverage mask directory: {self.effcov_mask_dir}")
+        print(f"  Effective coverage mask directory: {self.effcovmask_dir}")
         print(f"  Mosaic directory: {self.mosaic_dir}")
         print("")
         print("Working directories:")

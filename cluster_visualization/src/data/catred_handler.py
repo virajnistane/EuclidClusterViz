@@ -81,15 +81,19 @@ class Mask:
         return hp.ang2pix(self.nside, ra, dec, lonlat=True, nest=self.nested)
 
 
-def get_masked_catred(tile_id, effcovmask_info, catred_info, maglim=24.0, threshold=0.8):
+def get_masked_catred(tile_id, effcovmask_info, effcovmask_dsr, catred_info, catred_dsr, maglim=24.0, threshold=0.8):
     """Get masked CATRED data for a tile using effective coverage mask and magnitude limit."""
     try:
+
+        if effcovmask_dsr is None:
+            raise ValueError("effcovmask_dsr must be provided to load effective coverage mask.")
+        
         # Load mask for the tile
-        mask_file = effcovmask_info.loc[tile_id]['fits_file']
+        mask_file = effcovmask_info.loc[(effcovmask_info['mertileid'] == tile_id) & (effcovmask_info['dataset_release'] == effcovmask_dsr)].squeeze()['fits_file']
         msk = Mask(mask_file)  # Pass file path to constructor
         
         # Load CATRED data
-        catred_file = catred_info.loc[tile_id]['fits_file']
+        catred_file = catred_info.loc[(catred_info['mertileid'] == tile_id) & (catred_info['dataset_release'] == catred_dsr)].squeeze()['fits_file']
         with fits.open(catred_file, mode='readonly') as catred_hdu:
             src = Table(catred_hdu[1].data)
             
@@ -152,6 +156,8 @@ class CATREDHandler:
         self.traces_cache = []  # Store accumulated CATRED scatter traces
         self.current_catred_data = None  # Store current CATRED data for click callbacks
         self.catred_z_param_select_for_filter = 'PHZ_MEDIAN'  # Default redshift parameter for filtering
+        self.catred_dsr = None  # Dataset release for CATRED files
+        self.effcovmask_dsr = None  # Dataset release for effective coverage mask files
     
     def get_radec_mertile(self, mertileid: int, data: Dict[str, Any], maglim: float = 24.0) -> Dict[str, List]:
         """
@@ -175,11 +181,17 @@ class CATREDHandler:
                 print(f"Debug: No catred_info available for mertile {mertileid}")
                 return {}
             
-            if mertileid not in data['catred_info'].index:
+            if mertileid not in data['catred_info']['mertileid'].values:
                 print(f"Debug: MerTile {mertileid} not found in catred_info")
                 return {}
+
+            if (data.get('catred_dsr', None) not in data['catred_info']['dataset_release'].values or 
+                 data.get('effcovmask_dsr', None) not in data['effcovmask_info']['dataset_release'].values):
+                print(f"Debug: catred_dsr {data.get('catred_dsr', None)} or effcovmask_dsr {data.get('effcovmask_dsr', None)} not found in catred_info or effcovmask_info for mertile {mertileid}")
+                return {}
             
-            mertile_row = data['catred_info'].loc[mertileid]
+            mertile_row = data['catred_info'].loc[data['catred_info']['mertileid'] == mertileid &
+                                                  data['catred_info']['dataset_release'] == data.get('catred_dsr', None)].squeeze()
             
             # Check if fits_file column exists
             if 'fits_file' not in mertile_row or pd.isna(mertile_row['fits_file']):
@@ -199,8 +211,8 @@ class CATREDHandler:
             print(f"Debug: Error loading MER tile {mertileid}: {e}")
             # Fallback: try to use polygon vertices
             try:
-                if mertileid in data['catred_info'].index:
-                    mertile_row = data['catred_info'].loc[mertileid]
+                if mertileid in data['catred_info']['mertileid'].values:
+                    mertile_row = data['catred_info'].loc[(data['catred_info']['mertileid'] == mertileid) & (data['catred_info']['dataset_release'] == data.get('catred_dsr', None))].squeeze()
                     return self._get_polygon_fallback_data(mertile_row, mertileid)
             except Exception as fallback_error:
                 print(f"Debug: Fallback also failed for MER tile {mertileid}: {fallback_error}")
@@ -315,7 +327,8 @@ class CATREDHandler:
         zoom_box = box(ra_min, dec_min, ra_max, dec_max)
         mertiles_to_load = []
         
-        for mertileid, row in data['catred_info'].iterrows():
+        for uid, row in data['catred_info'].loc[data['catred_info']['dataset_release'] == data.get('catred_dsr', None)].iterrows():
+            mertileid = row['mertileid']
             poly = row['polygon']
             if poly is not None:
                 # Use proper geometric intersection: checks if polygons overlap in any way
@@ -355,15 +368,20 @@ class CATREDHandler:
                 print(f"Debug: Missing catred_info or effcovmask_info for coverage processing of mertile {mertileid}")
                 return {}
             
-            if (mertileid not in data['catred_info'].index or 
-                mertileid not in data['effcovmask_info'].index):
+            if (mertileid not in data['catred_info']['mertileid'].values or 
+                mertileid not in data['effcovmask_info']['mertileid'].values):
                 print(f"Debug: MerTile {mertileid} not found in catred_info or effcovmask_info")
                 return {}
             
+            if (data.get('catred_dsr', None) not in data['catred_info']['dataset_release'].values or 
+                 data.get('effcovmask_dsr', None) not in data['effcovmask_info']['dataset_release'].values):
+                print(f"Debug: catred_dsr {data.get('catred_dsr', None)} or effcovmask_dsr {data.get('effcovmask_dsr', None)} not found in catred_info or effcovmask_info for mertile {mertileid}")
+                return {}
+            
             # Get full CATRED data with coverage values (no threshold filtering)
-            full_src_with_coverage = get_masked_catred(mertileid, data['effcovmask_info'], 
-                                                     data['catred_info'], 
-                                                     maglim=maglim, threshold=threshold)  # Load all data
+            full_src_with_coverage = get_masked_catred(
+                mertileid, data['effcovmask_info'], data.get('effcovmask_dsr', None), data['catred_info'], data.get('catred_dsr', None), maglim=maglim, threshold=threshold
+                )  # Load all data
             
             if len(full_src_with_coverage) == 0:
                 print(f"Debug: No CATRED sources found for mertile {mertileid}")
@@ -417,14 +435,19 @@ class CATREDHandler:
                 print(f"Debug: Missing catred_info or effcovmask_info for masked processing of mertile {mertileid}")
                 return {}
             
-            if (mertileid not in data['catred_info'].index or 
-                mertileid not in data['effcovmask_info'].index):
+            if (mertileid not in data['catred_info']['mertileid'].values or 
+                mertileid not in data['effcovmask_info']['mertileid'].values):
                 print(f"Debug: MerTile {mertileid} not found in catred_info or effcovmask_info")
                 return {}
 
+            if (data.get('catred_dsr', None) not in data['catred_info']['dataset_release'].values or 
+                 data.get('effcovmask_dsr', None) not in data['effcovmask_info']['dataset_release'].values):
+                print(f"Debug: catred_dsr {data.get('catred_dsr', None)} or effcovmask_dsr {data.get('effcovmask_dsr', None)} not found in catred_info or effcovmask_info for mertile {mertileid}")
+                return {}
+            
             # Get masked CATRED data
-            filtered_src = get_masked_catred(mertileid, data['effcovmask_info'], 
-                                             data['catred_info'], maglim=maglim, threshold=threshold)
+            filtered_src = get_masked_catred(mertileid, data['effcovmask_info'], data.get('effcovmask_dsr', None),
+                                             data['catred_info'], data.get('catred_dsr', None), maglim=maglim, threshold=threshold)
             
             if len(filtered_src) == 0:
                 print(f"Debug: No sources above threshold {threshold} for mertile {mertileid}")

@@ -21,11 +21,11 @@ import healpy as hp
 import pandas as pd
 
 try:
-    from cluster_visualization.src import config
     from cluster_visualization.src.config import Config
 except ImportError:
-    from cluster_visualization.src.config import Config
-    config = Config()
+    raise ImportError("Config module not found in cluster_visualization.src.config")
+
+config = Config()
 
 try:
     from cluster_visualization.src.data.loader import DataLoader
@@ -45,6 +45,7 @@ class MOSAICHandler:
         paths = dataloader._get_paths(algorithm='PZWAV')
         dataloader._validate_paths(paths)
         self.effcovmask_fileinfo_df = dataloader._load_effcovmask_info(paths)
+        self.effcovmask_dsr = self.config.get_effcovmask_dsr() if self.config else None
 
         self.mosaic_header = None
         self.mosaic_data = None
@@ -273,7 +274,8 @@ class MOSAICHandler:
             print("Warning: No catred_info found in data for tile intersection")
             return mertiles_to_load
         
-        for mertileid, row in data['catred_info'].iterrows():
+        for uid, row in data['catred_info'].loc[data['catred_info']['dataset_release'] == data.get('catred_dsr', None)].iterrows():
+            mertileid = row['mertileid']
             poly = row['polygon']
             if poly is not None:
                 # Use proper geometric intersection
@@ -813,7 +815,10 @@ class MOSAICHandler:
         print(f"Dec range: {dec_min_mosaic:.4f} to {dec_max_mosaic:.4f}")
 
         # Load the effective coverage mask for this MER tile
-        hpmask_fits = self.effcovmask_fileinfo_df['fits_file'].loc[mertileid]
+        hpmask_fits = self.effcovmask_fileinfo_df.loc[
+            (self.effcovmask_fileinfo_df['mertileid'] == mertileid) & 
+            (self.effcovmask_fileinfo_df['dataset_release'] == self.effcovmask_dsr)
+        ].squeeze()['fits_file']
         footprint = Table.read(hpmask_fits, format='fits', hdu=1)
         print(f"Loaded HEALPix footprint with {len(footprint)} pixels from {hpmask_fits}")
         footprint['ra'], footprint['dec'] = hp.pix2ang(nside=16384, 
@@ -1035,7 +1040,10 @@ class MOSAICHandler:
         print(f"Dec range: {dec_min_mosaic:.4f} to {dec_max_mosaic:.4f}")
 
         # Load the effective coverage mask for this MER tile
-        hpmask_fits = self.effcovmask_fileinfo_df['fits_file'].loc[mertileid]
+        hpmask_fits = self.effcovmask_fileinfo_df.loc[
+            (self.effcovmask_fileinfo_df['mertileid'] == mertileid) & 
+            (self.effcovmask_fileinfo_df['dataset_release'] == self.effcovmask_dsr)
+        ].squeeze()['fits_file']
         footprint = Table.read(hpmask_fits, format='fits', hdu=1)
         print(f"Loaded HEALPix footprint with {len(footprint)} pixels from {hpmask_fits}")
         footprint['ra'], footprint['dec'] = hp.pix2ang(nside=16384, 

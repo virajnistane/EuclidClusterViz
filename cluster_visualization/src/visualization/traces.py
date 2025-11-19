@@ -1161,8 +1161,9 @@ class TraceCreator:
                                  tile: Dict[str, Any], tileid: str) -> None:
         """Create MER tile polygon traces for a cluster tile."""
         for mertileid in tile['LEV1']['ID_INTERSECTED']:
-            if mertileid in data['catred_info'].index:
-                merpoly = data['catred_info'].at[mertileid, 'polygon']
+            if mertileid in data['catred_info']['mertileid'].values:
+                merpoly = data['catred_info'].loc[(data['catred_info']['mertileid'] == mertileid) & 
+                                                  (data['catred_info']['dataset_release'] == data['catred_dsr'])].squeeze()['polygon']
                 if merpoly is not None:
                     x, y = merpoly.exterior.xy
                     mertile_trace = go.Scatter(
