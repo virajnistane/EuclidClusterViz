@@ -1164,21 +1164,24 @@ class TraceCreator:
             if mertileid in data['catred_info']['mertileid'].values:
                 merpoly = data['catred_info'].loc[(data['catred_info']['mertileid'] == mertileid) & 
                                                   (data['catred_info']['dataset_release'] == data['catred_dsr'])].squeeze()['polygon']
-                if merpoly is not None:
-                    x, y = merpoly.exterior.xy
-                    mertile_trace = go.Scatter(
-                        x=list(x), y=list(y),
-                        fill='toself',
-                        fillcolor=self.colors_list_transparent[int(tileid)],
-                        mode='lines',
-                        line=dict(width=2, color=self.colors_list[int(tileid)], dash='dot'),
-                        name=f'MerTile {mertileid}',
-                        showlegend=False,
-                        text=f'MerTile {mertileid} - CLtile {tileid}',
-                        hoverinfo='text',
-                        hoveron='fills+points'
-                    )
-                    polygon_traces.append(mertile_trace)
+                try:
+                    if merpoly is not None:
+                        x, y = merpoly.exterior.xy
+                        mertile_trace = go.Scatter(
+                            x=list(x), y=list(y),
+                            fill='toself',
+                            fillcolor=self.colors_list_transparent[int(tileid)],
+                            mode='lines',
+                            line=dict(width=2, color=self.colors_list[int(tileid)], dash='dot'),
+                            name=f'MerTile {mertileid}',
+                            showlegend=False,
+                            text=f'MerTile {mertileid} - CLtile {tileid}',
+                            hoverinfo='text',
+                            hoveron='fills+points'
+                        )
+                        polygon_traces.append(mertile_trace)
+                except Exception as e:
+                    print(f"Debug: merpoly = {merpoly}, type={type(merpoly)}")
     
     def _get_default_colors(self) -> List[str]:
         """Get default color list for tile traces."""

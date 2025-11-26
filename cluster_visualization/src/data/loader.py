@@ -310,7 +310,12 @@ class DataLoader:
             
             for file in detfiles_list:
                 # Extract tile information from XML files
-                xml_path = os.path.join(paths['mergedetcat_inputs_dir'], file) if 'inputs/' not in file else os.path.join(paths['mergedetcat_dir'], file)
+
+                try:
+                    xml_path = os.path.join(paths['mergedetcat_inputs_dir'], file)
+                    assert os.path.exists(xml_path), f"File not found: {xml_path}"
+                except AssertionError:
+                    xml_path = os.path.join(paths['mergedetcat_dir'], file)
                 
                 if not os.path.exists(xml_path):
                     print(f"Warning: XML file not found: {xml_path}")
@@ -506,6 +511,12 @@ class DataLoader:
                     creation_date[:-2], "%Y-%m-%dT%H:%M:%S.%f"
                     ).date().isoformat()
                 
+                manualvalidationstatus = self.get_xml_element(
+                    os.path.join(catred_dir, catredxmlfile), 
+                    'Header/ManualValidationStatus'
+                ).text
+                catred_fileinfo[uid]['manual_validation_status'] = manualvalidationstatus
+
                 # Add a column for remarks (empty for now)
                 catred_fileinfo[uid]['remarks'] = ''
 
@@ -519,7 +530,7 @@ class DataLoader:
 
         # Create DataFrame
         catred_fileinfo_df = pd.DataFrame.from_dict(catred_fileinfo, orient='index')
-        catred_fileinfo_df = catred_fileinfo_df[['mertileid', 'dataset_release', 'creation_date', 'xml_file', 'fits_file', 'remarks']]
+        catred_fileinfo_df = catred_fileinfo_df[['mertileid', 'dataset_release', 'creation_date', 'xml_file', 'fits_file', 'manual_validation_status', 'remarks']]
         catred_fileinfo_df.index.name = 'uid'
 
         # Handle duplicates:
