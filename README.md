@@ -37,7 +37,7 @@ An advanced interactive web-based visualization platform for astronomical cluste
 
 ## 🔗 Quick Remote Access Setup
 
-Access the application on a remote server using SSH port forwarding:
+Access the application on a remote server (**location of the stored data**) using SSH port forwarding:
 
 ### **Step 1: Connect with Port Forwarding**
 From your **local machine**, run:
@@ -47,18 +47,30 @@ From your **local machine**, run:
 ssh -L 8050:localhost:8050 username@remote-server.domain
 
 # Example for CC-IN2P3 systems:
-ssh -L 8050:localhost:8050 vnistane@cca019.in2p3.fr
+ssh -L 8050:localhost:8050 vnistane@cca.in2p3.fr
 ```
 
-### **Step 2: Launch the Application**
-Once connected to the remote server, navigate to the project directory and launch:
+### **Step 2: Clone the Repository**
+Once connected to the remote server, clone the repository:
 
 ```bash
-cd /path/to/ClusterViz
+# Clone the repository
+git clone https://github.com/virajnistane/EuclidClusterViz.git
+cd EuclidClusterViz
+
+# Or use SSH if you have access:
+# git clone git@github.com:virajnistane/EuclidClusterViz.git
+```
+
+### **Step 3: Launch the Application**
+Navigate to the project directory and launch:
+
+```bash
+cd /path/to/ClusterViz  # or just 'cd EuclidClusterViz' if you just cloned
 ./launch.sh
 ```
 
-### **Step 3: Access in Your Browser**
+### **Step 4: Access in Your Browser**
 Open your web browser on your **local machine** and navigate to:
 ```
 http://localhost:8050
@@ -309,8 +321,14 @@ The application loads configuration files in the following priority order:
 You can specify a custom configuration file when launching the application:
 
 ```bash
-# Using root launcher
+# Using root launcher (recommended)
 ./launch.sh --config /path/to/custom_config.ini
+
+# Show help
+./launch.sh --help
+
+# Test dependencies
+./launch.sh --test-dependencies
 
 # Using scripts directory launcher
 ./cluster_visualization/scripts/launch.sh --config my_config.ini
@@ -324,7 +342,7 @@ You can specify a custom configuration file when launching the application:
 # Direct Python execution
 python cluster_visualization/src/cluster_dash_app.py --config custom.ini
 
-# Show all command-line options
+# Show all Python command-line options
 python cluster_visualization/src/cluster_dash_app.py --help
 ```
 
@@ -367,18 +385,39 @@ The application supports several command-line arguments for flexible deployment:
 ### Available Options
 
 ```bash
-python cluster_visualization/src/cluster_dash_app.py [OPTIONS]
+./launch.sh [OPTIONS]
 
 Options:
-  --config PATH    Path to custom configuration file (default: auto-detect config_local.ini or config.ini)
-  --external       Allow external access (binds to 0.0.0.0 instead of 127.0.0.1)
-  --remote         Alias for --external (for backward compatibility)
-  --help           Show help message and exit
+  --config FILE            Use custom configuration file
+  --test-dependencies      Test all dependencies and exit
+  --help, -h               Show help message
+
+Direct Python execution:
+  python cluster_visualization/src/cluster_dash_app.py [OPTIONS]
+  
+  Options:
+    --config PATH    Path to custom configuration file (default: auto-detect config_local.ini or config.ini)
+    --external       Allow external access (binds to 0.0.0.0 instead of 127.0.0.1)
+    --remote         Alias for --external (for backward compatibility)
+    --help           Show help message and exit
 ```
 
 ### Usage Examples
 
 ```bash
+# Launch with default configuration
+./launch.sh
+
+# Show help message
+./launch.sh --help
+
+# Custom configuration file
+./launch.sh --config /path/to/my_config.ini
+
+# Test dependencies without launching
+./launch.sh --test-dependencies
+
+# Direct Python execution examples:
 # Default configuration with local access
 python cluster_visualization/src/cluster_dash_app.py
 
@@ -390,10 +429,6 @@ python cluster_visualization/src/cluster_dash_app.py --external
 
 # Combined: custom config with external access
 python cluster_visualization/src/cluster_dash_app.py --config production.ini --external
-
-# All launch scripts support passing these arguments:
-./launch.sh --config test_config.ini
-./cluster_visualization/scripts/run_dash_app_venv.sh --config my.ini --external
 ```
 
 ### When to Use Each Option
@@ -404,7 +439,17 @@ python cluster_visualization/src/cluster_dash_app.py --config production.ini --e
   - Using team-specific configuration files
   - Running multiple instances with different data
 
-- **`--external`**:
+- **`--test-dependencies`**:
+  - Verify all required Python packages are installed
+  - Check project structure and configuration files
+  - Troubleshoot environment issues before launching
+
+- **`--help`**:
+  - View detailed usage information
+  - See all available options and examples
+
+- **`--external`** (Python only):
+  - Accessing from other machines on the network
   - Accessing from other machines on the network
   - Running on a server accessible to multiple users
   - Container/cloud deployments

@@ -4,14 +4,18 @@
 # Provides standalone HTML visualization solutions
 #
 # Usage:
-#   ./launch.sh                              # Default config
-#   ./launch.sh --config /path/to/custom.ini # Custom config
+#   ./launch.sh                              # Launch Dash app (default)
+#   ./launch.sh --config /path/to/custom.ini # Launch with custom config
+#   ./launch.sh --test-dependencies          # Test dependencies only
+#   ./launch.sh --help                       # Show help message
 
 echo "=== Cluster Visualization Launcher ==="
-echo "Testing available solutions..."
 
-# Parse command line arguments for config file
+# Parse command line arguments
 CONFIG_ARG=""
+TEST_DEPENDENCIES=false
+SHOW_HELP=false
+
 while [[ $# -gt 0 ]]; do
     case $1 in
         --config)
@@ -19,85 +23,97 @@ while [[ $# -gt 0 ]]; do
             echo "Using custom config: $2"
             shift 2
             ;;
+        --test-dependencies)
+            TEST_DEPENDENCIES=true
+            shift
+            ;;
+        --help|-h)
+            SHOW_HELP=true
+            shift
+            ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 [--config /path/to/config.ini]"
+            echo "Use --help for usage information"
             exit 1
             ;;
     esac
 done
 
-# Check and activate EDEN environment if needed
-check_eden_environment() {
-    if [[ ":$PATH:" != *":/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/"* ]]; then
-        echo "⚠️  EDEN environment not detected!"
-        echo "   Attempting to activate EDEN environment..."
-        
-        if [ -f "/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate" ]; then
-            source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
-            echo "✓ EDEN environment activated"
-        else
-            echo "✗ EDEN environment not available at /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/"
-            echo "   Please ensure CVMFS is mounted and EDEN is available"
-            echo "   Or manually activate: source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate"
-            return 1
-        fi
-    else
-        echo "✓ EDEN environment already active"
-    fi
-    return 0
-}
-
-# Activate environment
-if ! check_eden_environment; then
-    echo "Warning: Continuing without EDEN environment - some features may not work"
+# Show help if requested
+if [ "$SHOW_HELP" = true ]; then
+    echo ""
+    echo "USAGE:"
+    echo "  ./launch.sh [OPTIONS]"
+    echo ""
+    echo "OPTIONS:"
+    echo "  --config FILE            Use custom configuration file"
+    echo "  --test-dependencies      Test all dependencies and exit"
+    echo "  --help, -h               Show this help message"
+    echo ""
+    echo "EXAMPLES:"
+    echo "  ./launch.sh"
+    echo "    Launch the Dash application with default configuration"
+    echo ""
+    echo "  ./launch.sh --config /path/to/custom.ini"
+    echo "    Launch with a custom configuration file"
+    echo ""
+    echo "  ./launch.sh --test-dependencies"
+    echo "    Test all Python dependencies and project structure"
+    echo ""
+    echo "DESCRIPTION:"
+    echo "  Launches the Euclid Cluster Visualization Dash application."
+    echo "  The application provides interactive visualization of cluster"
+    echo "  detection data with algorithm switching, filtering, and analysis tools."
+    echo ""
+    echo "  Features:"
+    echo "    - Interactive cluster detection visualization"
+    echo "    - Algorithm switching (PZWAV/AMICO/BOTH)"
+    echo "    - SNR and redshift filtering"
+    echo "    - CATRED high-resolution data integration"
+    echo "    - Mosaic image overlays"
+    echo "    - HEALPix mask visualization"
+    echo "    - Cluster analysis tools (cutouts, PHZ plots)"
+    echo ""
+    exit 0
 fi
-echo ""
 
-# Get the script directory and move to project root
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
-cd "$PROJECT_DIR"
+# If testing dependencies, run tests and exit
+if [ "$TEST_DEPENDENCIES" = true ]; then
+    echo "Testing available solutions..."
+    
+    # Check and activate EDEN environment if needed
+    check_eden_environment() {
+        if [[ ":$PATH:" != *":/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/"* ]]; then
+            echo "⚠️  EDEN environment not detected!"
+            echo "   Attempting to activate EDEN environment..."
+            
+            if [ -f "/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate" ]; then
+                source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
+                echo "✓ EDEN environment activated"
+            else
+                echo "✗ EDEN environment not available at /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/"
+                echo "   Please ensure CVMFS is mounted and EDEN is available"
+                echo "   Or manually activate: source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate"
+                return 1
+            fi
+        else
+            echo "✓ EDEN environment already active"
+        fi
+        return 0
+    }
 
-# Function to test dependencies
-test_dependencies() {
-    echo "Testing Python dependencies..."
-    python -c "
-import plotly.graph_objs as go
-import pandas, numpy
-from astropy.io import fits
-from shapely.geometry import Polygon
-print('Dependencies test passed')
-" 2>/dev/null
-    return $?
-}
-
-# Function to get user choice
-get_choice() {
-    echo "" >&2
-    echo "Available options:" >&2
-    echo "1) Dash App with Virtual Env" >&2
-    echo "2) Test dependencies" >&2
-    echo "" >&2
-    read -p "Choose an option (1-2): " choice >&2
-    echo "$choice"
-}
-
-# Function to launch Dash app with virtual environment
-launch_dash_venv() {
-    echo "Launching Dash app with virtual environment..."
-    echo "This will automatically install missing modules if needed"
-    echo "Features: Algorithm switching, interactive plotting, real-time updates"
-    echo "The app will automatically open in your browser"
-    if [ -n "$CONFIG_ARG" ]; then
-        echo "Config: $CONFIG_ARG"
+    # Activate environment
+    if ! check_eden_environment; then
+        echo "Warning: Continuing without EDEN environment - some features may not work"
     fi
     echo ""
-    ./cluster_visualization/scripts/run_dash_app_venv.sh $CONFIG_ARG
-}
-
-# Function to test all dependencies
-test_all() {
+    
+    # Get the script directory and move to project root
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
+    cd "$PROJECT_DIR"
+    
+    # Test all dependencies
     echo "Testing all dependencies..."
     echo ""
     
@@ -146,26 +162,56 @@ print('✓ Custom modules OK')
     fi
     
     echo ""
-    if test_dependencies; then
-        echo "✓ All dependencies working correctly"
+    python -c "
+import plotly.graph_objs as go
+import pandas, numpy
+from astropy.io import fits
+from shapely.geometry import Polygon
+print('✓ All dependencies working correctly')
+" 2>/dev/null || echo "✗ Some dependencies have issues"
+    
+    exit 0
+fi
+
+echo "Launching Dash application..."
+
+# Check and activate EDEN environment if needed
+check_eden_environment() {
+    if [[ ":$PATH:" != *":/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/"* ]]; then
+        echo "⚠️  EDEN environment not detected!"
+        echo "   Attempting to activate EDEN environment..."
+        
+        if [ -f "/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate" ]; then
+            source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
+            echo "✓ EDEN environment activated"
+        else
+            echo "✗ EDEN environment not available at /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/"
+            echo "   Please ensure CVMFS is mounted and EDEN is available"
+            echo "   Or manually activate: source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate"
+            return 1
+        fi
     else
-        echo "✗ Some dependencies have issues"
+        echo "✓ EDEN environment already active"
     fi
+    return 0
 }
 
-# Main execution
-choice=1 # $(get_choice)
-choice=$(echo "$choice" | tr -d '[:space:]')  # Remove whitespace
+# Activate environment
+if ! check_eden_environment; then
+    echo "Warning: Continuing without EDEN environment - some features may not work"
+fi
+echo ""
 
-case $choice in
-    1)
-        launch_dash_venv
-        ;;
-    2)
-        test_all
-        ;;
-    *)
-        echo "Invalid choice '$choice'. Using recommended option (Dash App with Virtual Env)..."
-        launch_dash_venv
-        ;;
-esac
+# Get the script directory and move to project root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
+cd "$PROJECT_DIR"
+
+# Launch Dash app with virtual environment
+echo "This will automatically install missing modules if needed"
+echo "Features: Algorithm switching, interactive plotting, real-time updates"
+if [ -n "$CONFIG_ARG" ]; then
+    echo "Config: $CONFIG_ARG"
+fi
+echo ""
+./cluster_visualization/scripts/run_dash_app_venv.sh $CONFIG_ARG
