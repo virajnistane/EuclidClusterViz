@@ -108,25 +108,25 @@ class Config:
 
         # LE3 PFs working directories
 
-        if self.config_parser.has_option('paths', 'detintile_workdir'):
-            self.detintile_workdir = self._expand_path(self.config_parser.get('paths', 'detintile_workdir'))
+        if self.config_parser.has_option('paths', 'detintile_dir'):
+            self.detintile_dir = self._expand_path(self.config_parser.get('paths', 'detintile_dir'))
         else:
-            self.detintile_workdir = None
+            self.detintile_dir = None
 
-        if self.config_parser.has_option('paths', 'mergedetcat_workdir'):
-            self.mergedetcat_workdir = self._expand_path(self.config_parser.get('paths', 'mergedetcat_workdir'))
+        if self.config_parser.has_option('paths', 'mergedetcat_dir'):
+            self.mergedetcat_dir = self._expand_path(self.config_parser.get('paths', 'mergedetcat_dir'))
         else:
-            self.mergedetcat_workdir = None
+            self.mergedetcat_dir = None
 
-        if self.config_parser.has_option('paths', 'gluematchcat_workdir'):
-            self.gluematchcat_workdir = self._expand_path(self.config_parser.get('paths', 'gluematchcat_workdir'))
+        if self.config_parser.has_option('paths', 'gluematchcat_dir'):
+            self.gluematchcat_dir = self._expand_path(self.config_parser.get('paths', 'gluematchcat_dir'))
         else:
-            self.gluematchcat_workdir = None
+            self.gluematchcat_dir = None
 
-        if self.config_parser.has_option('paths', 'characterization_workdir'):
-            self.characterization_workdir = self._expand_path(self.config_parser.get('paths', 'characterization_workdir'))
+        if self.config_parser.has_option('paths', 'characterization_dir'):
+            self.characterization_dir = self._expand_path(self.config_parser.get('paths', 'characterization_dir'))
         else:
-            self.characterization_workdir = None
+            self.characterization_dir = None
 
         # Environment paths
         self.eden_path = self._cvmfs_eden_path
@@ -144,8 +144,8 @@ class Config:
             if os.path.isabs(expanded_path):
                 return expanded_path
             else:
-                if self.gluematchcat_workdir:
-                    return os.path.join(self.gluematchcat_workdir, xmlname)
+                if self.gluematchcat_dir:
+                    return os.path.join(self.gluematchcat_dir, xmlname)
                 else:
                     return None
         else:
@@ -183,7 +183,7 @@ class Config:
                 if os.path.isabs(expanded_path):
                     files_list_dict[key] = expanded_path
                 else:
-                    files_list_dict[key] = os.path.join(self.mergedetcat_workdir, filename)
+                    files_list_dict[key] = os.path.join(self.mergedetcat_dir, filename)
 
         return files_list_dict
 
@@ -210,7 +210,7 @@ class Config:
                 if os.path.isabs(expanded_path):
                     files[key] = expanded_path
                 else:
-                    files[key] = os.path.join(self.mergedetcat_workdir, filename)
+                    files[key] = os.path.join(self.mergedetcat_dir, filename)
 
         return files
     
@@ -268,10 +268,10 @@ class Config:
             ('CATRED directory', self.catred_dir),
             ('Effective coverage mask directory', self.effcovmask_dir),
             ('Mosaic directory', self.mosaic_dir),
-            ('DetIntile working directory', self.detintile_workdir),
-            ('MergeDetCat working directory', self.mergedetcat_workdir),
-            ('GlueMatchCat working directory', self.gluematchcat_workdir),
-            ('Characterization working directory', self.characterization_workdir),
+            ('DetIntile directory', self.detintile_dir),
+            ('MergeDetCat directory', self.mergedetcat_dir),
+            ('GlueMatchCat directory', self.gluematchcat_dir),
+            ('Characterization directory', self.characterization_dir),
         ]
         
         for name, path in optional_dirs:
@@ -303,10 +303,10 @@ class Config:
         print(f"  Mosaic directory: {self.mosaic_dir}")
         print("")
         print("Working directories:")
-        print(f"  DetIntile workdir: {self.detintile_workdir}")
-        print(f"  MergeDetCat workdir: {self.mergedetcat_workdir}")
-        print(f"  GlueMatchCat workdir: {self.gluematchcat_workdir}")
-        print(f"  Characterization workdir: {self.characterization_workdir}")
+        print(f"  DetIntile directory: {self.detintile_dir}")
+        print(f"  MergeDetCat directory: {self.mergedetcat_dir}")
+        print(f"  GlueMatchCat directory: {self.gluematchcat_dir}")
+        print(f"  Characterization directory: {self.characterization_dir}")
         print("===========================================")
 
 # Global configuration instance (lazy initialization)

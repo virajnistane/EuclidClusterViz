@@ -135,12 +135,10 @@ class DataLoader:
             print(f"✓ Using separate DetInTile files for per-tile data")
             paths = {
                 'use_gluematchcat': True,
-                'gluematchcat_dir': self.config.gluematchcat_workdir,
+                'gluematchcat_dir': self.config.gluematchcat_dir,
                 'gluematchcat_xml': gluematchcat_xml,
-                'gluematchcat_data_dir': os.path.join(self.config.gluematchcat_workdir, 'data'),
-                'mergedetcat_dir': self.config.mergedetcat_workdir,
-                'mergedetcat_data_dir': os.path.join(self.config.mergedetcat_workdir, 'data'),
-                'mergedetcat_inputs_dir': os.path.join(self.config.mergedetcat_workdir, 'inputs'),
+                'mergedetcat_dir': self.config.mergedetcat_dir,
+                'detintile_dir': self.config.detintile_dir,
                 'detfiles_list_files_dict': detfiles_list_files_dict,
                 'catred_fileinfo_csv': self.config.get_catred_fileinfo_csv(),
                 'catred_polygon_pkl': self.config.get_catred_polygons_pkl(),
@@ -152,10 +150,9 @@ class DataLoader:
             
             paths = {
                 'use_gluematchcat': False,
-                'mergedetcat_dir': self.config.mergedetcat_workdir,
-                'mergedetcat_data_dir': os.path.join(self.config.mergedetcat_workdir, 'data'),
-                'mergedetcat_inputs_dir': os.path.join(self.config.mergedetcat_workdir, 'inputs'),
+                'mergedetcat_dir': self.config.mergedetcat_dir,
                 'mergedetcat_xml_files_dict': mergedetcat_xml_files_dict,
+                'detintile_dir': self.config.detintile_dir,
                 'detfiles_list_files_dict': detfiles_list_files_dict,
                 'catred_fileinfo_csv': self.config.get_catred_fileinfo_csv(),
                 'catred_polygon_pkl': self.config.get_catred_polygons_pkl(),
@@ -167,9 +164,9 @@ class DataLoader:
     def _validate_paths(self, paths: Dict[str, str]) -> None:
         """Validate that critical paths exist."""
         if paths.get('use_gluematchcat'):
-            critical_paths = ['gluematchcat_xml', 'gluematchcat_data_dir']
+            critical_paths = ['gluematchcat_xml', 'gluematchcat_dir', 'detintile_dir']
         else:
-            critical_paths = ['mergedetcat_xml_files_dict', 'mergedetcat_data_dir']
+            critical_paths = ['mergedetcat_xml_files_dict', 'mergedetcat_dir', 'detintile_dir']
         
         for path_key in critical_paths:
             if path_key == 'mergedetcat_xml_files_dict':
@@ -192,7 +189,7 @@ class DataLoader:
             
             # Extract FITS filename from XML
             fits_filename = self.get_xml_element(gluematchcat_xml, 'Data/FullDetectionsFile/DataContainer/FileName').text
-            fitsfile = os.path.join(paths['gluematchcat_data_dir'], fits_filename)
+            fitsfile = os.path.join(paths['gluematchcat_dir'], 'data', fits_filename)
             
             print(f"Loading clusters from GlueMatchCat: {os.path.basename(fitsfile)}")
             with fits.open(fitsfile, mode='readonly') as hdul:
@@ -236,7 +233,7 @@ class DataLoader:
                         raise FileNotFoundError(f"Merged detection XML not found: {det_xml}")
                     
                     fits_filename = self.get_xml_element(det_xml, 'Data/ClustersFile/DataContainer/FileName').text
-                    fitsfile = os.path.join(paths['mergedetcat_data_dir'], fits_filename)
+                    fitsfile = os.path.join(paths['mergedetcat_dir'], 'data', fits_filename)
                     
                     print(f"Loading merged catalog from: {os.path.basename(fitsfile)}")
                     with fits.open(fitsfile, mode='readonly') as hdul:
@@ -266,7 +263,7 @@ class DataLoader:
                     raise FileNotFoundError(f"Merged detection XML not found: {det_xml}")
                 
                 fits_filename = self.get_xml_element(det_xml, 'Data/ClustersFile/DataContainer/FileName').text
-                fitsfile = os.path.join(paths['mergedetcat_data_dir'], fits_filename)
+                fitsfile = os.path.join(paths['mergedetcat_dir'], 'data', fits_filename)
                 
                 print(f"Loading merged catalog from: {os.path.basename(fitsfile)}")
                 with fits.open(fitsfile, mode='readonly') as hdul:
@@ -312,20 +309,39 @@ class DataLoader:
                 # Extract tile information from XML files
 
                 try:
-                    xml_path = os.path.join(paths['mergedetcat_inputs_dir'], file)
-                    assert os.path.exists(xml_path), f"File not found: {xml_path}"
+                    assert os.path.isabs(file)
+                    print(f"Found absolute path for tile XML: {file}")
+                    xml_path = file
+                    dirpath = os.path.dirname(xml_path)
+                    while os.path.exists(os.path.join(dirpath, 'data/')):
+                        dirpath = os.path.dirname(dirpath)
+                        
+                    print(f"Determined directory path for data: {dirpath}")
+
                 except AssertionError:
-                    xml_path = os.path.join(paths['mergedetcat_dir'], file)
-                
-                if not os.path.exists(xml_path):
-                    print(f"Warning: XML file not found: {xml_path}")
-                    continue
-                
+
+                    dirs_to_checks = [paths['mergedetcat_dir'], 
+                                      paths['detintile_dir'],
+                                      os.path.join(paths['mergedetcat_dir'], 'inputs'),
+                                      os.path.join(paths['detintile_dir'], 'inputs')]
+
+                    try:
+                        xml_path = None
+                        dirpath = None
+                        for dir_check in dirs_to_checks:
+                            potential_path = os.path.join(dir_check, file)
+                            if os.path.exists(potential_path):
+                                xml_path = potential_path
+                                dirpath = dir_check if os.path.basename(dir_check) != 'inputs' else os.path.dirname(dir_check)
+                                break
+                        assert xml_path is not None, f"File not found in expected directories: {file}"
+                    except AssertionError:
+                        print(f"Warning: XML file not found in expected directories: {file}")
+                        continue
+
                 tile_file = self.get_xml_element(xml_path, 'Data/SpatialInformation/DataContainer/FileName').text
-                
-                # Use mergedetcat_data_dir for tile data (even when using gluematchcat for merged data)
-                tile_data_dir = paths.get('mergedetcat_data_dir', paths['mergedetcat_data_dir'])
-                tile_file_path = os.path.join(tile_data_dir, tile_file)
+                # Use {dirpath}/data for tile data (even when using gluematchcat for merged data)
+                tile_file_path = os.path.join(dirpath, 'data', tile_file)
                 
                 if not os.path.exists(tile_file_path):
                     print(f"Warning: Tile definition file not found: {tile_file_path}")
@@ -343,26 +359,25 @@ class DataLoader:
                     tile_key = tile_id
 
                 fits_file = self.get_xml_element(xml_path, 'Data/ClustersFile/DataContainer/FileName').text
-                
-                # Try to find density files
-                dens_xml = None
-                dens_fits = None
-                if os.path.exists(paths['mergedetcat_inputs_dir']):
-                    for i in os.listdir(paths['mergedetcat_inputs_dir']):
-                        try:
-                            assert 'DENSITIES' in self.get_xml_element(os.path.join(paths['mergedetcat_inputs_dir'], i), 'Data/PZWavDensFile/DataContainer/FileName').text
-                            assert self.get_xml_element(os.path.join(paths['mergedetcat_inputs_dir'], i), 'Data/SpatialInformation/DataContainer/FileName').text ==  tile_file
-                            dens_xml = i
-                            dens_fits = self.get_xml_element(os.path.join(paths['mergedetcat_inputs_dir'], i), 'Data/PZWavDensFile/DataContainer/FileName').text
-                            break
-                        except:
-                            continue
-
                 # Load FITS data for this tile
-                fits_path = os.path.join(tile_data_dir, fits_file)
+                fits_path = os.path.join(dirpath, 'data', fits_file)
                 if not os.path.exists(fits_path):
                     print(f"Warning: FITS file not found: {fits_path}")
                     continue
+
+                # Try to find density files
+                dens_xml = None
+                dens_fits = None
+                for i in os.listdir(os.path.dirname(xml_path)):
+                    try:
+                        assert i.endswith('.xml')
+                        dens_fits = self.get_xml_element(os.path.join(os.path.dirname(xml_path), i), 'Data/PZWavDensFile/DataContainer/FileName').text
+                        assert 'DENSITIES' in dens_fits
+                        assert self.get_xml_element(os.path.join(os.path.dirname(xml_path), i), 'Data/SpatialInformation/DataContainer/FileName').text ==  tile_file
+                        dens_xml = os.path.join(os.path.dirname(xml_path), i)
+                        break
+                    except:
+                        continue
 
                 with fits.open(fits_path, mode='readonly') as hdul:
                     tile_data = hdul[1].data
@@ -371,8 +386,8 @@ class DataLoader:
                     'detxml_file': xml_path,
                     'detfits_file': fits_path,
                     'cltiledef_file': tile_file_path,
-                    'densxml_file': os.path.join(paths['mergedetcat_inputs_dir'], dens_xml) if dens_xml else None,
-                    'densfits_file': os.path.join(tile_data_dir, dens_fits) if dens_fits else None,
+                    'densxml_file': dens_xml if dens_xml else None,
+                    'densfits_file': os.path.join(dirpath, 'data', dens_fits) if dens_fits else None,
                     'detfits_data': tile_data,
                     'algorithm': tile_algorithm,  # Add algorithm identifier
                     'tile_id': tile_id  # Store original tile_id separately
