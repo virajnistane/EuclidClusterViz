@@ -27,9 +27,16 @@ This interactive script will:
 
 The launcher will:
 - Automatically load your configuration
-- Check and activate the EDEN environment  
-- Provide options to run the Dash app or test dependencies
+- Check and activate the EDEN environment
+- Launch the Dash app directly (no interactive prompts)
 - Handle all environment setup automatically
+
+**Command-Line Options:**
+```bash
+./launch.sh --help              # Show all available options
+./launch.sh --test-dependencies # Test environment without launching
+./launch.sh --config FILE       # Use custom configuration file
+```
 
 ### 3. Manual Configuration (Advanced)
 
@@ -213,6 +220,9 @@ if not is_valid:
 
 1. **Paths don't exist**:
    ```bash
+   # Test your environment and see validation results
+   ./launch.sh --test-dependencies
+   
    # Edit config.py directly to update paths for your environment
    # The launcher will automatically detect and validate paths
    ./launch.sh
@@ -228,8 +238,12 @@ if not is_valid:
 
 3. **EDEN environment not found**:
    ```bash
+   # Test dependencies and see environment status
+   ./launch.sh --test-dependencies
+   
    # The launcher will automatically activate EDEN environment
    ./launch.sh
+   
    # Or manually activate:
    source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
    ```
@@ -240,6 +254,34 @@ If configuration fails, tools fall back to hardcoded paths:
 - Dash app continues with original paths
 - Clear warnings are displayed
 - Functionality is preserved
+
+## Launcher Options
+
+### Available Commands
+
+```bash
+# Direct launch (recommended)
+./launch.sh
+
+# Show help and all options
+./launch.sh --help
+
+# Test environment without launching
+./launch.sh --test-dependencies
+
+# Use custom configuration file
+./launch.sh --config /path/to/custom_config.ini
+
+# Combine options
+./launch.sh --config custom.ini --test-dependencies
+```
+
+### When to Use Each Option
+
+- **Default launch** (`./launch.sh`): Normal use after initial setup
+- **`--help`**: Discover all available options and usage examples
+- **`--test-dependencies`**: Validate environment setup before launching
+- **`--config FILE`**: Test different configurations or use project-specific settings
 
 ## Examples
 
