@@ -196,7 +196,7 @@ class DataLoader:
                     raise FileNotFoundError(f"{path_key.replace('_', ' ').title()} not found: {path}")
     
     def _load_data_detcluster_mergedcat_with_minmax_snr(self, paths: Dict[str, str], algorithm: str) -> np.ndarray:
-        """Load merged detection catalog from XML and FITS files."""
+        """Load merged detection catalog from XML and FITS files."""        
         # Try disk cache first
         if self.use_disk_cache:
             cache_key = f"merged_catalog_{algorithm}"
@@ -224,8 +224,9 @@ class DataLoader:
             
             print(f"Loading clusters from GlueMatchCat: {os.path.basename(fitsfile)}")
             with fits.open(fitsfile, mode='readonly', memmap=True) as hdul:
-                data_all = hdul[1].data
-            
+                # Convert to numpy array immediately to avoid memmap issues
+                data_all = np.array(hdul[1].data)
+                
             # Filter by algorithm if not BOTH
             if algorithm == 'BOTH':
                 data_merged = data_all

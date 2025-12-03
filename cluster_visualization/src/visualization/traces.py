@@ -353,12 +353,16 @@ class TraceCreator:
         if z_threshold_lower is None and z_threshold_upper is None:
             return cluster_data
         elif z_threshold_lower is not None and z_threshold_upper is not None:
-            return cluster_data[(cluster_data['Z_CLUSTER'] >= z_threshold_lower) & 
-                              (cluster_data['Z_CLUSTER'] <= z_threshold_upper)]
+            result = cluster_data[
+                (cluster_data['Z_CLUSTER'] >= z_threshold_lower) & (cluster_data['Z_CLUSTER'] <= z_threshold_upper)
+                ]
+            return result
         elif z_threshold_upper is not None and z_threshold_lower is None:
-            return cluster_data[cluster_data['Z_CLUSTER'] <= z_threshold_upper]
+            result = cluster_data[cluster_data['Z_CLUSTER'] <= z_threshold_upper]
+            return result
         elif z_threshold_lower is not None:
-            return cluster_data[cluster_data['Z_CLUSTER'] >= z_threshold_lower]
+            result = cluster_data[cluster_data['Z_CLUSTER'] >= z_threshold_lower]
+            return result
         else:
             return cluster_data
 
