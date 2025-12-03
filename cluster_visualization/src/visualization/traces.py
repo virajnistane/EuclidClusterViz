@@ -985,9 +985,9 @@ class TraceCreator:
                 # Use legendgroup to organize by algorithm
                 legend_group = f"tiles_{tile_algorithm}"
                 # Only show first trace of each algorithm in legend
-                show_in_legend = not shown_algorithm_legend[tile_algorithm]
+                show_in_legend = True # not shown_algorithm_legend[tile_algorithm]
                 shown_algorithm_legend[tile_algorithm] = True
-                trace_name = f"{tile_algorithm} Tiles"
+                trace_name = f'{tile_algorithm} Tile {tileid}' # f"{tile_algorithm} Tiles"
             else:
                 # Single algorithm mode - show each tile separately
                 legend_group = None
@@ -1002,7 +1002,7 @@ class TraceCreator:
                     mode='markers',
                     marker=dict(size=10, opacity=1, symbol=symbol, line=dict(width=2, color=self.colors_list[int(tileid)])),
                     name=trace_name,
-                    legendgroup=legend_group,
+                    # legendgroup=legend_group,
                     showlegend=show_in_legend,
                     text=[
                         f"TileID: {tileid}{f' ({tile_algorithm})' if tile_algorithm and data['algorithm'] == 'BOTH' else ''}<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"

@@ -94,7 +94,7 @@ def get_masked_catred(tile_id, effcovmask_info, effcovmask_dsr, catred_info, cat
         
         # Load CATRED data
         catred_file = catred_info.loc[(catred_info['mertileid'] == tile_id) & (catred_info['dataset_release'] == catred_dsr)].squeeze()['fits_file']
-        with fits.open(catred_file, mode='readonly') as catred_hdu:
+        with fits.open(catred_file, mode='readonly', memmap=True) as catred_hdu:
             src = Table(catred_hdu[1].data)
             
         # Get HEALPix cells for each source (using proper column names)
@@ -242,7 +242,7 @@ class CATREDHandler:
     
     def _load_fits_data(self, fits_path: str, maglim: float = 24.0) -> Dict[str, List]:
         """Load MER data from FITS file with magnitude filtering."""
-        with fits.open(fits_path, mode='readonly') as hdul:
+        with fits.open(fits_path, mode='readonly', memmap=True) as hdul:
             fits_data = hdul[1].data
             
             # Apply magnitude filtering if available
