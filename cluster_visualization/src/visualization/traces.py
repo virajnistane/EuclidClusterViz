@@ -889,8 +889,8 @@ class TraceCreator:
                     pzwav_near = near_catred_data[pzwav_mask_near]
                     amico_near = near_catred_data[amico_mask_near]
 
-                    pzwav_away = self._apply_snr_filtering(pzwav_near, snr_threshold_lower_pzwav, snr_threshold_upper_pzwav)
-                    amico_away = self._apply_snr_filtering(amico_near, snr_threshold_lower_amico, snr_threshold_upper_amico)
+                    pzwav_near = self._apply_snr_filtering(pzwav_near, snr_threshold_lower_pzwav, snr_threshold_upper_pzwav)
+                    amico_near = self._apply_snr_filtering(amico_near, snr_threshold_lower_amico, snr_threshold_upper_amico)
                     
                     # PZWAV enhanced traces
                     if len(pzwav_near) > 0:
