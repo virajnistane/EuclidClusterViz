@@ -217,11 +217,20 @@ class AppLayout:
                             value=False,
                             disabled=True,
                             className="ms-0"
+                        ),
+                        html.Button([
+                            html.I(className="fas fa-sync-alt me-1"),
+                            "Render"
+                        ], 
+                            id="rerender-ovals-button",
+                            className="btn btn-sm btn-outline-primary ms-2",
+                            style={'fontSize': '0.75rem', 'padding': '0.25rem 0.5rem'},
+                            title="Re-render ovals for current zoom window"
                         )
-                    ], className="d-flex align-items-left mb-0"),
+                    ], className="d-flex align-items-center mb-0"),
                     html.Small([
                         html.I(className="fas fa-info-circle me-0"),
-                        "Only in PZWAV+AMICO mode"
+                        "Ovals show in viewport only - zoom in, then re-render"
                     ], className="text-muted ms-0")
                 ])
             ], className="mb-3 border-0 shadow-sm", style={

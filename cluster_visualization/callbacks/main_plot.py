@@ -176,7 +176,8 @@ class MainPlotCallbacks:
             [Input('render-button', 'n_clicks'),
              Input('snr-render-button-pzwav', 'n_clicks'),
              Input('snr-render-button-amico', 'n_clicks'),
-             Input('redshift-render-button', 'n_clicks')
+             Input('redshift-render-button', 'n_clicks'),
+             Input('rerender-ovals-button', 'n_clicks')
              ],
             [State('algorithm-dropdown', 'value'),
              State('matching-clusters-switch', 'value'),
@@ -193,11 +194,11 @@ class MainPlotCallbacks:
              State('cluster-plot', 'relayoutData')
              ]
         )
-        def update_plot(n_clicks, snr_pzwav_n_clicks, snr_amico_n_clicks, redshift_n_clicks, 
+        def update_plot(n_clicks, snr_pzwav_n_clicks, snr_amico_n_clicks, redshift_n_clicks, rerender_ovals_n_clicks,
                         algorithm, matching_clusters, snr_range_pzwav, snr_range_amico, redshift_range, show_polygons, show_mer_tiles, 
                         free_aspect_ratio, show_merged_clusters, catred_masked, threshold, maglim, relayout_data):
             # Only render if button has been clicked at least once
-            if n_clicks == 0 and snr_pzwav_n_clicks == 0 and snr_amico_n_clicks == 0 and redshift_n_clicks == 0:
+            if n_clicks == 0 and snr_pzwav_n_clicks == 0 and snr_amico_n_clicks == 0 and redshift_n_clicks == 0 and rerender_ovals_n_clicks == 0:
                 return self._create_initial_empty_plots(free_aspect_ratio)
             
             try:

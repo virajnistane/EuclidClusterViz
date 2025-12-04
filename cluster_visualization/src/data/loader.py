@@ -26,20 +26,36 @@ except ImportError:
     print("Warning: Disk cache not available - using memory-only caching")
     DISK_CACHE_AVAILABLE = False
 
+try:
+    from cluster_visualization.utils.memory_manager import MemoryManager
+    MEMORY_MANAGER_AVAILABLE = True
+except ImportError:
+    print("Warning: Memory manager not available - no memory limits enforced")
+    MEMORY_MANAGER_AVAILABLE = False
+
 
 class DataLoader:
     """Handles loading and caching of cluster detection data."""
     
-    def __init__(self, config=None, use_disk_cache=True):
+    def __init__(self, config=None, use_disk_cache=True, max_memory_gb=None):
         """
         Initialize DataLoader with configuration.
         
         Args:
             config: Configuration object with path information
             use_disk_cache: Enable disk caching for faster subsequent loads (default: True)
+            max_memory_gb: Maximum memory to use in GB (default: auto-detect 50% of RAM)
         """
         self.config = config
         self.data_cache = {}  # In-memory cache
+        
+        # Initialize memory manager
+        if MEMORY_MANAGER_AVAILABLE:
+            if max_memory_gb is None:
+                max_memory_gb = MemoryManager.recommend_cache_size()
+            self.memory_manager = MemoryManager(max_memory_gb=max_memory_gb)
+        else:
+            self.memory_manager = None
         
         # Initialize disk cache
         self.use_disk_cache = use_disk_cache and DISK_CACHE_AVAILABLE
@@ -76,11 +92,24 @@ class DataLoader:
             FileNotFoundError: If required data files are missing
             ValueError: If algorithm is not supported
         """
+        # Cleanup memory if needed before loading
+        if self.memory_manager:
+            current_mem = self.memory_manager.get_memory_stats()['rss_mb']
+            print(f"🔍 [Memory Check] Current: {current_mem:.1f} MB, Loading: {select_algorithm}")
+            cleanup_performed = self.memory_manager.cleanup_if_needed(self.data_cache)
+            if cleanup_performed:
+                new_mem = self.memory_manager.get_memory_stats()['rss_mb']
+                print(f"   ↳ After cleanup: {new_mem:.1f} MB")
+        
         # Check cache first
         if select_algorithm in self.data_cache:
+            print(f"✓ [Cache HIT] Using cached data for {select_algorithm}")
+            if self.memory_manager:
+                self.memory_manager.mark_accessed(select_algorithm)
+                print(f"   ↳ Marked {select_algorithm} as recently accessed (LRU)")
             return self.data_cache[select_algorithm]
-            
-        print(f"Loading data for algorithm: {select_algorithm}")
+        
+        print(f"⏳ [Cache MISS] Loading data for algorithm: {select_algorithm}")
         
         # Validate algorithm choice
         if select_algorithm not in ['PZWAV', 'AMICO', 'BOTH']:
@@ -131,8 +160,35 @@ class DataLoader:
             'z_max': z_max,
         }
         
-        # Cache the data for future requests
-        self.data_cache[select_algorithm] = data
+        # Check if we have room to cache in memory
+        if self.memory_manager:
+            mem_before = self.memory_manager.check_memory()
+            current_mem_mb = mem_before / 1024**2
+            max_mem_mb = self.memory_manager.max_memory_bytes / 1024**2
+            
+            print(f"💾 [Cache Decision] Current: {current_mem_mb:.1f} MB / {max_mem_mb:.1f} MB")
+            
+            # Try caching and check if we're still under threshold
+            self.data_cache[select_algorithm] = data
+            mem_after = self.memory_manager.check_memory()
+            
+            if mem_after < self.memory_manager.warning_threshold_bytes:
+                # Successfully cached and still under limit
+                self.memory_manager.mark_accessed(select_algorithm)
+                new_mem_mb = mem_after / 1024**2
+                data_size_mb = (mem_after - mem_before) / 1024**2
+                print(f"   ↳ ✓ Cached in memory: {select_algorithm} (+{data_size_mb:.1f} MB)")
+                print(f"   ↳ Memory now: {new_mem_mb:.1f} MB (usage: {(new_mem_mb/max_mem_mb)*100:.1f}%)")
+            else:
+                # Would exceed limit - remove from cache
+                del self.data_cache[select_algorithm]
+                print(f"   ↳ ⚠️  Skipping memory cache for {select_algorithm} (would exceed limit)")
+                print(f"   ↳ Data will be loaded from disk cache on next request.")
+        else:
+            # No memory manager - cache everything
+            self.data_cache[select_algorithm] = data
+            print(f"💾 Cached in memory: {select_algorithm} (no memory limit)")
+        
         return data
     
     def _get_paths(self, algorithm: str) -> Dict[str, str]:
@@ -226,7 +282,7 @@ class DataLoader:
             with fits.open(fitsfile, mode='readonly', memmap=True) as hdul:
                 # Convert to numpy array immediately to avoid memmap issues
                 data_all = np.array(hdul[1].data)
-                
+
             # Filter by algorithm if not BOTH
             if algorithm == 'BOTH':
                 data_merged = data_all
@@ -944,6 +1000,32 @@ class DataLoader:
             if os.path.exists(list_path):
                 source_files.append(list_path)
         return source_files
+    
+    def get_memory_stats(self) -> Dict[str, Any]:
+        """
+        Get memory usage statistics.
+        
+        Returns:
+            Dictionary with memory stats or None if memory manager not available
+        """
+        if self.memory_manager:
+            return self.memory_manager.get_memory_stats()
+        return None
+    
+    def print_memory_report(self) -> None:
+        """Print detailed memory and cache usage report."""
+        if self.memory_manager:
+            self.memory_manager.print_cache_report(self.data_cache)
+        else:
+            print("Memory manager not available - cannot generate report")
+    
+    def clear_memory_cache(self) -> None:
+        """Manually clear all in-memory cached data."""
+        cleared = len(self.data_cache)
+        self.data_cache.clear()
+        if self.memory_manager:
+            self.memory_manager.access_times.clear()
+        print(f"✓ Cleared {cleared} items from memory cache")
     
     def _get_catred_dir(self, paths: Dict[str, str]) -> str:
         """Get CATRED directory path."""
