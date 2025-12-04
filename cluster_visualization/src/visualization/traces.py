@@ -490,7 +490,9 @@ class TraceCreator:
 
     def _create_glow_trace(
             self, x_coords, y_coords, size: int, 
-            shape: str = 'square', opacity: float = 0.3
+            shape: str = 'square', opacity: float = 0.3,
+            showlegend: bool = False, 
+            name: str = ''
             ) -> go.Scattergl:
         """Create a glow effect trace for enhanced markers."""
         return go.Scattergl(
@@ -504,8 +506,8 @@ class TraceCreator:
                 opacity=opacity,  # Semi-transparent for glow effect
                 line=dict(width=2, color='yellow')
             ),
-            name='Enhanced Marker Glow',
-            showlegend=False,  # Don't show in legend
+            name=name if name != '' else 'Cluster in Proximity',
+            showlegend=showlegend,  # Don't show in legend
             hoverinfo='skip',  # Don't show hover for glow layer
             hovertemplate=None  # Explicitly disable hover template
         )
@@ -627,8 +629,9 @@ class TraceCreator:
                         y=pzwav_data['DECLINATION_CLUSTER'],
                         mode='markers',
                         marker=dict(size=20, symbol='square-open', line=dict(width=2), color='black'),
-                        name=f'Merged PZWAV - {len(pzwav_data)} clusters',
+                        name=f'Merged PZWAV',
                         legendgroup='merged_pzwav',
+                        showlegend=True,
                         text=[
                             f"merged (PZWAV)<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
                             for snr, cz, ra, dec in zip(pzwav_data['SNR_CLUSTER'], 
@@ -649,8 +652,9 @@ class TraceCreator:
                         y=amico_data['DECLINATION_CLUSTER'],
                         mode='markers',
                         marker=dict(size=20, symbol='diamond-open', line=dict(width=2), color='black'),
-                        name=f'Merged AMICO - {len(amico_data)} clusters',
+                        name=f'Merged AMICO',
                         legendgroup='merged_amico',
+                        showlegend=True,
                         text=[
                             f"merged (AMICO)<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
                             for snr, cz, ra, dec in zip(amico_data['SNR_CLUSTER'], 
@@ -679,7 +683,7 @@ class TraceCreator:
                     y=datamod_detcluster_mergedcat['DECLINATION_CLUSTER'],
                     mode='markers',
                     marker=dict(size=20, symbol=symbol, line=dict(width=2), color='black'),
-                    name=f'Merged Data ({algorithm}) - {len(datamod_detcluster_mergedcat)} clusters',
+                    name=f'Merged {algorithm}',
                     text=[
                         f"merged<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
                         for snr, cz, ra, dec in zip(datamod_detcluster_mergedcat['SNR_CLUSTER'], 
@@ -727,11 +731,11 @@ class TraceCreator:
                             y=pzwav_away['DECLINATION_CLUSTER'],
                             mode='markers',
                             marker=dict(size=20, symbol='square-open', line=dict(width=2), color='black'),
-                            name=f'Merged PZWAV - {len(pzwav_away)} clusters',
+                            name=f'PZWAV (Merged)',  # - {len(pzwav_away)} clusters',
                             legendgroup='merged_pzwav',
-                            showlegend=False,  # Hide to avoid duplicate with main trace
+                            showlegend=True, 
                             text=[
-                                f"merged (PZWAV)<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
+                                f"PZWAV (Merged)<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
                                 for snr, cz, ra, dec in zip(pzwav_away['SNR_CLUSTER'], 
                                                           pzwav_away['Z_CLUSTER'], 
                                                           pzwav_away['RIGHT_ASCENSION_CLUSTER'], 
@@ -750,11 +754,11 @@ class TraceCreator:
                             y=amico_away['DECLINATION_CLUSTER'],
                             mode='markers',
                             marker=dict(size=20, symbol='diamond-open', line=dict(width=2), color='black'),
-                            name=f'Merged AMICO - {len(amico_away)} clusters',
+                            name=f'AMICO (Merged)',  # - {len(amico_away)} clusters',
                             legendgroup='merged_amico',
-                            showlegend=False,  # Hide to avoid duplicate with main trace
+                            showlegend=True, 
                             text=[
-                                f"merged (AMICO)<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
+                                f"AMICO (Merged)<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
                                 for snr, cz, ra, dec in zip(amico_away['SNR_CLUSTER'], 
                                                           amico_away['Z_CLUSTER'], 
                                                           amico_away['RIGHT_ASCENSION_CLUSTER'], 
@@ -781,9 +785,11 @@ class TraceCreator:
                         y=away_from_catred_data['DECLINATION_CLUSTER'],
                         mode='markers',
                         marker=dict(size=20, symbol=symbol, line=dict(width=2), color='black'),
-                        name=f'Merged Data ({algorithm}) - {len(away_from_catred_data)} clusters',
+                        name=f'{algorithm} (Merged)',
+                        legendgroup=f'merged_{algorithm.lower()}',
+                        showlegend=True,
                         text=[
-                            f"merged<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
+                            f"{algorithm} (Merged)<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
                             for snr, cz, ra, dec in zip(away_from_catred_data['SNR_CLUSTER'], 
                                                       away_from_catred_data['Z_CLUSTER'], 
                                                       away_from_catred_data['RIGHT_ASCENSION_CLUSTER'], 
@@ -818,8 +824,11 @@ class TraceCreator:
                             pzwav_near['RIGHT_ASCENSION_CLUSTER'],
                             pzwav_near['DECLINATION_CLUSTER'],
                             size=28,
-                            shape='square'
+                            shape='square',
+                            showlegend=False,
+                            name='Merged PZWAV (in CATRED region)'
                         )
+                        glow_trace_pzwav['legendgroup'] = 'merged_pzwav'
                         data_traces.append(glow_trace_pzwav)
                         
                         enhanced_trace_pzwav = go.Scattergl(
@@ -833,11 +842,11 @@ class TraceCreator:
                                 color='black',
                                 opacity=1.0
                             ),
-                            name=f'Merged PZWAV (Enhanced) - {len(pzwav_near)} clusters',
+                            name=f'PZWAV (Merged, near CATRED) - {len(pzwav_near)} clusters',
                             legendgroup='merged_pzwav',
                             showlegend=False,
                             text=[
-                                f"merged PZWAV (enhanced)<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
+                                f"PZWAV (Merged, near CATRED)<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
                                 for snr, cz, ra, dec in zip(pzwav_near['SNR_CLUSTER'], 
                                                           pzwav_near['Z_CLUSTER'], 
                                                           pzwav_near['RIGHT_ASCENSION_CLUSTER'], 
@@ -855,8 +864,11 @@ class TraceCreator:
                             amico_near['RIGHT_ASCENSION_CLUSTER'],
                             amico_near['DECLINATION_CLUSTER'],
                             size=28,
-                            shape='diamond'
+                            shape='diamond',
+                            showlegend=False,
+                            name='Merged AMICO (in CATRED region)'
                         )
+                        glow_trace_amico['legendgroup'] = 'merged_amico'
                         data_traces.append(glow_trace_amico)
                         
                         enhanced_trace_amico = go.Scattergl(
@@ -870,11 +882,11 @@ class TraceCreator:
                                 color='black',
                                 opacity=1.0
                             ),
-                            name=f'Merged AMICO (Enhanced) - {len(amico_near)} clusters',
+                            name=f'AMICO (Merged, near CATRED) - {len(amico_near)} clusters',
                             legendgroup='merged_amico',
                             showlegend=False,
                             text=[
-                                f"merged AMICO (enhanced)<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
+                                f"AMICO (Merged, near CATRED)<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
                                 for snr, cz, ra, dec in zip(amico_near['SNR_CLUSTER'], 
                                                           amico_near['Z_CLUSTER'], 
                                                           amico_near['RIGHT_ASCENSION_CLUSTER'], 
@@ -904,8 +916,11 @@ class TraceCreator:
                         near_catred_data['RIGHT_ASCENSION_CLUSTER'],
                         near_catred_data['DECLINATION_CLUSTER'],
                         size=28,
-                        shape=glow_shape
+                        shape=glow_shape,
+                        showlegend=False,
+                        name=f'{algorithm.upper()} (Merged, near CATRED)'
                     )
+                    glow_trace['legendgroup'] = f'merged_{algorithm.lower()}'
                     data_traces.append(glow_trace)
                     
                     # Add main enhanced trace (foreground)
@@ -920,10 +935,11 @@ class TraceCreator:
                             color='black',
                             opacity=1.0
                         ),
-                        name=f'Merged Data (Enhanced) - {len(near_catred_data)} clusters',
+                        name=f'{algorithm.upper()} (Merged, near CATRED) - {len(near_catred_data)} clusters',
+                        legendgroup=f'merged_{algorithm.lower()}',
                         showlegend=False,
                         text=[
-                            f"merged (enhanced)<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
+                            f"{algorithm.upper()} (Merged, near CATRED)<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
                             for snr, cz, ra, dec in zip(near_catred_data['SNR_CLUSTER'], 
                                                       near_catred_data['Z_CLUSTER'], 
                                                       near_catred_data['RIGHT_ASCENSION_CLUSTER'], 
@@ -983,16 +999,16 @@ class TraceCreator:
             # Configure legend behavior for BOTH algorithm case
             if data['algorithm'] == 'BOTH' and tile_algorithm:
                 # Use legendgroup to organize by algorithm
-                legend_group = f"tiles_{tile_algorithm}"
+                legend_group = f"{tile_algorithm}_cltile_{tileid}"
                 # Only show first trace of each algorithm in legend
                 show_in_legend = True # not shown_algorithm_legend[tile_algorithm]
                 shown_algorithm_legend[tile_algorithm] = True
-                trace_name = f'{tile_algorithm} Tile {tileid}' # f"{tile_algorithm} Tiles"
+                trace_name = f'{tile_algorithm} CL-Tile {tileid}' # f"{tile_algorithm} Tiles"
             else:
                 # Single algorithm mode - show each tile separately
-                legend_group = None
+                legend_group = f"{tile_algorithm}_cltile_{tileid}"
                 show_in_legend = True
-                trace_name = f'Tile {tileid}'
+                trace_name = f'{tile_algorithm} CL-Tile {tileid}'
 
             if catred_points is None:
                 # No CATRED data - create single trace with normal markers
@@ -1002,7 +1018,7 @@ class TraceCreator:
                     mode='markers',
                     marker=dict(size=10, opacity=1, symbol=symbol, line=dict(width=2, color=self.colors_list[int(tileid)])),
                     name=trace_name,
-                    # legendgroup=legend_group,
+                    legendgroup=legend_group,
                     showlegend=show_in_legend,
                     text=[
                         f"TileID: {tileid}{f' ({tile_algorithm})' if tile_algorithm and data['algorithm'] == 'BOTH' else ''}<br>SNR_CLUSTER: {snr:.2f}<br>Z_CLUSTER: {cz:.2f}<br>RA: {ra:.4f}<br>Dec: {dec:.4f}"
@@ -1062,8 +1078,11 @@ class TraceCreator:
                         near_catred_data['RIGHT_ASCENSION_CLUSTER'],
                         near_catred_data['DECLINATION_CLUSTER'],
                         20,
-                        shape=glow_shape
+                        shape=glow_shape,
+                        showlegend=False,
+                        name=f'{tile_algorithm.upper()} CL-Tile {tileid} (near CATRED)'
                     )
+                    glow_trace['legendgroup'] = legend_group #f'enhanced_{tile_algorithm.lower()}'
                     tile_traces.append(glow_trace)
                     
                     # Add main enhanced trace (foreground)
@@ -1078,7 +1097,7 @@ class TraceCreator:
                             # color=self.colors_list[int(tileid)],
                             line=dict(width=2, color=self.colors_list[int(tileid)])  # Yellow highlight for 'x' symbols
                         ),
-                        name=f'Tile {tileid} (Enhanced)',
+                        name=f'{tile_algorithm} CL-Tile {tileid} (near CATRED) - {len(near_catred_data)} clusters',
                         legendgroup=legend_group,
                         showlegend=False,  # Never show enhanced traces in legend to avoid clutter
                         text=[
@@ -1101,12 +1120,12 @@ class TraceCreator:
             # Create polygon traces for this tile
             
             # Create polygon traces for this tile
-            self._create_cltile_polygons(polygon_traces, data, tileid, value, show_polygons, show_mer_tiles)
+            self._create_cltile_polygons(polygon_traces, data, tileid, value, show_polygons, show_mer_tiles, legendgroup=None)
         
         return tile_traces
     
     def _create_cltile_polygons(self, polygon_traces: List, data: Dict[str, Any], tileid: str,
-                             tile_value: Dict[str, Any], show_polygons: bool, show_mer_tiles: bool) -> None:
+                             tile_value: Dict[str, Any], show_polygons: bool, show_mer_tiles: bool, legendgroup: str = None) -> None:
         """Create polygon traces for a single tile (LEV1, CORE, and optionally MER)."""
         # Load tile definition
         with open(tile_value['cltiledef_file'], 'r') as f:
@@ -1120,8 +1139,9 @@ class TraceCreator:
         lev1_trace = go.Scatter(
             x=lev1_x, y=lev1_y,
             mode='lines',
-            line=dict(width=2, color=self.colors_list[int(tileid)], dash='dash'),
+            line=dict(width=4, color=self.colors_list[int(tileid)], dash='dash'),
             name=f'Tile {tileid} LEV1',
+            legendgroup=legendgroup if legendgroup is not None else f'cl_tile_{tileid}',
             showlegend=False,
             text=f'Tile {tileid} - LEV1 Polygon',
             hoverinfo='text'
@@ -1145,8 +1165,9 @@ class TraceCreator:
             x=core_x, y=core_y,
             fill=fill, fillcolor=fillcolor,
             mode='lines',
-            line=dict(width=2, color=self.colors_list[int(tileid)]),
+            line=dict(width=4, color=self.colors_list[int(tileid)]),
             name=f'Tile {tileid} CORE',
+            legendgroup=legendgroup if legendgroup is not None else f'cl_tile_{tileid}',
             showlegend=False,
             text=f'Tile {tileid} - CORE Polygon',
             hoverinfo='text'
@@ -1155,10 +1176,11 @@ class TraceCreator:
         
         # MER tile polygons (only when in outline mode and MER tiles requested)
         if show_mer_tiles and not show_polygons and not data['catred_info'].empty and 'polygon' in data['catred_info'].columns:
-            self._create_mer_tile_polygons(polygon_traces, data, tile, tileid)
+            self._create_mer_tile_polygons(polygon_traces, data, tile, tileid, 
+                                           legendgroup=legendgroup if legendgroup is not None else f'cl_tile_{tileid}')
     
     def _create_mer_tile_polygons(self, polygon_traces: List, data: Dict[str, Any], 
-                                 tile: Dict[str, Any], tileid: str) -> None:
+                                 tile: Dict[str, Any], tileid: str, legendgroup: str = None) -> None:
         """Create MER tile polygon traces for a cluster tile."""
         for mertileid in tile['LEV1']['ID_INTERSECTED']:
             if mertileid in data['catred_info']['mertileid'].values:
@@ -1173,9 +1195,10 @@ class TraceCreator:
                             fillcolor=self.colors_list_transparent[int(tileid)],
                             mode='lines',
                             line=dict(width=2, color=self.colors_list[int(tileid)], dash='dot'),
-                            name=f'MerTile {mertileid}',
+                            name=f'MER-Tile {mertileid}',
+                            legendgroup=legendgroup if legendgroup is not None else None,
                             showlegend=False,
-                            text=f'MerTile {mertileid} - CLtile {tileid}',
+                            text=f'MER-Tile {mertileid} - CL-Tile {tileid}',
                             hoverinfo='text',
                             hoveron='fills+points'
                         )
