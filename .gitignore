@@ -1,7 +1,7 @@
 *ipynb
 *.backup
 fix_syntax.py
-
+PERFORMANCE_OPTIMIZATION_ROADMAP.md
 
 # Local configuration file (user-specific paths)
 config_local.ini
