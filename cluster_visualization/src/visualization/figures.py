@@ -47,7 +47,9 @@ class FigureManager:
                 x=1.01,
                 yanchor='top',
                 y=1,
-                font=dict(size=10)
+                font=dict(size=10),
+                itemclick='toggleothers',
+                itemdoubleclick='toggle'
             ),
             hovermode='closest',
             margin=dict(l=40, r=120, t=60, b=40),

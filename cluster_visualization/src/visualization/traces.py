@@ -1292,7 +1292,7 @@ class TraceCreator:
             mode='lines',
             line=dict(width=4, color=self.colors_list[int(tileid)], dash='dash'),
             name=f'Tile {tileid} LEV1',
-            legendgroup=legendgroup if legendgroup is not None else f'cl_tile_{tileid}',
+            # legendgroup=legendgroup if legendgroup is not None else f'cl_tile_{tileid}',
             showlegend=False,
             text=f'Tile {tileid} - LEV1 Polygon',
             hoverinfo='text'
@@ -1318,7 +1318,7 @@ class TraceCreator:
             mode='lines',
             line=dict(width=4, color=self.colors_list[int(tileid)]),
             name=f'Tile {tileid} CORE',
-            legendgroup=legendgroup if legendgroup is not None else f'cl_tile_{tileid}',
+            # legendgroup=legendgroup if legendgroup is not None else f'cl_tile_{tileid}',
             showlegend=False,
             text=f'Tile {tileid} - CORE Polygon',
             hoverinfo='text'
@@ -1347,7 +1347,7 @@ class TraceCreator:
                             mode='lines',
                             line=dict(width=2, color=self.colors_list[int(tileid)], dash='dot'),
                             name=f'MER-Tile {mertileid}',
-                            legendgroup=legendgroup if legendgroup is not None else None,
+                            # legendgroup=legendgroup if legendgroup is not None else None,
                             showlegend=False,
                             text=f'MER-Tile {mertileid} - CL-Tile {tileid}',
                             hoverinfo='text',

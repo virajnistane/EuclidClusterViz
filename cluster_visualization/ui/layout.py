@@ -83,7 +83,8 @@ class AppLayout:
                                             'displayModeBar': True,
                                             'displaylogo': False,
                                             'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
-                                            'responsive': True
+                                            'responsive': True,
+                                            'doubleClickDelay': 1000
                                         }
                                     )
                                 ],
