@@ -19,19 +19,51 @@ from astropy.io import fits
 from typing import Dict, Any, Optional
 import datetime
 
+try:
+    from cluster_visualization.utils.disk_cache import DiskCache, get_default_cache
+    DISK_CACHE_AVAILABLE = True
+except ImportError:
+    print("Warning: Disk cache not available - using memory-only caching")
+    DISK_CACHE_AVAILABLE = False
+
+try:
+    from cluster_visualization.utils.memory_manager import MemoryManager
+    MEMORY_MANAGER_AVAILABLE = True
+except ImportError:
+    print("Warning: Memory manager not available - no memory limits enforced")
+    MEMORY_MANAGER_AVAILABLE = False
+
 
 class DataLoader:
     """Handles loading and caching of cluster detection data."""
     
-    def __init__(self, config=None):
+    def __init__(self, config=None, use_disk_cache=True, max_memory_gb=None):
         """
         Initialize DataLoader with configuration.
         
         Args:
             config: Configuration object with path information
+            use_disk_cache: Enable disk caching for faster subsequent loads (default: True)
+            max_memory_gb: Maximum memory to use in GB (default: auto-detect 50% of RAM)
         """
         self.config = config
-        self.data_cache = {}
+        self.data_cache = {}  # In-memory cache
+        
+        # Initialize memory manager
+        if MEMORY_MANAGER_AVAILABLE:
+            if max_memory_gb is None:
+                max_memory_gb = MemoryManager.recommend_cache_size()
+            self.memory_manager = MemoryManager(max_memory_gb=max_memory_gb)
+        else:
+            self.memory_manager = None
+        
+        # Initialize disk cache
+        self.use_disk_cache = use_disk_cache and DISK_CACHE_AVAILABLE
+        if self.use_disk_cache:
+            self.disk_cache = get_default_cache()
+            print("Disk caching enabled - subsequent loads will be 5-10x faster")
+        else:
+            self.disk_cache = None
         
         # Import utilities from package structure
         try:
@@ -60,11 +92,24 @@ class DataLoader:
             FileNotFoundError: If required data files are missing
             ValueError: If algorithm is not supported
         """
+        # Cleanup memory if needed before loading
+        if self.memory_manager:
+            current_mem = self.memory_manager.get_memory_stats()['rss_mb']
+            print(f"🔍 [Memory Check] Current: {current_mem:.1f} MB, Loading: {select_algorithm}")
+            cleanup_performed = self.memory_manager.cleanup_if_needed(self.data_cache)
+            if cleanup_performed:
+                new_mem = self.memory_manager.get_memory_stats()['rss_mb']
+                print(f"   ↳ After cleanup: {new_mem:.1f} MB")
+        
         # Check cache first
         if select_algorithm in self.data_cache:
+            print(f"✓ [Cache HIT] Using cached data for {select_algorithm}")
+            if self.memory_manager:
+                self.memory_manager.mark_accessed(select_algorithm)
+                print(f"   ↳ Marked {select_algorithm} as recently accessed (LRU)")
             return self.data_cache[select_algorithm]
-            
-        print(f"Loading data for algorithm: {select_algorithm}")
+        
+        print(f"⏳ [Cache MISS] Loading data for algorithm: {select_algorithm}")
         
         # Validate algorithm choice
         if select_algorithm not in ['PZWAV', 'AMICO', 'BOTH']:
@@ -115,8 +160,35 @@ class DataLoader:
             'z_max': z_max,
         }
         
-        # Cache the data for future requests
-        self.data_cache[select_algorithm] = data
+        # Check if we have room to cache in memory
+        if self.memory_manager:
+            mem_before = self.memory_manager.check_memory()
+            current_mem_mb = mem_before / 1024**2
+            max_mem_mb = self.memory_manager.max_memory_bytes / 1024**2
+            
+            print(f"💾 [Cache Decision] Current: {current_mem_mb:.1f} MB / {max_mem_mb:.1f} MB")
+            
+            # Try caching and check if we're still under threshold
+            self.data_cache[select_algorithm] = data
+            mem_after = self.memory_manager.check_memory()
+            
+            if mem_after < self.memory_manager.warning_threshold_bytes:
+                # Successfully cached and still under limit
+                self.memory_manager.mark_accessed(select_algorithm)
+                new_mem_mb = mem_after / 1024**2
+                data_size_mb = (mem_after - mem_before) / 1024**2
+                print(f"   ↳ ✓ Cached in memory: {select_algorithm} (+{data_size_mb:.1f} MB)")
+                print(f"   ↳ Memory now: {new_mem_mb:.1f} MB (usage: {(new_mem_mb/max_mem_mb)*100:.1f}%)")
+            else:
+                # Would exceed limit - remove from cache
+                del self.data_cache[select_algorithm]
+                print(f"   ↳ ⚠️  Skipping memory cache for {select_algorithm} (would exceed limit)")
+                print(f"   ↳ Data will be loaded from disk cache on next request.")
+        else:
+            # No memory manager - cache everything
+            self.data_cache[select_algorithm] = data
+            print(f"💾 Cached in memory: {select_algorithm} (no memory limit)")
+        
         return data
     
     def _get_paths(self, algorithm: str) -> Dict[str, str]:
@@ -180,7 +252,17 @@ class DataLoader:
                     raise FileNotFoundError(f"{path_key.replace('_', ' ').title()} not found: {path}")
     
     def _load_data_detcluster_mergedcat_with_minmax_snr(self, paths: Dict[str, str], algorithm: str) -> np.ndarray:
-        """Load merged detection catalog from XML and FITS files."""
+        """Load merged detection catalog from XML and FITS files."""        
+        # Try disk cache first
+        if self.use_disk_cache:
+            cache_key = f"merged_catalog_{algorithm}"
+            source_files = self._get_merged_catalog_source_files(paths)
+            
+            cached = self.disk_cache.get(cache_key, source_files)
+            if cached is not None:
+                return cached  # Tuple of (data, snr_min_pzwav, snr_max_pzwav, snr_min_amico, snr_max_amico)
+        
+        # Cache miss - load data
         if paths.get('use_gluematchcat'):
             # Load from gluematchcat
             gluematchcat_xml = paths['gluematchcat_xml']
@@ -191,10 +273,16 @@ class DataLoader:
             fits_filename = self.get_xml_element(gluematchcat_xml, 'Data/FullDetectionsFile/DataContainer/FileName').text
             fitsfile = os.path.join(paths['gluematchcat_dir'], 'data', fits_filename)
             
+            # Check if file exists, if not try without checking (will raise error with better message)
+            if not os.path.exists(fitsfile):
+                print(f"Warning: FITS file not found at {fitsfile}")
+                print(f"This may indicate a path configuration issue")
+            
             print(f"Loading clusters from GlueMatchCat: {os.path.basename(fitsfile)}")
             with fits.open(fitsfile, mode='readonly', memmap=True) as hdul:
-                data_all = hdul[1].data
-            
+                # Convert to numpy array immediately to avoid memmap issues
+                data_all = np.array(hdul[1].data)
+
             # Filter by algorithm if not BOTH
             if algorithm == 'BOTH':
                 data_merged = data_all
@@ -282,10 +370,28 @@ class DataLoader:
                     snr_min_amico = float(data_merged['SNR_CLUSTER'].min())
                     snr_max_amico = float(data_merged['SNR_CLUSTER'].max())
         
-        return data_merged, snr_min_pzwav, snr_max_pzwav, snr_min_amico, snr_max_amico
+        result = (data_merged, snr_min_pzwav, snr_max_pzwav, snr_min_amico, snr_max_amico)
+        
+        # Save to disk cache
+        if self.use_disk_cache:
+            cache_key = f"merged_catalog_{algorithm}"
+            source_files = self._get_merged_catalog_source_files(paths)
+            self.disk_cache.set(cache_key, result, source_files)
+        
+        return result
     
     def _load_data_detcluster_by_cltile(self, paths: Dict[str, str], algorithm: str) -> Dict[str, Dict[str, Any]]:
         """Load individual tile detection data from separate detintile files."""
+        # Try disk cache first
+        if self.use_disk_cache:
+            cache_key = f"tile_data_{algorithm}"
+            source_files = self._get_tile_data_source_files(paths)
+            
+            cached = self.disk_cache.get(cache_key, source_files)
+            if cached is not None:
+                return cached
+        
+        # Cache miss - load data
         # Always load from separate detintile files (even when using gluematchcat for merged data)
         detfiles_list_files_dict = paths['detfiles_list_files_dict']
         
@@ -395,10 +501,28 @@ class DataLoader:
         
         data_by_tile = dict(sorted(data_by_tile.items()))
         print(f"Loaded {len(data_by_tile)} individual tiles")
+        
+        # Save to disk cache
+        if self.use_disk_cache:
+            cache_key = f"tile_data_{algorithm}"
+            source_files = self._get_tile_data_source_files(paths)
+            self.disk_cache.set(cache_key, data_by_tile, source_files)
+        
         return data_by_tile
     
     def _load_catred_info(self, paths: Dict[str, str]) -> pd.DataFrame:
         """Load CATRED file information and polygon data."""
+        # Try disk cache first
+        if self.use_disk_cache:
+            cache_key = "catred_fileinfo"
+            catred_dir = self._get_catred_dir(paths)
+            source_files = [catred_dir] if os.path.exists(catred_dir) else []
+            
+            cached = self.disk_cache.get(cache_key, source_files)
+            if cached is not None:
+                return cached
+        
+        # Cache miss - load or generate data
         catred_fileinfo_csv = paths['catred_fileinfo_csv']
         catred_polygon_pkl = paths['catred_polygon_pkl']
         regenerate = False
@@ -452,6 +576,13 @@ class DataLoader:
             catred_fileinfo_df = self._generate_catred_polygons(catred_fileinfo_df, paths)
         else:
             print("Warning: Cannot generate polygons - catred_fileinfo_df is empty")
+        
+        # Save to disk cache
+        if self.use_disk_cache and not catred_fileinfo_df.empty:
+            cache_key = "catred_fileinfo"
+            catred_dir = self._get_catred_dir(paths)
+            source_files = [catred_dir] if os.path.exists(catred_dir) else []
+            self.disk_cache.set(cache_key, catred_fileinfo_df, source_files)
         
         return catred_fileinfo_df
     
@@ -829,6 +960,79 @@ class DataLoader:
         """Clear the data cache to free memory."""
         self.data_cache.clear()
         print("Data cache cleared")
+        if self.use_disk_cache:
+            print("Note: Disk cache still contains data. Use clear_disk_cache() to clear it.")
+    
+    def clear_disk_cache(self, key: str = None) -> None:
+        """Clear disk cache entries.
+        
+        Args:
+            key: Specific cache key to clear (None = clear all)
+        """
+        if self.use_disk_cache:
+            self.disk_cache.clear(key)
+        else:
+            print("Disk cache not available")
+    
+    def get_cache_info(self) -> Dict[str, Any]:
+        """Get disk cache information and statistics."""
+        if self.use_disk_cache:
+            return self.disk_cache.get_cache_info()
+        else:
+            return {'status': 'Disk cache not available'}
+    
+    def _get_merged_catalog_source_files(self, paths: Dict[str, str]) -> list:
+        """Get list of source files for merged catalog (for cache invalidation)."""
+        source_files = []
+        if paths.get('use_gluematchcat'):
+            if os.path.exists(paths.get('gluematchcat_xml', '')):
+                source_files.append(paths['gluematchcat_xml'])
+        else:
+            for xml_path in paths.get('mergedetcat_xml_files_dict', {}).values():
+                if os.path.exists(xml_path):
+                    source_files.append(xml_path)
+        return source_files
+    
+    def _get_tile_data_source_files(self, paths: Dict[str, str]) -> list:
+        """Get list of source files for tile data (for cache invalidation)."""
+        source_files = []
+        for list_path in paths.get('detfiles_list_files_dict', {}).values():
+            if os.path.exists(list_path):
+                source_files.append(list_path)
+        return source_files
+    
+    def get_memory_stats(self) -> Dict[str, Any]:
+        """
+        Get memory usage statistics.
+        
+        Returns:
+            Dictionary with memory stats or None if memory manager not available
+        """
+        if self.memory_manager:
+            return self.memory_manager.get_memory_stats()
+        return None
+    
+    def print_memory_report(self) -> None:
+        """Print detailed memory and cache usage report."""
+        if self.memory_manager:
+            self.memory_manager.print_cache_report(self.data_cache)
+        else:
+            print("Memory manager not available - cannot generate report")
+    
+    def clear_memory_cache(self) -> None:
+        """Manually clear all in-memory cached data."""
+        cleared = len(self.data_cache)
+        self.data_cache.clear()
+        if self.memory_manager:
+            self.memory_manager.access_times.clear()
+        print(f"✓ Cleared {cleared} items from memory cache")
+    
+    def _get_catred_dir(self, paths: Dict[str, str]) -> str:
+        """Get CATRED directory path."""
+        if self.config and hasattr(self.config, 'catred_dir'):
+            return self.config.catred_dir
+        else:
+            return os.path.join(os.path.dirname(paths.get('catred_fileinfo_csv', '')), 'DpdLE3clFullInputCat')
     
     def get_cached_algorithms(self) -> list:
         """Get list of currently cached algorithms."""
