@@ -26,6 +26,10 @@ colors_list = [
     '#98df8a',  # light green
     '#ff9896',  # light red
     '#c5b0d5',  # light purple
+    '#f7b6d2',  # light pink
+    '#c7c7c7',  # light gray
+    '#dbdb8d',  # light olive
+    '#9edae5',  # light cyan
 ]
 
 colors_dict = {
@@ -44,6 +48,10 @@ colors_dict = {
     12: '#98df8a',  # light green
     13: '#ff9896',  # light red
     14: '#c5b0d5',  # light purple
+    15: '#f7b6d2',  # light pink
+    16: '#c7c7c7',  # light gray
+    17: '#dbdb8d',  # light olive
+    18: '#9edae5',  # light cyan
 }
 
 

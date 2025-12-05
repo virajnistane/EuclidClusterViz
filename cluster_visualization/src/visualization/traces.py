@@ -1368,21 +1368,21 @@ class TraceCreator:
         """Get default transparent color list for polygon fills."""
         # Map CSS color names to RGBA with 0.3 opacity
         color_map = {
-            'red': 'rgba(255, 0, 0, 0.3)',
-            'blue': 'rgba(0, 0, 255, 0.3)',
-            'green': 'rgba(0, 128, 0, 0.3)',
-            'orange': 'rgba(255, 165, 0, 0.3)',
-            'purple': 'rgba(128, 0, 128, 0.3)',
-            'brown': 'rgba(165, 42, 42, 0.3)',
-            'pink': 'rgba(255, 192, 203, 0.3)',
-            'gray': 'rgba(128, 128, 128, 0.3)',
-            'olive': 'rgba(128, 128, 0, 0.3)',
-            'cyan': 'rgba(0, 255, 255, 0.3)',
-            'magenta': 'rgba(255, 0, 255, 0.3)',
-            'yellow': 'rgba(255, 255, 0, 0.3)',
-            'darkred': 'rgba(139, 0, 0, 0.3)',
-            'darkblue': 'rgba(0, 0, 139, 0.3)',
-            'darkgreen': 'rgba(0, 100, 0, 0.3)'
+            'red': 'rgba(255, 0, 0, 0.2)',
+            'blue': 'rgba(0, 0, 255, 0.2)',
+            'green': 'rgba(0, 128, 0, 0.2)',
+            'orange': 'rgba(255, 165, 0, 0.2)',
+            'purple': 'rgba(128, 0, 128, 0.2)',
+            'brown': 'rgba(165, 42, 42, 0.2)',
+            'pink': 'rgba(255, 192, 203, 0.2)',
+            'gray': 'rgba(128, 128, 128, 0.2)',
+            'olive': 'rgba(128, 128, 0, 0.2)',
+            'cyan': 'rgba(0, 255, 255, 0.2)',
+            'magenta': 'rgba(255, 0, 255, 0.2)',
+            'yellow': 'rgba(255, 255, 0, 0.2)',
+            'darkred': 'rgba(139, 0, 0, 0.2)',
+            'darkblue': 'rgba(0, 0, 139, 0.2)',
+            'darkgreen': 'rgba(0, 100, 0, 0.2)'
         }
         base_colors = self._get_default_colors()
-        return [color_map.get(color, f'rgba(128, 128, 128, 0.3)') for color in base_colors]
+        return [color_map.get(color, f'rgba(128, 128, 128, 0.2)') for color in base_colors]
