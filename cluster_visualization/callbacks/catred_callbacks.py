@@ -5,11 +5,11 @@ Handles CATRED data rendering, clearing, and related UI interactions.
 Includes zoom-dependent CATRED button state management.
 """
 
-import dash
+import dash  # type: ignore[import]
 from dash import Input, Output, State, html
-import plotly.graph_objs as go
-import pandas as pd
-import dash_bootstrap_components as dbc
+import plotly.graph_objs as go # type: ignore[import]
+import pandas as pd # type: ignore[import]
+import dash_bootstrap_components as dbc # type: ignore[import]
 
 
 class CATREDCallbacks:

@@ -5,11 +5,11 @@ Handles cluster selection, modal dialog interactions, and cluster-specific actio
 like cutout generation, PHZ analysis, and data export.
 """
 
-import dash
+import dash # type: ignore[import]
 from dash import Input, Output, State, html, callback_context
-import plotly.graph_objs as go
-import pandas as pd
-import dash_bootstrap_components as dbc
+import plotly.graph_objs as go # type: ignore[import]
+import pandas as pd # type: ignore[import]
+import dash_bootstrap_components as dbc # type: ignore[import]
 import json
 
 

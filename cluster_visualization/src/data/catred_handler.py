@@ -9,19 +9,19 @@ This module handles loading and processing of MER tile data including:
 """
 
 import os
-import pandas as pd
+import pandas as pd # type: ignore[import]
 import numpy as np
-from astropy.io import fits
-from astropy.table import Table
+from astropy.io import fits # type: ignore[import]
+from astropy.table import Table # type: ignore[import]
 
 try:
-    import healpy as hp
+    import healpy as hp # type: ignore[import]
 except ImportError:
     raise ImportError(
         "healpy is required for CATRED operations. Install with: pip install healpy"
     )
 
-from shapely.geometry import box
+from shapely.geometry import box # type: ignore[import]
 from typing import Dict, List, Any, Optional, Tuple
 
 

@@ -5,12 +5,12 @@ Handles primary rendering logic for the main cluster visualization plot,
 including initial rendering, real-time option updates, and SNR filtering.
 """
 
-import dash
+import dash  # type: ignore[import]
 from dash import Input, Output, State, html
-import plotly.graph_objs as go
-import pandas as pd
+import plotly.graph_objs as go # type: ignore[import]
+import pandas as pd  # type: ignore[import]
 import numpy as np
-import dash_bootstrap_components as dbc
+import dash_bootstrap_components as dbc  # type: ignore[import]
 
 
 class MainPlotCallbacks:

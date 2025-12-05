@@ -2,7 +2,7 @@
 UI callbacks for cluster visualization
 """
 
-import dash
+import dash # type: ignore[import]
 from dash import Input, Output, html
 
 

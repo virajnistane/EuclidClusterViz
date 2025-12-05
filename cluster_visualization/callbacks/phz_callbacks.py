@@ -5,9 +5,9 @@ Handles PHZ_PDF plot updates when clicking on CATRED data points,
 including redshift probability distribution visualization and related UI interactions.
 """
 
-import dash
+import dash # type: ignore[import]
 from dash import Input, Output
-import plotly.graph_objs as go
+import plotly.graph_objs as go # type: ignore[import]
 import numpy as np
 
 
