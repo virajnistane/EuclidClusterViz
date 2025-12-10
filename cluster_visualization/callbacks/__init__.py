@@ -12,7 +12,14 @@ try:
     from .phz_callbacks import PHZCallbacks
     from .cluster_modal_callbacks import ClusterModalCallbacks
 
-    __all__ = ['MainPlotCallbacks', 'CATREDCallbacks', 'MOSAICCallbacks', 'UICallbacks', 'PHZCallbacks', 'ClusterModalCallbacks']
+    __all__ = [
+        "MainPlotCallbacks",
+        "CATREDCallbacks",
+        "MOSAICCallbacks",
+        "UICallbacks",
+        "PHZCallbacks",
+        "ClusterModalCallbacks",
+    ]
 
 except ImportError as e:
     print(f"Warning: Could not import all callback modules: {e}")

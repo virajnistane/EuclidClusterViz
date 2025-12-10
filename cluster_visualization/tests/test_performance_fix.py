@@ -23,19 +23,19 @@ from cluster_visualization.src.data.loader import DataLoader
 
 
 def test_performance():
-    print("="*70)
+    print("=" * 70)
     print("PERFORMANCE TEST - FAST MEMORY OPERATIONS")
-    print("="*70)
-    
+    print("=" * 70)
+
     config = Config()
     loader = DataLoader(config, use_disk_cache=True, max_memory_gb=3.0)
-    
+
     print("\n📊 Testing algorithm switching speed...")
     print("   (This would have been VERY slow with sys.getsizeof)")
-    
-    algorithms = ['PZWAV', 'AMICO', 'BOTH']
+
+    algorithms = ["PZWAV", "AMICO", "BOTH"]
     switch_times = []
-    
+
     # First load (cache miss - expected to be slower)
     print("\n1. Initial loads (cache misses):")
     for algo in algorithms:
@@ -43,7 +43,7 @@ def test_performance():
         data = loader.load_data(algo)
         elapsed = time.time() - start
         print(f"   {algo}: {elapsed:.3f}s")
-    
+
     # Rapid switching (cache hits - should be instant)
     print("\n2. Rapid switching (cache hits):")
     for i in range(10):
@@ -56,30 +56,31 @@ def test_performance():
             print(f"   Switch {i+1} ({algo}): {elapsed:.4f}s")
         elif i == 5:
             print("   ...")
-    
+
     avg_switch = sum(switch_times) / len(switch_times)
     max_switch = max(switch_times)
     min_switch = min(switch_times)
-    
+
     print(f"\n3. Performance summary:")
     print(f"   Average switch time: {avg_switch*1000:.2f} ms")
     print(f"   Min switch time:     {min_switch*1000:.2f} ms")
     print(f"   Max switch time:     {max_switch*1000:.2f} ms")
-    
+
     if avg_switch < 0.1:  # Under 100ms
         print(f"   ✓ FAST - App feels responsive!")
     elif avg_switch < 0.5:
         print(f"   ⚠ ACCEPTABLE - Slight delay noticeable")
     else:
         print(f"   ✗ SLOW - App feels sluggish")
-    
+
     print("\n4. Final memory state:")
     loader.print_memory_report()
-    
-    print("\n" + "="*70)
+
+    print("\n" + "=" * 70)
     print("WHY THE OLD CODE WAS SLOW:")
-    print("="*70)
-    print("""
+    print("=" * 70)
+    print(
+        """
 The problem: sys.getsizeof() on nested data structures
 
 Old code did this on EVERY cache decision and cleanup:
@@ -95,8 +96,9 @@ New code does this instead:
   - Result: Instant response, smooth operation
 
 Performance improvement: 100-500x faster memory operations!
-""")
+"""
+    )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_performance()

@@ -11,42 +11,42 @@ sys.path.append(str(path))
 from cluster_visualization.src.config import Config
 from cluster_visualization.src.data.loader import DataLoader
 
-print("="*70)
+print("=" * 70)
 print("MEMORY MANAGER DEBUG OUTPUT TEST")
-print("="*70)
+print("=" * 70)
 
 # Initialize with small limit to see more interesting behavior
 config = Config()
 loader = DataLoader(config, use_disk_cache=True, max_memory_gb=2.0)
 
-print("\n" + "="*70)
+print("\n" + "=" * 70)
 print("SCENARIO 1: First Load (Cache Miss)")
-print("="*70)
-data1 = loader.load_data('PZWAV')
+print("=" * 70)
+data1 = loader.load_data("PZWAV")
 
-print("\n" + "="*70)
+print("\n" + "=" * 70)
 print("SCENARIO 2: Second Load (Cache Hit)")
-print("="*70)
-data1_again = loader.load_data('PZWAV')
+print("=" * 70)
+data1_again = loader.load_data("PZWAV")
 
-print("\n" + "="*70)
+print("\n" + "=" * 70)
 print("SCENARIO 3: Different Algorithm (Cache Miss)")
-print("="*70)
-data2 = loader.load_data('AMICO')
+print("=" * 70)
+data2 = loader.load_data("AMICO")
 
-print("\n" + "="*70)
+print("\n" + "=" * 70)
 print("SCENARIO 4: Third Algorithm (May Trigger Memory Management)")
-print("="*70)
-data3 = loader.load_data('BOTH')
+print("=" * 70)
+data3 = loader.load_data("BOTH")
 
-print("\n" + "="*70)
+print("\n" + "=" * 70)
 print("SCENARIO 5: Switching Back (Cache Hit if Still in Memory)")
-print("="*70)
-data1_third = loader.load_data('PZWAV')
+print("=" * 70)
+data1_third = loader.load_data("PZWAV")
 
-print("\n" + "="*70)
+print("\n" + "=" * 70)
 print("FINAL MEMORY STATUS")
-print("="*70)
+print("=" * 70)
 loader.print_memory_report()
 
 print("\n✓ Debug output test complete!")

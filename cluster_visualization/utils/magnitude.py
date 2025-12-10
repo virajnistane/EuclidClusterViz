@@ -10,8 +10,8 @@ import numpy as np
 
 class Magnitude:
     """Magnitude conversion and filtering utilities."""
-    
-    band = 'H'
+
+    band = "H"
 
     @staticmethod
     def band_to_reference_magnitude(band, unit):
@@ -25,7 +25,7 @@ class Magnitude:
         # Current scheme (private conversation w Bolzonella):
         # reference magnitudes are the same for all bands. Currently, only H is implemented.
 
-        band_refmags = {'Jy':8.9, 'mJy':16.4, 'muJy':23.9}
+        band_refmags = {"Jy": 8.9, "mJy": 16.4, "muJy": 23.9}
         all_refmags = {band: band_refmags}
 
         try:
@@ -33,13 +33,15 @@ class Magnitude:
         except KeyError:
             error_msg = ""
             if band not in all_refmags:
-                error_msg += 'Reference magnitude of band ' + band + ' is not registered. '
+                error_msg += "Reference magnitude of band " + band + " is not registered. "
             if unit not in band_refmags:
-                error_msg += 'Unit ' + unit + ' not found. "unit" parameter should '\
-                           'be one of the following : "Jy", "mJy", "muJy" '
+                error_msg += (
+                    "Unit " + unit + ' not found. "unit" parameter should '
+                    'be one of the following : "Jy", "mJy", "muJy" '
+                )
 
             if not error_msg:
-                error_msg = 'Unexpected KeyError. input band =' + band + ' and input unit = ' + unit
+                error_msg = "Unexpected KeyError. input band =" + band + " and input unit = " + unit
 
             raise KeyError(error_msg)
 
@@ -56,12 +58,14 @@ class Magnitude:
         """
         reference_magnitude = Magnitude.band_to_reference_magnitude(band, unit)
 
-        ratio_badFlux = np.sum(flux<=0)*1.0 / len(flux)
-        if (ratio_badFlux >= error_ratio):
-            print(f" WARNING: A significant fraction ({np.sum(flux<=0)}/ {len(flux)} >= {error_ratio}) of fluxes are <0.")
+        ratio_badFlux = np.sum(flux <= 0) * 1.0 / len(flux)
+        if ratio_badFlux >= error_ratio:
+            print(
+                f" WARNING: A significant fraction ({np.sum(flux<=0)}/ {len(flux)} >= {error_ratio}) of fluxes are <0."
+            )
 
         # Replace low flux by NaN (to get NaN mag, not Inf)
-        flux[flux<=0] = np.nan
+        flux[flux <= 0] = np.nan
 
         # compute magnitude (with up to a fraction error_ratio of non-computed magnitudes (flux<0))
         magnitude = -2.5 * np.log10(flux) + reference_magnitude
@@ -69,26 +73,30 @@ class Magnitude:
         return magnitude
 
     @staticmethod
-    def apply_magnitude_cut(catred_data, maglim=24.0, flux_column='FLUX_H_2FWHM_APER', band='H', unit='muJy'):
+    def apply_magnitude_cut(
+        catred_data, maglim=24.0, flux_column="FLUX_H_2FWHM_APER", band="H", unit="muJy"
+    ):
         """
         Apply magnitude limit cut to CATRED data.
-        
+
         Args:
             catred_data: CATRED data dictionary or astropy Table
             maglim: Magnitude limit (default: 24.0)
             flux_column: Name of flux column to use (default: 'FLUX_H_2FWHM_APER')
             band: Photometric band (default: 'H')
             unit: Flux unit (default: 'muJy')
-            
+
         Returns:
             Filtered CATRED data with magnitude cut applied
         """
         try:
             # Check if flux column exists
-            if hasattr(catred_data, 'colnames'):
+            if hasattr(catred_data, "colnames"):
                 # astropy Table
                 if flux_column not in catred_data.colnames:
-                    print(f"Warning: Flux column '{flux_column}' not found. Available columns: {catred_data.colnames[:10]}...")
+                    print(
+                        f"Warning: Flux column '{flux_column}' not found. Available columns: {catred_data.colnames[:10]}..."
+                    )
                     return catred_data
                 flux = catred_data[flux_column]
             elif isinstance(catred_data, dict):
@@ -100,21 +108,23 @@ class Magnitude:
             else:
                 print(f"Warning: Unsupported data format for magnitude cut")
                 return catred_data
-            
+
             # Convert flux to magnitude
             flux_array = np.array(flux)
             magnitudes = Magnitude.flux_to_magnitude(flux_array, band, unit)
-            
+
             # Apply magnitude cut (keep sources brighter than magnitude limit)
             # Brighter sources have smaller magnitude values
             mask = ~np.isnan(magnitudes) & (magnitudes <= maglim)
-            
+
             n_before = len(flux)
             n_after = np.sum(mask)
-            print(f"Debug: Magnitude cut applied - {n_after}/{n_before} sources kept (mag <= {maglim})")
-            
+            print(
+                f"Debug: Magnitude cut applied - {n_after}/{n_before} sources kept (mag <= {maglim})"
+            )
+
             # Apply mask to data
-            if hasattr(catred_data, 'colnames'):
+            if hasattr(catred_data, "colnames"):
                 # astropy Table
                 return catred_data[mask]
             else:
@@ -126,7 +136,7 @@ class Magnitude:
                     else:
                         filtered_data[key] = values
                 return filtered_data
-                
+
         except Exception as e:
             print(f"Error applying magnitude cut: {e}")
             return catred_data
@@ -135,36 +145,38 @@ class Magnitude:
     def get_available_flux_columns():
         """
         Get list of commonly available flux columns in CATRED data.
-        
+
         Returns:
             List of flux column names
         """
         return [
-            'FLUX_H_2FWHM_APER',      # H-band 2FWHM aperture (default)
-            'FLUX_H_TEMPLFIT',        # H-band template fitting
-            'FLUX_H_UNIF',            # H-band uniform
-            'FLUX_J_2FWHM_APER',      # J-band 2FWHM aperture
-            'FLUX_Y_2FWHM_APER',      # Y-band 2FWHM aperture
-            'FLUX_VIS_2FWHM_APER',    # VIS-band 2FWHM aperture
-            'FLUX_DETECTION_TOTAL',   # Total detection flux
+            "FLUX_H_2FWHM_APER",  # H-band 2FWHM aperture (default)
+            "FLUX_H_TEMPLFIT",  # H-band template fitting
+            "FLUX_H_UNIF",  # H-band uniform
+            "FLUX_J_2FWHM_APER",  # J-band 2FWHM aperture
+            "FLUX_Y_2FWHM_APER",  # Y-band 2FWHM aperture
+            "FLUX_VIS_2FWHM_APER",  # VIS-band 2FWHM aperture
+            "FLUX_DETECTION_TOTAL",  # Total detection flux
         ]
 
-    @staticmethod 
-    def estimate_magnitude_range(catred_data, flux_column='FLUX_H_2FWHM_APER', band='H', unit='muJy'):
+    @staticmethod
+    def estimate_magnitude_range(
+        catred_data, flux_column="FLUX_H_2FWHM_APER", band="H", unit="muJy"
+    ):
         """
         Estimate magnitude range in the CATRED data for slider configuration.
-        
+
         Args:
             catred_data: CATRED data dictionary or astropy Table
             flux_column: Name of flux column to use
             band: Photometric band
             unit: Flux unit
-            
+
         Returns:
             Tuple of (min_mag, max_mag) or (20, 26) if estimation fails
         """
         try:
-            if hasattr(catred_data, 'colnames'):
+            if hasattr(catred_data, "colnames"):
                 # astropy Table
                 if flux_column not in catred_data.colnames:
                     return (20, 26)
@@ -176,11 +188,11 @@ class Magnitude:
                 flux = catred_data[flux_column]
             else:
                 return (20, 26)
-            
+
             # Convert flux to magnitude
             flux_array = np.array(flux)
             magnitudes = Magnitude.flux_to_magnitude(flux_array, band, unit)
-            
+
             # Get valid magnitude range
             valid_mags = magnitudes[~np.isnan(magnitudes)]
             if len(valid_mags) > 0:
@@ -192,7 +204,7 @@ class Magnitude:
                 return (min_mag, max_mag)
             else:
                 return (20, 26)
-                
+
         except Exception as e:
             print(f"Error estimating magnitude range: {e}")
             return (20, 26)

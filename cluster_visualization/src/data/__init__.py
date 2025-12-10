@@ -8,4 +8,4 @@ cluster detection data and MER tile information.
 from .loader import DataLoader
 from .catred_handler import CATREDHandler
 
-__all__ = ['DataLoader', 'CATREDHandler']
+__all__ = ["DataLoader", "CATREDHandler"]

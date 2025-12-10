@@ -8,4 +8,4 @@ and handling all visualization-related operations.
 from .traces import TraceCreator
 from .figures import FigureManager
 
-__all__ = ['TraceCreator', 'FigureManager']
+__all__ = ["TraceCreator", "FigureManager"]
