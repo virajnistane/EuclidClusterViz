@@ -3,10 +3,14 @@
 # Cluster Visualization Dash App Launcher with Virtual Environment
 # Automatically sets up and uses virtual environment
 
+# Enable timing measurements
+SCRIPT_START=$(date +%s.%N)
+
 echo "=== Cluster Visualization Dash App (Virtual Environment) ==="
 
 # Check and activate EDEN environment if needed
 check_eden_environment() {
+    local start=$(date +%s.%N)
     if [[ ":$PATH:" != *":/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/"* ]]; then
         echo "⚠️  EDEN environment not detected!"
         echo "   Attempting to activate EDEN environment..."
@@ -23,6 +27,9 @@ check_eden_environment() {
     else
         echo "✓ EDEN environment already active"
     fi
+    local end=$(date +%s.%N)
+    local elapsed=$(echo "$end - $start" | bc)
+    echo "   [Time: ${elapsed}s]"
 }
 
 # Activate EDEN environment
@@ -57,11 +64,15 @@ fi
 
 # Activate virtual environment
 echo "Activating virtual environment..."
+VENV_START=$(date +%s.%N)
 source "$VENV_DIR/bin/activate"
+VENV_END=$(date +%s.%N)
+VENV_TIME=$(echo "$VENV_END - $VENV_START" | bc)
 
 # Verify activation
 if [[ "$VIRTUAL_ENV" == "$VENV_DIR" ]]; then
     echo "✓ Virtual environment activated: $VIRTUAL_ENV"
+    echo "   [Time: ${VENV_TIME}s]"
 else
     echo "✗ Failed to activate virtual environment"
     exit 1
@@ -70,24 +81,12 @@ fi
 # Check for critical dependencies and install if missing
 echo ""
 echo "Checking critical dependencies..."
+DEPS_START=$(date +%s.%N)
 
-# Check healpy specifically since it's often missing
-python -c "import healpy" 2>/dev/null
-if [ $? -ne 0 ]; then
-    echo "⚠️  healpy not found, installing..."
-    pip install "healpy>=1.16.0"
-    if [ $? -eq 0 ]; then
-        echo "✓ healpy installed successfully"
-    else
-        echo "✗ Failed to install healpy"
-        echo "   You may need to install it manually: pip install healpy"
-        exit 1
-    fi
-else
-    echo "✓ healpy available"
-fi
+
 
 # Check other critical modules
+IMPORT_START=$(date +%s.%N)
 python -c "
 try:
     import plotly
@@ -104,17 +103,35 @@ except ImportError as e:
 " 2>/dev/null
 
 if [ $? -ne 0 ]; then
-    echo "Installing missing dependencies from requirements.txt..."
-    pip install -r "$PROJECT_DIR/requirements.txt"
+    echo "Installing missing dependencies from pyproject.toml..."
+    uv pip install -e "$PROJECT_DIR"
     if [ $? -ne 0 ]; then
         echo "✗ Failed to install dependencies"
-        echo "   Please run: pip install -r requirements.txt"
+        echo "   Please run: pip install -e $PROJECT_DIR"
         exit 1
     fi
     echo "✓ Dependencies installed"
 fi
+IMPORT_END=$(date +%s.%N)
+IMPORT_TIME=$(echo "$IMPORT_END - $IMPORT_START" | bc)
+echo "   [import check time: ${IMPORT_TIME}s]"
+
+DEPS_END=$(date +%s.%N)
+DEPS_TIME=$(echo "$DEPS_END - $DEPS_START" | bc)
+echo "   [Total dependency check time: ${DEPS_TIME}s]"
+
+# Calculate total startup time
+SCRIPT_END=$(date +%s.%N)
+TOTAL_TIME=$(echo "$SCRIPT_END - $SCRIPT_START" | bc)
 
 echo ""
+echo "=== Startup Performance Summary ==="
+echo "Total startup time: ${TOTAL_TIME}s"
+echo "  - EDEN check: ${elapsed}s"
+echo "  - Venv activation: ${VENV_TIME}s"
+echo "  - Dependency checks: ${DEPS_TIME}s"
+echo ""
+
 echo "Starting Dash app server..."
 echo "The app will automatically open in your browser"
 echo "Available at: http://localhost:8050 (or next available port)"
@@ -129,6 +146,9 @@ echo "  • Custom config file support (use --config /path/to/config.ini)"
 echo ""
 echo "Press Ctrl+C to stop the server"
 echo ""
+
+# Time the app startup
+APP_START=$(date +%s.%N)
 
 # Pass all arguments to the Python script (allows --config, --external, etc.)
 cd "$PROJECT_DIR"
