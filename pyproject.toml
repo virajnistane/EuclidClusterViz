@@ -1,6 +1,10 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Alternative: Use setuptools (comment above and uncomment below if needed)
+# requires = ["setuptools>=61.0", "wheel"]
+# build-backend = "setuptools.build_meta"
 
 [project]
 name = "cluster-visualization"
@@ -86,24 +90,25 @@ Repository = "https://github.com/virajnistane/EuclidClusterViz"
 Documentation = "https://github.com/virajnistane/EuclidClusterViz/tree/dashapp/cluster_visualization/docs"
 "Bug Tracker" = "https://github.com/virajnistane/EuclidClusterViz/issues"
 
-[tool.setuptools]
+[tool.hatch.build.targets.wheel]
 packages = ["cluster_visualization"]
 
-[tool.setuptools.package-data]
-cluster_visualization = [
-    "ui/*.css",
-    "docs/*.md",
-    "scripts/*.sh",
-]
+# Include non-Python files in the package
+[tool.hatch.build.targets.wheel.shared-data]
+"cluster_visualization/ui" = "cluster_visualization/ui"
+"cluster_visualization/docs" = "cluster_visualization/docs"
+"cluster_visualization/scripts" = "cluster_visualization/scripts"
 
-# Install shell scripts to bin directory
-[tool.setuptools.data-files]
-"bin" = [
-    "launch.sh",
-    "cluster_visualization/scripts/launch.sh",
-    "cluster_visualization/scripts/run_dash_app_venv.sh",
-    "cluster_visualization/scripts/run_remote_dash.sh",
-]
+# Alternative: Use setuptools configuration (if reverting to setuptools build backend)
+# [tool.setuptools]
+# packages = {find = {}}
+#
+# [tool.setuptools.package-data]
+# cluster_visualization = [
+#     "ui/*.css",
+#     "docs/*.md",
+#     "scripts/*.sh",
+# ]
 
 [tool.black]
 line-length = 100

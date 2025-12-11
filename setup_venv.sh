@@ -30,7 +30,7 @@ check_eden_environment
 
 # Get project directory
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VENV_DIR="$PROJECT_DIR/venv"
+VENV_DIR="$PROJECT_DIR/.venv"
 
 echo "Project directory: $PROJECT_DIR"
 echo "Virtual environment: $VENV_DIR"
@@ -38,7 +38,7 @@ echo ""
 
 # Create virtual environment if it doesn't exist
 if [ ! -d "$VENV_DIR" ]; then
-    echo "Creating virtual environment..."
+    echo "Creating virtual environment with pip..."
     python -m venv --system-site-packages "$VENV_DIR"
     echo "✓ Virtual environment created"
 else
@@ -49,25 +49,105 @@ fi
 echo "Activating virtual environment..."
 source "$VENV_DIR/bin/activate"
 
-# Upgrade pip
-echo "Upgrading pip..."
-pip install --upgrade pip
-
-# Install required packages from requirements.txt
-echo ""
-echo "Installing required packages from requirements.txt..."
-echo "This may take a few minutes..."
-
-if [ -f "$PROJECT_DIR/requirements.txt" ]; then
-    pip install -r "$PROJECT_DIR/requirements.txt"
+# Check if uv is available in the venv
+USE_UV=false
+if command -v uv &> /dev/null; then
+    echo "✓ uv package manager detected (fast installation mode)"
+    USE_UV=true
+else
+    echo "⚠️  uv not found in virtual environment"
+    echo "   Installing uv for faster package management (10-100x speedup)..."
+    pip install --upgrade pip
+    pip install uv
+    
     if [ $? -eq 0 ]; then
-        echo "✓ All packages from requirements.txt installed successfully"
+        echo "✓ uv installed successfully"
+        USE_UV=true
     else
-        echo "✗ Failed to install some packages from requirements.txt"
+        echo "⚠️  Failed to install uv - falling back to pip"
+        echo "   (Installation will be slower but will still work)"
+        USE_UV=false
+    fi
+fi
+echo ""
+
+# Upgrade build tools
+if [ "$USE_UV" = false ]; then
+    echo "Upgrading pip and build tools..."
+    pip install --upgrade pip setuptools wheel
+fi
+
+# Install package using pyproject.toml
+echo ""
+echo "Installing cluster-visualization package from pyproject.toml..."
+if [ "$USE_UV" = true ]; then
+    echo "Using uv for fast installation..."
+else
+    echo "This may take a few minutes..."
+fi
+
+if [ -f "$PROJECT_DIR/pyproject.toml" ]; then
+    # Install in editable mode with all dependencies
+    if [ "$USE_UV" = true ]; then
+        uv pip install -e "$PROJECT_DIR"
+    else
+        pip install -e "$PROJECT_DIR"
+    fi
+    
+    if [ $? -eq 0 ]; then
+        echo "✓ cluster-visualization package installed successfully"
+        echo "✓ All runtime dependencies installed from pyproject.toml"
+    else
+        echo "✗ Failed to install package from pyproject.toml"
+        exit 1
+    fi
+    
+    # Optionally install development dependencies
+    # Only prompt for user vnistane, auto-skip for others
+    CURRENT_USER=$(whoami)
+    if [[ "$CURRENT_USER" == "vnistane" ]]; then
+        read -p "Install development dependencies (pytest, black, mypy, etc.)? [Y/n] " -n 1 -r
+        echo
+        # Default to Yes if user just presses Enter (empty REPLY) or types Y/y
+        if [[ -z "$REPLY" ]] || [[ $REPLY =~ ^[Yy]$ ]]; then
+            if [ "$USE_UV" = true ]; then
+                uv pip install -e "$PROJECT_DIR[dev]"
+            else
+                pip install -e "$PROJECT_DIR[dev]"
+            fi
+            
+            if [ $? -eq 0 ]; then
+                echo "✓ Development dependencies installed"
+            else
+                echo "⚠️  Failed to install some development dependencies"
+            fi
+        else
+            echo "Skipping development dependencies"
+        fi
+    else
+        echo "Skipping development dependencies (for developers, use: pip install -e '.[dev]')"
     fi
 else
-    echo "✗ requirements.txt not found in $PROJECT_DIR"
-    exit 1
+    echo "✗ pyproject.toml not found in $PROJECT_DIR"
+    echo "   Falling back to requirements.txt..."
+    
+    if [ -f "$PROJECT_DIR/requirements.txt" ]; then
+        if [ "$USE_UV" = true ]; then
+            uv pip install -r "$PROJECT_DIR/requirements.txt"
+        else
+            pip install -r "$PROJECT_DIR/requirements.txt"
+        fi
+        
+        if [ $? -eq 0 ]; then
+            echo "✓ All packages from requirements.txt installed successfully"
+        else
+            echo "✗ Failed to install some packages"
+            exit 1
+        fi
+    else
+        echo "✗ Neither pyproject.toml nor requirements.txt found!"
+        exit 1
+    fi
 fi
 
 # Note: Some packages like astropy and shapely may be available from EDEN
@@ -114,14 +194,21 @@ if [ $? -eq 0 ]; then
     echo ""
     echo "=== Setup Complete ==="
     echo "Virtual environment created at: $VENV_DIR"
+    echo "Package installed: cluster-visualization v1.0.0"
+    echo ""
+    echo "Available commands:"
+    echo "  cluster-viz              Launch the Dash application"
+    echo "  cluster-viz-test         Run all tests"
     echo ""
     echo "To use the Dash app:"
-    echo "Simply run the launcher script: ./launch.sh"
+    echo "  Option 1 (Recommended): ./launch.sh"
+    echo "  Option 2: cluster-viz"
+    echo "  Option 3: python -m cluster_visualization.src.cluster_dash_app"
     echo ""
-    echo "Or manually:"
+    echo "Manual activation:"
     echo "1. Activate EDEN: source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate"
     echo "2. Activate venv: source $VENV_DIR/bin/activate"
-    echo "3. Run app: python cluster_visualization/src/cluster_dash_app.py"
+    echo "3. Run: cluster-viz"
     echo ""
 else
     echo ""
