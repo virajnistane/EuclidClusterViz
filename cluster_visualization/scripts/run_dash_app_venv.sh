@@ -134,7 +134,7 @@ echo ""
 
 echo "Starting Dash app server..."
 echo "The app will automatically open in your browser"
-echo "Available at: http://localhost:8050 (or next available port)"
+# echo "Available at: http://localhost:8050 (or next available port)"
 echo ""
 echo "Features:"
 echo "  • Algorithm switching (PZWAV/AMICO)"
