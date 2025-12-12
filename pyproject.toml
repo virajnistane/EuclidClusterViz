@@ -12,7 +12,7 @@ version = "1.0.0"
 description = "Advanced interactive web-based visualization platform for astronomical cluster detection data from the ESA Euclid Mission"
 authors = [{name = "Viraj Nistane", email = "nato.viraj@gmail.com"}]
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.9,<3.12"  # Restrict to tested Python versions
 license = {text = "MIT"}
 keywords = ["astronomy", "euclid", "visualization", "cluster-detection", "dash", "plotly"]
 classifiers = [
@@ -30,7 +30,7 @@ classifiers = [
 dependencies = [
     "plotly==5.17.0",
     "pandas==2.1.4",
-    "numpy==1.24.3",
+    "numpy>=1.26.0,<2.0",  # Compatible range for pandas 2.1.4
     "astropy>=5.0",
     "healpy>=1.16.0",
     "shapely==2.0.2",
@@ -48,6 +48,7 @@ dev = [
     "flake8>=4.0",
     "mypy>=1.0",
     "pylint>=2.15",
+    "isort>=6.1.0",
 ]
 
 # Testing dependencies
@@ -74,6 +75,7 @@ all = [
     "pytest-mock>=3.10",
     "sphinx>=5.0",
     "sphinx-rtd-theme>=1.0",
+    "isort>=6.1.0",
 ]
 
 [project.scripts]
