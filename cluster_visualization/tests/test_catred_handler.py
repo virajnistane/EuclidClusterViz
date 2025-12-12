@@ -5,13 +5,14 @@ Tests the CATREDHandler class for MER data loading, spatial calculations,
 polygon operations, and PHZ data processing.
 """
 
-import unittest
-import tempfile
 import os
+import sys
+import tempfile
+import unittest
+from unittest.mock import MagicMock, patch
+
 import numpy as np
 import pandas as pd
-from unittest.mock import patch, MagicMock
-import sys
 
 # Add the source directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "cluster_visualization"))

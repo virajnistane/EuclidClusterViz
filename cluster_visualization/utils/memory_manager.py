@@ -6,10 +6,10 @@ Implements LRU cache eviction and automatic memory cleanup.
 """
 
 import gc
-import sys
 import time
+from typing import Any, Dict
+
 import psutil
-from typing import Dict, Any, Optional
 
 
 class MemoryManager:
@@ -25,7 +25,7 @@ class MemoryManager:
         """
         self.max_memory_bytes = max_memory_gb * 1024**3
         self.warning_threshold_bytes = self.max_memory_bytes * warning_threshold
-        self.access_times = {}  # Track when each cache item was last accessed
+        self.access_times: Dict[str, float] = {}  # Track when each cache item was last accessed
         self.process = psutil.Process()
 
         print(f"Memory manager initialized:")
@@ -39,7 +39,8 @@ class MemoryManager:
         Returns:
             Current RSS (Resident Set Size) memory in bytes
         """
-        return self.process.memory_info().rss
+        rss: int = self.process.memory_info().rss
+        return rss
 
     def get_memory_stats(self) -> Dict[str, float]:
         """
@@ -217,7 +218,7 @@ class MemoryManager:
         total_ram_gb = system_mem.total / 1024**3
 
         # Use 50% of available RAM for cache, capped at 16GB
-        recommended = min(total_ram_gb * 0.5, 16.0)
+        recommended: float = min(total_ram_gb * 0.5, 16.0)
 
         print(f"\n💡 Memory Configuration Recommendation:")
         print(f"   System has {total_ram_gb:.1f} GB RAM")

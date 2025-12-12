@@ -4,18 +4,18 @@
 ### Date: 2025-06-30
 
 
-import os, sys
+import json
+import os
+import sys
+import xml.etree.ElementTree as ET
+
 import numpy as np
 import pandas as pd
-import json
-
-from astropy.io import fits
-from astropy.table import Table, Column
+from astropy import units as u
 from astropy import wcs
 from astropy.coordinates import SkyCoord
-from astropy import units as u
-
-import xml.etree.ElementTree as ET
+from astropy.io import fits
+from astropy.table import Column, Table
 
 # from bs4 import BeautifulSoup
 

@@ -4,21 +4,20 @@ Python class to handle the extraction and visualization of mosaic images.
 
 import glob
 import os
-import time
-import threading
 import queue
-from PIL import Image
-import numpy as np
+import threading
+import time
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import healpy as hp
 import matplotlib.pyplot as plt
+import numpy as np
+import plotly.graph_objs as go
+from astropy import wcs
 from astropy.io import fits
 from astropy.table import Table
-from astropy import wcs
-import plotly.graph_objs as go
-from typing import Dict, List, Any, Optional, Tuple
+from PIL import Image
 from shapely.geometry import box
-from typing import Union
-import healpy as hp
-import pandas as pd
 
 try:
     from cluster_visualization.src.config import Config

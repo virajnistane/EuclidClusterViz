@@ -4,8 +4,8 @@ Simple test script for the Dash app
 Tests if the app can be imported and initialized without errors
 """
 
-import sys
 import os
+import sys
 
 # Add the current directory to path for testing
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

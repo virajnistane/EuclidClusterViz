@@ -5,10 +5,10 @@ Runs all tests and provides a summary of results for each module.
 Handles missing modules gracefully and provides detailed reporting.
 """
 
-import unittest
-import sys
-import os
 import importlib
+import os
+import sys
+import unittest
 from io import StringIO
 
 # Add the source directories to the path

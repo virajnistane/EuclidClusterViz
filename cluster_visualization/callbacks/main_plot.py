@@ -6,11 +6,11 @@ including initial rendering, real-time option updates, and SNR filtering.
 """
 
 import dash  # type: ignore[import]
-from dash import Input, Output, State, html
-import plotly.graph_objs as go  # type: ignore[import]
-import pandas as pd  # type: ignore[import]
-import numpy as np
 import dash_bootstrap_components as dbc  # type: ignore[import]
+import numpy as np
+import pandas as pd  # type: ignore[import]
+import plotly.graph_objs as go  # type: ignore[import]
+from dash import Input, Output, State, html
 
 
 class MainPlotCallbacks:

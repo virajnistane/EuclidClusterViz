@@ -3,17 +3,18 @@
 Test script to verify client-side threshold filtering implementation
 """
 
-import sys
 import os
+import sys
 
 # Add the cluster_visualization directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "cluster_visualization"))
 
 try:
+    import inspect
+
     from callbacks.main_plot import MainPlotCallbacks
     from src.data.catred_handler import CATREDHandler
     from src.visualization.traces import TraceCreator
-    import inspect
 
     print("✓ All modules imported successfully")
 

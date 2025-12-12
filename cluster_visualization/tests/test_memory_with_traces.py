@@ -8,13 +8,14 @@ Tests:
 3. Cache eviction with multiple algorithms
 4. Memory stability over extended operations
 """
-import sys
 import pathlib
+import sys
 
 path = pathlib.Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(path))
 
 import time
+
 from cluster_visualization.src.config import Config
 from cluster_visualization.src.data.loader import DataLoader
 from cluster_visualization.src.visualization.traces import TraceCreator

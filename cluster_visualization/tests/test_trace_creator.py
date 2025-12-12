@@ -5,19 +5,20 @@ Tests the TraceCreator class for various trace generation scenarios,
 including cluster traces, MER traces, and polygon traces.
 """
 
+import os
+import sys
 import unittest
+from unittest.mock import MagicMock, patch
+
 import numpy as np
 import pandas as pd
-from unittest.mock import MagicMock, patch
-import sys
-import os
 
 # Add the source directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "cluster_visualization"))
 
 try:
-    from visualization.traces import TraceCreator
     import plotly.graph_objs as go
+    from visualization.traces import TraceCreator
 
     TRACE_CREATOR_AVAILABLE = True
 except ImportError:

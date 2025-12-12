@@ -4,9 +4,10 @@ Test the oval rendering performance fix.
 
 Simulates the scenario where user displays matched ovals with BOTH algorithms.
 """
-import sys
 import pathlib
+import sys
 import time
+
 import numpy as np
 
 path = pathlib.Path(__file__).resolve().parent.parent.parent

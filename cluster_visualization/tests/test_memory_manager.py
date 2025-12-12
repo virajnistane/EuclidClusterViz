@@ -7,14 +7,15 @@ Demonstrates:
 2. Cache eviction
 3. Memory report generation
 """
-import sys
 import pathlib
 import pdb
+import sys
 
 path = pathlib.Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(path))
 
 import time
+
 from cluster_visualization.src.config import Config
 from cluster_visualization.src.data.loader import DataLoader
 

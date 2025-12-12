@@ -4,10 +4,10 @@ Tests for UI and core modules.
 Tests the UI layout generation and core application functionality.
 """
 
+import os
+import sys
 import unittest
 from unittest.mock import MagicMock, patch
-import sys
-import os
 
 # Add the source directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "cluster_visualization"))

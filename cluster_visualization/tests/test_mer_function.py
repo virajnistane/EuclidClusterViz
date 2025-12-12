@@ -3,8 +3,8 @@
 Quick test to verify the get_radec_mertile function returns the correct dictionary format
 """
 
-import sys
 import os
+import sys
 
 sys.path.append("/pbs/home/v/vnistane/ClusterVisualization/cluster_visualization/src")
 

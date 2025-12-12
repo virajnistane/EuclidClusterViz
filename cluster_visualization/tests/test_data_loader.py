@@ -5,13 +5,14 @@ Tests the DataLoader class for various data loading scenarios,
 caching behavior, and error handling.
 """
 
-import unittest
-import tempfile
 import os
-import pandas as pd
-import numpy as np
-from unittest.mock import patch, MagicMock
 import sys
+import tempfile
+import unittest
+from unittest.mock import MagicMock, patch
+
+import numpy as np
+import pandas as pd
 
 # Add the source directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "cluster_visualization"))
@@ -23,7 +24,7 @@ try:
 except ImportError:
     DATA_LOADER_AVAILABLE = False
 
-from tests import create_test_data, create_test_config
+from tests import create_test_config, create_test_data
 
 
 class TestDataLoader(unittest.TestCase):

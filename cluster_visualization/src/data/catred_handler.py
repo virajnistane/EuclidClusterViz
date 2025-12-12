@@ -9,8 +9,9 @@ This module handles loading and processing of MER tile data including:
 """
 
 import os
-import pandas as pd  # type: ignore[import]
+
 import numpy as np
+import pandas as pd  # type: ignore[import]
 from astropy.io import fits  # type: ignore[import]
 from astropy.table import Table  # type: ignore[import]
 
@@ -19,8 +20,9 @@ try:
 except ImportError:
     raise ImportError("healpy is required for CATRED operations. Install with: pip install healpy")
 
+from typing import Any, Dict, List, Optional, Tuple
+
 from shapely.geometry import box  # type: ignore[import]
-from typing import Dict, List, Any, Optional, Tuple
 
 
 class Mask:
@@ -119,8 +121,8 @@ def get_masked_catred(
         # Apply magnitude limit filter if available
         if maglim is not None and maglim < 99.0:
             try:
-                import sys
                 import os
+                import sys
 
                 cluster_viz_root = os.path.join(os.path.dirname(__file__), "..", "..")
                 sys.path.insert(0, cluster_viz_root)
@@ -286,8 +288,8 @@ class CATREDHandler:
             if maglim < 99.0:  # Only apply if a realistic magnitude limit is set
                 try:
                     # Try to import magnitude module
-                    import sys
                     import os
+                    import sys
 
                     cluster_viz_root = os.path.join(os.path.dirname(__file__), "..", "..")
                     sys.path.insert(0, cluster_viz_root)

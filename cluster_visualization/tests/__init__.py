@@ -18,8 +18,8 @@ if source_dir not in sys.path:
 # Test utilities
 def create_test_data():
     """Create mock test data for testing purposes"""
-    import pandas as pd
     import numpy as np
+    import pandas as pd
 
     # Create sample merged data
     merged_data = pd.DataFrame(

@@ -6,9 +6,9 @@ including redshift probability distribution visualization and related UI interac
 """
 
 import dash  # type: ignore[import]
-from dash import Input, Output
-import plotly.graph_objs as go  # type: ignore[import]
 import numpy as np
+import plotly.graph_objs as go  # type: ignore[import]
+from dash import Input, Output
 
 
 class PHZCallbacks:

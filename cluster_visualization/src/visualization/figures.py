@@ -5,8 +5,9 @@ This module handles figure configuration, layout settings,
 and aspect ratio management for Plotly figures.
 """
 
+from typing import Dict, Optional, Tuple
+
 import plotly.graph_objs as go
-from typing import Dict, Any, Optional, Tuple
 
 
 class FigureManager:

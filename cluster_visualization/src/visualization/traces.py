@@ -10,10 +10,10 @@ This module handles the creation of all Plotly traces including:
 """
 
 import json
-import os
+from typing import Any, Dict, List, Optional
+
 import numpy as np
 import plotly.graph_objs as go
-from typing import Dict, List, Any, Optional, Tuple
 
 try:
     from cluster_visualization.utils.spatial_index import CATREDSpatialIndex
@@ -90,7 +90,7 @@ class TraceCreator:
 
         Returns:
             List of Plotly trace objects ready for figure display"""
-        traces = []  # Polygon traces (bottom layer)
+        traces: List = []  # Polygon traces (bottom layer)
 
         # Apply SNR filtering to merged data
         # if data['algorithm'] == 'PZWAV':
@@ -114,8 +114,8 @@ class TraceCreator:
 
         # Create data traces in layered order for proper visual hierarchy
         # Layer order: CATRED (bottom) → Merged clusters → Individual tile clusters (top)
-        catred_traces = []
-        cluster_traces = []
+        catred_traces: List = []
+        cluster_traces: List = []
 
         # Add CATRED traces to separate list (bottom layer)
         self._add_existing_catred_traces(catred_traces, existing_catred_traces)

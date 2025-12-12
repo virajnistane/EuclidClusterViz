@@ -10,9 +10,10 @@ feel extremely sluggish.
 Solution: Use actual process memory measurements (psutil) which are
 instant (<1ms) and accurate.
 """
-import sys
 import pathlib
+import sys
 import time
+
 import numpy as np
 
 path = pathlib.Path(__file__).resolve().parent.parent.parent

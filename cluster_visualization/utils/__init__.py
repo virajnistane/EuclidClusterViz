@@ -2,7 +2,7 @@
 # Contains utility functions and color definitions
 
 from .disk_cache import DiskCache
-from .spatial_index import SpatialIndex, CATREDSpatialIndex
 from .memory_manager import MemoryManager
+from .spatial_index import CATREDSpatialIndex, SpatialIndex
 
 __all__ = ["DiskCache", "SpatialIndex", "CATREDSpatialIndex", "MemoryManager"]

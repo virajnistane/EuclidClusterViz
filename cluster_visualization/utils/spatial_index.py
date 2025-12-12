@@ -7,9 +7,10 @@ This module provides efficient spatial indexing using KD-trees for:
 - O(log N) performance instead of O(N) for spatial operations
 """
 
+from typing import List, Optional, Tuple
+
 import numpy as np
 from scipy.spatial import cKDTree
-from typing import List, Tuple, Optional
 
 
 class SpatialIndex:

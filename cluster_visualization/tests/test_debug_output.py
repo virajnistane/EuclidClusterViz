@@ -2,8 +2,8 @@
 """
 Quick test to see debug output during normal app operations.
 """
-import sys
 import pathlib
+import sys
 
 path = pathlib.Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(path))

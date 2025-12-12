@@ -25,27 +25,28 @@ USAGE:
 - Combined:        python cluster_dash_app.py --config /path/to/config.ini --external
 """
 
-import os
-import sys
+import argparse
+import getpass
 import json
+import os
 import pickle
-import pandas as pd
-import numpy as np
-from astropy.io import fits
-from shapely.geometry import Polygon as ShapelyPolygon, box
-import webbrowser
+import socket
+import sys
 import threading
 import time
-import getpass
-import socket
+import webbrowser
 from datetime import datetime, timedelta
-import argparse
 
 import dash
-from dash import dcc, html, Input, Output, State, callback
-import plotly.graph_objs as go
 import dash_bootstrap_components as dbc
+import numpy as np
+import pandas as pd
+import plotly.graph_objs as go
+from astropy.io import fits
+from dash import Input, Output, State, callback, dcc, html
 from flask import request
+from shapely.geometry import Polygon as ShapelyPolygon
+from shapely.geometry import box
 
 
 def check_environment():
@@ -72,16 +73,16 @@ def check_environment():
         missing_modules.append(f"Dash modules: {e}")
 
     try:
-        import pandas
         import numpy
+        import pandas
 
         print("✓ Data processing modules available")
     except ImportError as e:
         missing_modules.append(f"Data modules: {e}")
 
     try:
-        from astropy.io import fits
         import shapely
+        from astropy.io import fits
 
         print("✓ Scientific modules available")
     except ImportError as e:
@@ -168,27 +169,27 @@ data_modules_path = os.path.join(os.path.dirname(__file__), "data")
 if data_modules_path not in sys.path:
     sys.path.append(data_modules_path)
 
+from data.catred_handler import CATREDHandler
 # Import data handling modules
 from data.loader import DataLoader
-from data.catred_handler import CATREDHandler
 from mermosaic import MOSAICHandler
 
 print("✓ Data modules loaded successfully")
 
+from visualization.figures import FigureManager
 # Import visualization modules
 from visualization.traces import TraceCreator
-from visualization.figures import FigureManager
 
 print("✓ Visualization modules loaded successfully")
 
 # Import callback modules
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from callbacks.main_plot import MainPlotCallbacks
 from callbacks.catred_callbacks import CATREDCallbacks
-from callbacks.mosaic_callback import MOSAICCallbacks
-from callbacks.ui_callbacks import UICallbacks
-from callbacks.phz_callbacks import PHZCallbacks
 from callbacks.cluster_modal_callbacks import ClusterModalCallbacks
+from callbacks.main_plot import MainPlotCallbacks
+from callbacks.mosaic_callback import MOSAICCallbacks
+from callbacks.phz_callbacks import PHZCallbacks
+from callbacks.ui_callbacks import UICallbacks
 
 print("✓ Callback modules loaded successfully")
 
@@ -208,9 +209,10 @@ utils_path = os.path.join(parent_dir, "utils")
 if utils_path not in sys.path:
     sys.path.append(utils_path)
 
+from cluster_visualization.utils.colordefinitions import (
+    colors_list, colors_list_transparent)
 # Import utilities
 from cluster_visualization.utils.myutils import get_xml_element
-from cluster_visualization.utils.colordefinitions import colors_list, colors_list_transparent
 
 print(f"✓ Utilities loaded from: {utils_path}")
 

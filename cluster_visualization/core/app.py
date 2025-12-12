@@ -5,12 +5,12 @@ Contains the main application coordination logic, browser management,
 and server startup functionality.
 """
 
-import webbrowser
-import threading
-import time
-import sys
 import getpass
 import socket
+import sys
+import threading
+import time
+import webbrowser
 from datetime import datetime, timedelta
 
 

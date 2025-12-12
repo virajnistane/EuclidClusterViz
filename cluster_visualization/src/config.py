@@ -8,10 +8,9 @@ configured for different users or environments.
 The configuration is read from config.ini (or config_local.ini if it exists).
 """
 
+import configparser
 import os
 import subprocess
-import configparser
-from pathlib import Path
 
 
 def get_git_repo_root():

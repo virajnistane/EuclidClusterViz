@@ -8,7 +8,6 @@
 
 import colorsys
 
-
 colors_list = [
     "#1f77b4",  # blue
     "#ff7f0e",  # orange

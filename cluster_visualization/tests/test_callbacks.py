@@ -5,10 +5,10 @@ Tests the callback classes for proper initialization, callback registration,
 and interaction handling.
 """
 
+import os
+import sys
 import unittest
 from unittest.mock import MagicMock, patch
-import sys
-import os
 
 # Add the source directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "cluster_visualization"))
@@ -16,8 +16,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "cluster_visual
 try:
     from src.callbacks.main_plot import MainPlotCallbacks
     from src.callbacks.mer_callbacks import MERCallbacks
-    from src.callbacks.ui_callbacks import UICallbacks
     from src.callbacks.phz_callbacks import PHZCallbacks
+    from src.callbacks.ui_callbacks import UICallbacks
 
     CALLBACKS_AVAILABLE = True
 except ImportError:

@@ -9,18 +9,19 @@ This module handles all data loading operations including:
 - Data validation and caching
 """
 
-import os
-import sys
-import json
-import pickle
-import pandas as pd
-import numpy as np
-from astropy.io import fits
-from typing import Dict, Any, Optional
 import datetime
+import json
+import os
+import pickle
+from typing import Any, Dict
+
+import numpy as np
+import pandas as pd
+from astropy.io import fits
 
 try:
-    from cluster_visualization.utils.disk_cache import DiskCache, get_default_cache
+    from cluster_visualization.utils.disk_cache import (DiskCache,
+                                                        get_default_cache)
 
     DISK_CACHE_AVAILABLE = True
 except ImportError:

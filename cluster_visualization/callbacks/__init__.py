@@ -5,12 +5,12 @@ This package contains all Dash callback implementations organized by functionali
 """
 
 try:
-    from .main_plot import MainPlotCallbacks
     from .catred_callbacks import CATREDCallbacks
-    from .mosaic_callback import MOSAICCallbacks
-    from .ui_callbacks import UICallbacks
-    from .phz_callbacks import PHZCallbacks
     from .cluster_modal_callbacks import ClusterModalCallbacks
+    from .main_plot import MainPlotCallbacks
+    from .mosaic_callback import MOSAICCallbacks
+    from .phz_callbacks import PHZCallbacks
+    from .ui_callbacks import UICallbacks
 
     __all__ = [
         "MainPlotCallbacks",

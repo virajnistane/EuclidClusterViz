@@ -6,11 +6,9 @@ like cutout generation, PHZ analysis, and data export.
 """
 
 import dash  # type: ignore[import]
-from dash import Input, Output, State, html, callback_context
-import plotly.graph_objs as go  # type: ignore[import]
-import pandas as pd  # type: ignore[import]
 import dash_bootstrap_components as dbc  # type: ignore[import]
-import json
+import plotly.graph_objs as go  # type: ignore[import]
+from dash import Input, Output, State, callback_context, html
 
 
 class ClusterModalCallbacks:

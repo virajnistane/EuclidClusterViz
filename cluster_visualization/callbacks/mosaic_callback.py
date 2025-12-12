@@ -5,11 +5,7 @@ Handles MER-Mosaic data rendering, clearing, and related UI interactions.
 Includes zoom-dependent MER-Mosaic and mask button state management.
 """
 
-import dash  # type: ignore[import]
-from dash import Input, Output, State, html
-import plotly.graph_objs as go  # type: ignore[import]
-import pandas as pd  # type: ignore[import]
-import dash_bootstrap_components as dbc  # type: ignore[import]
+from dash import Input, Output, State
 
 
 class MOSAICCallbacks:

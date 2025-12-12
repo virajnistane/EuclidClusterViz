@@ -4,11 +4,11 @@ Test script to demonstrate connection monitoring functionality.
 This will start the app and show the warning if no connections are made.
 """
 
-import threading
-import time
+import os
 import signal
 import sys
-import os
+import threading
+import time
 
 # Add the project path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "cluster_visualization", "src"))
@@ -22,7 +22,8 @@ def test_connection_monitoring():
     print("")
 
     # Import after setting up path
-    from cluster_visualization.src.cluster_dash_app import ClusterVisualizationApp
+    from cluster_visualization.src.cluster_dash_app import \
+        ClusterVisualizationApp
 
     app = ClusterVisualizationApp()
 

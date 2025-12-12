@@ -5,17 +5,17 @@ Tests the FigureManager class for figure creation, layout management,
 aspect ratio handling, and zoom state preservation.
 """
 
+import os
+import sys
 import unittest
 from unittest.mock import MagicMock
-import sys
-import os
 
 # Add the source directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 try:
-    from visualization.figures import FigureManager
     import plotly.graph_objs as go
+    from visualization.figures import FigureManager
 
     FIGURE_MANAGER_AVAILABLE = True
 except ImportError:
