@@ -115,9 +115,9 @@ class MOSAICHandler:
         ymin, ymax = max(ymin0, 0), min(ymax0, naxis2_org - 1)
 
         # Copy data, handling cases where cutout extends beyond image edges
-        cutout[
-            ymin - ymin0 : npt - (ymax0 - ymax), xmin - xmin0 : npt - (xmax0 - xmax)
-        ] = mosaic_data[ymin : ymax + 1, xmin : xmax + 1]
+        cutout[ymin - ymin0 : npt - (ymax0 - ymax), xmin - xmin0 : npt - (xmax0 - xmax)] = (
+            mosaic_data[ymin : ymax + 1, xmin : xmax + 1]
+        )
 
         hdr = mosaicinfo["header"].copy()
         hdr["NAXIS1"] = cutout.shape[1]

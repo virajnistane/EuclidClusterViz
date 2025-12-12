@@ -106,7 +106,9 @@ class ClusterModalCallbacks:
                         "point_data": point,
                     }
 
-                    print(f"🎯 Cluster clicked: RA={ra:.4f}, Dec={dec:.4f}, SNR={snr}, z={redshift}")
+                    print(
+                        f"🎯 Cluster clicked: RA={ra:.4f}, Dec={dec:.4f}, SNR={snr}, z={redshift}"
+                    )
 
                     # Create tab content with cluster information
                     tab_content = [

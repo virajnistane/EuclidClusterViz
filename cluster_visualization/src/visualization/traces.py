@@ -1052,10 +1052,12 @@ class TraceCreator:
                         for snr, z, det_code in zip(
                             datamod_detcluster_mergedcat["SNR_CLUSTER"],
                             datamod_detcluster_mergedcat["Z_CLUSTER"],
-                            datamod_detcluster_mergedcat["DET_CODE_NB"]
-                            if has_det_code
-                            else [2 if algorithm.lower() == "pzwav" else 1]
-                            * len(datamod_detcluster_mergedcat),
+                            (
+                                datamod_detcluster_mergedcat["DET_CODE_NB"]
+                                if has_det_code
+                                else [2 if algorithm.lower() == "pzwav" else 1]
+                                * len(datamod_detcluster_mergedcat)
+                            ),
                         )
                     ],
                     hoverinfo="text",
@@ -1212,10 +1214,12 @@ class TraceCreator:
                             for snr, z, det_code in zip(
                                 away_from_catred_data["SNR_CLUSTER"],
                                 away_from_catred_data["Z_CLUSTER"],
-                                away_from_catred_data["DET_CODE_NB"]
-                                if has_det_code
-                                else [2 if algorithm.lower() == "pzwav" else 1]
-                                * len(away_from_catred_data),
+                                (
+                                    away_from_catred_data["DET_CODE_NB"]
+                                    if has_det_code
+                                    else [2 if algorithm.lower() == "pzwav" else 1]
+                                    * len(away_from_catred_data)
+                                ),
                             )
                         ],
                         hoverinfo="text",
@@ -1396,10 +1400,12 @@ class TraceCreator:
                             for snr, z, det_code in zip(
                                 near_catred_data["SNR_CLUSTER"],
                                 near_catred_data["Z_CLUSTER"],
-                                near_catred_data["DET_CODE_NB"]
-                                if has_det_code
-                                else [2 if algorithm.lower() == "pzwav" else 1]
-                                * len(near_catred_data),
+                                (
+                                    near_catred_data["DET_CODE_NB"]
+                                    if has_det_code
+                                    else [2 if algorithm.lower() == "pzwav" else 1]
+                                    * len(near_catred_data)
+                                ),
                             )
                         ],
                         hoverinfo="text",
@@ -1510,10 +1516,12 @@ class TraceCreator:
                         for snr, z, det_code in zip(
                             datamod_detcluster_by_cltile["SNR_CLUSTER"],
                             datamod_detcluster_by_cltile["Z_CLUSTER"],
-                            datamod_detcluster_by_cltile["DET_CODE_NB"]
-                            if has_det_code
-                            else [2 if tile_algorithm == "PZWAV" else 1]
-                            * len(datamod_detcluster_by_cltile),
+                            (
+                                datamod_detcluster_by_cltile["DET_CODE_NB"]
+                                if has_det_code
+                                else [2 if tile_algorithm == "PZWAV" else 1]
+                                * len(datamod_detcluster_by_cltile)
+                            ),
                         )
                     ],
                     hoverinfo="text",
@@ -1577,10 +1585,12 @@ class TraceCreator:
                             for snr, z, det_code in zip(
                                 away_from_catred_data["SNR_CLUSTER"],
                                 away_from_catred_data["Z_CLUSTER"],
-                                away_from_catred_data["DET_CODE_NB"]
-                                if has_det_code
-                                else [2 if tile_algorithm == "PZWAV" else 1]
-                                * len(away_from_catred_data),
+                                (
+                                    away_from_catred_data["DET_CODE_NB"]
+                                    if has_det_code
+                                    else [2 if tile_algorithm == "PZWAV" else 1]
+                                    * len(away_from_catred_data)
+                                ),
                             )
                         ],
                         hoverinfo="text",
@@ -1634,10 +1644,12 @@ class TraceCreator:
                             for snr, z, det_code in zip(
                                 near_catred_data["SNR_CLUSTER"],
                                 near_catred_data["Z_CLUSTER"],
-                                near_catred_data["DET_CODE_NB"]
-                                if has_det_code
-                                else [2 if tile_algorithm == "PZWAV" else 1]
-                                * len(near_catred_data),
+                                (
+                                    near_catred_data["DET_CODE_NB"]
+                                    if has_det_code
+                                    else [2 if tile_algorithm == "PZWAV" else 1]
+                                    * len(near_catred_data)
+                                ),
                             )
                         ],
                         hoverinfo="text",

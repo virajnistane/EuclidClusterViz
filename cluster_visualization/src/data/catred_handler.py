@@ -470,24 +470,36 @@ class CATREDHandler:
             result = {
                 "RIGHT_ASCENSION": full_src_with_coverage["RA"].tolist(),
                 "DECLINATION": full_src_with_coverage["DEC"].tolist(),
-                "PHZ_MODE_1": full_src_with_coverage["PHZ_MODE_1"].tolist()
-                if "PHZ_MODE_1" in full_src_with_coverage.colnames
-                else [0.5] * len(full_src_with_coverage),
-                "PHZ_MEDIAN": full_src_with_coverage["PHZ_MEDIAN"].tolist()
-                if "PHZ_MEDIAN" in full_src_with_coverage.colnames
-                else [0.5] * len(full_src_with_coverage),
-                "PHZ_70_INT": full_src_with_coverage["PHZ_70_INT"].tolist()
-                if "PHZ_70_INT" in full_src_with_coverage.colnames
-                else [[0.1, 0.9]] * len(full_src_with_coverage),
-                "PHZ_PDF": full_src_with_coverage["PHZ_PDF"].tolist()
-                if "PHZ_PDF" in full_src_with_coverage.colnames
-                else [None] * len(full_src_with_coverage),
-                "KRON_RADIUS": full_src_with_coverage["KRON_RADIUS"].tolist()
-                if "KRON_RADIUS" in full_src_with_coverage.colnames
-                else [0.0] * len(full_src_with_coverage),
-                "EFFECTIVE_COVERAGE": full_src_with_coverage["EFFECTIVE_COVERAGE"].tolist()
-                if "EFFECTIVE_COVERAGE" in full_src_with_coverage.colnames
-                else [1.0] * len(full_src_with_coverage),
+                "PHZ_MODE_1": (
+                    full_src_with_coverage["PHZ_MODE_1"].tolist()
+                    if "PHZ_MODE_1" in full_src_with_coverage.colnames
+                    else [0.5] * len(full_src_with_coverage)
+                ),
+                "PHZ_MEDIAN": (
+                    full_src_with_coverage["PHZ_MEDIAN"].tolist()
+                    if "PHZ_MEDIAN" in full_src_with_coverage.colnames
+                    else [0.5] * len(full_src_with_coverage)
+                ),
+                "PHZ_70_INT": (
+                    full_src_with_coverage["PHZ_70_INT"].tolist()
+                    if "PHZ_70_INT" in full_src_with_coverage.colnames
+                    else [[0.1, 0.9]] * len(full_src_with_coverage)
+                ),
+                "PHZ_PDF": (
+                    full_src_with_coverage["PHZ_PDF"].tolist()
+                    if "PHZ_PDF" in full_src_with_coverage.colnames
+                    else [None] * len(full_src_with_coverage)
+                ),
+                "KRON_RADIUS": (
+                    full_src_with_coverage["KRON_RADIUS"].tolist()
+                    if "KRON_RADIUS" in full_src_with_coverage.colnames
+                    else [0.0] * len(full_src_with_coverage)
+                ),
+                "EFFECTIVE_COVERAGE": (
+                    full_src_with_coverage["EFFECTIVE_COVERAGE"].tolist()
+                    if "EFFECTIVE_COVERAGE" in full_src_with_coverage.colnames
+                    else [1.0] * len(full_src_with_coverage)
+                ),
             }
 
             print(
@@ -576,24 +588,36 @@ class CATREDHandler:
             result = {
                 "RIGHT_ASCENSION": filtered_src["RA"].tolist(),
                 "DECLINATION": filtered_src["DEC"].tolist(),
-                "PHZ_MODE_1": filtered_src["PHZ_MODE_1"].tolist()
-                if "PHZ_MODE_1" in filtered_src.colnames
-                else [0.5] * len(filtered_src),
-                "PHZ_MEDIAN": filtered_src["PHZ_MEDIAN"].tolist()
-                if "PHZ_MEDIAN" in filtered_src.colnames
-                else [0.5] * len(filtered_src),
-                "PHZ_70_INT": filtered_src["PHZ_70_INT"].tolist()
-                if "PHZ_70_INT" in filtered_src.colnames
-                else [[0.1, 0.9]] * len(filtered_src),
-                "PHZ_PDF": filtered_src["PHZ_PDF"].tolist()
-                if "PHZ_PDF" in filtered_src.colnames
-                else [None] * len(filtered_src),
-                "KRON_RADIUS": filtered_src["KRON_RADIUS"].tolist()
-                if "KRON_RADIUS" in filtered_src.colnames
-                else [0.0] * len(filtered_src),
-                "EFFECTIVE_COVERAGE": filtered_src["EFFECTIVE_COVERAGE"].tolist()
-                if "EFFECTIVE_COVERAGE" in filtered_src.colnames
-                else [1.0] * len(filtered_src),
+                "PHZ_MODE_1": (
+                    filtered_src["PHZ_MODE_1"].tolist()
+                    if "PHZ_MODE_1" in filtered_src.colnames
+                    else [0.5] * len(filtered_src)
+                ),
+                "PHZ_MEDIAN": (
+                    filtered_src["PHZ_MEDIAN"].tolist()
+                    if "PHZ_MEDIAN" in filtered_src.colnames
+                    else [0.5] * len(filtered_src)
+                ),
+                "PHZ_70_INT": (
+                    filtered_src["PHZ_70_INT"].tolist()
+                    if "PHZ_70_INT" in filtered_src.colnames
+                    else [[0.1, 0.9]] * len(filtered_src)
+                ),
+                "PHZ_PDF": (
+                    filtered_src["PHZ_PDF"].tolist()
+                    if "PHZ_PDF" in filtered_src.colnames
+                    else [None] * len(filtered_src)
+                ),
+                "KRON_RADIUS": (
+                    filtered_src["KRON_RADIUS"].tolist()
+                    if "KRON_RADIUS" in filtered_src.colnames
+                    else [0.0] * len(filtered_src)
+                ),
+                "EFFECTIVE_COVERAGE": (
+                    filtered_src["EFFECTIVE_COVERAGE"].tolist()
+                    if "EFFECTIVE_COVERAGE" in filtered_src.colnames
+                    else [1.0] * len(filtered_src)
+                ),
             }
 
             print(

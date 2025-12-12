@@ -1,7 +1,7 @@
 """
 Cluster Visualization Package
 
-Advanced interactive web-based visualization platform for astronomical 
+Advanced interactive web-based visualization platform for astronomical
 cluster detection data from the ESA Euclid Mission.
 """
 

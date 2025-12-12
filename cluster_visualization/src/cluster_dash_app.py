@@ -170,6 +170,7 @@ if data_modules_path not in sys.path:
     sys.path.append(data_modules_path)
 
 from data.catred_handler import CATREDHandler
+
 # Import data handling modules
 from data.loader import DataLoader
 from mermosaic import MOSAICHandler
@@ -177,6 +178,7 @@ from mermosaic import MOSAICHandler
 print("✓ Data modules loaded successfully")
 
 from visualization.figures import FigureManager
+
 # Import visualization modules
 from visualization.traces import TraceCreator
 
@@ -209,8 +211,8 @@ utils_path = os.path.join(parent_dir, "utils")
 if utils_path not in sys.path:
     sys.path.append(utils_path)
 
-from cluster_visualization.utils.colordefinitions import (
-    colors_list, colors_list_transparent)
+from cluster_visualization.utils.colordefinitions import colors_list, colors_list_transparent
+
 # Import utilities
 from cluster_visualization.utils.myutils import get_xml_element
 

@@ -17,8 +17,7 @@ import numpy as np
 # Add cluster_visualization to path
 sys.path.insert(0, "/pbs/home/v/vnistane/ClusterViz")
 
-from cluster_visualization.utils.spatial_index import (CATREDSpatialIndex,
-                                                       SpatialIndex)
+from cluster_visualization.utils.spatial_index import CATREDSpatialIndex, SpatialIndex
 
 
 def legacy_proximity_check(cluster_ra, cluster_dec, catred_points, radius_deg=0.1):

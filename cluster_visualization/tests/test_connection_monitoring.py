@@ -22,8 +22,7 @@ def test_connection_monitoring():
     print("")
 
     # Import after setting up path
-    from cluster_visualization.src.cluster_dash_app import \
-        ClusterVisualizationApp
+    from cluster_visualization.src.cluster_dash_app import ClusterVisualizationApp
 
     app = ClusterVisualizationApp()
 

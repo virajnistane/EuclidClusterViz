@@ -66,9 +66,11 @@ class UICallbacks:
                 snr_n_clicks = 0
             return [
                 html.I(className="fas fa-filter me-2"),
-                f"Apply SNR Filter (PZWAV) ({snr_n_clicks})"
-                if snr_n_clicks > 0
-                else "Apply SNR Filter (PZWAV)",
+                (
+                    f"Apply SNR Filter (PZWAV) ({snr_n_clicks})"
+                    if snr_n_clicks > 0
+                    else "Apply SNR Filter (PZWAV)"
+                ),
             ]
 
         @self.app.callback(
@@ -82,9 +84,11 @@ class UICallbacks:
                 snr_n_clicks = 0
             return [
                 html.I(className="fas fa-filter me-2"),
-                f"Apply SNR Filter (AMICO) ({snr_n_clicks})"
-                if snr_n_clicks > 0
-                else "Apply SNR Filter (AMICO)",
+                (
+                    f"Apply SNR Filter (AMICO) ({snr_n_clicks})"
+                    if snr_n_clicks > 0
+                    else "Apply SNR Filter (AMICO)"
+                ),
             ]
 
         @self.app.callback(

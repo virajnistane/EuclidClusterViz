@@ -337,7 +337,7 @@ class TestTraceCreatorEdgeCases(unittest.TestCase):
         incomplete_data = pd.DataFrame(
             {
                 "RA": [12.1, 12.2],
-                "DEC": [-0.1, 0.0]
+                "DEC": [-0.1, 0.0],
                 # Missing SNR_CLUSTER column
             }
         )

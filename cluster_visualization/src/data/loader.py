@@ -20,8 +20,7 @@ import pandas as pd
 from astropy.io import fits
 
 try:
-    from cluster_visualization.utils.disk_cache import (DiskCache,
-                                                        get_default_cache)
+    from cluster_visualization.utils.disk_cache import DiskCache, get_default_cache
 
     DISK_CACHE_AVAILABLE = True
 except ImportError:
@@ -545,9 +544,9 @@ class DataLoader:
                     "detfits_file": fits_path,
                     "cltiledef_file": tile_file_path,
                     "densxml_file": dens_xml if dens_xml else None,
-                    "densfits_file": os.path.join(dirpath, "data", dens_fits)
-                    if dens_fits
-                    else None,
+                    "densfits_file": (
+                        os.path.join(dirpath, "data", dens_fits) if dens_fits else None
+                    ),
                     "detfits_data": tile_data,
                     "algorithm": tile_algorithm,  # Add algorithm identifier
                     "tile_id": tile_id,  # Store original tile_id separately
