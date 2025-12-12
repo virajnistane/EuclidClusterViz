@@ -172,7 +172,7 @@ class FigureManager:
                 visible=visible,
                 autorange="reversed",  # Reverse RA axis for astronomy convention
             )
-            yaxis_config = dict(constrain="domain", visible=visible)
+            yaxis_config = dict(constrain="domain", visible=visible) # type: ignore
 
         return xaxis_config, yaxis_config
 
@@ -192,7 +192,7 @@ class FigureManager:
         )
 
     def preserve_zoom_state(
-        self, fig: go.Figure, relayout_data: Dict = None, current_figure: go.Figure = None
+        self, fig: go.Figure, relayout_data: Optional[Dict] = None, current_figure: go.Figure = None
     ) -> None:
         """
         Preserve and apply zoom state to figure.
@@ -286,7 +286,7 @@ class FigureManager:
                 visible=True,
                 autorange="reversed",  # 🆕 Reverse RA axis for astronomy convention
             )
-            yaxis_config = dict(constrain="domain", visible=True)
+            yaxis_config = dict(constrain="domain", visible=True) # type: ignore
 
         fig.update_layout(
             title=f"Cluster Detection Visualization - {algorithm}",

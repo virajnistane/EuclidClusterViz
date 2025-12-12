@@ -48,7 +48,7 @@ class MOSAICHandler:
         self.effcovmask_dsr = self.config.get_effcovmask_dsr() if self.config else None
 
         self.mosaic_header = None
-        self.mosaic_data = None
+        self.mosaic_data: Optional[np.ndarray] = None
         self.mosaic_wcs = None
 
         # Performance-optimized image processing parameters
@@ -182,8 +182,8 @@ class MOSAICHandler:
         print(f"[LOADING] Processing mosaic for MER tile {mertileid} ({file_size_gb:.2f}GB)...")
 
         # Thread-safe FITS loading with timeout
-        result_queue = queue.Queue()
-        error_queue = queue.Queue()
+        result_queue: queue.Queue = queue.Queue()
+        error_queue: queue.Queue = queue.Queue()
 
         def load_fits_with_timeout():
             try:
@@ -252,9 +252,12 @@ class MOSAICHandler:
 
     def _extract_zoom_ranges(
         self, relayout_data: Dict
-    ) -> Optional[Tuple[float, float, float, float]]:
+    ) -> Optional[Tuple[Optional[float], Optional[float], Optional[float], Optional[float]]]:
         """Extract zoom ranges from Plotly relayout data."""
-        ra_min = ra_max = dec_min = dec_max = None
+        ra_min: Optional[float] = None
+        ra_max: Optional[float] = None
+        dec_min: Optional[float] = None
+        dec_max: Optional[float] = None
 
         # Extract RA range
         if "xaxis.range[0]" in relayout_data and "xaxis.range[1]" in relayout_data:
@@ -277,11 +280,11 @@ class MOSAICHandler:
         return None
 
     def _find_intersecting_tiles(
-        self, data: Dict[str, Any], ra_min: float, ra_max: float, dec_min: float, dec_max: float
+        self, data: Dict[str, Any], ra_min: Optional[float], ra_max: Optional[float], dec_min: Optional[float], dec_max: Optional[float]
     ) -> List[int]:
         """Find MER tiles whose polygons intersect with the zoom box."""
         zoom_box = box(ra_min, dec_min, ra_max, dec_max)
-        mertiles_to_load = []
+        mertiles_to_load: List[int] = []
 
         # Check if catred_info exists in data (contains tile polygons)
         if "catred_info" not in data:
@@ -310,8 +313,8 @@ class MOSAICHandler:
     def _process_mosaic_image(
         self,
         mosaic_data: np.ndarray,
-        target_width_and_height: Union[list, tuple] = None,
-        target_scale_factor: float = None,
+        target_width_and_height: Optional[Union[list, tuple]] = None,
+        target_scale_factor: Optional[float] = None,
     ) -> np.ndarray:
         """
         Process mosaic image data with early downsampling for performance optimization
@@ -412,15 +415,15 @@ class MOSAICHandler:
             mer_array = np.array(
                 Image.fromarray(mer_image)
                 .resize((target_width, target_height), Image.Resampling.LANCZOS)
-                .transpose(Image.FLIP_LEFT_RIGHT)
+                .transpose(Image.Transpose.FLIP_LEFT_RIGHT)
             )
 
             print(f"Debug: Final processed image shape: {mer_array.shape}")
 
             # Clean up large arrays to free memory
             del mer_image
-            if "sample_data" in locals():
-                del sample_data
+            # if "sample_data" in locals():
+            #     del sample_data
 
             return mer_array
 
@@ -527,8 +530,8 @@ class MOSAICHandler:
             if isinstance(corners_world, np.ndarray):
                 if corners_world.ndim == 2 and corners_world.shape[1] >= 2:
                     # Array of coordinate pairs [N, 2]
-                    ra_coords = corners_world[:, 0]
-                    dec_coords = corners_world[:, 1]
+                    ra_coords = corners_world[:, 0].tolist()
+                    dec_coords = corners_world[:, 1].tolist()
                 else:
                     # 1D array or other format, convert each corner individually
                     ra_coords, dec_coords = [], []
@@ -686,14 +689,16 @@ class MOSAICHandler:
         # FIXED: Get the original image dimensions from WCS header
         try:
             # Get original dimensions from the WCS object
-            if hasattr(mosaic_wcs, "_naxis"):
+            if hasattr(mosaic_wcs, "_naxis") and mosaic_wcs._naxis is not None:
                 orig_width = mosaic_wcs._naxis[0]
                 orig_height = mosaic_wcs._naxis[1]
-            elif hasattr(mosaic_wcs, "pixel_shape"):
+            elif hasattr(mosaic_wcs, "pixel_shape") and mosaic_wcs.pixel_shape is not None:
                 orig_height, orig_width = mosaic_wcs.pixel_shape
-            else:
+            elif self.mosaic_data is not None:
                 # Fallback: get from the stored mosaic data
                 orig_height, orig_width = self.mosaic_data.shape
+            else:
+                raise ValueError("Original image dimensions not found in WCS or mosaic data")
 
             print(f"Debug: Original image size: {orig_width} x {orig_height}")
             print(f"Debug: Processed image size: {width} x {height}")
@@ -1048,7 +1053,7 @@ class MOSAICHandler:
         opacity: float = 0.6,
         colorscale: str = "viridis",
         add_colorbar: bool = True,
-    ) -> List[go.Scatter]:
+    ) -> Optional[List[go.Scatter]]:
         """Create Plotly scatter traces for a mask overlay cutout."""
 
         ra_cen, dec_cen = clickdata["cluster_ra"], clickdata["cluster_dec"]
@@ -1189,7 +1194,7 @@ class MOSAICHandler:
         Load mosaic image traces with strict performance limits and timing
         """
         start_time = time.time()
-        traces = []
+        traces: List[go.Heatmap] = []
 
         if not relayout_data:
             print("Debug: No relayout data available for mosaic loading")
@@ -1264,7 +1269,7 @@ class MOSAICHandler:
         Load mask overlay traces with strict performance limits and timing
         """
         start_time = time.time()
-        mask_traces = []
+        mask_traces: List[go.Scatter] = []
         if not relayout_data:
             print("Debug: No relayout data available for mask overlay loading")
             return mask_traces

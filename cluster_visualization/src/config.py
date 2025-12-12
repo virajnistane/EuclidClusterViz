@@ -11,6 +11,7 @@ The configuration is read from config.ini (or config_local.ini if it exists).
 import configparser
 import os
 import subprocess
+from typing import Optional
 
 
 def get_git_repo_root():
@@ -172,8 +173,8 @@ class Config:
             algorithm (str): 'PZWAV' or 'AMICO' or 'BOTH'
         """
         detintile_key_map = {
-            "pzwav": "detintile_pzwav_list",
-            "amico": "detintile_amico_list",
+            "pzwav": ["detintile_pzwav_list"],
+            "amico": ["detintile_amico_list"],
             "both": ["detintile_pzwav_list", "detintile_amico_list"],
         }
         algorithm_lower = det_algorithm.lower()
@@ -181,8 +182,8 @@ class Config:
             raise ValueError(f"Unknown algorithm: {det_algorithm}. Supported: PZWAV, AMICO, BOTH")
 
         filename_keys = detintile_key_map[algorithm_lower]
-        if not isinstance(filename_keys, list):
-            filename_keys = [filename_keys]
+        # if not isinstance(filename_keys, list):
+        #     filename_keys = [filename_keys]
 
         files_list_dict = {}
         for key in filename_keys:
@@ -199,8 +200,8 @@ class Config:
     def get_mergedetcat_xml_files(self, det_algorithm):
         """Get paths to mergedetcat XML files for both algorithms"""
         mergedetcat_key_map = {
-            "pzwav": "mergedetcat_pzwav",
-            "amico": "mergedetcat_amico",
+            "pzwav": ["mergedetcat_pzwav"],
+            "amico": ["mergedetcat_amico"],
             "both": ["mergedetcat_pzwav", "mergedetcat_amico"],
         }
         algorithm_lower = det_algorithm.lower()
@@ -208,8 +209,8 @@ class Config:
             raise ValueError(f"Unknown algorithm: {det_algorithm}. Supported: PZWAV, AMICO, BOTH")
 
         filename_keys = mergedetcat_key_map[algorithm_lower]
-        if not isinstance(filename_keys, list):
-            filename_keys = [filename_keys]
+        # if not isinstance(filename_keys, list):
+        #     filename_keys = [filename_keys]
 
         files = {}
         for key in filename_keys:
@@ -319,7 +320,7 @@ class Config:
 
 
 # Global configuration instance (lazy initialization)
-_config = None
+_config: Optional[Config] = None
 
 
 def get_config(config_file=None):

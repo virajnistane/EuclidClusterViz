@@ -10,14 +10,13 @@ This module handles the creation of all Plotly traces including:
 """
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, TypedDict
 
 import numpy as np
 import plotly.graph_objs as go
 
 try:
     from cluster_visualization.utils.spatial_index import CATREDSpatialIndex
-
     SPATIAL_INDEX_AVAILABLE = True
 except ImportError:
     print("Warning: Spatial indexing not available - using fallback proximity detection")
@@ -41,6 +40,11 @@ class TraceCreator:
             colors_list_transparent or self._get_default_transparent_colors()
         )
         self.catred_handler = catred_handler
+
+        # Initialize cache attributes with proper types
+        self._catred_bounds_cache: Optional[Dict[str, Any]] = None
+        self._subsampled_catred_cache: Optional[Tuple[int, List]] = None
+        self._catred_index_hash: Optional[int] = None
 
         # For fallback when no CATRED handler is available
         self.current_catred_data = None
@@ -200,8 +204,8 @@ class TraceCreator:
         all_points = []
 
         # Clear bounds cache when getting new CATRED data (important for multiple renders)
-        if hasattr(self, "_catred_bounds_cache"):
-            delattr(self, "_catred_bounds_cache")
+        if self._catred_bounds_cache is not None:
+            self._catred_bounds_cache = None
             print("Debug: Cleared old CATRED bounds cache for new data")
 
         # Collect coordinates from manual CATRED data
@@ -227,8 +231,8 @@ class TraceCreator:
                 self.current_catred_data = None
                 print("Debug: CATRED data cleared - reverting marker enhancements")
             # Clear bounds cache as well
-            if hasattr(self, "_catred_bounds_cache"):
-                delattr(self, "_catred_bounds_cache")
+            if self._catred_bounds_cache is not None:
+                self._catred_bounds_cache = None
 
         if catred_box_data and catred_box_data.get("ra"):
             for ra, dec in zip(catred_box_data["ra"], catred_box_data["dec"]):
@@ -255,8 +259,8 @@ class TraceCreator:
         if hasattr(self, "_catred_bounds_cache"):
             delattr(self, "_catred_bounds_cache")
             print("Debug: CATRED bounds cache cleared")
-        if hasattr(self, "_subsampled_catred_cache"):
-            delattr(self, "_subsampled_catred_cache")
+        if self._subsampled_catred_cache is not None:
+            self._subsampled_catred_cache = None
             print("Debug: Subsampled CATRED cache cleared")
 
     def _get_subsampled_catred_points(self, catred_points: List) -> List:
@@ -268,7 +272,7 @@ class TraceCreator:
         catred_hash = hash(str(len(catred_points)) + str(catred_points[0] if catred_points else ""))
 
         # Check if we have cached subsampled points for this dataset
-        if hasattr(self, "_subsampled_catred_cache"):
+        if self._subsampled_catred_cache is not None:
             cached_hash, cached_points = self._subsampled_catred_cache
             if cached_hash == catred_hash:
                 return cached_points
@@ -372,7 +376,7 @@ class TraceCreator:
 
         # Pre-compute CATRED bounds for quick rejection (with validation)
         if (
-            not hasattr(self, "_catred_bounds_cache")
+            self._catred_bounds_cache is None
             or self._catred_bounds_cache.get("hash") != catred_points_hash
         ):
             import numpy as np
@@ -1032,6 +1036,14 @@ class TraceCreator:
                         snr_threshold_upper_amico,
                     )
 
+                if has_det_code:
+                    det_code_values_customdata = datamod_detcluster_mergedcat["DET_CODE_NB"]
+                else:
+                    det_code_values_customdata = np.full(
+                        len(datamod_detcluster_mergedcat), 
+                        2 if algorithm.lower() == "pzwav" else 1
+                        )
+                    
                 merged_trace = go.Scattergl(
                     x=datamod_detcluster_mergedcat["RIGHT_ASCENSION_CLUSTER"],
                     y=datamod_detcluster_mergedcat["DECLINATION_CLUSTER"],
@@ -1052,12 +1064,7 @@ class TraceCreator:
                         for snr, z, det_code in zip(
                             datamod_detcluster_mergedcat["SNR_CLUSTER"],
                             datamod_detcluster_mergedcat["Z_CLUSTER"],
-                            (
-                                datamod_detcluster_mergedcat["DET_CODE_NB"]
-                                if has_det_code
-                                else [2 if algorithm.lower() == "pzwav" else 1]
-                                * len(datamod_detcluster_mergedcat)
-                            ),
+                            det_code_values_customdata,
                         )
                     ],
                     hoverinfo="text",
@@ -1192,6 +1199,14 @@ class TraceCreator:
                             snr_threshold_upper_amico,
                         )
 
+                    if has_det_code:
+                        det_code_values_customdata = away_from_catred_data["DET_CODE_NB"]
+                    else:
+                        det_code_values_customdata = np.full(
+                            len(away_from_catred_data), 
+                            2 if algorithm.lower() == "pzwav" else 1
+                            )
+                        
                     normal_trace = go.Scattergl(
                         x=away_from_catred_data["RIGHT_ASCENSION_CLUSTER"],
                         y=away_from_catred_data["DECLINATION_CLUSTER"],
@@ -1214,12 +1229,7 @@ class TraceCreator:
                             for snr, z, det_code in zip(
                                 away_from_catred_data["SNR_CLUSTER"],
                                 away_from_catred_data["Z_CLUSTER"],
-                                (
-                                    away_from_catred_data["DET_CODE_NB"]
-                                    if has_det_code
-                                    else [2 if algorithm.lower() == "pzwav" else 1]
-                                    * len(away_from_catred_data)
-                                ),
+                                det_code_values_customdata,
                             )
                         ],
                         hoverinfo="text",
@@ -1488,6 +1498,14 @@ class TraceCreator:
                 trace_name = f"{tile_algorithm} CL-Tile {tileid}"
 
             if catred_points is None:
+                if has_det_code:
+                    det_code_values_customdata = datamod_detcluster_by_cltile["DET_CODE_NB"]
+                else:
+                    det_code_values_customdata = np.full(
+                        len(datamod_detcluster_by_cltile), 
+                        2 if tile_algorithm == "PZWAV" else 1
+                        )
+                    
                 # No CATRED data - create single trace with normal markers
                 tile_trace = go.Scattergl(
                     x=datamod_detcluster_by_cltile["RIGHT_ASCENSION_CLUSTER"],
@@ -1516,12 +1534,7 @@ class TraceCreator:
                         for snr, z, det_code in zip(
                             datamod_detcluster_by_cltile["SNR_CLUSTER"],
                             datamod_detcluster_by_cltile["Z_CLUSTER"],
-                            (
-                                datamod_detcluster_by_cltile["DET_CODE_NB"]
-                                if has_det_code
-                                else [2 if tile_algorithm == "PZWAV" else 1]
-                                * len(datamod_detcluster_by_cltile)
-                            ),
+                            det_code_values_customdata,
                         )
                     ],
                     hoverinfo="text",
@@ -1558,6 +1571,13 @@ class TraceCreator:
 
                 # Create trace for markers away from CATRED region (normal size)
                 if len(away_from_catred_data) > 0:
+                    if has_det_code:
+                        det_code_values_customdata = away_from_catred_data["DET_CODE_NB"]
+                    else:
+                        det_code_values_customdata = np.full(
+                            len(away_from_catred_data), 
+                            2 if tile_algorithm == "PZWAV" else 1
+                            )
                     normal_trace = go.Scattergl(
                         x=away_from_catred_data["RIGHT_ASCENSION_CLUSTER"],
                         y=away_from_catred_data["DECLINATION_CLUSTER"],
@@ -1585,12 +1605,7 @@ class TraceCreator:
                             for snr, z, det_code in zip(
                                 away_from_catred_data["SNR_CLUSTER"],
                                 away_from_catred_data["Z_CLUSTER"],
-                                (
-                                    away_from_catred_data["DET_CODE_NB"]
-                                    if has_det_code
-                                    else [2 if tile_algorithm == "PZWAV" else 1]
-                                    * len(away_from_catred_data)
-                                ),
+                                det_code_values_customdata,
                             )
                         ],
                         hoverinfo="text",
@@ -1613,6 +1628,13 @@ class TraceCreator:
                     glow_trace["legendgroup"] = legend_group  # f'enhanced_{tile_algorithm.lower()}'
                     tile_traces.append(glow_trace)
 
+                    if has_det_code:
+                        det_code_values_customdata = near_catred_data["DET_CODE_NB"]
+                    else:
+                        det_code_values_customdata = np.full(
+                            len(near_catred_data), 
+                            2 if tile_algorithm == "PZWAV" else 1
+                            )
                     # Add main enhanced trace (foreground)
                     enhanced_trace = go.Scattergl(
                         x=near_catred_data["RIGHT_ASCENSION_CLUSTER"],
@@ -1644,12 +1666,7 @@ class TraceCreator:
                             for snr, z, det_code in zip(
                                 near_catred_data["SNR_CLUSTER"],
                                 near_catred_data["Z_CLUSTER"],
-                                (
-                                    near_catred_data["DET_CODE_NB"]
-                                    if has_det_code
-                                    else [2 if tile_algorithm == "PZWAV" else 1]
-                                    * len(near_catred_data)
-                                ),
+                                det_code_values_customdata,
                             )
                         ],
                         hoverinfo="text",
@@ -1678,7 +1695,7 @@ class TraceCreator:
         tile_value: Dict[str, Any],
         show_polygons: bool,
         show_mer_tiles: bool,
-        legendgroup: str = None,
+        legendgroup: Optional[str] = None,
     ) -> None:
         """Create polygon traces for a single tile (LEV1, CORE, and optionally MER)."""
         # Load tile definition
@@ -1752,7 +1769,7 @@ class TraceCreator:
         data: Dict[str, Any],
         tile: Dict[str, Any],
         tileid: str,
-        legendgroup: str = None,
+        legendgroup: Optional[str] = None,
     ) -> None:
         """Create MER tile polygon traces for a cluster tile."""
         for mertileid in tile["LEV1"]["ID_INTERSECTED"]:
