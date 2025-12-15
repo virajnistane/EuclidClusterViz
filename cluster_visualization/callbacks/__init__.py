@@ -4,6 +4,14 @@ Callbacks package for cluster visualization app.
 This package contains all Dash callback implementations organized by functionality.
 """
 
+# Initialize as None in case imports fail
+MainPlotCallbacks: object = None
+CATREDCallbacks: object = None
+MOSAICCallbacks: object = None
+UICallbacks: object = None
+PHZCallbacks: object = None
+ClusterModalCallbacks: object = None
+
 try:
     from .catred_callbacks import CATREDCallbacks
     from .cluster_modal_callbacks import ClusterModalCallbacks
@@ -23,5 +31,3 @@ try:
 
 except ImportError as e:
     print(f"Warning: Could not import all callback modules: {e}")
-    MainPlotCallbacks = None
-    CATREDCallbacks = None

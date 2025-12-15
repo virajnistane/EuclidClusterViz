@@ -8,6 +8,7 @@ polygon operations, and PHZ data processing.
 import os
 import sys
 import tempfile
+from typing import Dict, List
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -142,7 +143,7 @@ class TestCATREDHandler(unittest.TestCase):
 
     def test_load_catred_scatter_data_no_catred_info(self):
         """Test load_catred_scatter_data without catred_info"""
-        data = {}
+        data: dict = {}
         relayout_data = {"xaxis.range": [10.0, 11.0], "yaxis.range": [-5.0, -4.0]}
 
         result = self.handler.load_catred_scatter_data(data, relayout_data)
@@ -310,7 +311,7 @@ class TestCATREDHandler(unittest.TestCase):
     def test_load_tile_data(self):
         """Test _load_tile_data method"""
         data = self.test_data.copy()
-        catred_scatter_data = {
+        catred_scatter_data: Dict[str, List] = {
             "ra": [],
             "dec": [],
             "phz_mode_1": [],

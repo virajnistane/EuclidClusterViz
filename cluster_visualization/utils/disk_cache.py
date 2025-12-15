@@ -20,7 +20,7 @@ import os
 import pickle
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional, cast
 
 import numpy as np
 
@@ -41,7 +41,7 @@ class DiskCache:
         ...                              source_files=['/path/to/data.fits'])
     """
 
-    def __init__(self, cache_dir: str = None, max_age_days: int = 30):
+    def __init__(self, cache_dir: Optional[str] = None, max_age_days: int = 30):
         """
         Initialize disk cache.
 
@@ -54,13 +54,13 @@ class DiskCache:
             cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "clusterviz")
 
         self.cache_dir = Path(cache_dir)
-        self.max_age_seconds = max_age_days * 24 * 3600
+        self.max_age_seconds: int = int(max_age_days * 24 * 3600)
 
         # Create cache directory if it doesn't exist
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         print(f"Disk cache initialized at: {self.cache_dir}")
 
-    def _get_cache_key(self, key: str, source_files: list = None) -> str:
+    def _get_cache_key(self, key: str, source_files: Optional[list] = None) -> str:
         """
         Generate unique cache key based on name and source file timestamps.
 
@@ -86,13 +86,13 @@ class DiskCache:
         """Get full path to cache file."""
         return self.cache_dir / f"{cache_key}.pkl"
 
-    def get(self, key: str, source_files: list = None) -> Optional[Any]:
+    def get(self, key: str, source_files: Optional[list] = None) -> Optional[Any]:
         """
         Retrieve data from cache if valid.
 
         Args:
             key: Cache key (e.g., 'merged_catalog_PZWAV')
-            source_files: List of source files to check for modifications
+            source_files: Optional list of source files to check for modifications
 
         Returns:
             Cached data if valid, None otherwise
@@ -128,7 +128,7 @@ class DiskCache:
                 cache_path.unlink()
             return None
 
-    def set(self, key: str, data: Any, source_files: list = None) -> None:
+    def set(self, key: str, data: Any, source_files: Optional[list] = None) -> None:
         """
         Store data to cache.
 
@@ -162,7 +162,7 @@ class DiskCache:
                 temp_path.unlink()
 
     def get_or_compute(
-        self, key: str, compute_func: Callable, source_files: list = None, **kwargs
+        self, key: str, compute_func: Callable, source_files: Optional[list] = None, **kwargs
     ) -> Any:
         """
         Get data from cache or compute and cache it.
@@ -209,7 +209,7 @@ class DiskCache:
 
         return data
 
-    def clear(self, key: str = None) -> None:
+    def clear(self, key: Optional[str] = None) -> None:
         """
         Clear cache entries.
 
@@ -237,17 +237,21 @@ class DiskCache:
         Returns:
             Dict with cache statistics
         """
-        cache_files = list(self.cache_dir.glob("*.pkl"))
+        cache_files: List[Path] = list(self.cache_dir.glob("*.pkl"))
         total_size = sum(f.stat().st_size for f in cache_files)
 
-        entries = []
+        entries: List[Dict[str, Any]] = []
         for cache_file in cache_files:
-            age_hours = (time.time() - cache_file.stat().st_mtime) / 3600
-            size_mb = cache_file.stat().st_size / (1024 * 1024)
-            entries.append({"file": cache_file.name, "size_mb": size_mb, "age_hours": age_hours})
+            age_hours: float = (time.time() - cache_file.stat().st_mtime) / 3600
+            size_mb: float = cache_file.stat().st_size / (1024 * 1024)
+            entries.append({
+                "file": cache_file.name, 
+                "size_mb": size_mb, 
+                "age_hours": age_hours
+            })
 
         # Sort by age (oldest first)
-        entries.sort(key=lambda x: x["age_hours"], reverse=True)
+        entries.sort(key=lambda x: cast(float, x["age_hours"]), reverse=True)
 
         return {
             "cache_dir": str(self.cache_dir),
@@ -256,7 +260,7 @@ class DiskCache:
             "entries": entries,
         }
 
-    def cleanup_old_entries(self, max_age_days: int = None) -> int:
+    def cleanup_old_entries(self, max_age_days: Optional[int] = None) -> int:
         """
         Remove cache entries older than specified age.
 
@@ -267,7 +271,7 @@ class DiskCache:
             Number of entries deleted
         """
         if max_age_days is None:
-            max_age_days = self.max_age_seconds / 86400
+            max_age_days = int(self.max_age_seconds / 86400)
 
         max_age_seconds = max_age_days * 86400
         current_time = time.time()
@@ -293,15 +297,14 @@ def get_default_cache() -> DiskCache:
     """
     if not hasattr(get_default_cache, "_instance"):
         cache_dir = os.environ.get("CLUSTERVIZ_CACHE_DIR", None)
-        get_default_cache._instance = DiskCache(cache_dir)
+        get_default_cache._instance = DiskCache(cache_dir) # type: ignore[attr-defined]
 
-    return get_default_cache._instance
-
+    return get_default_cache._instance # type: ignore 
 
 # Convenience functions for common use cases
 
 
-def cache_fits_data(fits_path: str, cache_key: str = None) -> np.ndarray:
+def cache_fits_data(fits_path: str, cache_key: Optional[str] = None) -> np.ndarray:
     """
     Load FITS data with caching.
 
@@ -322,10 +325,10 @@ def cache_fits_data(fits_path: str, cache_key: str = None) -> np.ndarray:
             return hdul[1].data.copy()  # Copy to ensure cache works
 
     cache = get_default_cache()
-    return cache.get_or_compute(cache_key, load_fits, source_files=[fits_path])
+    return cache.get_or_compute(cache_key, load_fits, source_files=[fits_path]) # type: ignore
 
 
-def cache_json_data(json_path: str, cache_key: str = None) -> dict:
+def cache_json_data(json_path: str, cache_key: Optional[str] = None) -> dict:
     """
     Load JSON data with caching.
 
@@ -344,4 +347,4 @@ def cache_json_data(json_path: str, cache_key: str = None) -> dict:
             return json.load(f)
 
     cache = get_default_cache()
-    return cache.get_or_compute(cache_key, load_json, source_files=[json_path])
+    return cache.get_or_compute(cache_key, load_json, source_files=[json_path]) # type: ignore

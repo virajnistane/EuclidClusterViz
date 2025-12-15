@@ -7,7 +7,7 @@ Implements LRU cache eviction and automatic memory cleanup.
 
 import gc
 import time
-from typing import Any, Dict
+from typing import Any, Dict, cast
 
 import psutil
 
@@ -154,13 +154,13 @@ class MemoryManager:
         items_by_age = []
 
         for key in cache_dict.keys():
-            last_access = self.access_times.get(key, 0)
-            age = time.time() - last_access if last_access > 0 else 0
+            last_access: float = self.access_times.get(key, 0)
+            age: float = time.time() - last_access if last_access > 0 else 0
 
             items_by_age.append({"key": key, "last_access": last_access, "age_seconds": age})
 
         # Sort by access time (most recent first)
-        items_by_age.sort(key=lambda x: x["last_access"], reverse=True)
+        items_by_age.sort(key=lambda x: cast(float, x["last_access"]), reverse=True)
 
         return {"total_items": len(cache_dict), "items": items_by_age}
 

@@ -13,7 +13,7 @@ import datetime
 import json
 import os
 import pickle
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -55,14 +55,14 @@ class DataLoader:
         if MEMORY_MANAGER_AVAILABLE:
             if max_memory_gb is None:
                 max_memory_gb = MemoryManager.recommend_cache_size()
-            self.memory_manager = MemoryManager(max_memory_gb=max_memory_gb)
+            self.memory_manager: Optional[MemoryManager] = MemoryManager(max_memory_gb=max_memory_gb)
         else:
             self.memory_manager = None
 
         # Initialize disk cache
         self.use_disk_cache = use_disk_cache and DISK_CACHE_AVAILABLE
         if self.use_disk_cache:
-            self.disk_cache = get_default_cache()
+            self.disk_cache: Optional[DiskCache] = get_default_cache()
             print("Disk caching enabled - subsequent loads will be 5-10x faster")
         else:
             self.disk_cache = None
@@ -110,7 +110,8 @@ class DataLoader:
             if self.memory_manager:
                 self.memory_manager.mark_accessed(select_algorithm)
                 print(f"   ↳ Marked {select_algorithm} as recently accessed (LRU)")
-            return self.data_cache[select_algorithm]
+            data: Dict[str, Any] = self.data_cache[select_algorithm]
+            return data
 
         print(f"⏳ [Cache MISS] Loading data for algorithm: {select_algorithm}")
 
@@ -229,7 +230,7 @@ class DataLoader:
             }
         else:
             print(f"✓ Using separate MergeDetCat files for {algorithm}")
-            mergedetcat_xml_files_dict = self.config.get_mergedetcat_xml_files(algorithm)
+            mergedetcat_xml_files_dict: Dict[str, str] = self.config.get_mergedetcat_xml_files(algorithm)
 
             paths = {
                 "use_gluematchcat": False,
@@ -253,8 +254,10 @@ class DataLoader:
 
         for path_key in critical_paths:
             if path_key == "mergedetcat_xml_files_dict":
-                # Multiple files - check each one
-                for xml_path in paths[path_key].values():
+                path_value = paths[path_key]
+                if not isinstance(path_value, dict):
+                    raise ValueError(f"Expected dict for 'mergedetcat_xml_files_dict', got {type(path_value)}")
+                for xml_path in path_value.values():
                     if not os.path.exists(xml_path):
                         raise FileNotFoundError(f"MergeDetCat XML not found: {xml_path}")
             else:
@@ -266,14 +269,14 @@ class DataLoader:
 
     def _load_data_detcluster_mergedcat_with_minmax_snr(
         self, paths: Dict[str, str], algorithm: str
-    ) -> np.ndarray:
+    ) -> Tuple[np.ndarray, Optional[float], Optional[float], Optional[float], Optional[float]]:
         """Load merged detection catalog from XML and FITS files."""
         # Try disk cache first
-        if self.use_disk_cache:
+        if self.use_disk_cache and self.disk_cache is not None:
             cache_key = f"merged_catalog_{algorithm}"
             source_files = self._get_merged_catalog_source_files(paths)
-
-            cached = self.disk_cache.get(cache_key, source_files)
+            
+            cached: Optional[Tuple[np.ndarray, Optional[float], Optional[float], Optional[float], Optional[float]]] = self.disk_cache.get(cache_key, source_files)
             if cached is not None:
                 return cached  # Tuple of (data, snr_min_pzwav, snr_max_pzwav, snr_min_amico, snr_max_amico)
 
@@ -341,6 +344,7 @@ class DataLoader:
             if algorithm == "BOTH":
                 # Load both files and combine
                 all_data = []
+                assert isinstance(mergedetcat_xml_files_dict, dict)
                 for det_xml_key, det_xml in mergedetcat_xml_files_dict.items():
                     if not os.path.exists(det_xml):
                         raise FileNotFoundError(f"Merged detection XML not found: {det_xml}")
@@ -373,6 +377,7 @@ class DataLoader:
                 print(f"Loaded {len(data_merged)} total merged clusters (combined)")
             else:
                 # Load single file
+                assert isinstance(mergedetcat_xml_files_dict, dict)
                 det_xml = mergedetcat_xml_files_dict[f"mergedetcat_{algorithm.lower()}"]
                 if not os.path.exists(det_xml):
                     raise FileNotFoundError(f"Merged detection XML not found: {det_xml}")
@@ -402,7 +407,7 @@ class DataLoader:
         result = (data_merged, snr_min_pzwav, snr_max_pzwav, snr_min_amico, snr_max_amico)
 
         # Save to disk cache
-        if self.use_disk_cache:
+        if self.use_disk_cache and self.disk_cache is not None:
             cache_key = f"merged_catalog_{algorithm}"
             source_files = self._get_merged_catalog_source_files(paths)
             self.disk_cache.set(cache_key, result, source_files)
@@ -414,11 +419,11 @@ class DataLoader:
     ) -> Dict[str, Dict[str, Any]]:
         """Load individual tile detection data from separate detintile files."""
         # Try disk cache first
-        if self.use_disk_cache:
+        if self.use_disk_cache and self.disk_cache is not None:
             cache_key = f"tile_data_{algorithm}"
             source_files = self._get_tile_data_source_files(paths)
 
-            cached = self.disk_cache.get(cache_key, source_files)
+            cached: Optional[Dict[str, Dict[str, Any]]] = self.disk_cache.get(cache_key, source_files)
             if cached is not None:
                 return cached
 
@@ -427,6 +432,7 @@ class DataLoader:
         detfiles_list_files_dict = paths["detfiles_list_files_dict"]
 
         data_by_tile = {}
+        assert isinstance(detfiles_list_files_dict, dict)
         for detfiles_list_path_key, detfiles_list_path in detfiles_list_files_dict.items():
             if not os.path.exists(detfiles_list_path):
                 print(f"Warning: Detection files list not found: {detfiles_list_path}")
@@ -556,7 +562,7 @@ class DataLoader:
         print(f"Loaded {len(data_by_tile)} individual tiles")
 
         # Save to disk cache
-        if self.use_disk_cache:
+        if self.use_disk_cache and self.disk_cache is not None:
             cache_key = f"tile_data_{algorithm}"
             source_files = self._get_tile_data_source_files(paths)
             self.disk_cache.set(cache_key, data_by_tile, source_files)
@@ -566,7 +572,7 @@ class DataLoader:
     def _load_catred_info(self, paths: Dict[str, str]) -> pd.DataFrame:
         """Load CATRED file information and polygon data."""
         # Try disk cache first
-        if self.use_disk_cache:
+        if self.use_disk_cache and self.disk_cache is not None:
             cache_key = "catred_fileinfo"
             catred_dir = self._get_catred_dir(paths)
             source_files = [catred_dir] if os.path.exists(catred_dir) else []
@@ -641,7 +647,7 @@ class DataLoader:
             print("Warning: Cannot generate polygons - catred_fileinfo_df is empty")
 
         # Save to disk cache
-        if self.use_disk_cache and not catred_fileinfo_df.empty:
+        if self.use_disk_cache and not catred_fileinfo_df.empty and self.disk_cache is not None:
             cache_key = "catred_fileinfo"
             catred_dir = self._get_catred_dir(paths)
             source_files = [catred_dir] if os.path.exists(catred_dir) else []
@@ -650,7 +656,7 @@ class DataLoader:
         return catred_fileinfo_df
 
     def _generate_catred_fileinfo(
-        self, paths: Dict[str, str], catredxmlfiles: list = None
+        self, paths: Dict[str, str], catredxmlfiles: Optional[List[str]] = None
     ) -> pd.DataFrame:
         """Generate catred_fileinfo.csv from XML files."""
         print("Processing catred XML files to create catred_fileinfo dictionary")
@@ -687,7 +693,7 @@ class DataLoader:
 
         print(f"Found {len(catredxmlfiles)} CATRED XML files")
 
-        catred_fileinfo = {}
+        catred_fileinfo: Dict[int, Dict[str, Any]] = {}
         for uid, catredxmlfile in enumerate(catredxmlfiles):
             try:
                 catred_fileinfo[uid] = {}
@@ -997,7 +1003,7 @@ class DataLoader:
 
         print(f"Found {len(effcovxmlfiles)} effective coverage XML files")
 
-        effcovmask_fileinfo = {}
+        effcovmask_fileinfo: Dict[int, Dict[str, Any]] = {}
         for uid, effcovxmlfile in enumerate(effcovxmlfiles):
             try:
                 effcovmask_fileinfo[uid] = {}
@@ -1130,25 +1136,25 @@ class DataLoader:
         if self.use_disk_cache:
             print("Note: Disk cache still contains data. Use clear_disk_cache() to clear it.")
 
-    def clear_disk_cache(self, key: str = None) -> None:
+    def clear_disk_cache(self, key) -> None:
         """Clear disk cache entries.
 
         Args:
             key: Specific cache key to clear (None = clear all)
         """
-        if self.use_disk_cache:
+        if self.use_disk_cache and self.disk_cache is not None:
             self.disk_cache.clear(key)
         else:
             print("Disk cache not available")
 
     def get_cache_info(self) -> Dict[str, Any]:
         """Get disk cache information and statistics."""
-        if self.use_disk_cache:
+        if self.use_disk_cache and self.disk_cache is not None:
             return self.disk_cache.get_cache_info()
         else:
             return {"status": "Disk cache not available"}
 
-    def _get_merged_catalog_source_files(self, paths: Dict[str, str]) -> list:
+    def _get_merged_catalog_source_files(self, paths: Dict[str, Any]) -> list:
         """Get list of source files for merged catalog (for cache invalidation)."""
         source_files = []
         if paths.get("use_gluematchcat"):
@@ -1160,7 +1166,7 @@ class DataLoader:
                     source_files.append(xml_path)
         return source_files
 
-    def _get_tile_data_source_files(self, paths: Dict[str, str]) -> list:
+    def _get_tile_data_source_files(self, paths: Dict[str, Any]) -> list:
         """Get list of source files for tile data (for cache invalidation)."""
         source_files = []
         for list_path in paths.get("detfiles_list_files_dict", {}).values():
@@ -1168,7 +1174,7 @@ class DataLoader:
                 source_files.append(list_path)
         return source_files
 
-    def get_memory_stats(self) -> Dict[str, Any]:
+    def get_memory_stats(self) -> Optional[Dict[str, Any]]:
         """
         Get memory usage statistics.
 
@@ -1196,7 +1202,7 @@ class DataLoader:
 
     def _get_catred_dir(self, paths: Dict[str, str]) -> str:
         """Get CATRED directory path."""
-        if self.config and hasattr(self.config, "catred_dir"):
+        if self.config and hasattr(self.config, "catred_dir") and isinstance(self.config.catred_dir, str):
             return self.config.catred_dir
         else:
             return os.path.join(

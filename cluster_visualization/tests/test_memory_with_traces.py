@@ -40,7 +40,7 @@ def test_memory_with_traces():
     print(f"   ✓ Loaded {len(data_pzwav['data_detcluster_mergedcat'])} clusters")
 
     stats = loader.get_memory_stats()
-    print(f"   Memory: {stats['rss_mb']:.1f} MB (Process)")
+    print(f"   Memory: {stats['rss_mb']:.1f} MB (Process)") # type: ignore
 
     print("\n2. Initial memory state:")
     loader.print_memory_report()
@@ -59,7 +59,7 @@ def test_memory_with_traces():
     print(f"   ✓ Created {len(traces_pzwav)} traces")
 
     stats = loader.get_memory_stats()
-    print(f"   Memory: {stats['rss_mb']:.1f} MB (Process)")
+    print(f"   Memory: {stats['rss_mb']:.1f} MB (Process)") # type: ignore
 
     print("\n4. Loading and rendering AMICO...")
     data_amico = loader.load_data("AMICO")
@@ -71,7 +71,7 @@ def test_memory_with_traces():
     print(f"   ✓ Created {len(traces_amico)} traces")
 
     stats = loader.get_memory_stats()
-    print(f"   Memory: {stats['rss_mb']:.1f} MB (Process)")
+    print(f"   Memory: {stats['rss_mb']:.1f} MB (Process)") # type: ignore
 
     print("\n5. Memory state after 2 datasets + traces:")
     loader.print_memory_report()
@@ -86,7 +86,7 @@ def test_memory_with_traces():
     print(f"   ✓ Created {len(traces_both)} traces")
 
     stats = loader.get_memory_stats()
-    print(f"   Memory: {stats['rss_mb']:.1f} MB (Process)")
+    print(f"   Memory: {stats['rss_mb']:.1f} MB (Process)") # type: ignore
 
     print("\n7. Memory state after 3 datasets + traces:")
     loader.print_memory_report()
@@ -99,7 +99,7 @@ def test_memory_with_traces():
     print("   (Each switch: load data + render traces)")
 
     algorithms = ["PZWAV", "AMICO", "BOTH"]
-    start_mem = loader.get_memory_stats()["rss_mb"]
+    start_mem = loader.get_memory_stats()["rss_mb"] # type: ignore
 
     for i in range(15):
         algo = algorithms[i % 3]
@@ -108,9 +108,9 @@ def test_memory_with_traces():
 
         if (i + 1) % 5 == 0:
             stats = loader.get_memory_stats()
-            print(f"   After {i+1} switches: {stats['rss_mb']:.1f} MB")
+            print(f"   After {i+1} switches: {stats['rss_mb']:.1f} MB") # type: ignore
 
-    end_mem = loader.get_memory_stats()["rss_mb"]
+    end_mem = loader.get_memory_stats()["rss_mb"] # type: ignore
     mem_growth = end_mem - start_mem
 
     print(f"\n   Memory growth: {mem_growth:+.1f} MB")
@@ -127,13 +127,13 @@ def test_memory_with_traces():
     print("=" * 70)
 
     stats = loader.get_memory_stats()
-    cache_usage_pct = (stats["rss_mb"] / (3.0 * 1024)) * 100
+    cache_usage_pct = (stats["rss_mb"] / (3.0 * 1024)) * 100 # type: ignore
 
     print(f"\n10. Summary:")
-    print(f"    Process memory:     {stats['rss_mb']:.1f} MB")
+    print(f"    Process memory:     {stats['rss_mb']:.1f} MB") # type: ignore
     print(f"    Max allowed cache:  3072.0 MB")
     print(f"    Cache usage:        {cache_usage_pct:.1f}%")
-    print(f"    System available:   {stats['available_gb']:.1f} GB")
+    print(f"    System available:   {stats['available_gb']:.1f} GB") # type: ignore
     print(f"    Trace count:        {len(traces_both)} (last rendered)")
 
     if cache_usage_pct < 80:

@@ -60,7 +60,7 @@ class MockFits:
 import types
 
 fits_mock = types.ModuleType("fits")
-fits_mock.open = MockFits
+fits_mock.open = MockFits # type: ignore
 
 # Mock other required modules
 import pandas as pd
@@ -71,7 +71,7 @@ from shapely.geometry import Polygon
 def test_get_radec_mertile():
     # Import after mocking
     sys.modules["astropy.io.fits"] = fits_mock
-    from cluster_dash_app import ClusterDashApp
+    from cluster_dash_app import ClusterDashApp # type: ignore
 
     app = ClusterDashApp()
 

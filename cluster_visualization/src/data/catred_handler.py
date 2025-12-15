@@ -80,7 +80,8 @@ class Mask:
         Returns:
             HEALPix cell indices
         """
-        return hp.ang2pix(self.nside, ra, dec, lonlat=True, nest=self.nested)
+        pixelarr: np.ndarray = hp.ang2pix(self.nside, ra, dec, lonlat=True, nest=self.nested)
+        return pixelarr
 
 
 def get_masked_catred(
@@ -344,7 +345,7 @@ class CATREDHandler:
                 return [float(row[0]) if len(row) > 0 else 0.0 for row in col_data]
             else:
                 # Scalar column
-                return col_data.tolist()
+                return col_data.tolist() # type: ignore
 
     def _get_dummy_column_data(self, col_name: str, num_points: int) -> List:
         """Generate dummy data for missing columns."""
@@ -398,9 +399,9 @@ class CATREDHandler:
         self,
         mertileid: int,
         data: Dict[str, Any],
-        maglim: float = None,
+        maglim: Optional[float] = None,
         threshold: float = 0.8,
-        box: Dict[str, float] = None,
+        box: Optional[Dict[str, float]] = None,
     ) -> Dict[str, List]:
         """
         Load full CATRED data for a specific MER tile with effective coverage values for client-side filtering.
@@ -516,7 +517,7 @@ class CATREDHandler:
         mertileid: int,
         data: Dict[str, Any],
         threshold: float = 0.8,
-        maglim: float = None,
+        maglim: Optional[float] = None,
         box: Optional[Dict[str, float]] = None,
     ) -> Dict[str, List]:
         """
@@ -647,7 +648,7 @@ class CATREDHandler:
         Returns:
             Dictionary with scatter plot data including effective coverage values
         """
-        catred_scatter_data = {
+        catred_scatter_data: Dict[str, List] = {
             "ra": [],
             "dec": [],
             "phz_mode_1": [],
@@ -781,7 +782,7 @@ class CATREDHandler:
         print(f"Debug: Loading CATRED for {len(mertiles_to_load)} MER tiles")
 
         # Initialize scatter data container
-        catred_scatter_data = {
+        catred_scatter_data: Dict[str, List] = {
             "ra": [],
             "dec": [],
             "phz_mode_1": [],
@@ -809,7 +810,7 @@ class CATREDHandler:
         catred_scatter_data: Dict[str, List],
         threshold: float = 0.8,
         maglim: float = 24.0,
-        box: Dict[str, Any] = None,
+        box: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Load masked data for each MER tile and accumulate in scatter data."""
         for mertileid in mertiles_to_load:
@@ -826,19 +827,25 @@ class CATREDHandler:
                 catred_scatter_data["kron_radius"].extend(tile_data["KRON_RADIUS"])
                 catred_scatter_data["effective_coverage"].extend(tile_data["EFFECTIVE_COVERAGE"])
 
-                if "trace_marker_size" in box and type(box["trace_marker_size"]) == float:
-                    catred_scatter_data["trace_marker_size"].extend(
-                        [box["trace_marker_size"]] * len(tile_data["RIGHT_ASCENSION"])
-                    )
-                elif "trace_marker_size" in box and box["trace_marker_size"] == "variable":
-                    catred_scatter_data["trace_marker_size"].extend(tile_data["KRON_RADIUS"])
+                if box is not None:
+                    if "trace_marker_size" in box and type(box["trace_marker_size"]) == float:
+                        catred_scatter_data["trace_marker_size"].extend(
+                            [box["trace_marker_size"]] * len(tile_data["RIGHT_ASCENSION"])
+                        )
+                    elif "trace_marker_size" in box and box["trace_marker_size"] == "variable":
+                        catred_scatter_data["trace_marker_size"].extend(tile_data["KRON_RADIUS"])
+                    else:
+                        catred_scatter_data["trace_marker_size"].extend(
+                            [10] * len(tile_data["RIGHT_ASCENSION"])
+                        )
                 else:
                     catred_scatter_data["trace_marker_size"].extend(
                         [10] * len(tile_data["RIGHT_ASCENSION"])
                     )
 
-                if "trace_marker_color" in box and type(box["trace_marker_color"]) == str:
-                    catred_scatter_data["trace_marker_color"].append(box["trace_marker_color"])
+                if box is not None:
+                    if "trace_marker_color" in box and isinstance(box["trace_marker_color"], str):
+                        catred_scatter_data["trace_marker_color"].append(box["trace_marker_color"])
 
                 print(
                     f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} masked points from MER tile {mertileid}"
@@ -898,7 +905,7 @@ class CATREDHandler:
         print(f"Debug: Loading unmasked CATRED for {len(mertiles_to_load)} MER tiles")
 
         # Initialize scatter data container
-        catred_scatter_data = {
+        catred_scatter_data: Dict[str, List] = {
             "ra": [],
             "dec": [],
             "phz_mode_1": [],
@@ -1125,7 +1132,10 @@ class CATREDHandler:
         self, relayout_data: Dict
     ) -> Optional[Tuple[float, float, float, float]]:
         """Extract zoom ranges from Plotly relayout data."""
-        ra_min = ra_max = dec_min = dec_max = None
+        ra_min: Optional[float] = None
+        ra_max: Optional[float] = None
+        dec_min: Optional[float] = None
+        dec_max: Optional[float] = None
 
         # Extract RA range
         if "xaxis.range[0]" in relayout_data and "xaxis.range[1]" in relayout_data:
@@ -1144,5 +1154,10 @@ class CATREDHandler:
             dec_max = relayout_data["yaxis.range"][1]
 
         if all(val is not None for val in [ra_min, ra_max, dec_min, dec_max]):
+            assert ra_min is not None
+            assert ra_max is not None
+            assert dec_min is not None
+            assert dec_max is not None
             return ra_min, ra_max, dec_min, dec_max
+        
         return None

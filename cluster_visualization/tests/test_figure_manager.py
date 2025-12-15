@@ -257,7 +257,7 @@ class TestFigureManagerEdgeCases(unittest.TestCase):
         fig = go.Figure()
 
         # Incomplete current figure data
-        incomplete_current_figure = {
+        incomplete_current_figure: dict = {
             "layout": {
                 "xaxis": {}  # Missing range
                 # Missing yaxis entirely

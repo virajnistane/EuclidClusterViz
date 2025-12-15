@@ -517,11 +517,11 @@ class CATREDCallbacks:
         else:
             # Fallback to inline trace creation
             return self._create_traces_fallback(
-                data,
-                show_polygons,
-                show_mer_tiles,
-                relayout_data,
-                catred_masked,
+                data = data,
+                show_polygons=show_polygons,
+                show_mer_tiles=show_mer_tiles,
+                relayout_data=relayout_data,
+                catred_masked=catred_masked,
                 existing_catred_traces=existing_catred_traces,
                 existing_mosaic_traces=existing_mosaic_traces,  # 🆕 ADD MOSAIC TRACES
                 existing_mask_overlay_traces=existing_mask_overlay_traces,
@@ -736,6 +736,7 @@ class CATREDCallbacks:
         z_threshold_upper=None,
         threshold=0.8,
         show_merged_clusters=True,
+        matching_clusters=False,
     ):
         """Fallback trace creation method"""
         # This would contain the original inline trace creation logic
@@ -760,7 +761,7 @@ class CATREDCallbacks:
                 visible=True,
                 autorange="reversed",  # Reverse RA axis for astronomy convention
             )
-            yaxis_config = dict(constrain="domain", visible=True)
+            yaxis_config = dict(constrain="domain", visible=True) # type: ignore
 
         fig.update_layout(
             title=f"Cluster Detection Visualization - {algorithm}",
