@@ -280,7 +280,12 @@ class MOSAICHandler:
         return None
 
     def _find_intersecting_tiles(
-        self, data: Dict[str, Any], ra_min: Optional[float], ra_max: Optional[float], dec_min: Optional[float], dec_max: Optional[float]
+        self,
+        data: Dict[str, Any],
+        ra_min: Optional[float],
+        ra_max: Optional[float],
+        dec_min: Optional[float],
+        dec_max: Optional[float],
     ) -> List[int]:
         """Find MER tiles whose polygons intersect with the zoom box."""
         zoom_box = box(ra_min, dec_min, ra_max, dec_max)

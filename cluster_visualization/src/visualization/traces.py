@@ -17,6 +17,7 @@ import plotly.graph_objs as go
 
 try:
     from cluster_visualization.utils.spatial_index import CATREDSpatialIndex
+
     SPATIAL_INDEX_AVAILABLE = True
 except ImportError:
     print("Warning: Spatial indexing not available - using fallback proximity detection")
@@ -1040,10 +1041,9 @@ class TraceCreator:
                     det_code_values_customdata = datamod_detcluster_mergedcat["DET_CODE_NB"]
                 else:
                     det_code_values_customdata = np.full(
-                        len(datamod_detcluster_mergedcat), 
-                        2 if algorithm.lower() == "pzwav" else 1
-                        )
-                    
+                        len(datamod_detcluster_mergedcat), 2 if algorithm.lower() == "pzwav" else 1
+                    )
+
                 merged_trace = go.Scattergl(
                     x=datamod_detcluster_mergedcat["RIGHT_ASCENSION_CLUSTER"],
                     y=datamod_detcluster_mergedcat["DECLINATION_CLUSTER"],
@@ -1203,10 +1203,9 @@ class TraceCreator:
                         det_code_values_customdata = away_from_catred_data["DET_CODE_NB"]
                     else:
                         det_code_values_customdata = np.full(
-                            len(away_from_catred_data), 
-                            2 if algorithm.lower() == "pzwav" else 1
-                            )
-                        
+                            len(away_from_catred_data), 2 if algorithm.lower() == "pzwav" else 1
+                        )
+
                     normal_trace = go.Scattergl(
                         x=away_from_catred_data["RIGHT_ASCENSION_CLUSTER"],
                         y=away_from_catred_data["DECLINATION_CLUSTER"],
@@ -1502,10 +1501,9 @@ class TraceCreator:
                     det_code_values_customdata = datamod_detcluster_by_cltile["DET_CODE_NB"]
                 else:
                     det_code_values_customdata = np.full(
-                        len(datamod_detcluster_by_cltile), 
-                        2 if tile_algorithm == "PZWAV" else 1
-                        )
-                    
+                        len(datamod_detcluster_by_cltile), 2 if tile_algorithm == "PZWAV" else 1
+                    )
+
                 # No CATRED data - create single trace with normal markers
                 tile_trace = go.Scattergl(
                     x=datamod_detcluster_by_cltile["RIGHT_ASCENSION_CLUSTER"],
@@ -1575,9 +1573,8 @@ class TraceCreator:
                         det_code_values_customdata = away_from_catred_data["DET_CODE_NB"]
                     else:
                         det_code_values_customdata = np.full(
-                            len(away_from_catred_data), 
-                            2 if tile_algorithm == "PZWAV" else 1
-                            )
+                            len(away_from_catred_data), 2 if tile_algorithm == "PZWAV" else 1
+                        )
                     normal_trace = go.Scattergl(
                         x=away_from_catred_data["RIGHT_ASCENSION_CLUSTER"],
                         y=away_from_catred_data["DECLINATION_CLUSTER"],
@@ -1632,9 +1629,8 @@ class TraceCreator:
                         det_code_values_customdata = near_catred_data["DET_CODE_NB"]
                     else:
                         det_code_values_customdata = np.full(
-                            len(near_catred_data), 
-                            2 if tile_algorithm == "PZWAV" else 1
-                            )
+                            len(near_catred_data), 2 if tile_algorithm == "PZWAV" else 1
+                        )
                     # Add main enhanced trace (foreground)
                     enhanced_trace = go.Scattergl(
                         x=near_catred_data["RIGHT_ASCENSION_CLUSTER"],

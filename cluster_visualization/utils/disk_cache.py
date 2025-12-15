@@ -244,11 +244,7 @@ class DiskCache:
         for cache_file in cache_files:
             age_hours: float = (time.time() - cache_file.stat().st_mtime) / 3600
             size_mb: float = cache_file.stat().st_size / (1024 * 1024)
-            entries.append({
-                "file": cache_file.name, 
-                "size_mb": size_mb, 
-                "age_hours": age_hours
-            })
+            entries.append({"file": cache_file.name, "size_mb": size_mb, "age_hours": age_hours})
 
         # Sort by age (oldest first)
         entries.sort(key=lambda x: cast(float, x["age_hours"]), reverse=True)
@@ -297,9 +293,10 @@ def get_default_cache() -> DiskCache:
     """
     if not hasattr(get_default_cache, "_instance"):
         cache_dir = os.environ.get("CLUSTERVIZ_CACHE_DIR", None)
-        get_default_cache._instance = DiskCache(cache_dir) # type: ignore[attr-defined]
+        get_default_cache._instance = DiskCache(cache_dir)  # type: ignore[attr-defined]
 
-    return get_default_cache._instance # type: ignore 
+    return get_default_cache._instance  # type: ignore
+
 
 # Convenience functions for common use cases
 
@@ -325,7 +322,7 @@ def cache_fits_data(fits_path: str, cache_key: Optional[str] = None) -> np.ndarr
             return hdul[1].data.copy()  # Copy to ensure cache works
 
     cache = get_default_cache()
-    return cache.get_or_compute(cache_key, load_fits, source_files=[fits_path]) # type: ignore
+    return cache.get_or_compute(cache_key, load_fits, source_files=[fits_path])  # type: ignore
 
 
 def cache_json_data(json_path: str, cache_key: Optional[str] = None) -> dict:
@@ -347,4 +344,4 @@ def cache_json_data(json_path: str, cache_key: Optional[str] = None) -> dict:
             return json.load(f)
 
     cache = get_default_cache()
-    return cache.get_or_compute(cache_key, load_json, source_files=[json_path]) # type: ignore
+    return cache.get_or_compute(cache_key, load_json, source_files=[json_path])  # type: ignore

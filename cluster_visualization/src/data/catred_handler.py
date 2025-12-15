@@ -345,7 +345,7 @@ class CATREDHandler:
                 return [float(row[0]) if len(row) > 0 else 0.0 for row in col_data]
             else:
                 # Scalar column
-                return col_data.tolist() # type: ignore
+                return col_data.tolist()  # type: ignore
 
     def _get_dummy_column_data(self, col_name: str, num_points: int) -> List:
         """Generate dummy data for missing columns."""
@@ -1159,5 +1159,5 @@ class CATREDHandler:
             assert dec_min is not None
             assert dec_max is not None
             return ra_min, ra_max, dec_min, dec_max
-        
+
         return None

@@ -179,7 +179,7 @@ def run_performance_test():
     print(f"\n{'=' * 70}")
     print("CONCLUSION")
     print(f"{'=' * 70}")
-    avg_speedup = np.mean([r["speedup"] for r in results]) # type: ignore
+    avg_speedup = np.mean([r["speedup"] for r in results])  # type: ignore
     print(f"Average speedup: {avg_speedup:.1f}x")
     print(f"\nSpatial indexing provides consistent {avg_speedup:.0f}x performance improvement")
     print(f"across all dataset sizes, with even better performance on larger datasets.")

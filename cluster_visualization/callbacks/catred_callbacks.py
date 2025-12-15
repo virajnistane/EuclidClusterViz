@@ -517,7 +517,7 @@ class CATREDCallbacks:
         else:
             # Fallback to inline trace creation
             return self._create_traces_fallback(
-                data = data,
+                data=data,
                 show_polygons=show_polygons,
                 show_mer_tiles=show_mer_tiles,
                 relayout_data=relayout_data,
@@ -761,7 +761,7 @@ class CATREDCallbacks:
                 visible=True,
                 autorange="reversed",  # Reverse RA axis for astronomy convention
             )
-            yaxis_config = dict(constrain="domain", visible=True) # type: ignore
+            yaxis_config = dict(constrain="domain", visible=True)  # type: ignore
 
         fig.update_layout(
             title=f"Cluster Detection Visualization - {algorithm}",

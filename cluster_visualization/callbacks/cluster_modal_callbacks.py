@@ -1231,7 +1231,7 @@ class ClusterModalCallbacks:
                 visible=True,
                 autorange="reversed",  # Reverse RA axis for astronomy convention
             )
-            yaxis_config = dict(constrain="domain", visible=True) # type: ignore
+            yaxis_config = dict(constrain="domain", visible=True)  # type: ignore
 
         fig.update_layout(
             title=f"Cluster Detection Visualization - {algorithm}",

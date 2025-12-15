@@ -1074,7 +1074,7 @@ class MainPlotCallbacks:
                 visible=False,
                 autorange="reversed",
             )
-            yaxis_config = dict(constrain="domain", visible=False) # type: ignore
+            yaxis_config = dict(constrain="domain", visible=False)  # type: ignore
 
         initial_fig.update_layout(
             title="",
@@ -1452,7 +1452,7 @@ class MainPlotCallbacks:
                 visible=True,
                 autorange="reversed",
             )
-            yaxis_config = dict(constrain="domain", visible=True) # type: ignore
+            yaxis_config = dict(constrain="domain", visible=True)  # type: ignore
 
         fig.update_layout(
             title=f"Cluster Detection Visualization - {algorithm}",

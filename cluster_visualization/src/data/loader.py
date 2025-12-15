@@ -55,7 +55,9 @@ class DataLoader:
         if MEMORY_MANAGER_AVAILABLE:
             if max_memory_gb is None:
                 max_memory_gb = MemoryManager.recommend_cache_size()
-            self.memory_manager: Optional[MemoryManager] = MemoryManager(max_memory_gb=max_memory_gb)
+            self.memory_manager: Optional[MemoryManager] = MemoryManager(
+                max_memory_gb=max_memory_gb
+            )
         else:
             self.memory_manager = None
 
@@ -230,7 +232,9 @@ class DataLoader:
             }
         else:
             print(f"✓ Using separate MergeDetCat files for {algorithm}")
-            mergedetcat_xml_files_dict: Dict[str, str] = self.config.get_mergedetcat_xml_files(algorithm)
+            mergedetcat_xml_files_dict: Dict[str, str] = self.config.get_mergedetcat_xml_files(
+                algorithm
+            )
 
             paths = {
                 "use_gluematchcat": False,
@@ -256,7 +260,9 @@ class DataLoader:
             if path_key == "mergedetcat_xml_files_dict":
                 path_value = paths[path_key]
                 if not isinstance(path_value, dict):
-                    raise ValueError(f"Expected dict for 'mergedetcat_xml_files_dict', got {type(path_value)}")
+                    raise ValueError(
+                        f"Expected dict for 'mergedetcat_xml_files_dict', got {type(path_value)}"
+                    )
                 for xml_path in path_value.values():
                     if not os.path.exists(xml_path):
                         raise FileNotFoundError(f"MergeDetCat XML not found: {xml_path}")
@@ -275,8 +281,12 @@ class DataLoader:
         if self.use_disk_cache and self.disk_cache is not None:
             cache_key = f"merged_catalog_{algorithm}"
             source_files = self._get_merged_catalog_source_files(paths)
-            
-            cached: Optional[Tuple[np.ndarray, Optional[float], Optional[float], Optional[float], Optional[float]]] = self.disk_cache.get(cache_key, source_files)
+
+            cached: Optional[
+                Tuple[
+                    np.ndarray, Optional[float], Optional[float], Optional[float], Optional[float]
+                ]
+            ] = self.disk_cache.get(cache_key, source_files)
             if cached is not None:
                 return cached  # Tuple of (data, snr_min_pzwav, snr_max_pzwav, snr_min_amico, snr_max_amico)
 
@@ -423,7 +433,9 @@ class DataLoader:
             cache_key = f"tile_data_{algorithm}"
             source_files = self._get_tile_data_source_files(paths)
 
-            cached: Optional[Dict[str, Dict[str, Any]]] = self.disk_cache.get(cache_key, source_files)
+            cached: Optional[Dict[str, Dict[str, Any]]] = self.disk_cache.get(
+                cache_key, source_files
+            )
             if cached is not None:
                 return cached
 
@@ -1202,7 +1214,11 @@ class DataLoader:
 
     def _get_catred_dir(self, paths: Dict[str, str]) -> str:
         """Get CATRED directory path."""
-        if self.config and hasattr(self.config, "catred_dir") and isinstance(self.config.catred_dir, str):
+        if (
+            self.config
+            and hasattr(self.config, "catred_dir")
+            and isinstance(self.config.catred_dir, str)
+        ):
             return self.config.catred_dir
         else:
             return os.path.join(
