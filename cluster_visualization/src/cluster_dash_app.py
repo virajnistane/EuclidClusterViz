@@ -408,7 +408,7 @@ class ClusterVisualizationApp:
                 self.figure_manager,
             )
 
-            self.ui_callbacks = UICallbacks(self.app)
+            self.ui_callbacks = UICallbacks(self.app, config, self.data_loader)
 
             self.phz_callbacks = PHZCallbacks(self.app, self.catred_handler)
 

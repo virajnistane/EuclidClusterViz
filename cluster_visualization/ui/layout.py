@@ -165,6 +165,10 @@ class AppLayout:
                                                                             label="🎯 Cluster Tools",
                                                                             tab_id="cluster-tab",
                                                                         ),
+                                                                        dbc.Tab(
+                                                                            label="📁 File Config",
+                                                                            tab_id="file-config-tab",
+                                                                        ),
                                                                     ],
                                                                     id="analysis-tabs",
                                                                     active_tab="phz-tab",
@@ -216,6 +220,14 @@ class AppLayout:
                                                                     id="cluster-tab-content",
                                                                     style={"display": "none"},
                                                                 ),
+                                                                # File Configuration Tab Content
+                                                                html.Div(
+                                                                    [
+                                                                        AppLayout._create_file_configuration_section()
+                                                                    ],
+                                                                    id="file-config-tab-content",
+                                                                    style={"display": "none"},
+                                                                ),
                                                             ],
                                                             className="p-2",
                                                         ),
@@ -237,6 +249,8 @@ class AppLayout:
                 ),  # Remove gutters for tighter layout
                 # Cluster Action Modal Dialog
                 AppLayout._create_cluster_action_modal(),
+                # File Browser Modal Dialog
+                AppLayout._create_file_browser_modal(),
             ],
             fluid=True,
             className="px-3",
@@ -277,6 +291,137 @@ class AppLayout:
                     style={
                         "background": "linear-gradient(45deg, #f8f9ff, #ffffff)",
                         "border-radius": "10px",
+                    },
+                ),
+            ]
+        )
+
+    @staticmethod
+    def _create_file_configuration_section():
+        """Create file configuration section for selecting data files"""
+        return html.Div(
+            [
+                html.Div(
+                    [
+                        html.I(className="fas fa-folder-open me-2 text-primary"),
+                        html.Label("Detection Catalog Configuration:", className="fw-bold mb-0"),
+                    ],
+                    className="d-flex align-items-center mb-3",
+                ),
+                dbc.Card(
+                    [
+                        dbc.CardBody(
+                            [
+                                # File path display (always visible, showing current file)
+                                html.Div(
+                                    [
+                                        html.Label(
+                                            [
+                                                html.I(className="fas fa-file me-2"),
+                                                "Current GlueMatchCat XML File:"
+                                            ],
+                                            className="form-label small fw-bold"
+                                        ),
+                                        dbc.InputGroup(
+                                            [
+                                                dbc.Input(
+                                                    id="gluematchcat-file-display",
+                                                    type="text",
+                                                    value="No file selected",
+                                                    readonly=True,
+                                                    className="mb-0",
+                                                    style={
+                                                        "border-radius": "8px 0 0 8px",
+                                                        "font-size": "0.9rem",
+                                                        "background-color": "#f8f9fa",
+                                                    }
+                                                ),
+                                                dbc.Button(
+                                                    html.I(className="fas fa-folder-open"),
+                                                    id="browse-file-button",
+                                                    color="primary",
+                                                    outline=True,
+                                                    size="sm",
+                                                    style={
+                                                        "border-radius": "0 8px 8px 0",
+                                                    },
+                                                    title="Browse for file"
+                                                ),
+                                            ],
+                                            className="mb-2",
+                                        ),
+                                        html.Small(
+                                            [
+                                                html.I(className="fas fa-info-circle me-1"),
+                                                "Currently loaded catalog file"
+                                            ],
+                                            className="text-muted"
+                                        ),
+                                    ],
+                                    className="mb-3"
+                                ),
+                                
+                                # Editable file path input (for changing the file)
+                                html.Div(
+                                    [
+                                        html.Label(
+                                            [
+                                                html.I(className="fas fa-edit me-2"),
+                                                "Change File Path:"
+                                            ],
+                                            className="form-label small fw-bold"
+                                        ),
+                                        dbc.Input(
+                                            id="gluematchcat-file-input",
+                                            type="text",
+                                            placeholder="Enter new path to gluematchcat XML file...",
+                                            className="mb-2",
+                                            style={
+                                                "border-radius": "8px",
+                                                "font-size": "0.9rem",
+                                            }
+                                        ),
+                                        html.Small(
+                                            [
+                                                html.I(className="fas fa-info-circle me-1"),
+                                                "Example: /path/to/gluematchcat_PZWAV_AMICO.xml"
+                                            ],
+                                            className="text-muted"
+                                        ),
+                                    ],
+                                    id="gluematchcat-file-container",
+                                    className="mb-3"
+                                ),
+                                
+                                # Apply button (always visible)
+                                dbc.Button(
+                                    [
+                                        html.I(className="fas fa-check me-2"),
+                                        "Apply File Configuration"
+                                    ],
+                                    id="apply-file-config-button",
+                                    color="success",
+                                    size="sm",
+                                    className="w-100",
+                                    disabled=True,
+                                    style={
+                                        "border-radius": "8px",
+                                        "font-weight": "600"
+                                    }
+                                ),
+                                
+                                # Status indicator
+                                html.Div(
+                                    id="file-config-status",
+                                    className="mt-2 small"
+                                )
+                            ]
+                        )
+                    ],
+                    className="border-0 shadow-sm",
+                    style={
+                        "background": "linear-gradient(45deg, #f0fff0, #ffffff)",
+                        "border-radius": "12px",
                     },
                 ),
             ]
@@ -1691,6 +1836,84 @@ class AppLayout:
             size="lg",
             backdrop=True,
             scrollable=True,
+        )
+
+    @staticmethod
+    def _create_file_browser_modal():
+        """Create modal dialog for browsing and selecting files"""
+        return dbc.Modal(
+            [
+                dbc.ModalHeader(
+                    [
+                        html.H4("Select GlueMatchCat XML File", className="modal-title"),
+                        dbc.Button(
+                            "×", className="btn-close", id="file-browser-close", n_clicks=0
+                        ),
+                    ]
+                ),
+                dbc.ModalBody(
+                    [
+                        html.Div(
+                            [
+                                html.Label("Directory:", className="fw-bold mb-2"),
+                                dbc.Input(
+                                    id="file-browser-directory",
+                                    type="text",
+                                    placeholder="/path/to/directory",
+                                    className="mb-3",
+                                ),
+                                dbc.Button(
+                                    [
+                                        html.I(className="fas fa-sync me-2"),
+                                        "Refresh File List",
+                                    ],
+                                    id="file-browser-refresh",
+                                    color="primary",
+                                    size="sm",
+                                    className="mb-3",
+                                    n_clicks=0,
+                                ),
+                            ]
+                        ),
+                        html.Hr(),
+                        html.Label("Available XML Files:", className="fw-bold mb-2"),
+                        dbc.Spinner(
+                            html.Div(
+                                id="file-browser-list",
+                                className="mb-3",
+                                style={
+                                    "max-height": "400px",
+                                    "overflow-y": "auto",
+                                    "border": "1px solid #dee2e6",
+                                    "border-radius": "8px",
+                                    "padding": "10px",
+                                },
+                            )
+                        ),
+                        dcc.Store(id="selected-file-path", data=None),
+                    ]
+                ),
+                dbc.ModalFooter(
+                    [
+                        dbc.Button(
+                            "Cancel",
+                            id="file-browser-cancel",
+                            color="secondary",
+                            n_clicks=0,
+                        ),
+                        dbc.Button(
+                            "Select File",
+                            id="file-browser-select",
+                            color="primary",
+                            n_clicks=0,
+                            disabled=True,
+                        ),
+                    ]
+                ),
+            ],
+            id="file-browser-modal",
+            size="lg",
+            is_open=False,
         )
 
     @staticmethod

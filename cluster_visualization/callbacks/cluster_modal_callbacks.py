@@ -454,17 +454,23 @@ class ClusterModalCallbacks:
 
         # Tab content switching
         @self.app.callback(
-            [Output("phz-tab-content", "style"), Output("cluster-tab-content", "style")],
+            [
+                Output("phz-tab-content", "style"),
+                Output("cluster-tab-content", "style"),
+                Output("file-config-tab-content", "style"),
+            ],
             [Input("analysis-tabs", "active_tab")],
             prevent_initial_call=True,
         )
         def switch_tab_content(active_tab):
-            """Switch between PHZ and cluster analysis tab content"""
+            """Switch between PHZ, cluster analysis, and file config tab content"""
             if active_tab == "phz-tab":
-                return {"display": "block"}, {"display": "none"}
+                return {"display": "block"}, {"display": "none"}, {"display": "none"}
             elif active_tab == "cluster-tab":
-                return {"display": "none"}, {"display": "block"}
-            return dash.no_update, dash.no_update
+                return {"display": "none"}, {"display": "block"}, {"display": "none"}
+            elif active_tab == "file-config-tab":
+                return {"display": "none"}, {"display": "none"}, {"display": "block"}
+            return dash.no_update, dash.no_update, dash.no_update
 
         # Toggle tab options - only one collapse open at a time
         @self.app.callback(
