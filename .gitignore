@@ -8,6 +8,7 @@ config_local.ini
 *_config.ini
 *_config_*.ini
 config_*.ini
+notebooks/
 
 venv/
 .venv/
