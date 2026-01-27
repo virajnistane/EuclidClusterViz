@@ -11,7 +11,7 @@ The configuration is read from config.ini (or config_local.ini if it exists).
 import configparser
 import os
 import subprocess
-from typing import Optional
+from typing import Optional, List
 
 
 def get_git_repo_root():
@@ -166,6 +166,44 @@ class Config:
         gluematchcat_xml = self.get_gluematchcat_clusters_xml()
         return gluematchcat_xml is not None and os.path.exists(gluematchcat_xml)
 
+    def _parse_list_value(self, value: str) -> List[str]:
+        """
+        Parse a config value that might be a list in various formats.
+        
+        Supports:
+        - Python list syntax: [item1, item2, item3]
+        - Multi-line format with brackets
+        - JSON file path
+        
+        Args:
+            value: The config value string
+            
+        Returns:
+            List of strings (file paths)
+        """
+        import ast
+        
+        value = value.strip()
+        
+        # Check if it's a list in Python syntax
+        if value.startswith('[') and value.endswith(']'):
+            try:
+                # Try to parse as Python literal
+                parsed = ast.literal_eval(value)
+                if isinstance(parsed, list):
+                    # Expand paths and clean whitespace
+                    return [self._expand_path(item.strip()) for item in parsed]
+            except (ValueError, SyntaxError):
+                try:
+                    parsed = [i.strip('\n') for i in value.strip('[]').split(',')]
+                    assert all(i.endswith('.xml') for i in parsed)
+                    return [self._expand_path(item) for item in parsed]
+                except Exception:
+                    pass
+        
+        # Otherwise treat as single path (could be JSON file)
+        return [self._expand_path(value)]
+
     def get_detintile_list_files(self, det_algorithm):
         """
         Get path to detection files list for selected algorithm
@@ -188,12 +226,28 @@ class Config:
         files_list_dict = {}
         for key in filename_keys:
             if self.config_parser.has_option("files", key):
-                filename = self.config_parser.get("files", key)
-                expanded_path = self._expand_path(filename)
-                if os.path.isabs(expanded_path):
-                    files_list_dict[key] = expanded_path
+                raw_value = self.config_parser.get("files", key)
+                parsed_list = self._parse_list_value(raw_value)
+
+                # If we got a list from config (not a JSON file path), create temp JSON file
+                if len(parsed_list) > 1 or (len(parsed_list) == 1 and not parsed_list[0].endswith('.json')):
+                    # Create a temporary JSON file with the list
+                    import tempfile
+                    import json
+                    
+                    temp_dir = tempfile.gettempdir()
+                    temp_file = os.path.join(temp_dir, f"{key}_temp.json")
+                    
+                    with open(temp_file, 'w') as f:
+                        json.dump(parsed_list, f, indent=2)
+                    
+                    files_list_dict[key] = temp_file
+                    print(f"Debug: Created temporary JSON file for {key}: {temp_file} with {len(parsed_list)} files")
                 else:
-                    files_list_dict[key] = os.path.join(self.mergedetcat_dir, filename)
+                    # Single JSON file path - use directly
+                    files_list_dict[key] = parsed_list[0]
+                    print(f"Debug: Using JSON file for {key}: {parsed_list[0]}")
+
 
         return files_list_dict
 
