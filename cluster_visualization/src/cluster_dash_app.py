@@ -332,10 +332,11 @@ class ClusterVisualizationApp:
                 </html>
                 """
                 print("✓ Custom enhanced styling loaded")
+                print("✓ ESASky API integration enabled")
             except Exception as e:
                 print(f"⚠️  Warning: Could not load custom CSS: {e}")
         else:
-            print(f"⚠️  Warning: Custom CSS file not found at {css_path}")
+            print("✓ Basic HTML template loaded (no custom CSS)")
 
         # Initialize connection monitoring
         self.connection_monitor = None
@@ -421,6 +422,15 @@ class ClusterVisualizationApp:
                 trace_creator=self.trace_creator,
                 figure_manager=self.figure_manager,
             )
+
+            # 🔭 Initialize ESASky sky viewer callbacks
+            try:
+                from cluster_visualization.callbacks.esasky_callbacks import ESASkyCallbacks
+
+                self.esasky_callbacks = ESASkyCallbacks(self.app)
+                print("✓ ESASky API sky viewer callbacks initialized")
+            except Exception as e:
+                print(f"⚠️  Warning: Could not initialize ESASky callbacks: {e}")
 
             print("✓ All modular callbacks initialized")
 

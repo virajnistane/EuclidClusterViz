@@ -121,33 +121,164 @@ class AppLayout:
                                         # Main cluster plot
                                         dbc.Col(
                                             [
-                                                dcc.Loading(
-                                                    id="loading",
-                                                    children=[
-                                                        dcc.Graph(
-                                                            id="cluster-plot",
-                                                            style={
-                                                                "height": "75vh",
-                                                                "width": "100%",
-                                                                "min-height": "500px",
-                                                            },
-                                                            config={
-                                                                "displayModeBar": True,
-                                                                "displaylogo": False,
-                                                                "modeBarButtonsToRemove": [
-                                                                    "lasso2d",
-                                                                    "select2d",
-                                                                ],
-                                                                "responsive": True,
-                                                                "doubleClickDelay": 1000,
-                                                            },
-                                                        )
+                                                # Toggle button for Esasky view
+                                                # Overlay toggle button
+                                                dbc.Button(
+                                                    [
+                                                        html.I(className="fas fa-layer-group me-1"),
+                                                        "Toggle Sky Overlay",
                                                     ],
-                                                    type="circle",
-                                                )
+                                                    id="toggle-esasky-overlay-btn",
+                                                    color="info",
+                                                    outline=True,
+                                                    size="sm",
+                                                    className="mb-2",
+                                                ),
+                                                # Relative container for overlay positioning
+                                                html.Div(
+                                                    [
+                                                        # Cluster plot container
+                                                        html.Div(
+                                                    [
+                                                        dcc.Loading(
+                                                            id="loading",
+                                                            children=[
+                                                                dcc.Graph(
+                                                                    id="cluster-plot",
+                                                                    style={
+                                                                        "height": "75vh",
+                                                                        "width": "100%",
+                                                                        "min-height": "500px",
+                                                                    },
+                                                                    config={
+                                                                        "displayModeBar": True,
+                                                                        "displaylogo": False,
+                                                                        "modeBarButtonsToRemove": [
+                                                                            "lasso2d",
+                                                                            "select2d",
+                                                                        ],
+                                                                        "responsive": True,
+                                                                        "doubleClickDelay": 1000,
+                                                                    },
+                                                                )
+                                                            ],
+                                                            type="circle",
+                                                        )
+                                                        ],
+                                                        id="cluster-plot-container",
+                                                        style={"height": "75vh"},
+                                                    ),
+                                                # ESASky iframe overlay in main area
+                                                html.Div(
+                                                    [
+                                                        html.Iframe(
+                                                            id="esasky-main-iframe",
+                                                            src="https://sky.esa.int/esasky/?hide_welcome=true&hide_banner_info=true&target=0%200&fov=0.5&cooframe=J2000",
+                                                            style={
+                                                                "width": "100%",
+                                                                "height": "100%",
+                                                                "min-height": "500px",
+                                                                "border": "none",
+                                                            },
+                                                        ),
+                                                        dbc.Card(
+                                                            [
+                                                                dbc.CardBody(
+                                                                    [
+                                                                        dbc.Row(
+                                                                            [
+                                                                                dbc.Col(
+                                                                                    [
+                                                                                        html.Label(
+                                                                                            "Survey:",
+                                                                                            className="form-label small",
+                                                                                        ),
+                                                                                        dbc.Select(
+                                                                                            id="esasky-main-survey",
+                                                                                            options=[
+                                                                                                {
+                                                                                                    "label": "DSS2",
+                                                                                                    "value": "DSS2 color",
+                                                                                                },
+                                                                                                {
+                                                                                                    "label": "PanSTARRS",
+                                                                                                    "value": "PanSTARRS DR1 color",
+                                                                                                },
+                                                                                                {
+                                                                                                    "label": "2MASS",
+                                                                                                    "value": "2MASS",
+                                                                                                },
+                                                                                            ],
+                                                                                            value="DSS2 color",
+                                                                                            size="sm",
+                                                                                        ),
+                                                                                    ],
+                                                                                    width=4,
+                                                                                ),
+                                                                                dbc.Col(
+                                                                                    [
+                                                                                        html.Label(
+                                                                                            "FOV (°):",
+                                                                                            className="form-label small",
+                                                                                        ),
+                                                                                        dbc.Input(
+                                                                                            id="esasky-main-fov",
+                                                                                            type="number",
+                                                                                            value=0.5,
+                                                                                            min=0.01,
+                                                                                            max=180,
+                                                                                            step=0.1,
+                                                                                            size="sm",
+                                                                                        ),
+                                                                                    ],
+                                                                                    width=3,
+                                                                                ),
+                                                                                dbc.Col(
+                                                                                    [
+                                                                                        html.Label(
+                                                                                            "Overlay:",
+                                                                                            className="form-label small",
+                                                                                        ),
+                                                                                        dbc.Switch(
+                                                                                            id="esasky-main-overlay",
+                                                                                            value=False,
+                                                                                            className="mt-1",
+                                                                                        ),
+                                                                                    ],
+                                                                                    width=2,
+                                                                                ),
+                                                                            ],
+                                                                            className="g-2",
+                                                                        )
+                                                                    ],
+                                                                    className="p-2",
+                                                                )
+                                                            ],
+                                                            className="mt-2",
+                                                        ),
+                                                    ],
+                                                    id="esasky-main-container",
+                                                    style={
+                                                        "position": "absolute",
+                                                        "top": "0",
+                                                        "left": "0",
+                                                        "width": "100%",
+                                                        "height": "100%",
+                                                        "opacity": "0",
+                                                        "pointer-events": "none",
+                                                        "transition": "opacity 0.3s ease-in-out",
+                                                        "z-index": "10",
+                                                    },
+                                                ),
                                             ],
-                                            width=8,
+                                            style={
+                                                "position": "relative",
+                                                "height": "75vh",
+                                            },
                                         ),
+                                    ],
+                                    width=8,
+                                ),
                                         # Tabbed interface for PHZ plot and Cluster Analysis
                                         dbc.Col(
                                             [
@@ -164,6 +295,10 @@ class AppLayout:
                                                                         dbc.Tab(
                                                                             label="🎯 Cluster Tools",
                                                                             tab_id="cluster-tab",
+                                                                        ),
+                                                                        dbc.Tab(
+                                                                            label="🔭 ESASky",
+                                                                            tab_id="esasky-tab",
                                                                         ),
                                                                     ],
                                                                     id="analysis-tabs",
@@ -214,6 +349,14 @@ class AppLayout:
                                                                         AppLayout._create_cluster_analysis_tab_content()
                                                                     ],
                                                                     id="cluster-tab-content",
+                                                                    style={"display": "none"},
+                                                                ),
+                                                                # ESASky Viewer Tab Content
+                                                                html.Div(
+                                                                    [
+                                                                        AppLayout._create_esasky_tab_content()
+                                                                    ],
+                                                                    id="esasky-tab-content",
                                                                     style={"display": "none"},
                                                                 ),
                                                             ],
@@ -2363,3 +2506,158 @@ class AppLayout:
             ],
             style={"height": "60vh", "overflow-y": "auto"},
         )
+
+    @staticmethod
+    def _create_esasky_tab_content():
+        """Create ESASky viewer tab content"""
+        return html.Div(
+            [
+                # Header
+                html.Div(
+                    [
+                        html.H5(
+                            [
+                                html.I(className="fas fa-globe me-2"),
+                                "ESASky Viewer",
+                            ],
+                            className="mb-3",
+                        ),
+                        html.P(
+                            "Interactive sky atlas powered by ESA ESASky. Click on a cluster in the main plot to center the view.",
+                            className="text-muted small mb-3",
+                        ),
+                    ]
+                ),
+                # ESASky iframe container
+                html.Iframe(
+                    id="esasky-iframe",
+                    src="https://sky.esa.int/esasky/?hide_welcome=true&hide_banner_info=true&target=0%200&fov=0.5&cooframe=J2000",
+                    style={
+                        "width": "100%",
+                        "height": "50vh",
+                        "min-height": "400px",
+                        "border": "1px solid #ddd",
+                        "border-radius": "5px",
+                        "margin-bottom": "15px",
+                    },
+                ),
+                # Control panel
+                dbc.Card(
+                    [
+                        dbc.CardHeader(
+                            html.H6(
+                                [html.I(className="fas fa-cog me-2"), "Viewer Controls"],
+                                className="mb-0",
+                            )
+                        ),
+                        dbc.CardBody(
+                            [
+                                dbc.Row(
+                                    [
+                                        dbc.Col(
+                                            [
+                                                html.Label(
+                                                    "Sky Survey:", className="form-label fw-bold"
+                                                ),
+                                                dbc.Select(
+                                                    id="esasky-survey",
+                                                    options=[
+                                                        {
+                                                            "label": "DSS2 Color",
+                                                            "value": "DSS2 color",
+                                                        },
+                                                        {
+                                                            "label": "PanSTARRS DR1",
+                                                            "value": "PanSTARRS DR1 color",
+                                                        },
+                                                        {
+                                                            "label": "2MASS",
+                                                            "value": "2MASS",
+                                                        },
+                                                        {
+                                                            "label": "SDSS DR9",
+                                                            "value": "SDSS9 color",
+                                                        },
+                                                        {
+                                                            "label": "AllWISE",
+                                                            "value": "AllWISE color",
+                                                        },
+                                                        {
+                                                            "label": "Herschel Color",
+                                                            "value": "Herschel color",
+                                                        },
+                                                    ],
+                                                    value="DSS2 color",
+                                                    className="mb-2",
+                                                ),
+                                                html.Small(
+                                                    "Select astronomical image survey",
+                                                    className="text-muted",
+                                                ),
+                                            ],
+                                            width=6,
+                                        ),
+                                        dbc.Col(
+                                            [
+                                                html.Label(
+                                                    "Field of View (°):",
+                                                    className="form-label fw-bold",
+                                                ),
+                                                dbc.Input(
+                                                    id="esasky-fov",
+                                                    type="number",
+                                                    value=0.5,
+                                                    min=0.01,
+                                                    max=180,
+                                                    step=0.1,
+                                                    className="mb-2",
+                                                ),
+                                                html.Small(
+                                                    "Zoom level (smaller = more zoom)",
+                                                    className="text-muted",
+                                                ),
+                                            ],
+                                            width=6,
+                                        ),
+                                    ],
+                                    className="mb-2",
+                                ),
+                                dbc.Row(
+                                    [
+                                        dbc.Col(
+                                            [
+                                                dbc.Checklist(
+                                                    id="esasky-overlay-clusters",
+                                                    options=[
+                                                        {
+                                                            "label": " Overlay detected clusters on sky map",
+                                                            "value": True,
+                                                        }
+                                                    ],
+                                                    value=[],
+                                                    inline=True,
+                                                ),
+                                            ],
+                                            width=12,
+                                        ),
+                                    ]
+                                ),
+                            ]
+                        ),
+                    ],
+                    className="mb-2",
+                ),
+                # Instructions
+                dbc.Alert(
+                    [
+                        html.I(className="fas fa-info-circle me-2"),
+                        html.Strong("Tip: "),
+                        "Use mouse wheel to zoom, click and drag to pan. Click on a cluster in the main plot to jump to its position.",
+                    ],
+                    color="info",
+                    className="small",
+                ),
+            ],
+            style={"height": "60vh", "overflow-y": "auto"},
+        )
+

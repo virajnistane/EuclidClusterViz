@@ -227,6 +227,7 @@ class MainPlotCallbacks:
                 State("magnitude-limit-slider", "value"),
                 State("cluster-plot", "relayoutData"),
             ],
+            prevent_initial_call=False,
         )
         def update_plot(
             n_clicks,
