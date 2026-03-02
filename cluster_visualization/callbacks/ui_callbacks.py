@@ -1,4 +1,4 @@
-"""  
+"""
 UI callbacks for cluster visualization
 """
 
@@ -281,7 +281,7 @@ class UICallbacks:
             """Display current gluematchcat XML file basename"""
             if self.config is None:
                 return "Config not available"
-            
+
             try:
                 gluematchcat_path = self.config.get_gluematchcat_clusters_xml()
                 if gluematchcat_path and os.path.exists(gluematchcat_path):
@@ -309,19 +309,18 @@ class UICallbacks:
             [State("file-browser-modal", "is_open")],
             prevent_initial_call=True,
         )
-        def toggle_file_browser(browse_clicks, close_clicks, cancel_clicks, select_clicks, 
-                                is_open):
+        def toggle_file_browser(browse_clicks, close_clicks, cancel_clicks, select_clicks, is_open):
             """Toggle file browser modal and initialize directory"""
             ctx = callback_context
             if not ctx.triggered:
                 return dash.no_update, dash.no_update
-            
+
             button_id = ctx.triggered[0]["prop_id"].split(".")[0]
-            
+
             if button_id == "browse-file-button":
                 # Get default directory from config
                 default_dir = ""
-                if self.config and hasattr(self.config, 'gluematchcat_dir'):
+                if self.config and hasattr(self.config, "gluematchcat_dir"):
                     default_dir = self.config.gluematchcat_dir or ""
                 return True, default_dir
             else:
@@ -347,7 +346,7 @@ class UICallbacks:
                     ],
                     className="text-muted text-center p-3",
                 )
-            
+
             try:
                 # Find all XML files in directory
                 xml_files = []
@@ -356,7 +355,7 @@ class UICallbacks:
                     pattern = os.path.join(directory, *["*"] * leveldeep, "unified_clusters*.xml")
                     xml_files.extend(glob.glob(pattern))
                     leveldeep += 1
-                
+
                 if not xml_files:
                     return html.Div(
                         [
@@ -365,7 +364,7 @@ class UICallbacks:
                         ],
                         className="text-muted text-center p-3",
                     )
-                
+
                 # Create clickable list of files
                 file_list = []
                 for xml_file in sorted(xml_files):
@@ -383,9 +382,9 @@ class UICallbacks:
                             n_clicks=0,
                         )
                     )
-                
+
                 return html.Div(file_list)
-                
+
             except Exception as e:
                 return html.Div(
                     [
@@ -410,14 +409,14 @@ class UICallbacks:
             ctx = callback_context
             if not ctx.triggered or not any(n_clicks_list):
                 return dash.no_update, dash.no_update
-            
+
             # Find which button was clicked
             triggered_id = ctx.triggered_id
             if triggered_id and isinstance(triggered_id, dict):
                 selected_path = triggered_id.get("index")
                 if selected_path:
                     return selected_path, False
-            
+
             return dash.no_update, dash.no_update
 
         # Apply selected file to input when Select button is clicked
@@ -441,7 +440,7 @@ class UICallbacks:
         )
         def enable_apply_button(file_path):
             """Enable apply button when a valid file path is entered"""
-            if file_path and file_path.strip() and file_path.endswith('.xml'):
+            if file_path and file_path.strip() and file_path.endswith(".xml"):
                 return False
             return True
 
@@ -458,87 +457,103 @@ class UICallbacks:
         def apply_file_config(n_clicks, file_path):
             """Apply the new file configuration"""
             if not file_path or not file_path.strip():
-                return html.Div(
-                    [
-                        html.I(className="fas fa-exclamation-triangle text-warning me-2"),
-                        "No file path provided"
-                    ],
-                    className="text-warning"
-                ), dash.no_update
-            
+                return (
+                    html.Div(
+                        [
+                            html.I(className="fas fa-exclamation-triangle text-warning me-2"),
+                            "No file path provided",
+                        ],
+                        className="text-warning",
+                    ),
+                    dash.no_update,
+                )
+
             # Validate file exists
             if not os.path.exists(file_path):
-                return html.Div(
-                    [
-                        html.I(className="fas fa-exclamation-circle text-danger me-2"),
-                        f"File not found: {os.path.basename(file_path)}"
-                    ],
-                    className="text-danger"
-                ), dash.no_update
-            
+                return (
+                    html.Div(
+                        [
+                            html.I(className="fas fa-exclamation-circle text-danger me-2"),
+                            f"File not found: {os.path.basename(file_path)}",
+                        ],
+                        className="text-danger",
+                    ),
+                    dash.no_update,
+                )
+
             # Validate it's an XML file
-            if not file_path.endswith('.xml'):
-                return html.Div(
-                    [
-                        html.I(className="fas fa-exclamation-circle text-danger me-2"),
-                        "File must be an XML file"
-                    ],
-                    className="text-danger"
-                ), dash.no_update
-            
+            if not file_path.endswith(".xml"):
+                return (
+                    html.Div(
+                        [
+                            html.I(className="fas fa-exclamation-circle text-danger me-2"),
+                            "File must be an XML file",
+                        ],
+                        className="text-danger",
+                    ),
+                    dash.no_update,
+                )
+
             # Update config if available
             if self.config:
                 try:
                     # Update the config parser
-                    if not self.config.config_parser.has_section('files'):
-                        self.config.config_parser.add_section('files')
-                    self.config.config_parser.set('files', 'gluematchcat_clusters', file_path)
-                    
+                    if not self.config.config_parser.has_section("files"):
+                        self.config.config_parser.add_section("files")
+                    self.config.config_parser.set("files", "gluematchcat_clusters", file_path)
+
                     # Save to config file
-                    if not Path(self.config._config_file_used).name.endswith('_temp.ini'):
-                        newconfigfile_path = str(Path(self.config._config_file_used).with_stem(Path(self.config._config_file_used).stem + '_temp')) 
+                    if not Path(self.config._config_file_used).name.endswith("_temp.ini"):
+                        newconfigfile_path = str(
+                            Path(self.config._config_file_used).with_stem(
+                                Path(self.config._config_file_used).stem + "_temp"
+                            )
+                        )
                     else:
                         newconfigfile_path = self.config._config_file_used
-                    with open(newconfigfile_path, 'w') as f:
+                    with open(newconfigfile_path, "w") as f:
                         self.config.config_parser.write(f)
-                    
+
                     # Clear ALL caches to force reload with new file
                     if self.data_loader:
                         # Clear in-memory cache
                         self.data_loader.data_cache.clear()
                         print(f"✓ Cleared in-memory data cache")
-                        
+
                         # Clear disk cache entries for merged catalog
-                        if hasattr(self.data_loader, 'cached') and self.data_loader.cached:
+                        if hasattr(self.data_loader, "cached") and self.data_loader.cached:
                             cache_keys_to_remove = []
                             for key in self.data_loader.cached.keys():
-                                if 'merged_catalog' in key:
+                                if "merged_catalog" in key:
                                     cache_keys_to_remove.append(key)
                             for key in cache_keys_to_remove:
                                 del self.data_loader.cached[key]
                                 print(f"✓ Cleared disk cache entry: {key}")
-                    
+
                     return html.Div(
                         [
                             html.I(className="fas fa-check-circle text-success me-2"),
-                            f"Configuration updated! Click 'Render' to reload data with: {os.path.basename(file_path)}"
+                            f"Configuration updated! Click 'Render' to reload data with: {os.path.basename(file_path)}",
                         ],
-                        className="text-success"
+                        className="text-success",
                     ), os.path.basename(file_path)
-                    
+
                 except Exception as e:
-                    return html.Div(
-                        [
-                            html.I(className="fas fa-exclamation-circle text-danger me-2"),
-                            f"Error updating config: {str(e)}"
-                        ],
-                        className="text-danger"
-                    ), dash.no_update
+                    return (
+                        html.Div(
+                            [
+                                html.I(className="fas fa-exclamation-circle text-danger me-2"),
+                                f"Error updating config: {str(e)}",
+                            ],
+                            className="text-danger",
+                        ),
+                        dash.no_update,
+                    )
             else:
                 return html.Div(
                     [
                         html.I(className="fas fa-info-circle text-info me-2"),
-                        "Config not available - changes will not persist"
+                        "Config not available - changes will not persist",
                     ],
-                    className="text-info"
+                    className="text-info",
                 ), os.path.basename(file_path)

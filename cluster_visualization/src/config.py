@@ -169,24 +169,24 @@ class Config:
     def _parse_list_value(self, value: str) -> List[str]:
         """
         Parse a config value that might be a list in various formats.
-        
+
         Supports:
         - Python list syntax: [item1, item2, item3]
         - Multi-line format with brackets
         - JSON file path
-        
+
         Args:
             value: The config value string
-            
+
         Returns:
             List of strings (file paths)
         """
         import ast
-        
+
         value = value.strip()
-        
+
         # Check if it's a list in Python syntax
-        if value.startswith('[') and value.endswith(']'):
+        if value.startswith("[") and value.endswith("]"):
             try:
                 # Try to parse as Python literal
                 parsed = ast.literal_eval(value)
@@ -195,12 +195,12 @@ class Config:
                     return [self._expand_path(item.strip()) for item in parsed]
             except (ValueError, SyntaxError):
                 try:
-                    parsed = [i.strip('\n') for i in value.strip('[]').split(',')]
-                    assert all(i.endswith('.xml') for i in parsed)
+                    parsed = [i.strip("\n") for i in value.strip("[]").split(",")]
+                    assert all(i.endswith(".xml") for i in parsed)
                     return [self._expand_path(item) for item in parsed]
                 except Exception:
                     pass
-        
+
         # Otherwise treat as single path (could be JSON file)
         return [self._expand_path(value)]
 
@@ -230,24 +230,27 @@ class Config:
                 parsed_list = self._parse_list_value(raw_value)
 
                 # If we got a list from config (not a JSON file path), create temp JSON file
-                if len(parsed_list) > 1 or (len(parsed_list) == 1 and not parsed_list[0].endswith('.json')):
+                if len(parsed_list) > 1 or (
+                    len(parsed_list) == 1 and not parsed_list[0].endswith(".json")
+                ):
                     # Create a temporary JSON file with the list
                     import tempfile
                     import json
-                    
+
                     temp_dir = tempfile.gettempdir()
                     temp_file = os.path.join(temp_dir, f"{key}_temp.json")
-                    
-                    with open(temp_file, 'w') as f:
+
+                    with open(temp_file, "w") as f:
                         json.dump(parsed_list, f, indent=2)
-                    
+
                     files_list_dict[key] = temp_file
-                    print(f"Debug: Created temporary JSON file for {key}: {temp_file} with {len(parsed_list)} files")
+                    print(
+                        f"Debug: Created temporary JSON file for {key}: {temp_file} with {len(parsed_list)} files"
+                    )
                 else:
                     # Single JSON file path - use directly
                     files_list_dict[key] = parsed_list[0]
                     print(f"Debug: Using JSON file for {key}: {parsed_list[0]}")
-
 
         return files_list_dict
 

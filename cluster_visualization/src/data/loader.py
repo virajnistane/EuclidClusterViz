@@ -643,7 +643,9 @@ class DataLoader:
             print("Loaded catred file info")
         else:
             print(f"catred_fileinfo.csv does not exist in {os.path.dirname(catred_fileinfo_csv)}")
-            catred_fileinfo_df = self._generate_catred_fileinfo(paths, add_mertile_radec_center=False)
+            catred_fileinfo_df = self._generate_catred_fileinfo(
+                paths, add_mertile_radec_center=False
+            )
 
         # Load polygon data or generate it if it doesn't exist
         if os.path.exists(catred_polygon_pkl) and not catred_fileinfo_df.empty:
@@ -669,15 +671,18 @@ class DataLoader:
         return catred_fileinfo_df
 
     def _generate_catred_fileinfo(
-        self, paths: Dict[str, str], catredxmlfiles: Optional[List[str]] = None, add_mertile_radec_center: Optional[bool] = False
+        self,
+        paths: Dict[str, str],
+        catredxmlfiles: Optional[List[str]] = None,
+        add_mertile_radec_center: Optional[bool] = False,
     ) -> pd.DataFrame:
         """
         Generate catred_fileinfo.csv from XML files.
-         - If catredxmlfiles is provided, it will use that list of XML files instead of scanning the directory. 
+         - If catredxmlfiles is provided, it will use that list of XML files instead of scanning the directory.
          This is useful for testing or if the XML files are located in a different directory.
-         - If add_mertile_radec_center is True, it will also extract the RA and Dec of the tile center from the XML and add them as columns in the DataFrame. 
+         - If add_mertile_radec_center is True, it will also extract the RA and Dec of the tile center from the XML and add them as columns in the DataFrame.
          This can be useful for spatial queries or visualizations that require the tile center coordinates.
-        
+
         """
 
         print("Processing catred XML files to create catred_fileinfo dictionary")
@@ -714,7 +719,9 @@ class DataLoader:
 
         if add_mertile_radec_center:
             mertile_dir = os.path.join(self.config._data_base_dir, "DpdMerTile")
-            print("add_mertile_radec_center is True - will attempt to extract RA/Dec center from XML files and add to DataFrame")
+            print(
+                "add_mertile_radec_center is True - will attempt to extract RA/Dec center from XML files and add to DataFrame"
+            )
             # xmlfiles_mertiledef = [i for i in os.listdir(mertile_dir) if i.endswith(".xml")]
 
         print(f"Found {len(catredxmlfiles)} CATRED XML files")
@@ -733,14 +740,12 @@ class DataLoader:
                 catred_fileinfo[uid]["mertileid"] = int(mertileid)
 
                 if add_mertile_radec_center:
-                    xmlfile_mertiledef = glob.glob(os.path.join(mertile_dir, f"*{mertileid}*.xml"))[0]
+                    xmlfile_mertiledef = glob.glob(os.path.join(mertile_dir, f"*{mertileid}*.xml"))[
+                        0
+                    ]
                     if xmlfile_mertiledef:
-                        ra_center = self.get_xml_element(
-                            xmlfile_mertiledef, "Data/RaCen"
-                        ).text
-                        dec_center = self.get_xml_element(
-                            xmlfile_mertiledef, "Data/DecCen"
-                        ).text
+                        ra_center = self.get_xml_element(xmlfile_mertiledef, "Data/RaCen").text
+                        dec_center = self.get_xml_element(xmlfile_mertiledef, "Data/DecCen").text
                         catred_fileinfo[uid]["ra_center"] = float(ra_center)
                         catred_fileinfo[uid]["dec_center"] = float(dec_center)
                     else:
@@ -749,7 +754,6 @@ class DataLoader:
                         )
                         catred_fileinfo[uid]["ra_center"] = None
                         catred_fileinfo[uid]["dec_center"] = None
-
 
                 # Extract FITS file name from XML
                 catred_fitsfile = self.get_xml_element(
@@ -793,7 +797,15 @@ class DataLoader:
 
         # Create DataFrame
         catred_fileinfo_df = pd.DataFrame.from_dict(catred_fileinfo, orient="index")
-        cols = ["mertileid", "dataset_release", "creation_date", "xml_file", "fits_file", "manual_validation_status", "remarks",]
+        cols = [
+            "mertileid",
+            "dataset_release",
+            "creation_date",
+            "xml_file",
+            "fits_file",
+            "manual_validation_status",
+            "remarks",
+        ]
         if add_mertile_radec_center:
             cols.insert(1, "ra_center")
             cols.insert(2, "dec_center")
