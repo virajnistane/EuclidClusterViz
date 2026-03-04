@@ -466,15 +466,17 @@ class DataLoader:
 
                 try:
                     assert os.path.isabs(file)
-                    print(f"Found absolute path for tile XML: {file}")
+                    print(f"Found absolute path for detintile XML: {file}")
                     xml_path = file
                     dirpath = os.path.dirname(xml_path)
-                    while os.path.exists(os.path.join(dirpath, "data/")):
+                    while not os.path.exists(os.path.join(dirpath, "data/")):
                         dirpath = os.path.dirname(dirpath)
 
                     print(f"Determined directory path for data: {dirpath}")
 
                 except AssertionError:
+                    print(f"Warning: Expected absolute path for tile XML, got relative path: {file}")
+                    
                     dirs_to_checks = [
                         paths["mergedetcat_dir"],
                         paths["detintile_dir"],
@@ -486,21 +488,21 @@ class DataLoader:
                         xml_path = None
                         dirpath = None
                         for dir_check in dirs_to_checks:
-                            potential_path = os.path.join(dir_check, file)
-                            if os.path.exists(potential_path):
-                                xml_path = potential_path
-                                dirpath = (
-                                    dir_check
-                                    if os.path.basename(dir_check) != "inputs"
-                                    else os.path.dirname(dir_check)
-                                )
+                            xml_path = os.path.join(dir_check, file)
+                            if os.path.exists(xml_path):
                                 break
                         assert (
                             xml_path is not None
                         ), f"File not found in expected directories: {file}"
+
+                        dirpath = os.path.dirname(xml_path)
+                        while os.path.exists(os.path.join(dirpath, "data/")):
+                            dirpath = os.path.dirname(dirpath)
                     except AssertionError:
                         print(f"Warning: XML file not found in expected directories: {file}")
                         continue
+
+                    print(f"Determined directory path for data: {dirpath}")
 
                 tile_file = self.get_xml_element(
                     xml_path, "Data/SpatialInformation/DataContainer/FileName"
