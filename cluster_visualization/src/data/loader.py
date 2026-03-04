@@ -214,6 +214,28 @@ class DataLoader:
         gluematchcat_xml = self.config.get_gluematchcat_clusters_xml()
         use_gluematchcat = gluematchcat_xml is not None and os.path.exists(gluematchcat_xml)
 
+        if use_gluematchcat:
+            # If using gluematchcat, we can extract detintile paths from the merged catalog XML
+            self._set_detintile_paths_from_merged_xml(
+                gluematchcat_xml
+            )
+        else:
+            # If not using gluematchcat, we need to get the separate mergedetcat XML files for the selected algorithm
+            mergedetcat_xml_files_dict: Dict[str, str] = self.config.get_mergedetcat_xml_files(
+                algorithm
+            )
+            if algorithm == "BOTH":
+                print(f"✓ Using separate MergeDetCat files for BOTH algorithms")
+                print(f"✓ Extracting DetInTile paths from both merged catalog XML files")
+                for alg in ["PZWAV", "AMICO"]:
+                    self._set_detintile_paths_from_merged_xml(
+                        mergedetcat_xml_files_dict[f"mergedetcat_{alg.lower()}"]
+                    )
+            else:
+                self._set_detintile_paths_from_merged_xml(
+                    mergedetcat_xml_files_dict[f"mergedetcat_{algorithm.lower()}"]
+                )
+
         # Always get detintile files for per-tile data
         detfiles_list_files_dict = self.config.get_detintile_list_files(algorithm)
 
@@ -233,10 +255,7 @@ class DataLoader:
             }
         else:
             print(f"✓ Using separate MergeDetCat files for {algorithm}")
-            mergedetcat_xml_files_dict: Dict[str, str] = self.config.get_mergedetcat_xml_files(
-                algorithm
-            )
-
+            
             paths = {
                 "use_gluematchcat": False,
                 "mergedetcat_dir": self.config.mergedetcat_dir,
@@ -424,6 +443,30 @@ class DataLoader:
             self.disk_cache.set(cache_key, result, source_files)
 
         return result
+
+    def _set_detintile_paths_from_merged_xml(self, merged_catalog_xml: str) -> None:
+        """Extract paths to individual tile detection files from gluematched/merged catalog XML and set in config."""
+        try:
+            detintile_pzwav_list = self.get_xml_element(
+                merged_catalog_xml, "Parameters/Parameter[Key='InputDetectionsFiles_PZWAV']/StringValue"
+            ).text
+            self.config.config_parser.set("paths", "detintile_pzwav_list", detintile_pzwav_list)
+            print(
+                f"Set detintile_pzwav_list path from merged catalog XML: {detintile_pzwav_list}"
+            )
+        except Exception as e:
+            print(f"Error occurred while setting detintile_pzwav_list: {e}")
+
+        try:
+            detintile_amico_list = self.get_xml_element(
+                merged_catalog_xml, "Parameters/Parameter[Key='InputDetectionsFiles_AMICO']/StringValue"
+            ).text
+            self.config.config_parser.set("paths", "detintile_amico_list", detintile_amico_list)
+            print(
+                f"Set detintile_amico_list path from merged catalog XML: {detintile_amico_list}"
+            )
+        except Exception as e:
+            print(f"Error occurred while setting detintile_amico_list: {e}")
 
     def _load_data_detcluster_by_cltile(
         self, paths: Dict[str, str], algorithm: str
