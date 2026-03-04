@@ -502,15 +502,25 @@ class UICallbacks:
                         self.config.config_parser.add_section("files")
                     self.config.config_parser.set("files", "gluematchcat_clusters", file_path)
 
-                    # Save to config file
-                    if not Path(self.config._config_file_used).name.endswith("_temp.ini"):
-                        newconfigfile_path = str(
-                            Path(self.config._config_file_used).with_stem(
-                                Path(self.config._config_file_used).stem + "_temp"
-                            )
-                        )
+                    # Save to config file in tmp directory
+                    config_path = Path(self.config._config_file_used)
+                    
+                    # Determine the base config file (remove _temp if present)
+                    if config_path.name.endswith("_temp.ini"):
+                        base_stem = config_path.stem.replace("_temp", "")
+                        # Get parent of current file, and if it's 'tmp', go one level up
+                        if config_path.parent.name == "tmp":
+                            config_parent = config_path.parent.parent
+                        else:
+                            config_parent = config_path.parent
                     else:
-                        newconfigfile_path = self.config._config_file_used
+                        base_stem = config_path.stem
+                        config_parent = config_path.parent
+                    
+                    # Always place temp config in tmp directory
+                    tmp_dir = config_parent / "tmp"
+                    tmp_dir.mkdir(exist_ok=True)
+                    newconfigfile_path = str(tmp_dir / f"{base_stem}_temp.ini")
                     with open(newconfigfile_path, "w") as f:
                         self.config.config_parser.write(f)
 
