@@ -771,6 +771,7 @@ class DataLoader:
 
         print(f"Found {len(catredxmlfiles)} CATRED XML files")
 
+        self.missing_mertile_definitions = []
         catred_fileinfo: Dict[int, Dict[str, Any]] = {}
         for uid, catredxmlfile in enumerate(catredxmlfiles):
             try:
@@ -785,20 +786,23 @@ class DataLoader:
                 catred_fileinfo[uid]["mertileid"] = int(mertileid)
 
                 if add_mertile_radec_center:
-                    xmlfile_mertiledef = glob.glob(os.path.join(mertile_dir, f"*{mertileid}*.xml"))[
-                        0
-                    ]
-                    if xmlfile_mertiledef:
-                        ra_center = self.get_xml_element(xmlfile_mertiledef, "Data/RaCen").text
-                        dec_center = self.get_xml_element(xmlfile_mertiledef, "Data/DecCen").text
-                        catred_fileinfo[uid]["ra_center"] = float(ra_center)
-                        catred_fileinfo[uid]["dec_center"] = float(dec_center)
-                    else:
+                    try:
+                        xmlfile_mertiledef = glob.glob(os.path.join(mertile_dir, f"*{mertileid}*.xml"))[
+                            0
+                        ]
+                        if xmlfile_mertiledef:
+                            ra_center = self.get_xml_element(xmlfile_mertiledef, "Data/RaCen").text
+                            dec_center = self.get_xml_element(xmlfile_mertiledef, "Data/DecCen").text
+                            catred_fileinfo[uid]["ra_center"] = float(ra_center)
+                            catred_fileinfo[uid]["dec_center"] = float(dec_center)
+                    except Exception as e:
                         print(
-                            f"Warning: Mertile definition XML not found for mertileid {mertileid} in {mertile_dir}. RA/Dec center will be set to None."
+                            f"Warning: Error occurred while extracting RA/Dec center for mertileid {mertileid}: {e}. RA/Dec center will be set to None."
                         )
                         catred_fileinfo[uid]["ra_center"] = None
                         catred_fileinfo[uid]["dec_center"] = None
+                        self.missing_mertile_definitions.append(mertileid)
+
 
                 # Extract FITS file name from XML
                 catred_fitsfile = self.get_xml_element(
