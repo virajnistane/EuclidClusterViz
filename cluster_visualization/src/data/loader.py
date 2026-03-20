@@ -1060,7 +1060,7 @@ class DataLoader:
 
         return effcovmask_fileinfo_df
 
-    def _generate_effcovmask_fileinfo(self, paths: Dict[str, str]) -> pd.DataFrame:
+    def _generate_effcovmask_fileinfo(self, paths: Dict[str, str], effcovxmlfiles: Optional[list] = None) -> pd.DataFrame:
         """Generate effcovmask_fileinfo.csv from XML files (based on notebook cell 29)."""
         print(
             "Processing effective coverage mask XML files to create effcovmask_fileinfo dictionary"
@@ -1079,23 +1079,24 @@ class DataLoader:
             print(f"Warning: Effective coverage mask directory not found at {effcovmask_dir}")
             return pd.DataFrame()
 
-        # Get list of XML files (based on notebook: files with 'DpdHealpixEffectiveCoverageVMPZ' in name)
-        effcovxmlfiles = [
-            i
-            for i in os.listdir(effcovmask_dir)
-            if i.endswith(".xml") and "DpdHealpixEffectiveCoverageVMPZ" in i
-        ]
+        if effcovxmlfiles is None:
+            # Get list of XML files (based on notebook: files with 'DpdHealpixEffectiveCoverageVMPZ' in name)
+            effcovxmlfiles = [
+                i
+                for i in os.listdir(effcovmask_dir)
+                if i.endswith(".xml") and "DpdHealpixEffectiveCoverageVMPZ" in i
+            ]
 
-        # Get xml files from each subdirectory (named for DSR) too
-        for subdir in os.listdir(effcovmask_dir):
-            subdir_path = os.path.join(effcovmask_dir, subdir)
-            if os.path.isdir(subdir_path):
-                subdir_files = [
-                    os.path.join(subdir, f)
-                    for f in os.listdir(subdir_path)
-                    if f.endswith(".xml") and "DpdHealpixEffectiveCoverageVMPZ" in f
-                ]
-                effcovxmlfiles.extend(subdir_files)
+            # Get xml files from each subdirectory (named for DSR) too
+            for subdir in os.listdir(effcovmask_dir):
+                subdir_path = os.path.join(effcovmask_dir, subdir)
+                if os.path.isdir(subdir_path):
+                    subdir_files = [
+                        os.path.join(subdir, f)
+                        for f in os.listdir(subdir_path)
+                        if f.endswith(".xml") and "DpdHealpixEffectiveCoverageVMPZ" in f
+                    ]
+                    effcovxmlfiles.extend(subdir_files)
 
         if not effcovxmlfiles:
             print(f"Warning: No effective coverage XML files found in {effcovmask_dir}")
