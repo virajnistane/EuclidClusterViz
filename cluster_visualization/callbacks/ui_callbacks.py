@@ -135,6 +135,26 @@ class UICallbacks:
 
         @self.app.callback(
             [
+                Output("file-config-tab-control", "disabled"),
+                Output("file-config-tab-control", "label"),
+            ],
+            [Input("render-button", "n_clicks")],
+            prevent_initial_call=False,
+        )
+        def disable_file_config_tab(n_clicks):
+            """Disable File Config tab if gluematchcat_clusters is not configured"""
+            if self.config is None:
+                return True, "📁 File Config (Not Available)"
+            
+            # Check if gluematchcat_clusters is configured
+            gluematchcat_xml = self.config.get_gluematchcat_clusters_xml()
+            if gluematchcat_xml is None:
+                return True, "📁 File Config (GlueMatchCat XML Not Configured)"
+            
+            return False, "📁 File Config"
+
+        @self.app.callback(
+            [
                 Output("snr-render-button-pzwav", "disabled"),
                 Output("snr-render-button-amico", "disabled"),
                 Output("redshift-render-button", "disabled"),
@@ -162,6 +182,26 @@ class UICallbacks:
                 f"🔄 Algorithm dropdown callback: algorithm={algorithm}, merged_clusters={merged_clusters}, matching-switch-disabled={is_disabled}"
             )
             return is_disabled
+
+        @self.app.callback(
+            [
+                Output("browse-file-button", "disabled"),
+                Output("browse-file-button", "title"),
+            ],
+            [Input("browse-file-button", "n_clicks")],
+            prevent_initial_call=False,
+        )
+        def disable_browse_button_if_no_config(n_clicks):
+            """Disable browse button if gluematchcat_clusters is not configured"""
+            if self.config is None:
+                return True, "Configuration not available"
+            
+            # Check if gluematchcat_clusters is configured
+            gluematchcat_xml = self.config.get_gluematchcat_clusters_xml()
+            if gluematchcat_xml is None:
+                return True, "GlueMatchCat XML file not configured in config.ini"
+            
+            return False, "Browse for file"
 
     def _setup_catred_visibility_callback(self):
         """Setup clientside callback to show/hide CATRED controls based on catred-mode-switch"""
@@ -318,6 +358,11 @@ class UICallbacks:
             button_id = ctx.triggered[0]["prop_id"].split(".")[0]
 
             if button_id == "browse-file-button":
+                # Check if gluematchcat_clusters is configured
+                if self.config is None or self.config.get_gluematchcat_clusters_xml() is None:
+                    # Don't open modal if not configured
+                    return False, dash.no_update
+                
                 # Get default directory from config
                 default_dir = ""
                 if self.config and hasattr(self.config, "gluematchcat_dir"):

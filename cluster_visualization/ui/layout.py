@@ -172,6 +172,8 @@ class AppLayout:
                                                                         dbc.Tab(
                                                                             label="📁 File Config",
                                                                             tab_id="file-config-tab",
+                                                                            id="file-config-tab-control",
+                                                                            disabled=False,
                                                                         ),
                                                                     ],
                                                                     id="analysis-tabs",
