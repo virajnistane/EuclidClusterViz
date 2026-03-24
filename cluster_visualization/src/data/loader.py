@@ -12,6 +12,7 @@ This module handles all data loading operations including:
 import datetime
 import json
 import os
+import pdb
 import pickle
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -446,11 +447,26 @@ class DataLoader:
 
     def _set_detintile_paths_from_merged_xml(self, merged_catalog_xml: str) -> None:
         """Extract paths to individual tile detection files from gluematched/merged catalog XML and set in config."""
+
+        dirs_to_checks = [
+            self.config.mergedetcat_dir,
+            self.config.detintile_dir,
+            os.path.join(self.config.mergedetcat_dir, "inputs"),
+            os.path.join(self.config.detintile_dir, "inputs"),
+        ]
+
         try:
             detintile_pzwav_list = self.get_xml_element(
                 merged_catalog_xml, "Parameters/Parameter[Key='InputDetectionsFiles_PZWAV']/StringValue"
             ).text
-            self.config.config_parser.set("paths", "detintile_pzwav_list", detintile_pzwav_list)
+
+            if not os.path.isabs(detintile_pzwav_list) and not os.path.exists(detintile_pzwav_list):
+                for dir_check in dirs_to_checks:
+                    potential_path = os.path.join(dir_check, detintile_pzwav_list)
+                    if os.path.exists(potential_path):
+                        detintile_pzwav_list = potential_path
+                        break
+            self.config.config_parser.set("files", "detintile_pzwav_list", detintile_pzwav_list)
             print(
                 f"Set detintile_pzwav_list path from merged catalog XML: {detintile_pzwav_list}"
             )
@@ -461,7 +477,13 @@ class DataLoader:
             detintile_amico_list = self.get_xml_element(
                 merged_catalog_xml, "Parameters/Parameter[Key='InputDetectionsFiles_AMICO']/StringValue"
             ).text
-            self.config.config_parser.set("paths", "detintile_amico_list", detintile_amico_list)
+            if not os.path.isabs(detintile_amico_list) and not os.path.exists(detintile_amico_list):
+                for dir_check in dirs_to_checks:
+                    potential_path = os.path.join(dir_check, detintile_amico_list)
+                    if os.path.exists(potential_path):
+                        detintile_amico_list = potential_path
+                        break
+            self.config.config_parser.set("files", "detintile_amico_list", detintile_amico_list)
             print(
                 f"Set detintile_amico_list path from merged catalog XML: {detintile_amico_list}"
             )
@@ -515,10 +537,10 @@ class DataLoader:
                     while not os.path.exists(os.path.join(dirpath, "data/")):
                         dirpath = os.path.dirname(dirpath)
 
-                    print(f"Determined directory path for data: {dirpath}")
+                    print(f"Determined directory path for data/ dir: {dirpath}")
 
                 except AssertionError:
-                    print(f"Warning: Expected absolute path for tile XML, got relative path: {file}")
+                    print(f"Warning: Expected absolute path for detintile XML, got relative path: {file}")
                     
                     dirs_to_checks = [
                         paths["mergedetcat_dir"],
@@ -539,13 +561,13 @@ class DataLoader:
                         ), f"File not found in expected directories: {file}"
 
                         dirpath = os.path.dirname(xml_path)
-                        while os.path.exists(os.path.join(dirpath, "data/")):
+                        while not os.path.exists(os.path.join(dirpath, "data/")):
                             dirpath = os.path.dirname(dirpath)
                     except AssertionError:
                         print(f"Warning: XML file not found in expected directories: {file}")
                         continue
 
-                    print(f"Determined directory path for data: {dirpath}")
+                    print(f"Determined directory path for data/ dir: {dirpath}")
 
                 tile_file = self.get_xml_element(
                     xml_path, "Data/SpatialInformation/DataContainer/FileName"

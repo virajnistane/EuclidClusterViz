@@ -251,6 +251,8 @@ class Config:
                     # Single JSON file path - use directly
                     files_list_dict[key] = parsed_list[0]
                     print(f"Debug: Using JSON file for {key}: {parsed_list[0]}")
+            else:
+                print(f"Warning: No configuration found for {key} in [files] section")
 
         return files_list_dict
 
