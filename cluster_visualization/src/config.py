@@ -315,6 +315,71 @@ class Config:
             return dsr.strip("'\"")  # Remove quotes if present
         return None
 
+    def _get_mosaic_option(self, option_name: str, fallback=None):
+        """Get a value from [mosaic] section with optional fallback."""
+        if self.config_parser.has_option("mosaic", option_name):
+            return self.config_parser.get("mosaic", option_name)
+        return fallback
+
+    def get_mosaic_provider_default(self) -> str:
+        """Get default mosaic provider."""
+        provider = self._get_mosaic_option("provider_default", "local_fits")
+        return str(provider).strip().lower()
+
+    def get_esa_source_default(self) -> str:
+        """Get default ESA/HiPS source identifier."""
+        source_id = self._get_mosaic_option("esa_source_default", "CDS/P/DSS2/color")
+        return str(source_id).strip()
+
+    def get_esa_mocserver_url(self) -> str:
+        """Get public source discovery endpoint for ESA/HiPS surveys."""
+        return str(
+            self._get_mosaic_option(
+                "esa_mocserver_url",
+                "https://alasky.cds.unistra.fr/MocServer/query?expr=dataproduct_type%3Dimage&fmt=json",
+            )
+        ).strip()
+
+    def get_esa_cutout_base_url(self) -> str:
+        """Get cutout endpoint for HiPS image extraction."""
+        return str(
+            self._get_mosaic_option(
+                "esa_cutout_base_url", "https://alasky.cds.unistra.fr/hips-image-services/hips2fits"
+            )
+        ).strip()
+
+    def get_esa_timeout_seconds(self) -> int:
+        """Get network timeout for ESA source discovery and cutout requests."""
+        raw_value = self._get_mosaic_option("esa_timeout_seconds", "30")
+        try:
+            return max(1, int(str(raw_value).strip()))
+        except ValueError:
+            return 30
+
+    def get_esa_source_cache_ttl_seconds(self) -> int:
+        """Get in-memory cache TTL for discovered public ESA sources."""
+        raw_value = self._get_mosaic_option("esa_source_cache_ttl_seconds", "21600")
+        try:
+            return max(60, int(str(raw_value).strip()))
+        except ValueError:
+            return 21600
+
+    def get_esa_cutout_width(self) -> int:
+        """Get requested cutout width (pixels) for ESA cutouts."""
+        raw_value = self._get_mosaic_option("esa_cutout_width", "768")
+        try:
+            return max(64, min(2048, int(str(raw_value).strip())))
+        except ValueError:
+            return 768
+
+    def get_esa_cutout_height(self) -> int:
+        """Get requested cutout height (pixels) for ESA cutouts."""
+        raw_value = self._get_mosaic_option("esa_cutout_height", "768")
+        try:
+            return max(64, min(2048, int(str(raw_value).strip())))
+        except ValueError:
+            return 768
+
     def validate_paths(self):
         """Validate that critical paths exist and return status"""
         issues = []
