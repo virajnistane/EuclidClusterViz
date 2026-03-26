@@ -6,6 +6,7 @@ import glob
 import json
 import os
 import queue
+import re
 import threading
 import time
 import warnings
@@ -46,6 +47,21 @@ class MOSAICHandler:
             "id": "CDS/P/DSS2/color",
             "label": "DSS2 Color",
             "attribution": "DSS2 / CDS",
+        },
+        {
+            "id": "CDS/P/Euclid/ERO/VIS",
+            "label": "Euclid ERO VIS",
+            "attribution": "Euclid ERO VIS / CDS",
+        },
+        {
+            "id": "CDS/P/Euclid/Q1/VIS",
+            "label": "Euclid Q1 VIS",
+            "attribution": "Euclid Q1 VIS / CDS",
+        },
+        {
+            "id": "CDS/P/Euclid/Q1/color",
+            "label": "Euclid Q1 Color",
+            "attribution": "Euclid Q1 Color / CDS",
         },
         {
             "id": "CDS/P/2MASS/color",
@@ -299,7 +315,7 @@ class MOSAICHandler:
             print(f"Warning: No mosaic FITS file found for MER tile {mertileid}")
             return None
 
-        fits_file = fits_files[0]  # Take the first match
+        fits_file = self._select_best_local_mosaic_file(fits_files)
         file_size_gb = os.path.getsize(fits_file) / (1024**3)
 
         # Check file size for initial performance optimization
@@ -380,6 +396,57 @@ class MOSAICHandler:
 
         print(f"[SUCCESS] Processed MER tile {mertileid}")
         return result
+
+    def _parse_mosaic_timestamp_score(self, file_path: str) -> int:
+        """Extract sortable timestamp score from MER mosaic filename."""
+        # Example segment: _20250818T005850.245906Z_
+        basename = os.path.basename(file_path)
+        match = re.search(r"_(\d{8})T(\d{6})\.(\d+)Z_", basename)
+        if not match:
+            return 0
+        date_part, time_part, frac_part = match.groups()
+        frac_part = (frac_part + "000000")[:6]
+        return int(f"{date_part}{time_part}{frac_part}")
+
+    def _estimate_file_valid_fraction(self, file_path: str) -> float:
+        """Estimate usable-data fraction from a fast primary-HDU sample."""
+        try:
+            with fits.open(
+                file_path,
+                mode="readonly",
+                ignore_missing_simple=True,
+                memmap=False,
+            ) as hdul:
+                data = hdul[0].data
+                if not isinstance(data, np.ndarray) or data.ndim != 2 or data.size == 0:
+                    return -1.0
+
+                step_y = max(1, data.shape[0] // 512)
+                step_x = max(1, data.shape[1] // 512)
+                sample = data[::step_y, ::step_x]
+
+                valid_mask = np.isfinite(sample) & (np.abs(sample) < 1e30)
+                return float(np.mean(valid_mask))
+        except Exception as exc:
+            print(f"[WARNING] Could not score mosaic candidate {os.path.basename(file_path)}: {exc}")
+            return -1.0
+
+    def _select_best_local_mosaic_file(self, fits_files: List[str]) -> str:
+        """Select best local MER mosaic candidate deterministically."""
+        scored_candidates = []
+        for file_path in sorted(set(fits_files)):
+            valid_fraction = self._estimate_file_valid_fraction(file_path)
+            ts_score = self._parse_mosaic_timestamp_score(file_path)
+            scored_candidates.append((valid_fraction, ts_score, file_path))
+
+        # Prefer highest valid fraction, then latest timestamp, then lexicographic path.
+        scored_candidates.sort(key=lambda x: (x[0], x[1], x[2]))
+        best_valid, best_ts, best_file = scored_candidates[-1]
+        print(
+            "[SELECT] Chose MER mosaic candidate "
+            f"{os.path.basename(best_file)} (valid_fraction={best_valid:.4f}, ts_score={best_ts})"
+        )
+        return best_file
 
     def _load_esa_cutout_by_mertile(
         self,
@@ -680,41 +747,63 @@ class MOSAICHandler:
                         f"Debug: Downsampled to: {mosaic_data.shape[1]} x {mosaic_data.shape[0]} pixels"
                     )
 
-            # Handle NaN values - similar to notebook approach
-            valid_mask = np.isfinite(mosaic_data)
+            # Handle NaN and extreme sentinel values often used in large FITS mosaics.
+            valid_mask = np.isfinite(mosaic_data) & (np.abs(mosaic_data) < 1e30)
             if not np.any(valid_mask):
                 print("Warning: No valid data found in mosaic image")
                 return np.zeros((target_height, target_width))
 
+            invalid_fraction = 1.0 - float(np.mean(valid_mask))
+            if invalid_fraction > 0:
+                print(f"Debug: Excluding {invalid_fraction*100:.2f}% invalid/sentinel pixels")
+
             print("Debug: Computing statistics...")
 
-            # Apply sigma clipping and normalization
-            # Use ravel to flatten the array for mean and std calculations
-            # For large arrays, sample a subset for statistics to speed up processing
-            # if mosaic_data.size > self.max_pixels_for_stats:  # If larger than 10M pixels
-            #     print("Debug: Large image detected, sampling for statistics...")
-            #     # Sample every 10th pixel for statistics
-            #     sample_data = mosaic_data[::10, ::10].ravel()
-            #     mean = np.mean(sample_data)
-            #     std = np.std(sample_data)
-            # else:
-            #     # Sample all pixels for statistics
-            #     mean = np.mean(mosaic_data.ravel())
-            #     std = np.std(mosaic_data.ravel())
+            # Robust normalization using finite percentile range avoids overflow/NaN on very large arrays.
+            finite_vals = mosaic_data[valid_mask].astype(np.float64, copy=False)
 
-            mean = np.mean(mosaic_data.ravel())
-            std = np.std(mosaic_data.ravel())
+            # Sample statistics for very large arrays to keep processing fast.
+            if finite_vals.size > self.max_pixels_for_stats:
+                step = max(1, finite_vals.size // self.max_pixels_for_stats)
+                stats_vals = finite_vals[::step]
+            else:
+                stats_vals = finite_vals
 
-            print(f"Debug: Mosaic data statistics - mean: {mean:.3f}, std: {std:.3f}")
+            # Reject extreme tails using robust IQR fencing before percentile stretch.
+            q25 = float(np.nanpercentile(stats_vals, 25.0))
+            q75 = float(np.nanpercentile(stats_vals, 75.0))
+            iqr = q75 - q25
+            if np.isfinite(iqr) and iqr > 0:
+                lower_fence = q25 - 10.0 * iqr
+                upper_fence = q75 + 10.0 * iqr
+                core_vals = stats_vals[(stats_vals >= lower_fence) & (stats_vals <= upper_fence)]
+                if core_vals.size > 10_000:
+                    stats_vals = core_vals
+                    print(
+                        "Debug: Robust outlier rejection retained "
+                        f"{(core_vals.size / max(1, finite_vals.size))*100:.2f}% of sampled pixels"
+                    )
 
-            # Clip the data to the range [0, mean + N * std] where N = n_sigma
-            max_val = mean + self.n_sigma * std
-            print(f"Debug: Clipping data to range [0, {max_val:.3f}]")
+            p_low = float(np.nanpercentile(stats_vals, 1.0))
+            p_high = float(np.nanpercentile(stats_vals, 99.5))
+            if not np.isfinite(p_low) or not np.isfinite(p_high) or p_high <= p_low:
+                p_low = float(np.nanmin(stats_vals))
+                p_high = float(np.nanmax(stats_vals))
 
-            mer_image = np.clip(mosaic_data, 0.0, max_val)
+            if not np.isfinite(p_low) or not np.isfinite(p_high) or p_high <= p_low:
+                print("Warning: Invalid normalization bounds, returning zeros")
+                return np.zeros((target_height, target_width), dtype=np.float32)
 
-            # Normalize the image
-            mer_image = mer_image / max_val
+            print(
+                f"Debug: Mosaic data percentile bounds - p1: {p_low:.3f}, p99.5: {p_high:.3f}"
+            )
+
+            working_image = np.array(mosaic_data, dtype=np.float64, copy=True)
+            working_image[~valid_mask] = np.nan
+            mer_image = np.clip(working_image, p_low, p_high)
+            mer_image = (mer_image - p_low) / (p_high - p_low)
+            mer_image = np.nan_to_num(mer_image, nan=0.0, posinf=1.0, neginf=0.0)
+            mer_image = mer_image.astype(np.float32, copy=False)
 
             print(
                 f"Debug: After clipping and normalization - range: [{np.min(mer_image):.3f}, {np.max(mer_image):.3f}]"
@@ -730,6 +819,8 @@ class MOSAICHandler:
                 .resize((target_width, target_height), Image.Resampling.LANCZOS)
                 .transpose(Image.Transpose.FLIP_LEFT_RIGHT)
             )
+            mer_array = np.nan_to_num(mer_array, nan=0.0, posinf=1.0, neginf=0.0)
+            mer_array = np.clip(mer_array, 0.0, 1.0).astype(np.float32, copy=False)
 
             print(f"Debug: Final processed image shape: {mer_array.shape}")
 
