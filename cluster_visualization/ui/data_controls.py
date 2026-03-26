@@ -408,6 +408,61 @@ class DataControls:
                     className="mb-1 border-0 shadow-sm",
                     style={"border-radius": "12px"},
                 ),
+                # Provider and source selection
+                dbc.Card(
+                    [
+                        dbc.CardHeader(
+                            [
+                                html.Div(
+                                    [
+                                        html.I(className="fas fa-database me-2"),
+                                        html.H6("Mosaic Source", className="mb-0"),
+                                    ],
+                                    className="d-flex align-items-center",
+                                )
+                            ],
+                            className="border-0",
+                            style={
+                                "background": "linear-gradient(45deg, #55efc4, #00b894)",
+                                "color": "#1f2937",
+                                "border-radius": "8px 8px 0 0",
+                            },
+                        ),
+                        dbc.CardBody(
+                            [
+                                html.Small("Provider", className="text-muted d-block mb-1"),
+                                dcc.Dropdown(
+                                    id="mosaic-provider-selector",
+                                    options=[
+                                        {"label": "Local MER FITS", "value": "local_fits"},
+                                        {"label": "ESA Sky (Public HiPS)", "value": "esa_sky"},
+                                    ],
+                                    value="esa_sky",
+                                    clearable=False,
+                                    className="mb-2",
+                                ),
+                                html.Small("Source", className="text-muted d-block mb-1"),
+                                dcc.Dropdown(
+                                    id="mosaic-source-selector",
+                                    options=[
+                                        {"label": "MER FITS tiles", "value": "local_mer"},
+                                        {"label": "ESA DSS2 Color", "value": "CDS/P/DSS2/color"},
+                                    ],
+                                    value="CDS/P/DSS2/color",
+                                    clearable=False,
+                                ),
+                                html.Small(
+                                    id="mosaic-source-attribution",
+                                    children="Attribution: ESA DSS2 Color",
+                                    className="text-muted d-block mt-2",
+                                ),
+                            ],
+                            className="p-3",
+                        ),
+                    ],
+                    className="mb-2 border-0 shadow-sm",
+                    style={"border-radius": "12px"},
+                ),
                 # Load mosaic button
                 dbc.Card(
                     [
