@@ -1095,6 +1095,66 @@ class MOSAICHandler:
 
         return colorbar_trace
 
+    def _create_grouped_mask_traces(
+        self,
+        pixels: np.ndarray,
+        weights: np.ndarray,
+        opacity: float,
+        colorscale: str,
+        name_prefix: str = "Mask overlay",
+        n_bins: int = 12,
+        weight_min: float = 0.8,
+        weight_max: float = 1.0,
+    ) -> List[go.Scatter]:
+        """Create a small number of grouped polygon traces to reduce Plotly lag."""
+        grouped_x: List[List[Optional[float]]] = [[] for _ in range(n_bins)]
+        grouped_y: List[List[Optional[float]]] = [[] for _ in range(n_bins)]
+        grouped_count: List[int] = [0 for _ in range(n_bins)]
+
+        for pix, weight in zip(pixels, weights):
+            # Build polygon directly in world coordinates
+            ra, dec = hp.vec2ang(hp.boundaries(16384, int(pix), step=2, nest=True).T, lonlat=True)
+            ra = np.append(ra, ra[0]).tolist()
+            dec = np.append(dec, dec[0]).tolist()
+
+            weight_norm = (float(weight) - weight_min) / max(weight_max - weight_min, 1e-8)
+            weight_norm = float(np.clip(weight_norm, 0.0, 1.0))
+            bin_idx = min(n_bins - 1, int(weight_norm * n_bins))
+
+            grouped_x[bin_idx].extend(ra + [None])
+            grouped_y[bin_idx].extend(dec + [None])
+            grouped_count[bin_idx] += 1
+
+        traces: List[go.Scatter] = []
+        try:
+            colormap = getattr(plt.cm, colorscale)
+        except AttributeError:
+            print(f"Warning: Invalid colorscale '{colorscale}', defaulting to 'viridis'")
+            colormap = plt.get_cmap("viridis")
+
+        for bin_idx in range(n_bins):
+            if grouped_count[bin_idx] == 0:
+                continue
+
+            color = colormap(bin_idx / max(n_bins - 1, 1))
+            traces.append(
+                go.Scatter(
+                    x=grouped_x[bin_idx],
+                    y=grouped_y[bin_idx],
+                    mode="lines",
+                    fill="toself",
+                    fillcolor=(
+                        f"rgba({int(color[0]*255)},{int(color[1]*255)},{int(color[2]*255)},{opacity})"
+                    ),
+                    line=dict(width=0.5, color="yellow"),
+                    name=f"{name_prefix} bin {bin_idx}",
+                    showlegend=False,
+                    hoverinfo="skip",
+                )
+            )
+
+        return traces
+
     def create_mosaic_image_trace(
         self,
         mertileid: int,
@@ -1249,50 +1309,23 @@ class MOSAICHandler:
                 f"Weight range: {footprint['WEIGHT'][_pix_mask].min():.3f} to {footprint['WEIGHT'][_pix_mask].max():.3f}"
             )
 
-        # Create traces for HEALPix footprint polygons
-        footprint_traces = []
+        # Create grouped traces for HEALPix footprint polygons
+        footprint_traces: List[go.Scatter] = []
         weight_min, weight_max = 0.8, 1.0
 
         if _pix_mask.sum() > 0:
-            print(f"Creating {_pix_mask.sum()} HEALPix polygon traces...")
+            print(f"Creating grouped traces for {_pix_mask.sum()} HEALPix polygons...")
             polygon_start = time.time()
-
-            for idx, (pix, weight) in enumerate(
-                zip(footprint["PIXEL"][_pix_mask], footprint["WEIGHT"][_pix_mask])
-            ):
-                # Build polygon directly in world coordinates for speed and provider independence.
-                ra, dec = hp.vec2ang(
-                    hp.boundaries(16384, pix, step=2, nest=True).T,
-                    lonlat=True,
-                )
-                ra = np.append(ra, ra[0])
-                dec = np.append(dec, dec[0])
-
-                # Normalize weight for colorscale
-                weight_norm = (weight - weight_min) / (weight_max - weight_min)
-                try:
-                    colormap = getattr(plt.cm, colorscale)
-                    color = colormap(weight_norm)  # RGBA
-                except AttributeError:
-                    print(f"Warning: Invalid colorscale '{colorscale}', defaulting to 'viridis'")
-                    colormap = plt.get_cmap("viridis")
-                    color = colormap(weight_norm)
-
-                footprint_traces.append(
-                    go.Scatter(
-                        x=list(ra),
-                        y=list(dec),
-                        mode="lines",
-                        fill="toself",
-                        fillcolor=f"rgba({int(color[0]*255)},{int(color[1]*255)},{int(color[2]*255)},{opacity})",
-                        line=dict(width=0.5, color="yellow"),
-                        name=f"Mask overlay pixel {pix}",
-                        showlegend=False,
-                        hovertext=f"HEALPix {pix}<br>Weight: {weight:.3f}",
-                        hoverinfo="text",
-                        customdata=[[weight]],
-                    )
-                )
+            footprint_traces = self._create_grouped_mask_traces(
+                pixels=np.asarray(footprint["PIXEL"][_pix_mask]),
+                weights=np.asarray(footprint["WEIGHT"][_pix_mask]),
+                opacity=opacity,
+                colorscale=colorscale,
+                name_prefix="Mask overlay",
+                n_bins=12,
+                weight_min=weight_min,
+                weight_max=weight_max,
+            )
             polygon_time = time.time() - polygon_start
         else:
             polygon_time = 0.0
@@ -1491,52 +1524,22 @@ class MOSAICHandler:
                 f"Weight range: {footprint['WEIGHT'][_pix_mask].min():.3f} to {footprint['WEIGHT'][_pix_mask].max():.3f}"
             )
 
-        # Create traces for HEALPix footprint polygons
-        footprint_traces = []
+        # Create grouped traces for HEALPix footprint polygons
+        footprint_traces: List[go.Scatter] = []
         weight_min, weight_max = 0.8, 1.0
 
         if _pix_mask.sum() > 0:
-            print(f"Creating {_pix_mask.sum()} HEALPix polygon traces...")
-
-            for idx, (pix, weight) in enumerate(
-                zip(footprint["PIXEL"][_pix_mask], footprint["WEIGHT"][_pix_mask])
-            ):
-                # Get pixel boundaries
-                rapix, decpix = self.get_healpix_boundaries(
-                    pix, nside=16384, nest=True, step=2, mertileid=mertileid, wcs_mosaic=wcs_cutout
-                )
-
-                ra, dec = wcs_cutout.wcs_pix2world(rapix, decpix, 0)
-
-                # Close the polygon
-                ra = np.append(ra, ra[0])
-                dec = np.append(dec, dec[0])
-
-                # Normalize weight for colorscale
-                weight_norm = (weight - weight_min) / (weight_max - weight_min)
-                try:
-                    colormap = getattr(plt.cm, colorscale)
-                    color = colormap(weight_norm)  # RGBA
-                except AttributeError:
-                    print(f"Warning: Invalid colorscale '{colorscale}', defaulting to 'viridis'")
-                    colormap = plt.get_cmap("viridis")
-                    color = colormap(weight_norm)
-
-                footprint_traces.append(
-                    go.Scatter(
-                        x=list(ra),
-                        y=list(dec),
-                        mode="lines",
-                        fill="toself",
-                        fillcolor=f"rgba({int(color[0]*255)},{int(color[1]*255)},{int(color[2]*255)},{opacity})",
-                        line=dict(width=0.5, color="yellow"),
-                        name=f"Mask overlay (cutout) pixel {pix}",
-                        showlegend=False,
-                        hovertext=f"HEALPix {pix}<br>Weight: {weight:.3f}",
-                        hoverinfo="text",
-                        customdata=[[weight]],
-                    )
-                )
+            print(f"Creating grouped traces for {_pix_mask.sum()} HEALPix cutout polygons...")
+            footprint_traces = self._create_grouped_mask_traces(
+                pixels=np.asarray(footprint["PIXEL"][_pix_mask]),
+                weights=np.asarray(footprint["WEIGHT"][_pix_mask]),
+                opacity=opacity,
+                colorscale=colorscale,
+                name_prefix="Mask overlay (cutout)",
+                n_bins=12,
+                weight_min=weight_min,
+                weight_max=weight_max,
+            )
 
         # Add a colorbar trace (invisible heatmap that only shows the colorbar)
         if footprint_traces and add_colorbar:
