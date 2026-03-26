@@ -3,11 +3,16 @@ Python class to handle the extraction and visualization of mosaic images.
 """
 
 import glob
+import json
 import os
 import queue
 import threading
 import time
+import warnings
+from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple, Union
+from urllib.parse import urlencode
+from urllib.request import urlopen
 
 import healpy as hp
 import matplotlib.pyplot as plt
@@ -16,6 +21,7 @@ import plotly.graph_objs as go
 from astropy import wcs
 from astropy.io import fits
 from astropy.table import Table
+from astropy.units import UnitsWarning
 from PIL import Image
 from shapely.geometry import box
 
@@ -34,6 +40,24 @@ except ImportError:
 
 class MOSAICHandler:
     """Handler for MER mosaic image data, similar to CATREDHandler."""
+
+    FALLBACK_ESA_SOURCES = [
+        {
+            "id": "CDS/P/DSS2/color",
+            "label": "DSS2 Color",
+            "attribution": "DSS2 / CDS",
+        },
+        {
+            "id": "CDS/P/2MASS/color",
+            "label": "2MASS Color",
+            "attribution": "2MASS / CDS",
+        },
+        {
+            "id": "CDS/P/allWISE/color",
+            "label": "AllWISE Color",
+            "attribution": "AllWISE / CDS",
+        },
+    ]
 
     def __init__(self, config=None):
         """Initiate MOSAICHandler with performance optimizations"""
@@ -63,6 +87,370 @@ class MOSAICHandler:
         self.max_file_size_gb = 2.0  # Skip files larger than 2GB initially
         self.max_pixels_for_stats = 10_000_000  # Sample large images for statistics
 
+        # Mosaic provider and ESA discovery settings
+        self.default_mosaic_provider = "local_fits"
+        if hasattr(self.config, "get_mosaic_provider_default"):
+            self.default_mosaic_provider = self.config.get_mosaic_provider_default()
+
+        self.default_esa_source = "CDS/P/DSS2/color"
+        if hasattr(self.config, "get_esa_source_default"):
+            self.default_esa_source = self.config.get_esa_source_default()
+
+        self.esa_source_discovery_url = ""
+        if hasattr(self.config, "get_esa_mocserver_url"):
+            self.esa_source_discovery_url = self.config.get_esa_mocserver_url()
+
+        self.esa_cutout_base_url = ""
+        if hasattr(self.config, "get_esa_cutout_base_url"):
+            self.esa_cutout_base_url = self.config.get_esa_cutout_base_url()
+
+        self.esa_timeout_seconds = 30
+        if hasattr(self.config, "get_esa_timeout_seconds"):
+            self.esa_timeout_seconds = self.config.get_esa_timeout_seconds()
+
+        self.esa_source_cache_ttl_seconds = 21600
+        if hasattr(self.config, "get_esa_source_cache_ttl_seconds"):
+            self.esa_source_cache_ttl_seconds = self.config.get_esa_source_cache_ttl_seconds()
+
+        self.esa_cutout_width = 768
+        if hasattr(self.config, "get_esa_cutout_width"):
+            self.esa_cutout_width = self.config.get_esa_cutout_width()
+
+        self.esa_cutout_height = 768
+        if hasattr(self.config, "get_esa_cutout_height"):
+            self.esa_cutout_height = self.config.get_esa_cutout_height()
+
+        self._cached_esa_sources: Optional[List[Dict[str, str]]] = None
+        self._cached_esa_sources_ts: Optional[float] = None
+
+    def _normalize_provider(self, provider: Optional[str]) -> str:
+        """Normalize provider aliases used by UI and callback layers."""
+        if not provider:
+            provider = self.default_mosaic_provider
+
+        provider_norm = str(provider).strip().lower()
+        alias_map = {
+            "local": "local_fits",
+            "local_fits": "local_fits",
+            "fits": "local_fits",
+            "mer": "local_fits",
+            "esa": "esa_sky",
+            "esa_sky": "esa_sky",
+            "esasky": "esa_sky",
+        }
+        return alias_map.get(provider_norm, "local_fits")
+
+    def _build_cache_key(self, provider: str, source_id: Optional[str], mertileid: int) -> str:
+        """Build a provider-aware cache key for mosaic data."""
+        source_component = source_id or "default"
+        return f"{provider}|{source_component}|{mertileid}"
+
+    def _extract_tile_bounds(
+        self, data: Dict[str, Any], mertileid: int
+    ) -> Optional[Tuple[float, float, float, float]]:
+        """Get tile bounds (ra_min, ra_max, dec_min, dec_max) from catred polygons."""
+        if "catred_info" not in data:
+            return None
+
+        tile_rows = data["catred_info"].loc[data["catred_info"]["mertileid"] == mertileid]
+        if tile_rows.empty:
+            return None
+
+        tile_polygon = tile_rows.iloc[0].get("polygon")
+        if tile_polygon is None:
+            return None
+
+        minx, miny, maxx, maxy = tile_polygon.bounds
+        return (float(minx), float(maxx), float(miny), float(maxy))
+
+    def get_available_mosaic_sources(self, provider: Optional[str] = None) -> List[Dict[str, str]]:
+        """Return available sources for selected mosaic provider."""
+        provider_norm = self._normalize_provider(provider)
+        if provider_norm == "esa_sky":
+            return self._discover_esa_sources()
+
+        return [
+            {
+                "id": "local_mer",
+                "label": "MER FITS tiles",
+                "attribution": "Local Euclid MER FITS",
+            }
+        ]
+
+    def _discover_esa_sources(self) -> List[Dict[str, str]]:
+        """Discover publicly available image surveys from a public MOC server endpoint."""
+        now_ts = time.time()
+        if (
+            self._cached_esa_sources is not None
+            and self._cached_esa_sources_ts is not None
+            and (now_ts - self._cached_esa_sources_ts) < self.esa_source_cache_ttl_seconds
+        ):
+            return self._cached_esa_sources
+
+        discovered_sources: List[Dict[str, str]] = []
+        if self.esa_source_discovery_url:
+            try:
+                with urlopen(self.esa_source_discovery_url, timeout=self.esa_timeout_seconds) as resp:
+                    payload = resp.read().decode("utf-8", errors="replace")
+                records = json.loads(payload)
+
+                if isinstance(records, list):
+                    for record in records:
+                        if not isinstance(record, dict):
+                            continue
+
+                        source_id = record.get("ID")
+                        if not source_id:
+                            continue
+
+                        label = record.get("obs_title") or source_id
+                        regime = record.get("obs_regime") or ""
+                        attribution = record.get("obs_copyright") or "ESA/ESDC public HiPS"
+                        if regime:
+                            attribution = f"{attribution} ({regime})"
+
+                        discovered_sources.append(
+                            {
+                                "id": str(source_id),
+                                "label": str(label),
+                                "attribution": str(attribution),
+                            }
+                        )
+            except Exception as exc:
+                print(f"[WARNING] ESA source discovery failed: {exc}")
+
+        if not discovered_sources:
+            discovered_sources = list(self.FALLBACK_ESA_SOURCES)
+
+        # Dedupe while preserving order
+        deduped: List[Dict[str, str]] = []
+        seen = set()
+        for src in discovered_sources:
+            src_id = src.get("id")
+            if src_id in seen:
+                continue
+            deduped.append(src)
+            seen.add(src_id)
+
+        self._cached_esa_sources = deduped
+        self._cached_esa_sources_ts = now_ts
+        return deduped
+
+    def _load_mosaic_data_by_provider(
+        self,
+        mertileid: int,
+        provider: Optional[str] = None,
+        source_id: Optional[str] = None,
+        tile_bounds: Optional[Tuple[float, float, float, float]] = None,
+    ):
+        """Load mosaic data for local FITS or ESA source provider."""
+        provider_norm = self._normalize_provider(provider)
+        normalized_source = source_id
+        if provider_norm == "esa_sky" and not normalized_source:
+            normalized_source = self.default_esa_source
+        elif provider_norm == "local_fits":
+            normalized_source = "local_mer"
+
+        cache_key = self._build_cache_key(provider_norm, normalized_source, mertileid)
+        if cache_key in self.traces_cache:
+            print(f"[CACHE HIT] Using cached data for key {cache_key}")
+            return self.traces_cache[cache_key]
+
+        if provider_norm == "esa_sky":
+            result = self._load_esa_cutout_by_mertile(
+                mertileid=mertileid, source_id=normalized_source, tile_bounds=tile_bounds
+            )
+        else:
+            result = self._load_local_mosaic_fits_data(mertileid=mertileid)
+
+        if result is not None:
+            result["provider"] = provider_norm
+            result["source_id"] = normalized_source
+            self.traces_cache[cache_key] = result
+
+        return result
+
+    def _load_local_mosaic_fits_data(self, mertileid: int):
+        """Load local MER FITS tile from configured mosaic directory."""
+        mosaic_dir = self.config.mosaic_dir
+        if not mosaic_dir:
+            print("[ERROR] paths.mosaic_dir is not configured")
+            return None
+
+        fits_files: List[str] = []
+        try:
+            fits_files = glob.glob(
+                os.path.join(mosaic_dir, f"EUC_MER_BGSUB-MOSAIC-VIS_TILE{mertileid}*.fits.gz")
+            )
+        except Exception:
+            print(f"Error accessing directory {mosaic_dir}, trying subdirectories...")
+            for subdir in os.listdir(mosaic_dir):
+                subdir_path = os.path.join(mosaic_dir, subdir)
+                if os.path.isdir(subdir_path):
+                    fits_files = glob.glob(
+                        os.path.join(
+                            subdir_path, f"EUC_MER_BGSUB-MOSAIC-VIS_TILE{mertileid}*.fits.gz"
+                        )
+                    )
+                    if fits_files:
+                        break
+
+        if not fits_files:
+            print(f"Warning: No mosaic FITS file found for MER tile {mertileid}")
+            return None
+
+        fits_file = fits_files[0]  # Take the first match
+        file_size_gb = os.path.getsize(fits_file) / (1024**3)
+
+        # Check file size for initial performance optimization
+        if file_size_gb > self.max_file_size_gb:
+            print(f"[WARNING] Large file ({file_size_gb:.2f}GB) - may take longer to process")
+
+        print(f"[LOADING] Processing mosaic for MER tile {mertileid} ({file_size_gb:.2f}GB)...")
+
+        # Thread-safe FITS loading with timeout
+        result_queue: queue.Queue = queue.Queue()
+        error_queue: queue.Queue = queue.Queue()
+
+        def load_fits_with_timeout():
+            try:
+                start_time = time.time()
+
+                # Use memmap=False to avoid memory mapping issues with compressed files
+                with fits.open(
+                    fits_file, mode="readonly", ignore_missing_simple=True, memmap=False
+                ) as hdul:
+                    primary_hdu = hdul[0]
+                    header = primary_hdu.header.copy()
+                    # Create a copy of the data to avoid issues with file closure
+                    data = primary_hdu.data.copy() if primary_hdu.data is not None else None
+                    wcs_obj = wcs.WCS(primary_hdu.header)
+
+                    if data is None:
+                        error_queue.put(f"No data in primary HDU for {fits_file}")
+                        return
+
+                    load_time = time.time() - start_time
+                    print(f"[TIMING] FITS loaded in {load_time:.2f}s")
+
+                    result_queue.put(
+                        {
+                            "header": header,
+                            "data": data,
+                            "wcs": wcs_obj,
+                            "file_path": fits_file,
+                            "provider": "local_fits",
+                            "source_id": "local_mer",
+                            "attribution": "Local Euclid MER FITS",
+                        }
+                    )
+
+            except Exception as e:
+                error_queue.put(str(e))
+
+        # Start loading thread
+        load_thread = threading.Thread(target=load_fits_with_timeout)
+        load_thread.daemon = True
+        load_thread.start()
+
+        # Wait with timeout
+        load_thread.join(timeout=self.timeout_seconds)
+
+        if load_thread.is_alive():
+            print(f"[TIMEOUT] Loading MER tile {mertileid} timed out after {self.timeout_seconds}s")
+            return None
+
+        # Check for errors
+        if not error_queue.empty():
+            error_msg = error_queue.get()
+            print(f"[ERROR] Failed to load MER tile {mertileid}: {error_msg}")
+            return None
+
+        # Get results
+        if result_queue.empty():
+            print(f"[ERROR] No data loaded for MER tile {mertileid}")
+            return None
+
+        result = result_queue.get()
+
+        # Store in instance variables for compatibility
+        self.mosaic_header = result["header"]
+        self.mosaic_data = result["data"]
+        self.mosaic_wcs = result["wcs"]
+
+        print(f"[SUCCESS] Processed MER tile {mertileid}")
+        return result
+
+    def _load_esa_cutout_by_mertile(
+        self,
+        mertileid: int,
+        source_id: Optional[str],
+        tile_bounds: Optional[Tuple[float, float, float, float]],
+    ):
+        """Load an ESA cutout image centered on selected MER tile bounds."""
+        if not tile_bounds:
+            print(f"[WARNING] Missing tile bounds for ESA tile request: {mertileid}")
+            return None
+
+        if not self.esa_cutout_base_url:
+            print("[ERROR] ESA cutout endpoint is not configured")
+            return None
+
+        ra_min, ra_max, dec_min, dec_max = tile_bounds
+        center_ra = (ra_min + ra_max) / 2.0
+        center_dec = (dec_min + dec_max) / 2.0
+        fov_deg = max(abs(ra_max - ra_min), abs(dec_max - dec_min)) * 1.05
+        if fov_deg <= 0:
+            fov_deg = 0.02
+
+        params = {
+            "hips": source_id or self.default_esa_source,
+            "ra": center_ra,
+            "dec": center_dec,
+            "fov": fov_deg,
+            "width": self.esa_cutout_width,
+            "height": self.esa_cutout_height,
+            "projection": "TAN",
+            "format": "jpg",
+        }
+        cutout_url = f"{self.esa_cutout_base_url}?{urlencode(params)}"
+
+        try:
+            with urlopen(cutout_url, timeout=self.esa_timeout_seconds) as resp:
+                image_bytes = resp.read()
+
+            pil_img = Image.open(BytesIO(image_bytes)).convert("L")
+            image_array = np.asarray(pil_img, dtype=np.float32)
+
+            if image_array.size == 0:
+                print(f"[WARNING] Empty ESA cutout for tile {mertileid}")
+                return None
+
+            max_pixel = float(np.max(image_array))
+            if max_pixel > 0:
+                image_array = image_array / max_pixel
+
+            return {
+                "header": None,
+                "data": image_array,
+                "wcs": None,
+                "file_path": cutout_url,
+                "bounds": {
+                    "ra_min": ra_min,
+                    "ra_max": ra_max,
+                    "dec_min": dec_min,
+                    "dec_max": dec_max,
+                    "ra_size_deg": abs(ra_max - ra_min),
+                    "dec_size_deg": abs(dec_max - dec_min),
+                },
+                "provider": "esa_sky",
+                "source_id": source_id,
+                "attribution": "ESA/ESDC public HiPS via CDS hips2fits",
+            }
+        except Exception as exc:
+            print(f"[ERROR] ESA cutout load failed for tile {mertileid}: {exc}")
+            return None
+
     def get_mosaic_cutout(self, mertileid, racen, deccen, size, mosaicinfo=None):
         """
         Get a cutout from the mosaic FITS file.
@@ -81,7 +469,9 @@ class MOSAICHandler:
 
         if mosaicinfo is None:
             try:
-                mosaicinfo = self.get_mosaic_fits_data_by_mertile(mertileid)
+                mosaicinfo = self.get_mosaic_fits_data_by_mertile(
+                    mertileid, provider="local_fits", source_id="local_mer"
+                )
             except Exception as e:
                 print(f"Error loading mosaic data for MER tile {mertileid}: {e}")
                 return None, None, None
@@ -141,114 +531,22 @@ class MOSAICHandler:
 
         return cutout, wnew, hdr
 
-    def get_mosaic_fits_data_by_mertile(self, mertileid):
+    def get_mosaic_fits_data_by_mertile(
+        self,
+        mertileid,
+        provider: Optional[str] = None,
+        source_id: Optional[str] = None,
+        tile_bounds: Optional[Tuple[float, float, float, float]] = None,
+    ):
         """
-        Load mosaic FITS data with performance optimization and threading timeout
+        Load mosaic data for the selected provider with performance optimization.
         """
-        # Check if already cached
-        if mertileid in self.traces_cache:
-            print(f"[CACHE HIT] Using cached data for MER tile {mertileid}")
-            return self.traces_cache[mertileid]
-
-        mosaic_dir = self.config.mosaic_dir
-        try:
-            fits_files = glob.glob(
-                os.path.join(mosaic_dir, f"EUC_MER_BGSUB-MOSAIC-VIS_TILE{mertileid}*.fits.gz")
-            )
-        except:
-            print(f"Error accessing directory {mosaic_dir}, trying subdirectories...")
-            for subdir in os.listdir(mosaic_dir):
-                subdir_path = os.path.join(mosaic_dir, subdir)
-                if os.path.isdir(subdir_path):
-                    fits_files = glob.glob(
-                        os.path.join(
-                            subdir_path, f"EUC_MER_BGSUB-MOSAIC-VIS_TILE{mertileid}*.fits.gz"
-                        )
-                    )
-                    if fits_files:
-                        break
-
-        if not fits_files:
-            print(f"Warning: No mosaic FITS file found for MER tile {mertileid}")
-            return None
-
-        fits_file = fits_files[0]  # Take the first match
-        file_size_gb = os.path.getsize(fits_file) / (1024**3)
-
-        # Check file size for initial performance optimization
-        if file_size_gb > self.max_file_size_gb:
-            print(f"[WARNING] Large file ({file_size_gb:.2f}GB) - may take longer to process")
-
-        print(f"[LOADING] Processing mosaic for MER tile {mertileid} ({file_size_gb:.2f}GB)...")
-
-        # Thread-safe FITS loading with timeout
-        result_queue: queue.Queue = queue.Queue()
-        error_queue: queue.Queue = queue.Queue()
-
-        def load_fits_with_timeout():
-            try:
-                start_time = time.time()
-
-                # Use memmap=False to avoid memory mapping issues with compressed files
-                with fits.open(
-                    fits_file, mode="readonly", ignore_missing_simple=True, memmap=False
-                ) as hdul:
-                    primary_hdu = hdul[0]
-                    header = primary_hdu.header.copy()
-                    # Create a copy of the data to avoid issues with file closure
-                    data = primary_hdu.data.copy() if primary_hdu.data is not None else None
-                    wcs_obj = wcs.WCS(primary_hdu.header)
-
-                    if data is None:
-                        error_queue.put(f"No data in primary HDU for {fits_file}")
-                        return
-
-                    load_time = time.time() - start_time
-                    print(f"[TIMING] FITS loaded in {load_time:.2f}s")
-
-                    result_queue.put(
-                        {"header": header, "data": data, "wcs": wcs_obj, "file_path": fits_file}
-                    )
-
-            except Exception as e:
-                error_queue.put(str(e))
-
-        # Start loading thread
-        load_thread = threading.Thread(target=load_fits_with_timeout)
-        load_thread.daemon = True
-        load_thread.start()
-
-        # Wait with timeout
-        load_thread.join(timeout=self.timeout_seconds)
-
-        if load_thread.is_alive():
-            print(f"[TIMEOUT] Loading MER tile {mertileid} timed out after {self.timeout_seconds}s")
-            return None
-
-        # Check for errors
-        if not error_queue.empty():
-            error_msg = error_queue.get()
-            print(f"[ERROR] Failed to load MER tile {mertileid}: {error_msg}")
-            return None
-
-        # Get results
-        if result_queue.empty():
-            print(f"[ERROR] No data loaded for MER tile {mertileid}")
-            return None
-
-        result = result_queue.get()
-
-        # Store in instance variables for compatibility
-        self.mosaic_header = result["header"]
-        self.mosaic_data = result["data"]
-        self.mosaic_wcs = result["wcs"]
-
-        # Cache results
-        self.traces_cache[mertileid] = result
-
-        print(f"[SUCCESS] Processed MER tile {mertileid}")
-
-        return result
+        return self._load_mosaic_data_by_provider(
+            mertileid=mertileid,
+            provider=provider,
+            source_id=source_id,
+            tile_bounds=tile_bounds,
+        )
 
     def _extract_zoom_ranges(
         self, relayout_data: Dict
@@ -278,6 +576,16 @@ class MOSAICHandler:
         if all(v is not None for v in [ra_min, ra_max, dec_min, dec_max]):
             return (ra_min, ra_max, dec_min, dec_max)
         return None
+
+    def _read_effcovmask_table(self, hpmask_fits: str) -> Table:
+        """Read HEALPix effective coverage table while silencing non-standard unit warnings."""
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                category=UnitsWarning,
+                message=".*HEALPix pixel index.*",
+            )
+            return Table.read(hpmask_fits, format="fits", hdu=1)
 
     def _find_intersecting_tiles(
         self,
@@ -788,28 +1096,50 @@ class MOSAICHandler:
         return colorbar_trace
 
     def create_mosaic_image_trace(
-        self, mertileid: int, opacity: float = 0.5, colorscale: str = "gray"
+        self,
+        mertileid: int,
+        opacity: float = 0.5,
+        colorscale: str = "gray",
+        provider: Optional[str] = None,
+        source_id: Optional[str] = None,
+        tile_bounds: Optional[Tuple[float, float, float, float]] = None,
     ) -> Optional[go.Heatmap]:
         """Create a Plotly heatmap trace for a mosaic image."""
+        provider_norm = self._normalize_provider(provider)
         # Load mosaic data for this tile
-        mosaic_info = self.get_mosaic_fits_data_by_mertile(mertileid)
+        mosaic_info = self.get_mosaic_fits_data_by_mertile(
+            mertileid,
+            provider=provider_norm,
+            source_id=source_id,
+            tile_bounds=tile_bounds,
+        )
         if not mosaic_info:
-            print(f"Warning: Could not load mosaic data for MER tile {mertileid}")
+            print(f"Warning: Could not load mosaic data for tile {mertileid}")
             return None
 
-        # Process the image
-        processed_image = self._process_mosaic_image(
-            mosaic_info["data"], target_scale_factor=self.img_scale_factor
-        )
+        if provider_norm == "esa_sky":
+            processed_image = np.asarray(mosaic_info["data"], dtype=np.float32)
+            bounds = mosaic_info.get("bounds")
+            if bounds is None:
+                if tile_bounds is None:
+                    print(f"Warning: Missing bounds for ESA tile {mertileid}")
+                    return None
+                bounds = {
+                    "ra_min": tile_bounds[0],
+                    "ra_max": tile_bounds[1],
+                    "dec_min": tile_bounds[2],
+                    "dec_max": tile_bounds[3],
+                    "ra_size_deg": abs(tile_bounds[1] - tile_bounds[0]),
+                    "dec_size_deg": abs(tile_bounds[3] - tile_bounds[2]),
+                }
+        else:
+            # Process the local FITS image
+            processed_image = self._process_mosaic_image(
+                mosaic_info["data"], target_scale_factor=self.img_scale_factor
+            )
 
-        # Calculate coordinate bounds
-        # bounds = self._calculate_image_bounds(
-        #     mosaic_info['wcs'],
-        #     mosaic_info['header'],
-        #     self.img_width,
-        #     self.img_height
-        # )
-        bounds = self._calculate_image_bounds_direct(mosaic_info["wcs"], processed_image)
+            # Calculate coordinate bounds from FITS/WCS
+            bounds = self._calculate_image_bounds_direct(mosaic_info["wcs"], processed_image)
 
         # Create coordinate arrays for the heatmap
         height, width = processed_image.shape
@@ -817,13 +1147,16 @@ class MOSAICHandler:
         y_coords = np.linspace(bounds["dec_min"], bounds["dec_max"], height)
 
         # Add debug information about the tile size and coordinates
-        print(f"Debug: Creating heatmap trace for MER tile {mertileid}")
+        print(f"Debug: Creating heatmap trace for tile {mertileid} ({provider_norm})")
         print(
             f"       - Tile size: {bounds.get('ra_size_deg', 'unknown'):.6f}° × {bounds.get('dec_size_deg', 'unknown'):.6f}°"
         )
         print(f"       - RA range: {bounds['ra_min']:.6f}° to {bounds['ra_max']:.6f}°")
         print(f"       - Dec range: {bounds['dec_min']:.6f}° to {bounds['dec_max']:.6f}°")
         print(f"       - Image shape: {height} × {width} pixels")
+
+        source_label = source_id or mosaic_info.get("source_id") or "local_mer"
+        provider_label = "ESA" if provider_norm == "esa_sky" else "MER"
 
         # Create the heatmap trace
         trace = go.Heatmap(
@@ -833,15 +1166,18 @@ class MOSAICHandler:
             opacity=opacity,
             colorscale=colorscale,
             showscale=False,  # Don't show colorbar
-            name=f"Mosaic {mertileid}",
+            name=f"Mosaic ({provider_label}) {mertileid}",
             hovertemplate=(
                 f"MER Tile: {mertileid}<br>"
+                f"Provider: {provider_label}<br>"
+                f"Source: {source_label}<br>"
                 "RA: %{x:.6f}°<br>"
                 "Dec: %{y:.6f}°<br>"
                 "Intensity: %{z:.3f}<br>"
                 f"Tile Size: {bounds.get('ra_size_deg', 'unknown'):.4f}° × {bounds.get('dec_size_deg', 'unknown'):.4f}°<br>"
                 "<extra>Mosaic Image</extra>"
             ),
+            customdata=np.full((height, width), source_label),
         )
 
         return trace
@@ -852,36 +1188,46 @@ class MOSAICHandler:
         opacity: float = 0.6,
         colorscale: str = "viridis",
         add_colorbar: bool = True,
+        provider: Optional[str] = None,
+        source_id: Optional[str] = None,
+        tile_bounds: Optional[Tuple[float, float, float, float]] = None,
     ) -> Optional[go.Heatmap]:
         """Create a Plotly heatmap trace for a mask overlay."""
+        trace_start = time.time()
 
-        # Load mosaic data for this tile
-        mosaic_info = self.get_mosaic_fits_data_by_mertile(mertileid)
-        if not mosaic_info:
-            print(f"Warning: Could not load mosaic data for MER tile {mertileid}")
-            return None
-        mosaic_data = mosaic_info["data"]
-        wcs_mosaic = mosaic_info["wcs"]
+        # Fast path: use tile bounds directly (works for all providers and avoids heavy FITS/WCS loads).
+        if tile_bounds is not None:
+            ra_min_mosaic, ra_max_mosaic, dec_min_mosaic, dec_max_mosaic = tile_bounds
+        else:
+            # Fallback for call paths that do not pass tile bounds.
+            mosaic_info = self.get_mosaic_fits_data_by_mertile(
+                mertileid,
+                provider="local_fits",
+                source_id="local_mer",
+            )
+            if not mosaic_info or mosaic_info.get("wcs") is None or mosaic_info.get("data") is None:
+                print(f"Warning: Could not load local FITS/WCS for MER tile {mertileid}")
+                return None
 
-        # Get the full mosaic WCS and shape
-        print(f"Full mask overlay array shape: {mosaic_data.shape}")
-        # print(f"Full mosaic WCS: {wcs_mosaic}")
+            mosaic_data = mosaic_info["data"]
+            wcs_mosaic = mosaic_info["wcs"]
 
-        # Get RA/Dec limits from the full mosaic
-        ny, nx = mosaic_data.shape
-        corners = wcs_mosaic.pixel_to_world([0, nx - 1, nx - 1, 0], [0, 0, ny - 1, ny - 1])
-        ra_min_mosaic, ra_max_mosaic = corners.ra.deg.min(), corners.ra.deg.max()
-        dec_min_mosaic, dec_max_mosaic = corners.dec.deg.min(), corners.dec.deg.max()
+            ny, nx = mosaic_data.shape
+            corners = wcs_mosaic.pixel_to_world([0, nx - 1, nx - 1, 0], [0, 0, ny - 1, ny - 1])
+            ra_min_mosaic, ra_max_mosaic = corners.ra.deg.min(), corners.ra.deg.max()
+            dec_min_mosaic, dec_max_mosaic = corners.dec.deg.min(), corners.dec.deg.max()
 
         print(f"RA range: {ra_min_mosaic:.4f} to {ra_max_mosaic:.4f}")
         print(f"Dec range: {dec_min_mosaic:.4f} to {dec_max_mosaic:.4f}")
 
         # Load the effective coverage mask for this MER tile
+        io_start = time.time()
         hpmask_fits = self.effcovmask_fileinfo_df.loc[
             (self.effcovmask_fileinfo_df["mertileid"] == mertileid)
             & (self.effcovmask_fileinfo_df["dataset_release"] == self.effcovmask_dsr)
         ].squeeze()["fits_file"]
-        footprint = Table.read(hpmask_fits, format="fits", hdu=1)
+        footprint = self._read_effcovmask_table(hpmask_fits)
+        io_time = time.time() - io_start
         print(f"Loaded HEALPix footprint with {len(footprint)} pixels from {hpmask_fits}")
         footprint["ra"], footprint["dec"] = hp.pix2ang(
             nside=16384, ipix=footprint["PIXEL"], nest=True, lonlat=True
@@ -895,6 +1241,7 @@ class MOSAICHandler:
             & (footprint["dec"] >= dec_min_mosaic - 0.01)
             & (footprint["dec"] <= dec_max_mosaic + 0.01)
         )
+        filter_time = time.time() - io_start - io_time
 
         print(f"Footprint pixels in full mosaic: {_pix_mask.sum()}")
         if _pix_mask.sum() > 0:
@@ -908,18 +1255,18 @@ class MOSAICHandler:
 
         if _pix_mask.sum() > 0:
             print(f"Creating {_pix_mask.sum()} HEALPix polygon traces...")
+            polygon_start = time.time()
 
             for idx, (pix, weight) in enumerate(
                 zip(footprint["PIXEL"][_pix_mask], footprint["WEIGHT"][_pix_mask])
             ):
-                # Get pixel boundaries
-                rapix, decpix = self.get_healpix_boundaries(
-                    pix, nside=16384, nest=True, step=2, mertileid=mertileid, wcs_mosaic=wcs_mosaic
+                # Build polygon directly in world coordinates for speed and provider independence.
+                ra, dec = hp.vec2ang(
+                    hp.boundaries(16384, pix, step=2, nest=True).T,
+                    lonlat=True,
                 )
-                rapix = np.append(rapix, rapix[0])  # Close the polygon
-                decpix = np.append(decpix, decpix[0])  # Close the polygon
-
-                ra, dec = wcs_mosaic.wcs_pix2world(rapix, decpix, 0)
+                ra = np.append(ra, ra[0])
+                dec = np.append(dec, dec[0])
 
                 # Normalize weight for colorscale
                 weight_norm = (weight - weight_min) / (weight_max - weight_min)
@@ -928,7 +1275,7 @@ class MOSAICHandler:
                     color = colormap(weight_norm)  # RGBA
                 except AttributeError:
                     print(f"Warning: Invalid colorscale '{colorscale}', defaulting to 'viridis'")
-                    colormap = plt.cm.viridis
+                    colormap = plt.get_cmap("viridis")
                     color = colormap(weight_norm)
 
                 footprint_traces.append(
@@ -946,6 +1293,9 @@ class MOSAICHandler:
                         customdata=[[weight]],
                     )
                 )
+            polygon_time = time.time() - polygon_start
+        else:
+            polygon_time = 0.0
 
         # Add a colorbar trace (invisible heatmap that only shows the colorbar)
         if footprint_traces and add_colorbar:
@@ -953,6 +1303,13 @@ class MOSAICHandler:
                 weight_min, weight_max, colorscale, title="Coverage<br>Weight"
             )
             footprint_traces.append(colorbar_trace)
+
+        total_trace_time = time.time() - trace_start
+        print(
+            "[TIMING] Mask trace breakdown for tile "
+            f"{mertileid}: io={io_time:.2f}s, filter={filter_time:.2f}s, "
+            f"polygon={polygon_time:.2f}s, total={total_trace_time:.2f}s"
+        )
 
         return footprint_traces
 
@@ -980,7 +1337,9 @@ class MOSAICHandler:
         else:
             mertileid = mertiles_to_load[0]
 
-        mosaicinfo = self.get_mosaic_fits_data_by_mertile(mertileid)
+        mosaicinfo = self.get_mosaic_fits_data_by_mertile(
+            mertileid, provider="local_fits", source_id="local_mer"
+        )
 
         # Load mosaic data for this tile
         try:
@@ -1111,7 +1470,7 @@ class MOSAICHandler:
             (self.effcovmask_fileinfo_df["mertileid"] == mertileid)
             & (self.effcovmask_fileinfo_df["dataset_release"] == self.effcovmask_dsr)
         ].squeeze()["fits_file"]
-        footprint = Table.read(hpmask_fits, format="fits", hdu=1)
+        footprint = self._read_effcovmask_table(hpmask_fits)
         print(f"Loaded HEALPix footprint with {len(footprint)} pixels from {hpmask_fits}")
         footprint["ra"], footprint["dec"] = hp.pix2ang(
             nside=16384, ipix=footprint["PIXEL"], nest=True, lonlat=True
@@ -1160,7 +1519,7 @@ class MOSAICHandler:
                     color = colormap(weight_norm)  # RGBA
                 except AttributeError:
                     print(f"Warning: Invalid colorscale '{colorscale}', defaulting to 'viridis'")
-                    colormap = plt.cm.viridis
+                    colormap = plt.get_cmap("viridis")
                     color = colormap(weight_norm)
 
                 footprint_traces.append(
@@ -1194,12 +1553,15 @@ class MOSAICHandler:
         relayout_data: Optional[Dict],
         opacity: float = 0.5,
         colorscale: str = "gray",
+        provider: Optional[str] = None,
+        source_id: Optional[str] = None,
     ) -> List[go.Heatmap]:
         """
         Load mosaic image traces with strict performance limits and timing
         """
         start_time = time.time()
         traces: List[go.Heatmap] = []
+        provider_norm = self._normalize_provider(provider)
 
         if not relayout_data:
             print("Debug: No relayout data available for mosaic loading")
@@ -1214,7 +1576,7 @@ class MOSAICHandler:
         ra_min, ra_max, dec_min, dec_max = zoom_ranges
         print(
             f"Debug: Loading mosaics for zoom area: RA({ra_min:.3f}, {ra_max:.3f}), "
-            f"Dec({dec_min:.3f}, {dec_max:.3f})"
+            f"Dec({dec_min:.3f}, {dec_max:.3f}), provider={provider_norm}, source={source_id}"
         )
 
         # Find intersecting tiles
@@ -1244,7 +1606,15 @@ class MOSAICHandler:
 
             try:
                 trace_start = time.time()
-                trace = self.create_mosaic_image_trace(mertileid, opacity, colorscale)
+                tile_bounds = self._extract_tile_bounds(data, mertileid)
+                trace = self.create_mosaic_image_trace(
+                    mertileid,
+                    opacity,
+                    colorscale,
+                    provider=provider_norm,
+                    source_id=source_id,
+                    tile_bounds=tile_bounds,
+                )
                 trace_time = time.time() - trace_start
 
                 if trace:
@@ -1269,12 +1639,15 @@ class MOSAICHandler:
         relayout_data: Optional[Dict],
         opacity: float = 0.6,
         colorscale: str = "viridis",
+        provider: Optional[str] = None,
+        source_id: Optional[str] = None,
     ) -> List[go.Scatter]:
         """
         Load mask overlay traces with strict performance limits and timing
         """
         start_time = time.time()
         mask_traces: List[go.Scatter] = []
+        provider_norm = self._normalize_provider(provider)
         if not relayout_data:
             print("Debug: No relayout data available for mask overlay loading")
             return mask_traces
@@ -1288,7 +1661,7 @@ class MOSAICHandler:
         ra_min, ra_max, dec_min, dec_max = zoom_ranges
         print(
             f"Debug: Loading mask overlays for zoom area: RA({ra_min:.3f}, {ra_max:.3f}), "
-            f"Dec({dec_min:.3f}, {dec_max:.3f})"
+            f"Dec({dec_min:.3f}, {dec_max:.3f}), provider={provider_norm}, source={source_id}"
         )
 
         # Find intersecting tiles
@@ -1300,6 +1673,7 @@ class MOSAICHandler:
         # PERFORMANCE LIMITS: Strict limits for interactive experience
         max_masks = 5  # Maximum 5 mask overlays per zoom
         max_processing_time = 30  # Maximum 30 seconds total processing time
+        tile_processing_time_total = 0.0
         if len(mertiles_to_load) > max_masks:
             print(f"Debug: Limiting to first {max_masks} mask overlays for performance")
             mertiles_to_load = mertiles_to_load[:max_masks]
@@ -1318,10 +1692,18 @@ class MOSAICHandler:
             try:
                 trace_start = time.time()
                 # Don't add colorbar for each tile, we'll add one at the end
+                tile_bounds = self._extract_tile_bounds(data, mertileid)
                 footprint_traces = self.create_mask_overlay_trace(
-                    mertileid, opacity, colorscale, add_colorbar=False
+                    mertileid,
+                    opacity,
+                    colorscale,
+                    add_colorbar=False,
+                    provider=provider_norm,
+                    source_id=source_id,
+                    tile_bounds=tile_bounds,
                 )
                 trace_time = time.time() - trace_start
+                tile_processing_time_total += trace_time
 
                 if footprint_traces:
                     mask_traces.extend(footprint_traces)
@@ -1343,7 +1725,11 @@ class MOSAICHandler:
             mask_traces.append(colorbar_trace)
 
         total_time = time.time() - start_time
-        print(f"[TIMING] Total mask overlay loading completed in {total_time:.2f}s")
+        print(
+            f"[TIMING] Total mask overlay loading completed in {total_time:.2f}s "
+            f"(tile_processing={tile_processing_time_total:.2f}s, "
+            f"overhead={max(total_time - tile_processing_time_total, 0.0):.2f}s)"
+        )
         return mask_traces
 
     def clear_traces_cache(self):
@@ -1413,7 +1799,9 @@ class MOSAICHandler:
         if wcs_mosaic is None:
             try:
                 # Load mosaic data for this tile
-                mosaic_info = self.get_mosaic_fits_data_by_mertile(mertileid)
+                mosaic_info = self.get_mosaic_fits_data_by_mertile(
+                    mertileid, provider="local_fits", source_id="local_mer"
+                )
                 if not mosaic_info:
                     print(f"Warning: Could not load mosaic data for MER tile {mertileid}")
                     return None, None

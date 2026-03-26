@@ -120,6 +120,7 @@ def main():
     test_modules = [
         ("test_data_loader", "Data Loader Tests"),
         ("test_mer_handler", "MER Handler Tests"),
+        ("test_mosaic_sources", "Mosaic Source Provider Tests"),
         ("test_trace_creator", "Trace Creator Tests"),
         ("test_figure_manager", "Figure Manager Tests"),
         ("test_callbacks", "Callbacks Tests"),

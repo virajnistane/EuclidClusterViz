@@ -35,6 +35,7 @@ class MOSAICCallbacks:
 
     def setup_callbacks(self):
         """Setup all MER-Mosaic- and Mask-related callbacks"""
+        self._setup_mosaic_source_selector_callback()
         self._setup_mosaic_button_state_callback()
         self._setup_healpix_mask_button_state_callback()
         self._setup_mosaic_render_callback()
@@ -45,6 +46,46 @@ class MOSAICCallbacks:
         self._setup_mask_visibility_toggle_callback()
         self._setup_mask_delete_callback()
         self._setup_mask_control_buttons_state_callback()
+
+    def _setup_mosaic_source_selector_callback(self):
+        """Setup callback for mosaic provider/source selectors and attribution text."""
+
+        @self.app.callback(
+            [
+                Output("mosaic-source-selector", "options"),
+                Output("mosaic-source-selector", "value"),
+                Output("mosaic-source-attribution", "children"),
+            ],
+            [Input("mosaic-provider-selector", "value"), Input("mosaic-source-selector", "value")],
+            prevent_initial_call=False,
+        )
+        def update_mosaic_source_selector(provider, current_source):
+            if not self.mosaic_handler:
+                return (
+                    [{"label": "MER FITS tiles", "value": "local_mer"}],
+                    "local_mer",
+                    "Attribution: Local Euclid MER FITS",
+                )
+
+            sources = self.mosaic_handler.get_available_mosaic_sources(provider=provider)
+            if not sources:
+                return (
+                    [{"label": "MER FITS tiles", "value": "local_mer"}],
+                    "local_mer",
+                    "Attribution: Local Euclid MER FITS",
+                )
+
+            options = [{"label": src["label"], "value": src["id"]} for src in sources]
+            option_values = {option["value"] for option in options}
+            selected_source = current_source if current_source in option_values else options[0]["value"]
+
+            attribution = "Attribution: Local Euclid MER FITS"
+            for src in sources:
+                if src["id"] == selected_source:
+                    attribution = f"Attribution: {src.get('attribution', 'N/A')}"
+                    break
+
+            return options, selected_source, attribution
 
     def _setup_mosaic_button_state_callback(self):
         """Setup callback to enable/disable MOSAIC render button based on zoom level"""
@@ -129,11 +170,20 @@ class MOSAICCallbacks:
                 State("mosaic-enable-switch", "value"),
                 State("mosaic-opacity-slider", "value"),
                 State("algorithm-dropdown", "value"),
+                State("mosaic-provider-selector", "value"),
+                State("mosaic-source-selector", "value"),
             ],
             prevent_initial_call=True,
         )
         def render_mosaic_images(
-            n_clicks, current_figure, relayout_data, mosaic_enabled, opacity, algorithm
+            n_clicks,
+            current_figure,
+            relayout_data,
+            mosaic_enabled,
+            opacity,
+            algorithm,
+            mosaic_provider,
+            mosaic_source,
         ):
             """Render mosaic images when button is clicked"""
             try:
@@ -144,6 +194,7 @@ class MOSAICCallbacks:
                     f"   -> relayout_data keys: {list(relayout_data.keys()) if relayout_data else None}"
                 )
                 print(f"   -> opacity: {opacity}, algorithm: {algorithm}")
+                print(f"   -> provider: {mosaic_provider}, source: {mosaic_source}")
                 print(f"   -> current_figure exists: {current_figure is not None}")
 
                 if not n_clicks:
@@ -164,7 +215,11 @@ class MOSAICCallbacks:
                     # Get mosaic traces for current zoom window
                     if self.mosaic_handler:
                         mosaic_traces = self.mosaic_handler.load_mosaic_traces_in_zoom(
-                            data, relayout_data, opacity=opacity
+                            data,
+                            relayout_data,
+                            opacity=opacity,
+                            provider=mosaic_provider,
+                            source_id=mosaic_source,
                         )
                         print(
                             f"   -> Mosaic traces result: {len(mosaic_traces) if mosaic_traces else 0} traces"
@@ -269,17 +324,29 @@ class MOSAICCallbacks:
                 State("cluster-plot", "relayoutData"),
                 State("mask-opacity-slider", "value"),
                 State("algorithm-dropdown", "value"),
+                State("mosaic-provider-selector", "value"),
+                State("mosaic-source-selector", "value"),
             ],
             prevent_initial_call=True,
         )
-        def render_mask_overlay(n_clicks, current_figure, relayout_data, mask_opacity, algorithm):
+        def render_mask_overlay(
+            n_clicks,
+            current_figure,
+            relayout_data,
+            mask_opacity,
+            algorithm,
+            mosaic_provider,
+            mosaic_source,
+        ):
             """Render mosaic images when button is clicked"""
             try:
                 print(f"🔍 Mask overlay callback triggered! n_clicks={n_clicks}")
                 print(
                     f"   -> relayout_data keys: {list(relayout_data.keys()) if relayout_data else None}"
                 )
-                print(f"   -> algorithm: {algorithm}")
+                print(
+                    f"   -> algorithm: {algorithm}, provider: {mosaic_provider}, source: {mosaic_source}"
+                )
                 print(f"   -> current_figure exists: {current_figure is not None}")
 
                 if not n_clicks:
@@ -297,7 +364,12 @@ class MOSAICCallbacks:
                     if self.mosaic_handler:
                         mask_footprint_traces = (
                             self.mosaic_handler.load_mask_overlay_traces_in_zoom(
-                                data, relayout_data, opacity=mask_opacity, colorscale="viridis"
+                                data,
+                                relayout_data,
+                                opacity=mask_opacity,
+                                colorscale="viridis",
+                                provider=mosaic_provider,
+                                source_id=mosaic_source,
                             )
                         )
                         print(
