@@ -380,6 +380,11 @@ class Config:
         except ValueError:
             return 768
 
+    def get_mosaic_select_best_local_file(self) -> bool:
+        """Choose local mosaic file strategy: False uses first match for speed, True scores candidates."""
+        raw_value = str(self._get_mosaic_option("select_best_local_file", "false")).strip().lower()
+        return raw_value in {"1", "true", "yes", "on"}
+
     def validate_paths(self):
         """Validate that critical paths exist and return status"""
         issues = []

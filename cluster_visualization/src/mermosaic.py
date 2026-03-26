@@ -136,6 +136,10 @@ class MOSAICHandler:
         if hasattr(self.config, "get_esa_cutout_height"):
             self.esa_cutout_height = self.config.get_esa_cutout_height()
 
+        self.select_best_local_file = False
+        if hasattr(self.config, "get_mosaic_select_best_local_file"):
+            self.select_best_local_file = self.config.get_mosaic_select_best_local_file()
+
         self._cached_esa_sources: Optional[List[Dict[str, str]]] = None
         self._cached_esa_sources_ts: Optional[float] = None
 
@@ -315,7 +319,14 @@ class MOSAICHandler:
             print(f"Warning: No mosaic FITS file found for MER tile {mertileid}")
             return None
 
-        fits_file = self._select_best_local_mosaic_file(fits_files)
+        if self.select_best_local_file:
+            fits_file = self._select_best_local_mosaic_file(fits_files)
+        else:
+            fits_file = fits_files[0]
+            print(
+                "[SELECT] Using first MER mosaic candidate for speed "
+                f"({os.path.basename(fits_file)})"
+            )
         file_size_gb = os.path.getsize(fits_file) / (1024**3)
 
         # Check file size for initial performance optimization
