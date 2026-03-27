@@ -11,7 +11,8 @@ from cluster_visualization.src.data.loader import DataLoader
 from cluster_visualization.src.mermosaic import MOSAICHandler
 
 
-DEFAULT_TILE_ID = 102021016
+# DEFAULT_TILE_ID = 102021016
+DEFAULT_TILE_ID = 102019589
 DEFAULT_ESA_SOURCE = "CDS/P/Euclid/Q1/VIS"
 
 
@@ -19,7 +20,7 @@ def create_side_by_side_mosaic_comparison(
     tile_id: int = DEFAULT_TILE_ID,
     algorithm: str = "PZWAV",
     esa_source: str = DEFAULT_ESA_SOURCE,
-    output_html: str = "cluster_visualization/tests/artifacts/mosaic_comparison_tile_102021016.html",
+    output_html: str = f"cluster_visualization/tests/artifacts/mosaic_comparison_tile_{DEFAULT_TILE_ID}.html",
 ) -> str:
     """Create and save an HTML figure with local MER and ESA DSS2 heatmaps side by side."""
 
