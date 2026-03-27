@@ -508,18 +508,36 @@ class MOSAICHandler:
             if max_pixel > 0:
                 image_array = image_array / max_pixel
 
+            # Compute the actual sky coverage of the HiPS cutout.
+            # hips2fits delivers a square image spanning fov_deg × fov_deg of
+            # *sky* angle centered at (center_ra, center_dec).  In coordinate
+            # space, 1 sky-degree of RA spans 1/cos(dec) coordinate degrees,
+            # so the RA half-extent in degrees of RA coordinate is:
+            #   half_fov_ra = fov_deg / (2 * |cos(dec)|)
+            # while the Dec half-extent is simply fov_deg / 2.
+            center_dec_rad = np.radians(center_dec)
+            cos_dec = np.abs(np.cos(center_dec_rad))
+            if cos_dec < 1e-6:
+                cos_dec = 1e-6  # guard against pole singularity
+            half_fov_ra = fov_deg / (2.0 * cos_dec)
+            half_fov_dec = fov_deg / 2.0
+            img_ra_min = center_ra - half_fov_ra
+            img_ra_max = center_ra + half_fov_ra
+            img_dec_min = center_dec - half_fov_dec
+            img_dec_max = center_dec + half_fov_dec
+
             return {
                 "header": None,
                 "data": image_array,
                 "wcs": None,
                 "file_path": cutout_url,
                 "bounds": {
-                    "ra_min": ra_min,
-                    "ra_max": ra_max,
-                    "dec_min": dec_min,
-                    "dec_max": dec_max,
-                    "ra_size_deg": abs(ra_max - ra_min),
-                    "dec_size_deg": abs(dec_max - dec_min),
+                    "ra_min": img_ra_min,
+                    "ra_max": img_ra_max,
+                    "dec_min": img_dec_min,
+                    "dec_max": img_dec_max,
+                    "ra_size_deg": img_ra_max - img_ra_min,
+                    "dec_size_deg": fov_deg,
                 },
                 "provider": "esa_sky",
                 "source_id": source_id,
@@ -1280,7 +1298,12 @@ class MOSAICHandler:
             return None
 
         if provider_norm == "esa_sky":
-            processed_image = np.asarray(mosaic_info["data"], dtype=np.float32)
+            # hips2fits returns an image in standard astronomical orientation:
+            # North up (row 0 = max Dec) and East left (col 0 = max RA).
+            # Plotly Heatmap maps z[0][0] to (x[0], y[0]) = (ra_min, dec_min),
+            # i.e. bottom-left.  We must flip both axes so that the array's
+            # [0][0] corner corresponds to (ra_min, dec_min) before mapping.
+            processed_image = np.asarray(mosaic_info["data"], dtype=np.float32)[::-1, ::-1].copy()
             bounds = mosaic_info.get("bounds")
             if bounds is None:
                 if tile_bounds is None:
