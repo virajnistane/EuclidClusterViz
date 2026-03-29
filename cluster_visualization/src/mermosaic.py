@@ -169,7 +169,8 @@ class MOSAICHandler:
     def _build_cache_key(self, provider: str, source_id: Optional[str], mertileid: int) -> str:
         """Build a provider-aware cache key for mosaic data."""
         source_component = source_id or "default"
-        return f"{provider}|{source_component}|{mertileid}"
+        fmt_component = self.esa_cutout_format if provider == "esa_sky" else "local"
+        return f"{provider}|{source_component}|{mertileid}|{fmt_component}"
 
     def _extract_tile_bounds(
         self, data: Dict[str, Any], mertileid: int
@@ -1790,6 +1791,7 @@ class MOSAICHandler:
         colorscale: str = "gray",
         provider: Optional[str] = None,
         source_id: Optional[str] = None,
+        esa_cutout_format: Optional[str] = None,
     ) -> List[go.Heatmap]:
         """
         Load mosaic image traces with strict performance limits and timing
@@ -1798,13 +1800,20 @@ class MOSAICHandler:
         traces: List[go.Heatmap] = []
         provider_norm = self._normalize_provider(provider)
 
+        # Override ESA cutout format for this call if provided by the UI.
+        _original_format = self.esa_cutout_format
+        if esa_cutout_format is not None:
+            self.esa_cutout_format = esa_cutout_format
+
         if not relayout_data:
+            self.esa_cutout_format = _original_format
             print("Debug: No relayout data available for mosaic loading")
             return traces
 
         # Extract zoom ranges from relayout data
         zoom_ranges = self._extract_zoom_ranges(relayout_data)
         if not zoom_ranges:
+            self.esa_cutout_format = _original_format
             print("Debug: Could not extract zoom ranges for mosaic loading")
             return traces
 
@@ -1865,6 +1874,9 @@ class MOSAICHandler:
 
         total_time = time.time() - start_time
         print(f"[TIMING] Total mosaic loading completed in {total_time:.2f}s")
+
+        # Restore the format that was set before this call.
+        self.esa_cutout_format = _original_format
 
         return traces
 

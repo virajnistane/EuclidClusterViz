@@ -456,6 +456,31 @@ class DataControls:
                                     children="Attribution: ESA DSS2 Color",
                                     className="text-muted d-block mt-2",
                                 ),
+                                html.Div(
+                                    [
+                                        html.Small(
+                                            "Image Format",
+                                            className="text-muted d-block mb-1 mt-2",
+                                        ),
+                                        dcc.Dropdown(
+                                            id="mosaic-esa-format-selector",
+                                            options=[
+                                                {
+                                                    "label": "FITS (32-bit, high quality)",
+                                                    "value": "fits",
+                                                },
+                                                {
+                                                    "label": "JPEG (8-bit, faster)",
+                                                    "value": "jpg",
+                                                },
+                                            ],
+                                            value="jpg",
+                                            clearable=False,
+                                        ),
+                                    ],
+                                    id="mosaic-esa-format-container",
+                                    style={"display": "block"},
+                                ),
                             ],
                             className="p-3",
                         ),

@@ -55,16 +55,20 @@ class MOSAICCallbacks:
                 Output("mosaic-source-selector", "options"),
                 Output("mosaic-source-selector", "value"),
                 Output("mosaic-source-attribution", "children"),
+                Output("mosaic-esa-format-container", "style"),
             ],
             [Input("mosaic-provider-selector", "value"), Input("mosaic-source-selector", "value")],
             prevent_initial_call=False,
         )
         def update_mosaic_source_selector(provider, current_source):
+            esa_format_style = {"display": "block"} if provider == "esa_sky" else {"display": "none"}
+
             if not self.mosaic_handler:
                 return (
                     [{"label": "MER FITS tiles", "value": "local_mer"}],
                     "local_mer",
                     "Attribution: Local Euclid MER FITS",
+                    esa_format_style,
                 )
 
             sources = self.mosaic_handler.get_available_mosaic_sources(provider=provider)
@@ -73,6 +77,7 @@ class MOSAICCallbacks:
                     [{"label": "MER FITS tiles", "value": "local_mer"}],
                     "local_mer",
                     "Attribution: Local Euclid MER FITS",
+                    esa_format_style,
                 )
 
             options = [{"label": src["label"], "value": src["id"]} for src in sources]
@@ -85,7 +90,7 @@ class MOSAICCallbacks:
                     attribution = f"Attribution: {src.get('attribution', 'N/A')}"
                     break
 
-            return options, selected_source, attribution
+            return options, selected_source, attribution, esa_format_style
 
     def _setup_mosaic_button_state_callback(self):
         """Setup callback to enable/disable MOSAIC render button based on zoom level"""
@@ -172,6 +177,7 @@ class MOSAICCallbacks:
                 State("algorithm-dropdown", "value"),
                 State("mosaic-provider-selector", "value"),
                 State("mosaic-source-selector", "value"),
+                State("mosaic-esa-format-selector", "value"),
             ],
             prevent_initial_call=True,
         )
@@ -184,6 +190,7 @@ class MOSAICCallbacks:
             algorithm,
             mosaic_provider,
             mosaic_source,
+            esa_cutout_format,
         ):
             """Render mosaic images when button is clicked"""
             try:
@@ -220,6 +227,7 @@ class MOSAICCallbacks:
                             opacity=opacity,
                             provider=mosaic_provider,
                             source_id=mosaic_source,
+                            esa_cutout_format=esa_cutout_format,
                         )
                         print(
                             f"   -> Mosaic traces result: {len(mosaic_traces) if mosaic_traces else 0} traces"
