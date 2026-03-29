@@ -141,7 +141,8 @@ The EDEN-3.1 environment lacks several critical modules (`healpy`, `dash`, `plot
 - **Interactive Cluster Analysis**: Dedicated tab with cutout generation, CATRED box views, and mask cutouts
 - **Smart Filtering**: Client-side SNR and redshift filtering with preserved zoom states
 - **CATRED Integration**: High-resolution masked data with effective coverage thresholding
-- **Mosaic Visualization**: Dynamic MER tile mosaic loading with opacity controls
+- **Mosaic Visualization**: Dynamic MER tile mosaic loading with opacity controls and ESA/local provider selection
+- **ESA Sky HiPS Integration**: Fetch cutouts from public CDS hips2fits service in FITS (32-bit) or JPEG format
 - **HEALPix Mask Overlay**: Effective coverage footprint visualization with configurable opacity
 - **PHZ Analysis**: Interactive photometric redshift probability distribution plots with improved click detection
 
@@ -162,6 +163,7 @@ The EDEN-3.1 environment lacks several critical modules (`healpy`, `dash`, `plot
 - **Responsive Design**: Optimized layout for different screen sizes and zoom levels
 - **Intuitive Workflow**: Guided user experience with helpful tooltips and status indicators
 - **Mosaic & Mask Management**: Separate controls for background images and HEALPix footprint overlays
+- **ESA Format Selector**: Dropdown to choose FITS (high quality) or JPEG (faster) for ESA Sky cutouts — visible only when ESA provider is active
 - **Collapsible Sections**: Organized controls with expandable/collapsible cards
 
 ### 🌐 **Enterprise Remote Access**
@@ -583,10 +585,20 @@ To visualize the effective survey coverage:
 To add astronomical background images:
 
 1. **Enable Mosaic**: Activate the "Enable MER-MOSAIC loading" switch
-2. **Zoom In**: Zoom to a region smaller than 2° × 2° 
-3. **Click "Render MER-MOSAIC images"**: Loads background images for visible tiles
-4. **Adjust Opacity**: Use the mosaic opacity slider (0.0-1.0)
-5. **Multiple Layers**: Mosaics and masks can be displayed simultaneously
+2. **Select Provider**: Choose **Local MER FITS** (on-disk tiles) or **ESA Sky (Public HiPS)** (online cutout)
+3. **Select Source** (ESA Sky only): Pick from available HiPS surveys (e.g., DSS2 Color, Euclid VIS)
+4. **Select Image Format** (ESA Sky only): Choose between:
+   - **FITS (32-bit, high quality)** — 32-bit float, WCS-derived bounds, percentile normalisation
+   - **JPEG (8-bit, faster)** — 8-bit, geometric bounds, max-pixel normalisation
+5. **Zoom In**: Zoom to a region smaller than 2° × 2°
+6. **Click "Render MER-MOSAIC images"**: Loads background images for visible tiles
+7. **Adjust Opacity**: Use the mosaic opacity slider (0.0-1.0)
+8. **Multiple Layers**: Mosaics and masks can be displayed simultaneously
+
+**Image Quality Notes**:
+- FITS format preserves full dynamic range and uses robust 1st–99.5th percentile stretch
+- All fetched ESA cutouts are LANCZOS-upsampled to the display canvas size before rendering, preventing browser upscaling artefacts
+- The ESA image resolution is ultimately limited by the HiPS pyramid order of the selected survey
 
 ### **Layer Management**
 The application maintains proper layering automatically:
@@ -901,7 +913,7 @@ Visualize the effective survey coverage using HEALPix footprint data:
 #### **🖼️ Multi-Layer Overlay System**
 The application now supports independent control of multiple overlay layers:
 1. **Base Layer**: Tile polygons (CORE/LEV1 regions)
-2. **Mosaic Layer**: Background astronomical images with opacity control
+2. **Mosaic Layer**: Background astronomical images (local MER FITS or ESA Sky HiPS) with opacity and format controls
 3. **Mask Layer**: HEALPix effective coverage footprint with separate opacity
 4. **CATRED Layer**: High-resolution catalog data points
 5. **Cluster Layer**: Detection markers with matching ovals (BOTH mode)
@@ -969,6 +981,14 @@ The application now supports independent control of multiple overlay layers:
 - ✅ **PHZ Callback Improvements**: Fixed point detection using `pointNumber` instead of `customdata`
 - ✅ **Smart UI Sections**: Only one options section expands at a time for cleaner interface
 - ✅ **Parameter Synchronization**: Unified controls between sidebar and cluster analysis tab
+
+### **March 2026: ESA Sky Mosaic Quality & UI Improvements**
+- ✅ **ESA Cut-out Orientation Fix**: Corrected both-axis inversion and RA alignment (cos(dec) correction) for ESA Sky cutouts
+- ✅ **FITS Format Support**: Added `esa_cutout_format = fits/jpg` config key; FITS path uses 32-bit float data, WCS-derived corner bounds, and `wcs.WCS.celestial` to handle degenerate Stokes/spectral axes
+- ✅ **Percentile Normalisation**: Robust 1st–99.5th percentile stretch with IQR outlier fencing, shared between local MER FITS and ESA FITS paths via `_percentile_normalize()` helper
+- ✅ **LANCZOS Upsampling**: ESA cutouts LANCZOS-resized to display canvas before handing to Plotly, eliminating browser bilinear upscaling blur
+- ✅ **Format Dropdown in UI**: `mosaic-esa-format-selector` dropdown (FITS / JPEG) shown only when ESA provider is active; format is passed through callback `State` and applied per render call without touching the server-side default
+- ✅ **Format-Aware Cache Key**: Cache key extended to `provider|source|tile|format` so switching format always re-fetches rather than serving a stale entry
 
 ### **Current State: Enterprise-Grade Platform**
 - ✅ **Multi-Layer Visualization**: Independent control of mosaics, masks, CATRED, cutouts, and cluster overlays
