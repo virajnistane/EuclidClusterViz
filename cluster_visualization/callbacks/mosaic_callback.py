@@ -179,9 +179,19 @@ class MOSAICCallbacks:
                 State("mosaic-source-selector", "value"),
                 State("mosaic-esa-format-selector", "value"),
             ],
+            background=True,
+            running=[
+                (Output("mosaic-load-progress-container", "style"), {"display": "block"}, {"display": "none"}),
+                (Output("mosaic-render-button", "disabled"), True, False),
+            ],
+            progress=[
+                Output("mosaic-load-progress", "value"),
+                Output("mosaic-load-label", "children"),
+            ],
             prevent_initial_call=True,
         )
         def render_mosaic_images(
+            set_progress,
             n_clicks,
             current_figure,
             relayout_data,
@@ -216,11 +226,19 @@ class MOSAICCallbacks:
                 try:
                     print(f"   -> Loading data for algorithm: {algorithm}")
                     # Load current data
+                    set_progress((15, f"Loading {algorithm} data..."))
                     data = self.data_loader.load_data(algorithm)
                     print(f"   -> Data loaded successfully")
 
                     # Get mosaic traces for current zoom window
                     if self.mosaic_handler:
+                        set_progress((30, "Finding tiles in zoom window..."))
+
+                        def mosaic_progress_cb(tile_idx, total_tiles, tile_id=""):
+                            pct = 30 + int(60 * tile_idx / max(total_tiles, 1))
+                            label = f"Loading tile {tile_idx}/{total_tiles}{': ' + str(tile_id) if tile_id else ''}..."
+                            set_progress((pct, label))
+
                         mosaic_traces = self.mosaic_handler.load_mosaic_traces_in_zoom(
                             data,
                             relayout_data,
@@ -228,6 +246,7 @@ class MOSAICCallbacks:
                             provider=mosaic_provider,
                             source_id=mosaic_source,
                             esa_cutout_format=esa_cutout_format,
+                            progress_callback=mosaic_progress_cb,
                         )
                         print(
                             f"   -> Mosaic traces result: {len(mosaic_traces) if mosaic_traces else 0} traces"

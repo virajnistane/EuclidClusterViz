@@ -771,6 +771,23 @@ class TabContent:
                             is_open=False,
                             className="mb-3",
                         ),
+                        # Progress bar for tab actions
+                        html.Div(
+                            [
+                                dbc.Progress(
+                                    id="tab-action-progress",
+                                    value=0,
+                                    striped=True,
+                                    animated=True,
+                                    color="info",
+                                    className="mb-1",
+                                ),
+                                html.Span("", id="tab-action-label", className="small text-muted"),
+                            ],
+                            id="tab-action-progress-container",
+                            style={"display": "none"},
+                            className="mb-2",
+                        ),
                         # Analysis results area
                         html.Div(
                             [

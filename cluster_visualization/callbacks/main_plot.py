@@ -227,8 +227,21 @@ class MainPlotCallbacks:
                 State("magnitude-limit-slider", "value"),
                 State("cluster-plot", "relayoutData"),
             ],
+            background=True,
+            running=[
+                (Output("data-load-progress-container", "style"), {"display": "block"}, {"display": "none"}),
+                (Output("render-button", "disabled"), True, False),
+                (Output("snr-render-button-pzwav", "disabled"), True, False),
+                (Output("snr-render-button-amico", "disabled"), True, False),
+                (Output("redshift-render-button", "disabled"), True, False),
+            ],
+            progress=[
+                Output("data-load-progress", "value"),
+                Output("data-load-label", "children"),
+            ],
         )
         def update_plot(
+            set_progress,
             n_clicks,
             snr_pzwav_n_clicks,
             snr_amico_n_clicks,
@@ -262,6 +275,8 @@ class MainPlotCallbacks:
                 return self._create_initial_empty_plots(free_aspect_ratio)
 
             try:
+                set_progress((5, f"Preparing {algorithm} data..."))
+
                 # Extract SNR values from range sliders (separate for PZWAV and AMICO)
                 snr_pzwav_lower = (
                     snr_range_pzwav[0] if snr_range_pzwav and len(snr_range_pzwav) == 2 else None
@@ -282,12 +297,14 @@ class MainPlotCallbacks:
                 z_upper = redshift_range[1] if redshift_range and len(redshift_range) == 2 else None
 
                 # Load data for selected algorithm
+                set_progress((20, f"Loading {algorithm} catalog..."))
                 data = self.load_data(algorithm)
 
                 # Only reset CATRED traces cache if algorithm changed, not for SNR/redshift filtering
                 # CATRED data doesn't have SNR and shouldn't be affected by cluster-level filtering
                 # Note: This preserves CATRED data when only SNR/redshift filters change
 
+                set_progress((55, "Creating visualization traces..."))
                 # Create traces with separate SNR thresholds
                 traces = self.create_traces(
                     data,
@@ -308,6 +325,7 @@ class MainPlotCallbacks:
                 )
 
                 # Create figure
+                set_progress((80, "Building figure..."))
                 fig = (
                     self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio)
                     if self.figure_manager

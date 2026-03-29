@@ -39,6 +39,8 @@ from datetime import datetime, timedelta
 
 import dash
 import dash_bootstrap_components as dbc
+import diskcache
+from dash import DiskcacheManager
 import numpy as np
 import pandas as pd
 import plotly.graph_objs as go
@@ -302,7 +304,16 @@ class ClusterVisualizationApp:
             "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css",
         ]
 
-        self.app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+        # Background callback manager for long_callback / background=True support
+        _bg_cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "clusterviz_bg")
+        _bg_cache = diskcache.Cache(_bg_cache_dir)
+        bg_callback_manager = DiskcacheManager(_bg_cache)
+
+        self.app = dash.Dash(
+            __name__,
+            external_stylesheets=external_stylesheets,
+            background_callback_manager=bg_callback_manager,
+        )
 
         # Add custom CSS if file exists
         if os.path.exists(css_path):

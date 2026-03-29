@@ -1792,6 +1792,7 @@ class MOSAICHandler:
         provider: Optional[str] = None,
         source_id: Optional[str] = None,
         esa_cutout_format: Optional[str] = None,
+        progress_callback=None,
     ) -> List[go.Heatmap]:
         """
         Load mosaic image traces with strict performance limits and timing
@@ -1847,6 +1848,8 @@ class MOSAICHandler:
                 break
 
             print(f"[PROGRESS] Processing mosaic {i+1}/{len(mertiles_to_load)}: tile {mertileid}")
+            if progress_callback is not None:
+                progress_callback(i + 1, len(mertiles_to_load), mertileid)
 
             try:
                 trace_start = time.time()

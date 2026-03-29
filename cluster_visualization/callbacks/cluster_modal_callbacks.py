@@ -561,8 +561,25 @@ class ClusterModalCallbacks:
                 State("cluster-plot", "figure"),
             ],
             prevent_initial_call=True,
+            background=True,
+            running=[
+                (
+                    Output("tab-action-progress-container", "style"),
+                    {"display": "block"},
+                    {"display": "none"},
+                ),
+                (Output("tab-generate-cutout", "disabled"), True, False),
+                (Output("tab-view-catred-box", "disabled"), True, False),
+                (Output("tab-generate-mask-cutout", "disabled"), True, False),
+                (Output("tab-export-button", "disabled"), True, False),
+            ],
+            progress=[
+                Output("tab-action-progress", "value"),
+                Output("tab-action-label", "children"),
+            ],
         )
         def handle_tab_actions(
+            set_progress,
             cutout_clicks,
             catred_box_clicks,
             mask_cutout_clicks,
@@ -595,6 +612,7 @@ class ClusterModalCallbacks:
             current_figure,
         ):
             """Handle tab action button clicks"""
+            set_progress((5, "Initializing..."))
             ctx = callback_context
             if not ctx.triggered:
                 return dash.no_update, dash.no_update, dash.no_update, dash.no_update
@@ -609,9 +627,11 @@ class ClusterModalCallbacks:
 
             cluster = self.selected_cluster
 
+            set_progress((20, f"Loading {algorithm} data..."))
             print(f"Loading data for algorithm: {algorithm}")
             data = self.data_loader.load_data(select_algorithm=algorithm)
             print("Data loaded successfully.")
+            set_progress((50, "Processing..."))
 
             if button_id == "tab-generate-cutout":
                 # Analysis results for the tab
@@ -659,6 +679,7 @@ class ClusterModalCallbacks:
 
                 if cutout_type == "mermosaic":
                     if self.mosaic_handler:
+                        set_progress((65, "Fetching mosaic cutout tiles..."))
                         mosaic_cutout_trace = self.mosaic_handler.create_mosaic_cutout_trace(
                             data=data,
                             clickdata=clickdata,
@@ -853,10 +874,12 @@ class ClusterModalCallbacks:
                 )
 
                 # data = self.data_loader.load_data(select_algorithm=algorithm)
+                set_progress((65, "Loading CATRED box data..."))
                 catred_box_data = self.catred_handler.load_catred_data_clusterbox(
                     box=box_params, data=data, threshold=catred_mask_threshold, maglim=catred_maglim
                 )
 
+                set_progress((80, "Building figure..."))
                 if self.trace_creator:
                     traces = self.trace_creator.create_traces(
                         data,
@@ -940,6 +963,7 @@ class ClusterModalCallbacks:
                     "nclicks": cutout_clicks,
                 }
 
+                set_progress((65, "Creating mask overlay..."))
                 if self.mosaic_handler:
                     if current_figure and "data" in current_figure:
                         mask_overlay_traces = [

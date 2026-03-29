@@ -105,9 +105,19 @@ class CATREDCallbacks:
                 State("cluster-plot", "relayoutData"),
                 State("cluster-plot", "figure"),
             ],
+            background=True,
+            running=[
+                (Output("catred-load-progress-container", "style"), {"display": "block"}, {"display": "none"}),
+                (Output("catred-render-button", "disabled"), True, False),
+            ],
+            progress=[
+                Output("catred-load-progress", "value"),
+                Output("catred-load-label", "children"),
+            ],
             prevent_initial_call=True,
         )
         def manual_render_catred_data(
+            set_progress,
             catred_n_clicks,
             algorithm,
             matching_clusters,
@@ -131,6 +141,8 @@ class CATREDCallbacks:
             )
 
             try:
+                set_progress((10, "Extracting SNR values..."))
+
                 # Extract SNR values from range sliders (separate for PZWAV and AMICO)
                 snr_pzwav_lower = (
                     snr_range_pzwav[0] if snr_range_pzwav and len(snr_range_pzwav) == 2 else None
@@ -158,9 +170,11 @@ class CATREDCallbacks:
                     snr_upper = (snr_pzwav_upper, snr_amico_upper)
 
                 # Load data for selected algorithm
+                set_progress((30, f"Loading {algorithm} cluster data..."))
                 data = self.load_data(algorithm)
 
                 # Load CATRED scatter data for current zoom window with threshold
+                set_progress((50, "Loading CATRED high-res sources..."))
                 catred_scatter_data = self.load_catred_scatter_data(
                     data, relayout_data, catred_masked, threshold, maglim
                 )
@@ -213,6 +227,7 @@ class CATREDCallbacks:
                     self.catred_traces_cache.append(None)  # Placeholder for the new trace
 
                 # Create figure
+                set_progress((80, "Building figure..."))
                 fig = (
                     self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio)
                     if self.figure_manager

@@ -245,6 +245,73 @@ class AppLayout:
                                         ),
                                     ]
                                 ),
+                                # Progress Bars Row - controlled by background callbacks running parameter
+                                dbc.Row(
+                                    [
+                                        dbc.Col(
+                                            [
+                                                html.Div(
+                                                    [
+                                                        html.Div(
+                                                            html.Span("Loading cluster data...", id="data-load-label"),
+                                                            className="mb-1 small text-muted",
+                                                        ),
+                                                        dbc.Progress(
+                                                            id="data-load-progress",
+                                                            value=0,
+                                                            striped=True,
+                                                            animated=True,
+                                                            style={"height": "8px"},
+                                                        ),
+                                                    ],
+                                                    id="data-load-progress-container",
+                                                    style={"display": "none"},
+                                                    className="mb-2",
+                                                ),
+                                                html.Div(
+                                                    [
+                                                        html.Div(
+                                                            html.Span("Loading CATRED sources...", id="catred-load-label"),
+                                                            className="mb-1 small text-muted",
+                                                        ),
+                                                        dbc.Progress(
+                                                            id="catred-load-progress",
+                                                            value=0,
+                                                            striped=True,
+                                                            animated=True,
+                                                            color="warning",
+                                                            style={"height": "8px"},
+                                                        ),
+                                                    ],
+                                                    id="catred-load-progress-container",
+                                                    style={"display": "none"},
+                                                    className="mb-2",
+                                                ),
+                                                html.Div(
+                                                    [
+                                                        html.Div(
+                                                            html.Span("Loading mosaic tiles...", id="mosaic-load-label"),
+                                                            className="mb-1 small text-muted",
+                                                        ),
+                                                        dbc.Progress(
+                                                            id="mosaic-load-progress",
+                                                            value=0,
+                                                            striped=True,
+                                                            animated=True,
+                                                            color="info",
+                                                            style={"height": "8px"},
+                                                        ),
+                                                    ],
+                                                    id="mosaic-load-progress-container",
+                                                    style={"display": "none"},
+                                                    className="mb-2",
+                                                ),
+                                            ],
+                                            className="px-3",
+                                        )
+                                    ],
+                                    className="mt-2",
+                                ),
                                 # Status info row
                                 dbc.Row([dbc.Col([html.Div(id="status-info", className="mt-2")])]),
                             ],
