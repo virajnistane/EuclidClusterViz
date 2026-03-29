@@ -131,7 +131,7 @@ The EDEN-3.1 environment lacks several critical modules (`healpy`, `dash`, `plot
 - **Development tools**: pytest, black, mypy, pylint (optional)
 - **Optional uv**: Automatic bootstrapping for faster installations
 
-**Core Dependencies**: `plotly`, `pandas`, `numpy`, `astropy`, `healpy`, `shapely`, `dash`, `dash-bootstrap-components`, `psutil`
+**Core Dependencies**: `plotly`, `pandas`, `numpy`, `astropy`, `healpy`, `shapely`, `dash`, `dash-bootstrap-components`, `psutil`, `diskcache`
 
 ## 🎯 Key Features
 
@@ -156,6 +156,7 @@ The EDEN-3.1 environment lacks several critical modules (`healpy`, `dash`, `plot
 
 ### 🖥️ **Professional UI Controls**
 - **Tabbed Interface**: Separate tabs for main visualization and cluster analysis
+- **App Configuration Panel**: Collapsible sidebar card showing active merged catalog file and tile data paths, read live from the loaded configuration with abbreviated display and full path on hover
 - **Highlighted Section Headers**: Clear visual hierarchy with Bootstrap styling
 - **Dynamic Visibility**: Context-aware control hiding/showing based on user selections
 - **Algorithm-Based Toggle Control**: Matching clusters toggle enabled only in BOTH mode
@@ -174,6 +175,7 @@ The EDEN-3.1 environment lacks several critical modules (`healpy`, `dash`, `plot
 
 ### ⚡ **Performance Optimization**
 - **Client-side Filtering**: Real-time SNR/redshift filtering without server round-trips
+- **Background Callbacks**: Heavy data-loading operations run as true background tasks with real percentage progress bars (powered by `diskcache` and Dash `background=True`)
 - **Layered Rendering**: Optimized trace ordering (polygons → mosaics → mask overlays → CATRED → clusters)
 - **Preserved State**: Zoom levels and filter settings maintained during updates
 - **Efficient Caching**: Smart data caching with trace preservation for smooth interactions
@@ -441,6 +443,7 @@ pip install -r requirements.txt
 - `healpy` - HEALPix operations for masked CATRED data
 - `dash` - Web application framework
 - `dash-bootstrap-components` - Enhanced UI components
+- `diskcache` - Background callback task queue for progress reporting
 
 ## 🎛️ Command-Line Options
 
@@ -810,6 +813,7 @@ cluster_visualization/src/
 
 ### **Runtime Optimization Features**
 - **Client-side Processing**: Real-time filtering without server round-trips
+- **Background Callbacks**: All heavy data-loading operations use Dash `background=True` with `DiskcacheManager` — real percentage progress bars keep users informed and buttons are disabled to prevent duplicate requests
 - **Lazy Loading Architecture**: On-demand data loading for CATRED, MOSAIC, and HEALPix mask components
 - **Memory Efficiency**: Smart caching system for algorithm switching with `psutil` monitoring
 - **Trace Management**: Optimized layer ordering and intelligent trace preservation across updates
@@ -990,11 +994,20 @@ The application now supports independent control of multiple overlay layers:
 - ✅ **Format Dropdown in UI**: `mosaic-esa-format-selector` dropdown (FITS / JPEG) shown only when ESA provider is active; format is passed through callback `State` and applied per render call without touching the server-side default
 - ✅ **Format-Aware Cache Key**: Cache key extended to `provider|source|tile|format` so switching format always re-fetches rather than serving a stale entry
 
+### **March 2026 (Late): Config Display & Background Progress**
+- ✅ **App Configuration Sidebar Section**: Collapsible "⚙️ App Configuration" card in the sidebar showing the active merged catalog file and individual tile data paths read live from the configuration — abbreviated to the last two path segments with full path available on hover
+- ✅ **Real Background Progress Bars**: Replaced naive animated stripe bars with true `background=True` Dash callbacks backed by `diskcache` (v5.6.3) via `DiskcacheManager`; progress bars report actual completion percentages during data loading rather than indeterminate spinners
+- ✅ **Progress on All Heavy Callbacks**: Background progress implemented across all four heavy operations — main cluster render (`update_plot`), CATRED data render (`manual_render_catred_data`), mosaic tile render (`render_mosaic_images` with per-tile progress), and cluster analysis tab actions (`handle_tab_actions`)
+- ✅ **Per-Tile Mosaic Progress**: `load_mosaic_traces_in_zoom` accepts an optional `progress_callback` hook; the mosaic callback passes a closure that maps tile index to a 30%–90% progress range as each tile is fetched and decoded
+- ✅ **Button Disable During Loading**: All action buttons are automatically disabled while a background callback is running and re-enabled on completion, preventing duplicate submissions
+
 ### **Current State: Enterprise-Grade Platform**
 - ✅ **Multi-Layer Visualization**: Independent control of mosaics, masks, CATRED, cutouts, and cluster overlays
 - ✅ **Advanced Matching Analysis**: Visual cluster cross-matching with geometric overlays
 - ✅ **Interactive Cluster Analysis**: Comprehensive tools for detailed cluster investigation
 - ✅ **Robust State Management**: Preserved traces and settings across all data operations
+- ✅ **Background Progress**: Real percentage-based progress bars on all heavy callbacks via `diskcache`
+- ✅ **Config Display**: Live active-configuration panel in the sidebar for quick path inspection
 - ✅ **Professional Documentation**: Comprehensive README reflecting sophisticated architecture
 - ✅ **Trace Management**: Granular control over visibility and clearing of all overlay types
 
