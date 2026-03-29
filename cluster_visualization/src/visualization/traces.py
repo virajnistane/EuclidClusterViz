@@ -257,9 +257,8 @@ class TraceCreator:
             print("Debug: TraceCreator CATRED data explicitly cleared")
 
         # Clear bounds cache as well
-        if hasattr(self, "_catred_bounds_cache"):
-            delattr(self, "_catred_bounds_cache")
-            print("Debug: CATRED bounds cache cleared")
+        self._catred_bounds_cache = None
+        print("Debug: CATRED bounds cache cleared")
         if self._subsampled_catred_cache is not None:
             self._subsampled_catred_cache = None
             print("Debug: Subsampled CATRED cache cleared")
