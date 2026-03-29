@@ -380,6 +380,15 @@ class Config:
         except ValueError:
             return 768
 
+    def get_esa_cutout_format(self) -> str:
+        """Get image format for ESA HiPS cutout requests.
+
+        Returns 'fits' (default) for 32-bit float data with WCS-derived bounds,
+        or 'jpg' for 8-bit JPEG with geometric bounds (faster, lower quality).
+        """
+        raw_value = str(self._get_mosaic_option("esa_cutout_format", "fits")).strip().lower()
+        return "fits" if raw_value in {"fits", "fit"} else "jpg"
+
     def get_mosaic_select_best_local_file(self) -> bool:
         """Choose local mosaic file strategy: False uses first match for speed, True scores candidates."""
         raw_value = str(self._get_mosaic_option("select_best_local_file", "false")).strip().lower()

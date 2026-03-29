@@ -136,6 +136,12 @@ class MOSAICHandler:
         if hasattr(self.config, "get_esa_cutout_height"):
             self.esa_cutout_height = self.config.get_esa_cutout_height()
 
+        # 'fits' = 32-bit float with WCS-derived bounds (default, best quality)
+        # 'jpg'  = 8-bit JPEG with geometric cos(dec) bounds
+        self.esa_cutout_format = "fits"
+        if hasattr(self.config, "get_esa_cutout_format"):
+            self.esa_cutout_format = self.config.get_esa_cutout_format()
+
         self.select_best_local_file = False
         if hasattr(self.config, "get_mosaic_select_best_local_file"):
             self.select_best_local_file = self.config.get_mosaic_select_best_local_file()
@@ -465,7 +471,20 @@ class MOSAICHandler:
         source_id: Optional[str],
         tile_bounds: Optional[Tuple[float, float, float, float]],
     ):
-        """Load an ESA cutout image centered on selected MER tile bounds."""
+        """Load an ESA cutout image centered on selected MER tile bounds.
+
+        The image format is selected by ``self.esa_cutout_format``:
+
+        * ``'fits'`` (default) — requests a FITS file from hips2fits; bounds are
+          derived exactly from the WCS header; data is 32-bit float with no
+          compression artefacts.  Only the column axis is flipped so that
+          ``data[0,0]`` = (min Dec, min RA) matches the Plotly heatmap convention.
+        * ``'jpg'`` — requests a JPEG; bounds are computed geometrically using the
+          cos(Dec) RA correction; both axes are flipped (PIL loads top-row first).
+
+        In both cases the pixel values are normalized with the robust 1st–99.5th
+        percentile stretch used for local FITS tiles.
+        """
         if not tile_bounds:
             print(f"[WARNING] Missing tile bounds for ESA tile request: {mertileid}")
             return None
@@ -481,6 +500,7 @@ class MOSAICHandler:
         if fov_deg <= 0:
             fov_deg = 0.02
 
+        fmt = self.esa_cutout_format  # 'fits' or 'jpg'
         params = {
             "hips": source_id or self.default_esa_source,
             "ra": center_ra,
@@ -489,60 +509,131 @@ class MOSAICHandler:
             "width": self.esa_cutout_width,
             "height": self.esa_cutout_height,
             "projection": "TAN",
-            "format": "jpg",
+            "format": fmt,
         }
         cutout_url = f"{self.esa_cutout_base_url}?{urlencode(params)}"
+        print(f"[ESA] Fetching {fmt.upper()} cutout for tile {mertileid}")
 
         try:
             with urlopen(cutout_url, timeout=self.esa_timeout_seconds) as resp:
                 image_bytes = resp.read()
 
-            pil_img = Image.open(BytesIO(image_bytes)).convert("L")
-            image_array = np.asarray(pil_img, dtype=np.float32)
+            if fmt == "fits":
+                # ------------------------------------------------------------------
+                # FITS path: 32-bit float, WCS-derived bounds, column-axis flip only
+                # ------------------------------------------------------------------
+                with fits.open(BytesIO(image_bytes), memmap=False) as hdul:
+                    header = hdul[0].header.copy()
+                    raw_data = hdul[0].data
+                    if raw_data is None or raw_data.size == 0:
+                        print(f"[WARNING] Empty FITS payload for ESA tile {mertileid}")
+                        return None
+                    # hips2fits may return 3-D or 4-D data when Stokes / spectral
+                    # axes are present (NAXIS3, NAXIS4).  Drop all degenerate
+                    # leading axes so we are left with a plain 2-D (height, width).
+                    arr = raw_data
+                    while arr.ndim > 2:
+                        arr = arr[0]
+                    image_array = arr.astype(np.float32, copy=True)
+                    # .celestial extracts only the RA/Dec part of the WCS,
+                    # avoiding "too many values to unpack" when the full header
+                    # has extra axes.
+                    wcs_obj = wcs.WCS(header).celestial
 
-            if image_array.size == 0:
-                print(f"[WARNING] Empty ESA cutout for tile {mertileid}")
-                return None
+                img_h, img_w = image_array.shape
 
-            max_pixel = float(np.max(image_array))
-            if max_pixel > 0:
-                image_array = image_array / max_pixel
+                # Derive bounds from the four corner pixels via WCS.
+                # astropy pixel_to_world_values uses 0-indexed (x=col, y=row).
+                corners_x = np.array([0.0, img_w - 1, img_w - 1, 0.0])
+                corners_y = np.array([0.0, 0.0, img_h - 1, img_h - 1])
+                ra_c, dec_c = wcs_obj.wcs_pix2world(corners_x, corners_y, 0)
+                img_ra_min = float(np.min(ra_c))
+                img_ra_max = float(np.max(ra_c))
+                img_dec_min = float(np.min(dec_c))
+                img_dec_max = float(np.max(dec_c))
 
-            # Compute the actual sky coverage of the HiPS cutout.
-            # hips2fits delivers a square image spanning fov_deg × fov_deg of
-            # *sky* angle centered at (center_ra, center_dec).  In coordinate
-            # space, 1 sky-degree of RA spans 1/cos(dec) coordinate degrees,
-            # so the RA half-extent in degrees of RA coordinate is:
-            #   half_fov_ra = fov_deg / (2 * |cos(dec)|)
-            # while the Dec half-extent is simply fov_deg / 2.
-            center_dec_rad = np.radians(center_dec)
-            cos_dec = np.abs(np.cos(center_dec_rad))
-            if cos_dec < 1e-6:
-                cos_dec = 1e-6  # guard against pole singularity
-            half_fov_ra = fov_deg / (2.0 * cos_dec)
-            half_fov_dec = fov_deg / 2.0
-            img_ra_min = center_ra - half_fov_ra
-            img_ra_max = center_ra + half_fov_ra
-            img_dec_min = center_dec - half_fov_dec
-            img_dec_max = center_dec + half_fov_dec
+                # Percentile normalization (same stretch as local FITS path).
+                image_array = self._percentile_normalize(image_array)
 
-            return {
-                "header": None,
-                "data": image_array,
-                "wcs": None,
-                "file_path": cutout_url,
-                "bounds": {
-                    "ra_min": img_ra_min,
-                    "ra_max": img_ra_max,
-                    "dec_min": img_dec_min,
-                    "dec_max": img_dec_max,
-                    "ra_size_deg": img_ra_max - img_ra_min,
-                    "dec_size_deg": fov_deg,
-                },
-                "provider": "esa_sky",
-                "source_id": source_id,
-                "attribution": "ESA/ESDC public HiPS via CDS hips2fits",
-            }
+                # Orientation fix: FITS data[i,j] = pixel(x=j, y=i).
+                # For standard TAN (CD1_1 < 0, CD2_2 > 0):
+                #   data[0,0] = (x=0, y=0) = max RA, min Dec
+                # Plotly needs z[0,0] = (ra_min, dec_min) = min RA, min Dec.
+                # Flip column axis only:
+                image_array = np.ascontiguousarray(image_array[:, ::-1])
+
+                return {
+                    "header": header,
+                    "data": image_array,
+                    "wcs": wcs_obj,
+                    "file_path": cutout_url,
+                    "bounds": {
+                        "ra_min": img_ra_min,
+                        "ra_max": img_ra_max,
+                        "dec_min": img_dec_min,
+                        "dec_max": img_dec_max,
+                        "ra_size_deg": img_ra_max - img_ra_min,
+                        "dec_size_deg": img_dec_max - img_dec_min,
+                    },
+                    "cutout_format": "fits",
+                    "provider": "esa_sky",
+                    "source_id": source_id,
+                    "attribution": "ESA/ESDC public HiPS via CDS hips2fits (FITS)",
+                }
+
+            else:
+                # ------------------------------------------------------------------
+                # JPEG path: 8-bit JPEG, geometric bounds, both-axes flip
+                # ------------------------------------------------------------------
+                pil_img = Image.open(BytesIO(image_bytes)).convert("L")
+                image_array = np.asarray(pil_img, dtype=np.float32)
+
+                if image_array.size == 0:
+                    print(f"[WARNING] Empty JPEG payload for ESA tile {mertileid}")
+                    return None
+
+                # Simple geometric normalization: scale to [0, 1] by the
+                # brightest pixel.  JPEG values are already 8-bit (0–255);
+                # a more complex stretch would not recover lost precision.
+                max_pixel = float(np.max(image_array))
+                if max_pixel > 0:
+                    image_array = image_array / max_pixel
+
+                # Compute coordinate bounds.
+                # hips2fits delivers fov_deg × fov_deg of sky angle;
+                # 1 sky-angle degree = 1/cos(dec) degrees of RA coordinate.
+                center_dec_rad = np.radians(center_dec)
+                cos_dec = max(np.abs(np.cos(center_dec_rad)), 1e-6)
+                half_fov_ra = fov_deg / (2.0 * cos_dec)
+                half_fov_dec = fov_deg / 2.0
+                img_ra_min = center_ra - half_fov_ra
+                img_ra_max = center_ra + half_fov_ra
+                img_dec_min = center_dec - half_fov_dec
+                img_dec_max = center_dec + half_fov_dec
+
+                # Orientation fix: PIL loads top-row first (max Dec, max RA at [0,0]).
+                # Plotly needs z[0,0] = (ra_min, dec_min).  Flip both axes:
+                image_array = np.ascontiguousarray(image_array[::-1, ::-1])
+
+                return {
+                    "header": None,
+                    "data": image_array,
+                    "wcs": None,
+                    "file_path": cutout_url,
+                    "bounds": {
+                        "ra_min": img_ra_min,
+                        "ra_max": img_ra_max,
+                        "dec_min": img_dec_min,
+                        "dec_max": img_dec_max,
+                        "ra_size_deg": img_ra_max - img_ra_min,
+                        "dec_size_deg": fov_deg,
+                    },
+                    "cutout_format": "jpg",
+                    "provider": "esa_sky",
+                    "source_id": source_id,
+                    "attribution": "ESA/ESDC public HiPS via CDS hips2fits (JPEG)",
+                }
+
         except Exception as exc:
             print(f"[ERROR] ESA cutout load failed for tile {mertileid}: {exc}")
             return None
@@ -719,6 +810,54 @@ class MOSAICHandler:
 
         return mertiles_to_load
 
+    def _percentile_normalize(self, image: np.ndarray) -> np.ndarray:
+        """Normalize a 2D float array to [0, 1] using a robust 1st–99.5th
+        percentile stretch with IQR outlier fencing.
+
+        This is the same normalization used for local FITS tiles inside
+        ``_process_mosaic_image`` and is applied to both FITS and JPEG
+        ESA cutouts so that all providers share consistent contrast scaling.
+
+        Returns a float32 array of the same shape.
+        """
+        valid_mask = np.isfinite(image) & (np.abs(image) < 1e30)
+        if not np.any(valid_mask):
+            return np.zeros_like(image, dtype=np.float32)
+
+        finite_vals = image[valid_mask].astype(np.float64, copy=False)
+
+        # Sample statistics for very large arrays.
+        if finite_vals.size > self.max_pixels_for_stats:
+            step = max(1, finite_vals.size // self.max_pixels_for_stats)
+            stats_vals = finite_vals[::step]
+        else:
+            stats_vals = finite_vals
+
+        # Robust IQR fencing to reject extreme outliers before stretch.
+        q25 = float(np.nanpercentile(stats_vals, 25.0))
+        q75 = float(np.nanpercentile(stats_vals, 75.0))
+        iqr = q75 - q25
+        if np.isfinite(iqr) and iqr > 0:
+            core_vals = stats_vals[
+                (stats_vals >= q25 - 10.0 * iqr) & (stats_vals <= q75 + 10.0 * iqr)
+            ]
+            if core_vals.size > 10_000:
+                stats_vals = core_vals
+
+        p_low = float(np.nanpercentile(stats_vals, 1.0))
+        p_high = float(np.nanpercentile(stats_vals, 99.5))
+        if not np.isfinite(p_low) or not np.isfinite(p_high) or p_high <= p_low:
+            p_low = float(np.nanmin(stats_vals))
+            p_high = float(np.nanmax(stats_vals))
+        if not np.isfinite(p_low) or not np.isfinite(p_high) or p_high <= p_low:
+            return np.zeros_like(image, dtype=np.float32)
+
+        out = np.array(image, dtype=np.float64, copy=True)
+        out[~valid_mask] = p_low
+        out = np.clip(out, p_low, p_high)
+        out = (out - p_low) / (p_high - p_low)
+        return np.nan_to_num(out, nan=0.0, posinf=1.0, neginf=0.0).astype(np.float32)
+
     def _process_mosaic_image(
         self,
         mosaic_data: np.ndarray,
@@ -776,63 +915,13 @@ class MOSAICHandler:
                         f"Debug: Downsampled to: {mosaic_data.shape[1]} x {mosaic_data.shape[0]} pixels"
                     )
 
-            # Handle NaN and extreme sentinel values often used in large FITS mosaics.
-            valid_mask = np.isfinite(mosaic_data) & (np.abs(mosaic_data) < 1e30)
-            if not np.any(valid_mask):
-                print("Warning: No valid data found in mosaic image")
-                return np.zeros((target_height, target_width))
-
-            invalid_fraction = 1.0 - float(np.mean(valid_mask))
-            if invalid_fraction > 0:
-                print(f"Debug: Excluding {invalid_fraction*100:.2f}% invalid/sentinel pixels")
-
             print("Debug: Computing statistics...")
 
-            # Robust normalization using finite percentile range avoids overflow/NaN on very large arrays.
-            finite_vals = mosaic_data[valid_mask].astype(np.float64, copy=False)
+            mer_image = self._percentile_normalize(mosaic_data)
 
-            # Sample statistics for very large arrays to keep processing fast.
-            if finite_vals.size > self.max_pixels_for_stats:
-                step = max(1, finite_vals.size // self.max_pixels_for_stats)
-                stats_vals = finite_vals[::step]
-            else:
-                stats_vals = finite_vals
-
-            # Reject extreme tails using robust IQR fencing before percentile stretch.
-            q25 = float(np.nanpercentile(stats_vals, 25.0))
-            q75 = float(np.nanpercentile(stats_vals, 75.0))
-            iqr = q75 - q25
-            if np.isfinite(iqr) and iqr > 0:
-                lower_fence = q25 - 10.0 * iqr
-                upper_fence = q75 + 10.0 * iqr
-                core_vals = stats_vals[(stats_vals >= lower_fence) & (stats_vals <= upper_fence)]
-                if core_vals.size > 10_000:
-                    stats_vals = core_vals
-                    print(
-                        "Debug: Robust outlier rejection retained "
-                        f"{(core_vals.size / max(1, finite_vals.size))*100:.2f}% of sampled pixels"
-                    )
-
-            p_low = float(np.nanpercentile(stats_vals, 1.0))
-            p_high = float(np.nanpercentile(stats_vals, 99.5))
-            if not np.isfinite(p_low) or not np.isfinite(p_high) or p_high <= p_low:
-                p_low = float(np.nanmin(stats_vals))
-                p_high = float(np.nanmax(stats_vals))
-
-            if not np.isfinite(p_low) or not np.isfinite(p_high) or p_high <= p_low:
+            if not np.any(mer_image):
                 print("Warning: Invalid normalization bounds, returning zeros")
                 return np.zeros((target_height, target_width), dtype=np.float32)
-
-            print(
-                f"Debug: Mosaic data percentile bounds - p1: {p_low:.3f}, p99.5: {p_high:.3f}"
-            )
-
-            working_image = np.array(mosaic_data, dtype=np.float64, copy=True)
-            working_image[~valid_mask] = np.nan
-            mer_image = np.clip(working_image, p_low, p_high)
-            mer_image = (mer_image - p_low) / (p_high - p_low)
-            mer_image = np.nan_to_num(mer_image, nan=0.0, posinf=1.0, neginf=0.0)
-            mer_image = mer_image.astype(np.float32, copy=False)
 
             print(
                 f"Debug: After clipping and normalization - range: [{np.min(mer_image):.3f}, {np.max(mer_image):.3f}]"
@@ -1298,12 +1387,11 @@ class MOSAICHandler:
             return None
 
         if provider_norm == "esa_sky":
-            # hips2fits returns an image in standard astronomical orientation:
-            # North up (row 0 = max Dec) and East left (col 0 = max RA).
-            # Plotly Heatmap maps z[0][0] to (x[0], y[0]) = (ra_min, dec_min),
-            # i.e. bottom-left.  We must flip both axes so that the array's
-            # [0][0] corner corresponds to (ra_min, dec_min) before mapping.
-            processed_image = np.asarray(mosaic_info["data"], dtype=np.float32)[::-1, ::-1].copy()
+            # Data has already been normalized and orientation-corrected in
+            # _load_esa_cutout_by_mertile (format-aware flip applied at load time).
+            # FITS path:  column-flip only  → z[0,0] = (min Dec, min RA)
+            # JPEG path:  both-axes flip    → z[0,0] = (min Dec, min RA)
+            processed_image = np.asarray(mosaic_info["data"], dtype=np.float32)
             bounds = mosaic_info.get("bounds")
             if bounds is None:
                 if tile_bounds is None:
