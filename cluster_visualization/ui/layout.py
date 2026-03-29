@@ -607,6 +607,14 @@ class AppLayout:
         """Create organized collapsible sections for better UX"""
         return html.Div(
             [
+                # Configuration Info Section - FIRST
+                AppLayout._create_collapsible_card(
+                    "⚙️ App Configuration",
+                    "app-config",
+                    [SidebarSections.create_config_info_section()],
+                    is_open=True,
+                    color="secondary",
+                ),
                 # Core Settings Section
                 AppLayout._create_collapsible_card(
                     "🎯 Detected Clusters",

@@ -462,3 +462,64 @@ class SidebarSections:
                 ),
             ]
         )
+
+    @staticmethod
+    def create_config_info_section():
+        """Create application configuration info section"""
+        return html.Div(
+            [
+                dbc.Card(
+                    [
+                        dbc.CardBody(
+                            [
+                                html.Div(
+                                    [
+                                        html.I(className="fas fa-database me-2 text-primary"),
+                                        html.Strong("Merged Catalog:", className="me-2"),
+                                    ],
+                                    className="d-flex align-items-center mb-2",
+                                ),
+                                html.Div(
+                                    id="config-merged-catalog",
+                                    className="mb-3 small",
+                                    children=[
+                                        html.Div(
+                                            [
+                                                dbc.Spinner(size="sm", color="primary"),
+                                                html.Span(" Loading...", className="ms-2"),
+                                            ]
+                                        )
+                                    ],
+                                ),
+                                html.Hr(className="my-2"),
+                                html.Div(
+                                    [
+                                        html.I(className="fas fa-file-alt me-2 text-info"),
+                                        html.Strong("Tile Detection List:", className="me-2"),
+                                    ],
+                                    className="d-flex align-items-center mb-2",
+                                ),
+                                html.Div(
+                                    id="config-detintile-list",
+                                    className="mb-2 small",
+                                    children=[
+                                        html.Div(
+                                            [
+                                                dbc.Spinner(size="sm", color="primary"),
+                                                html.Span(" Loading...", className="ms-2"),
+                                            ]
+                                        )
+                                    ],
+                                ),
+                            ],
+                            className="p-3",
+                        )
+                    ],
+                    className="mb-3 border-0 shadow-sm",
+                    style={
+                        "background": "linear-gradient(45deg, #f0f4ff, #ffffff)",
+                        "border-radius": "12px",
+                    },
+                )
+            ]
+        )

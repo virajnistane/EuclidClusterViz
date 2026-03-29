@@ -32,6 +32,7 @@ class UICallbacks:
         self._setup_button_state_callbacks()
         self._setup_catred_visibility_callback()
         self._setup_collapsible_callbacks()
+        self._setup_config_display_callback()
         self._setup_file_configuration_callback()
         self._setup_file_browser_callbacks()
 
@@ -308,6 +309,178 @@ class UICallbacks:
             is_open = (n_clicks % 2) == 1
             icon = "fas fa-chevron-up" if is_open else "fas fa-chevron-down"
             return is_open, [html.I(className=f"{icon} me-2"), "🖼️ Mosaic / Healpix Mask"]
+
+    def _setup_config_display_callback(self):
+        """Setup callback to display configuration parameters"""
+
+        @self.app.callback(
+            [
+                Output("config-merged-catalog", "children"),
+                Output("config-detintile-list", "children"),
+            ],
+            [Input("render-button", "n_clicks"), Input("algorithm-dropdown", "value")],
+            prevent_initial_call=False,
+        )
+        def display_config_info(n_clicks, algorithm):
+            """Display current configuration parameters"""
+            if self.config is None:
+                return (
+                    html.Div(
+                        [
+                            dbc.Badge("Not Available", color="warning", className="me-2"),
+                            html.Span("Configuration not loaded", className="text-muted"),
+                        ]
+                    ),
+                    html.Div(
+                        [
+                            dbc.Badge("Not Available", color="warning", className="me-2"),
+                            html.Span("Configuration not loaded", className="text-muted"),
+                        ]
+                    ),
+                )
+
+            try:
+                # Get merged catalog file
+                gluematchcat_path = self.config.get_gluematchcat_clusters_xml()
+                
+                merged_catalog_display = None
+                if gluematchcat_path and os.path.exists(gluematchcat_path):
+                    # Show abbreviated path (last 2 segments + filename)
+                    path_parts = Path(gluematchcat_path).parts
+                    if len(path_parts) > 2:
+                        short_path = str(Path(*path_parts[-2:]))
+                    else:
+                        short_path = os.path.basename(gluematchcat_path)
+                    
+                    merged_catalog_display = html.Div(
+                        [
+                            dbc.Badge("GlueMatchCat", color="success", className="me-2"),
+                            html.Span(
+                                short_path,
+                                className="text-primary font-monospace small",
+                                title=gluematchcat_path,
+                                style={"cursor": "help"},
+                            ),
+                        ]
+                    )
+                else:
+                    # Try algorithm-specific merged catalog
+                    try:
+                        mergedet_files = self.config.get_mergedetcat_xml_files(algorithm)
+                        if mergedet_files:
+                            # Get the first available file
+                            first_key = next(iter(mergedet_files))
+                            mergedet_path = mergedet_files[first_key]
+                            
+                            if mergedet_path and os.path.exists(mergedet_path):
+                                path_parts = Path(mergedet_path).parts
+                                if len(path_parts) > 2:
+                                    short_path = str(Path(*path_parts[-2:]))
+                                else:
+                                    short_path = os.path.basename(mergedet_path)
+                                
+                                merged_catalog_display = html.Div(
+                                    [
+                                        dbc.Badge(f"MergeDetCat ({algorithm})", color="info", className="me-2"),
+                                        html.Span(
+                                            short_path,
+                                            className="text-primary font-monospace small",
+                                            title=mergedet_path,
+                                            style={"cursor": "help"},
+                                        ),
+                                    ]
+                                )
+                            else:
+                                merged_catalog_display = html.Div(
+                                    [
+                                        dbc.Badge("Not Found", color="danger", className="me-2"),
+                                        html.Span("File configured but missing", className="text-muted small"),
+                                    ]
+                                )
+                        else:
+                            merged_catalog_display = html.Div(
+                                [
+                                    dbc.Badge("Not Configured", color="warning", className="me-2"),
+                                    html.Span("No merged catalog configured", className="text-muted small"),
+                                ]
+                            )
+                    except Exception as e:
+                        merged_catalog_display = html.Div(
+                            [
+                                dbc.Badge("Error", color="danger", className="me-2"),
+                                html.Span(f"Error: {str(e)}", className="text-danger small"),
+                            ]
+                        )
+
+                # Get DetInTile list files
+                detintile_display = None
+                try:
+                    detintile_files = self.config.get_detintile_list_files(algorithm)
+                    if detintile_files:
+                        detintile_items = []
+                        for key, json_path in detintile_files.items():
+                            if json_path and os.path.exists(json_path):
+                                path_parts = Path(json_path).parts
+                                if len(path_parts) > 2:
+                                    short_path = str(Path(*path_parts[-2:]))
+                                else:
+                                    short_path = os.path.basename(json_path)
+                                
+                                # Extract algorithm name from key
+                                algo_name = key.replace("detintile_", "").replace("_list", "").upper()
+                                
+                                detintile_items.append(
+                                    html.Div(
+                                        [
+                                            dbc.Badge(algo_name, color="primary", className="me-2"),
+                                            html.Span(
+                                                short_path,
+                                                className="text-info font-monospace small",
+                                                title=json_path,
+                                                style={"cursor": "help"},
+                                            ),
+                                        ],
+                                        className="mb-1",
+                                    )
+                                )
+                            else:
+                                algo_name = key.replace("detintile_", "").replace("_list", "").upper()
+                                detintile_items.append(
+                                    html.Div(
+                                        [
+                                            dbc.Badge(algo_name, color="danger", className="me-2"),
+                                            html.Span("File missing", className="text-muted small"),
+                                        ],
+                                        className="mb-1",
+                                    )
+                                )
+                        
+                        detintile_display = html.Div(detintile_items)
+                    else:
+                        detintile_display = html.Div(
+                            [
+                                dbc.Badge("Not Configured", color="warning", className="me-2"),
+                                html.Span("No tile list configured", className="text-muted small"),
+                            ]
+                        )
+                except Exception as e:
+                    detintile_display = html.Div(
+                        [
+                            dbc.Badge("Error", color="danger", className="me-2"),
+                            html.Span(f"Error: {str(e)}", className="text-danger small"),
+                        ]
+                    )
+
+                return merged_catalog_display, detintile_display
+
+            except Exception as e:
+                error_display = html.Div(
+                    [
+                        dbc.Badge("Error", color="danger", className="me-2"),
+                        html.Span(str(e), className="text-danger small"),
+                    ]
+                )
+                return error_display, error_display
 
     def _setup_file_configuration_callback(self):
         """Setup callback to display current gluematchcat file"""
