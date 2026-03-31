@@ -263,6 +263,33 @@ class AppLayout:
                                                                                             ],
                                                                                             type="circle",
                                                                                         ),
+                                                                                        html.Div(
+                                                                                            [
+                                                                                                html.Small(
+                                                                                                    "Bins:",
+                                                                                                    className="text-muted me-1",
+                                                                                                    style={"font-size": "0.72rem", "white-space": "nowrap"},
+                                                                                                ),
+                                                                                                dcc.Slider(
+                                                                                                    id="phz-cluster-nbins-slider",
+                                                                                                    min=5,
+                                                                                                    max=100,
+                                                                                                    step=5,
+                                                                                                    value=40,
+                                                                                                    marks={
+                                                                                                        5:  {"label": "5",  "style": {"font-size": "0.65rem"}},
+                                                                                                        25: {"label": "25", "style": {"font-size": "0.65rem"}},
+                                                                                                        50: {"label": "50", "style": {"font-size": "0.65rem"}},
+                                                                                                        75: {"label": "75", "style": {"font-size": "0.65rem"}},
+                                                                                                        100:{"label": "100","style": {"font-size": "0.65rem"}},
+                                                                                                    },
+                                                                                                    tooltip={"placement": "bottom", "always_visible": False},
+                                                                                                    className="flex-grow-1",
+                                                                                                ),
+                                                                                            ],
+                                                                                            className="d-flex align-items-center px-1 mb-1",
+                                                                                            style={"gap": "6px"},
+                                                                                        ),
                                                                                         dcc.Loading(
                                                                                             id="loading-cluster-snr-z",
                                                                                             children=[

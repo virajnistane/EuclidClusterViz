@@ -391,6 +391,7 @@ class PHZCallbacks:
             [
                 Input("phz-inner-tabs", "active_tab"),
                 Input("phz-cluster-refresh-btn", "n_clicks"),
+                Input("phz-cluster-nbins-slider", "value"),
             ],
             [
                 State("cluster-plot", "figure"),
@@ -398,12 +399,14 @@ class PHZCallbacks:
             ],
             prevent_initial_call=True,
         )
-        def update_cluster_data_plots(active_tab, _refresh_clicks, cluster_figure, algorithm):
-            # Allow trigger from either sub-tab switch or refresh button
+        def update_cluster_data_plots(active_tab, _refresh_clicks, n_bins, cluster_figure, algorithm):
+            # Allow trigger from sub-tab switch, refresh button, or bins slider
             ctx = dash.callback_context
             triggered_id = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
             if triggered_id == "phz-inner-tabs" and active_tab != "phz-cluster-subtab":
                 return dash.no_update, dash.no_update
+
+            n_bins = int(n_bins) if n_bins else 40
 
             if self.data_loader is None:
                 msg = "Data loader not available"
@@ -481,25 +484,44 @@ class PHZCallbacks:
                         self._create_empty_cluster_plot(msg),
                     )
 
-                z_vals = np.array(viewport_data["Z_CLUSTER"], dtype=float)
-                snr_vals = np.array(viewport_data["SNR_CLUSTER"], dtype=float)
+                # ---- Build per-algorithm series ----
+                # Each series: (label, z_vals, snr_vals, hist_color, kde_color)
+                _ALG_COLORS = {
+                    "PZWAV": ("steelblue", "dodgerblue"),
+                    "AMICO": ("tomato",    "crimson"),
+                }
 
-                # Remove non-finite values
-                valid_z = np.isfinite(z_vals)
-                z_vals = z_vals[valid_z]
-                snr_vals = snr_vals[valid_z]
+                if alg == "BOTH":
+                    series = []
+                    det_codes = np.array(viewport_data["DET_CODE_NB"])
+                    z_all   = np.array(viewport_data["Z_CLUSTER"],   dtype=float)
+                    snr_all = np.array(viewport_data["SNR_CLUSTER"],  dtype=float)
+                    for code, label in [(2, "PZWAV"), (1, "AMICO")]:
+                        mask = det_codes == code
+                        z_s, snr_s = z_all[mask], snr_all[mask]
+                        valid = np.isfinite(z_s)
+                        z_s, snr_s = z_s[valid], snr_s[valid]
+                        hc, kc = _ALG_COLORS[label]
+                        series.append((label, z_s, snr_s, hc, kc))
+                else:
+                    z_vals   = np.array(viewport_data["Z_CLUSTER"],   dtype=float)
+                    snr_vals = np.array(viewport_data["SNR_CLUSTER"],  dtype=float)
+                    valid    = np.isfinite(z_vals)
+                    z_vals, snr_vals = z_vals[valid], snr_vals[valid]
+                    hc, kc = _ALG_COLORS.get(alg, ("steelblue", "dodgerblue"))
+                    series = [(alg, z_vals, snr_vals, hc, kc)]
 
-                n_clusters = len(z_vals)
+                n_clusters = sum(len(s[1]) for s in series)
                 alg_label = alg if alg != "BOTH" else "PZWAV + AMICO"
 
                 # ---- Z distribution figure (histogram + KDE) ----
                 z_fig = self._create_z_distribution_plot(
-                    z_vals, n_clusters, alg_label, viewport_label
+                    series, n_clusters, alg_label, viewport_label, n_bins
                 )
 
                 # ---- SNR vs Z scatter figure ----
                 snr_fig = self._create_snr_z_scatter(
-                    z_vals, snr_vals, n_clusters, alg_label, viewport_label
+                    series, n_clusters, alg_label, viewport_label
                 )
 
                 return z_fig, snr_fig
@@ -515,43 +537,49 @@ class PHZCallbacks:
                     self._create_empty_cluster_plot(f"Error: {msg}"),
                 )
 
-    def _create_z_distribution_plot(self, z_vals, n_clusters, alg_label, viewport_label):
-        """Create Z_CLUSTER histogram + KDE overlay figure."""
+    def _create_z_distribution_plot(self, series, n_clusters, alg_label, viewport_label, n_bins=40):
+        """Create Z_CLUSTER histogram + KDE overlay figure.
+
+        Parameters
+        ----------
+        series : list of (label, z_vals, snr_vals, hist_color, kde_color)
+        """
         fig = go.Figure()
 
-        # Histogram
-        fig.add_trace(
-            go.Histogram(
-                x=z_vals,
-                nbinsx=40,
-                name="Z_CLUSTER histogram",
-                marker_color="steelblue",
-                opacity=0.6,
-                histnorm="probability density",
-                showlegend=True,
-            )
-        )
+        for label, z_vals, _snr, hist_color, kde_color in series:
+            if len(z_vals) == 0:
+                continue
 
-        # KDE overlay
-        try:
-            from scipy.stats import gaussian_kde
-
-            if len(z_vals) >= 3:
-                kde = gaussian_kde(z_vals)
-                z_grid = np.linspace(z_vals.min(), z_vals.max(), 300)
-                kde_values = kde(z_grid)
-                fig.add_trace(
-                    go.Scatter(
-                        x=z_grid,
-                        y=kde_values,
-                        mode="lines",
-                        name="KDE",
-                        line=dict(color="darkorange", width=2),
-                        showlegend=True,
-                    )
+            fig.add_trace(
+                go.Histogram(
+                    x=z_vals,
+                    nbinsx=n_bins,
+                    name=f"{label}",
+                    marker_color=hist_color,
+                    opacity=0.55,
+                    histnorm="probability density",
+                    showlegend=True,
                 )
-        except ImportError:
-            pass  # scipy not available; histogram only
+            )
+
+            try:
+                from scipy.stats import gaussian_kde
+
+                if len(z_vals) >= 3:
+                    kde = gaussian_kde(z_vals)
+                    z_grid = np.linspace(z_vals.min(), z_vals.max(), 300)
+                    fig.add_trace(
+                        go.Scatter(
+                            x=z_grid,
+                            y=kde(z_grid),
+                            mode="lines",
+                            name=f"{label} KDE",
+                            line=dict(color=kde_color, width=2),
+                            showlegend=True,
+                        )
+                    )
+            except ImportError:
+                pass
 
         fig.update_layout(
             title=dict(
@@ -569,31 +597,36 @@ class PHZCallbacks:
         )
         return fig
 
-    def _create_snr_z_scatter(self, z_vals, snr_vals, n_clusters, alg_label, viewport_label):
-        """Create SNR_CLUSTER vs Z_CLUSTER scatter figure."""
+    def _create_snr_z_scatter(self, series, n_clusters, alg_label, viewport_label):
+        """Create SNR_CLUSTER vs Z_CLUSTER scatter figure.
+
+        Parameters
+        ----------
+        series : list of (label, z_vals, snr_vals, hist_color, kde_color)
+        """
         fig = go.Figure()
 
-        fig.add_trace(
-            go.Scattergl(
-                x=z_vals,
-                y=snr_vals,
-                mode="markers",
-                name=alg_label,
-                marker=dict(
-                    size=5,
-                    color=snr_vals,
-                    colorscale="Viridis",
-                    showscale=True,
-                    colorbar=dict(title="SNR", thickness=10, len=0.7),
-                    opacity=0.7,
-                ),
-                text=[
-                    f"Z: {z:.3f}<br>SNR: {s:.2f}"
-                    for z, s in zip(z_vals, snr_vals)
-                ],
-                hovertemplate="%{text}<extra></extra>",
+        for label, z_vals, snr_vals, hist_color, _kc in series:
+            if len(z_vals) == 0:
+                continue
+            fig.add_trace(
+                go.Scattergl(
+                    x=z_vals,
+                    y=snr_vals,
+                    mode="markers",
+                    name=label,
+                    marker=dict(
+                        size=5,
+                        color=hist_color,
+                        opacity=0.7,
+                    ),
+                    text=[
+                        f"{label}<br>Z: {z:.3f}<br>SNR: {s:.2f}"
+                        for z, s in zip(z_vals, snr_vals)
+                    ],
+                    hovertemplate="%{text}<extra></extra>",
+                )
             )
-        )
 
         fig.update_layout(
             title=dict(
@@ -602,7 +635,8 @@ class PHZCallbacks:
             ),
             xaxis_title="Z_CLUSTER",
             yaxis_title="SNR_CLUSTER",
-            margin=dict(l=40, r=60, t=45, b=40),
+            margin=dict(l=40, r=15, t=45, b=40),
+            legend=dict(font=dict(size=10), orientation="h", y=1.12),
             hovermode="closest",
             plot_bgcolor="white",
             paper_bgcolor="white",
