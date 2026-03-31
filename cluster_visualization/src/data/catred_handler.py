@@ -828,7 +828,7 @@ class CATREDHandler:
                 catred_scatter_data["effective_coverage"].extend(tile_data["EFFECTIVE_COVERAGE"])
 
                 if box is not None:
-                    if "trace_marker_size" in box and type(box["trace_marker_size"]) == float:
+                    if "trace_marker_size" in box and isinstance(box["trace_marker_size"], (int, float)):
                         catred_scatter_data["trace_marker_size"].extend(
                             [box["trace_marker_size"]] * len(tile_data["RIGHT_ASCENSION"])
                         )
@@ -1060,14 +1060,31 @@ class CATREDHandler:
         ra_max = click_data["ra"] + click_data["catred_box_size"] / 2
         dec_min = click_data["dec"] - click_data["catred_box_size"] / 2
         dec_max = click_data["dec"] + click_data["catred_box_size"] / 2
-        z_min = max(
-            click_data["redshift"] - click_data["catred_redshift_bin_width"] / 2,
-            click_data["redshift_lim_lower"],
-        )
-        z_max = min(
-            click_data["redshift"] + click_data["catred_redshift_bin_width"] / 2,
-            click_data["redshift_lim_upper"],
-        )
+
+        bin_width = click_data.get("catred_redshift_bin_width") or 0.0
+        z_center = float(click_data["redshift"])
+        if bin_width == 0.0:
+            # No bin width specified — disable z filtering
+            z_min = float("-inf")
+            z_max = float("inf")
+        else:
+            z_min = z_center - bin_width / 2
+            z_max = z_center + bin_width / 2
+
+        lim_lower = click_data.get("redshift_lim_lower")
+        lim_upper = click_data.get("redshift_lim_upper")
+        if lim_lower is not None:
+            z_min = max(z_min, float(lim_lower))
+        if lim_upper is not None:
+            z_max = min(z_max, float(lim_upper))
+
+        if z_min > z_max:
+            print(
+                f"Warning: z_min ({z_min:.4f}) > z_max ({z_max:.4f}) after applying redshift limits "
+                f"[{lim_lower}, {lim_upper}] on cluster redshift {z_center:.4f} ± {bin_width/2:.4f}. "
+                "No CATRED sources will pass the redshift filter."
+            )
+
 
         if "trace_marker" in click_data:
             if click_data["trace_marker"]["size_option"] == "set_size_custom":

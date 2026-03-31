@@ -863,7 +863,7 @@ class ClusterModalCallbacks:
                         "redshift": cluster["redshift"],
                         "redshift_lim_lower": redshift_lower,
                         "redshift_lim_upper": redshift_upper,
-                        "catred_box_size": catred_box_size / 60,  # Convert arcmin to degrees
+                        "catred_box_size": (catred_box_size or 2.0) / 60,  # Convert arcmin to degrees; default 2 arcmin
                         "catred_redshift_bin_width": catred_redshift_bin_width,
                         "trace_marker": {
                             "size_option": catred_marker_size_option,  # 'set_size_custom' or 'set_size_kron'
