@@ -575,6 +575,18 @@ class TraceCreator:
             self.catred_handler.current_catred_data[trace_name] = manual_catred_data
             print(f"Debug: Also stored CATRED data in catred_handler")
 
+        # Persist to shared diskcache so main-process callbacks (PHZ click) can access
+        # this data even though trace creation runs inside a background callback worker.
+        try:
+            import diskcache as _dc
+            import os as _os
+            _state_dir = _os.path.join(_os.path.expanduser("~"), ".cache", "clusterviz_state")
+            with _dc.Cache(_state_dir) as _sc:
+                _sc.set("catred_click_data", self.current_catred_data)
+            print(f"Debug: Persisted {len(self.current_catred_data)} CATRED trace(s) to state cache for cross-process access")
+        except Exception as _exc:
+            print(f"Warning: Could not persist CATRED data to state cache: {_exc}")
+
         print(
             f"Debug: Stored CATRED data for trace '{trace_name}' with {len(manual_catred_data['ra'])} points"
         )

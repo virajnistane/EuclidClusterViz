@@ -421,7 +421,7 @@ class ClusterVisualizationApp:
 
             self.ui_callbacks = UICallbacks(self.app, config, self.data_loader)
 
-            self.phz_callbacks = PHZCallbacks(self.app, self.catred_handler)
+            self.phz_callbacks = PHZCallbacks(self.app, self.catred_handler, self.data_loader)
 
             # 🆕 Initialize cluster modal callbacks
             self.cluster_modal_callbacks = ClusterModalCallbacks(

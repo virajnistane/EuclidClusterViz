@@ -8,22 +8,24 @@ including redshift probability distribution visualization and related UI interac
 import dash  # type: ignore[import]
 import numpy as np
 import plotly.graph_objs as go  # type: ignore[import]
-from dash import Input, Output
+from dash import Input, Output, State
 
 
 class PHZCallbacks:
     """Handles PHZ_PDF plot callbacks"""
 
-    def __init__(self, app, catred_handler=None):
+    def __init__(self, app, catred_handler=None, data_loader=None):
         """
         Initialize PHZ callbacks.
 
         Args:
             app: Dash application instance
             catred_handler: CATREDHandler instance for CATRED data operations (optional)
+            data_loader: DataLoader instance for merged catalog access (optional)
         """
         self.app = app
         self.catred_handler = catred_handler
+        self.data_loader = data_loader
 
         # Fallback attributes for backward compatibility
         self.current_catred_data = None
@@ -33,6 +35,7 @@ class PHZCallbacks:
     def setup_callbacks(self):
         """Setup all PHZ-related callbacks"""
         self._setup_phz_pdf_callback()
+        self._setup_cluster_data_callback()
 
     def _setup_phz_pdf_callback(self):
         """Setup callback for handling clicks on CATRED data points to show PHZ_PDF"""
@@ -79,6 +82,21 @@ class PHZCallbacks:
                 current_catred_data = self.current_catred_data
                 data_source = "self"
                 print("Debug: Using current_catred_data from self")
+
+            # Fallback: read from cross-process diskcache written by background callback worker
+            if not current_catred_data:
+                try:
+                    import diskcache as _dc
+                    import os as _os
+                    _state_dir = _os.path.join(_os.path.expanduser("~"), ".cache", "clusterviz_state")
+                    with _dc.Cache(_state_dir) as _sc:
+                        _cached = _sc.get("catred_click_data")
+                    if _cached:
+                        current_catred_data = _cached
+                        data_source = "diskcache"
+                        print("Debug: Using current_catred_data from cross-process diskcache")
+                except Exception as _exc:
+                    print(f"Warning: Could not read CATRED data from state cache: {_exc}")
 
             print(
                 f"Debug: Data source: {data_source}, data available: {current_catred_data is not None}"
@@ -357,3 +375,261 @@ class PHZCallbacks:
             ],
         )
         return error_fig
+
+    # ------------------------------------------------------------------
+    # Cluster Data sub-tab
+    # ------------------------------------------------------------------
+
+    def _setup_cluster_data_callback(self):
+        """Setup callback to populate Cluster Data sub-tab plots from the merged catalog."""
+
+        @self.app.callback(
+            [
+                Output("phz-cluster-z-dist-plot", "figure"),
+                Output("phz-cluster-snr-z-plot", "figure"),
+            ],
+            [
+                Input("phz-inner-tabs", "active_tab"),
+                Input("phz-cluster-refresh-btn", "n_clicks"),
+            ],
+            [
+                State("cluster-plot", "figure"),
+                State("algorithm-dropdown", "value"),
+            ],
+            prevent_initial_call=True,
+        )
+        def update_cluster_data_plots(active_tab, _refresh_clicks, cluster_figure, algorithm):
+            # Allow trigger from either sub-tab switch or refresh button
+            ctx = dash.callback_context
+            triggered_id = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
+            if triggered_id == "phz-inner-tabs" and active_tab != "phz-cluster-subtab":
+                return dash.no_update, dash.no_update
+
+            if self.data_loader is None:
+                msg = "Data loader not available"
+                return self._create_empty_cluster_plot(msg), self._create_empty_cluster_plot(msg)
+
+            try:
+                alg = algorithm or "BOTH"
+                data = self.data_loader.load_data(alg)
+                if data is None:
+                    msg = "No data loaded — render the main plot first"
+                    return (
+                        self._create_empty_cluster_plot(msg),
+                        self._create_empty_cluster_plot(msg),
+                    )
+
+                merged = data.get("data_detcluster_mergedcat")
+                if merged is None or len(merged) == 0:
+                    msg = "No merged catalog available"
+                    return (
+                        self._create_empty_cluster_plot(msg),
+                        self._create_empty_cluster_plot(msg),
+                    )
+
+                import numpy as np  # ensure available inside closure
+
+                # ---- Algorithm filter ----
+                if alg == "PZWAV":
+                    mask_alg = merged["DET_CODE_NB"] == 2
+                elif alg == "AMICO":
+                    mask_alg = merged["DET_CODE_NB"] == 1
+                else:  # BOTH
+                    mask_alg = np.ones(len(merged), dtype=bool)
+
+                filtered = merged[mask_alg]
+
+                # ---- Viewport filter ----
+                ra_range = None
+                dec_range = None
+                if cluster_figure:
+                    layout = cluster_figure.get("layout", {})
+                    xaxis = layout.get("xaxis", {})
+                    yaxis = layout.get("yaxis", {})
+                    ra_range = xaxis.get("range")
+                    dec_range = yaxis.get("range")
+
+                if ra_range and dec_range:
+                    ra_min = min(ra_range)
+                    ra_max = max(ra_range)
+                    dec_min = min(dec_range)
+                    dec_max = max(dec_range)
+                    in_vp = (
+                        (filtered["RIGHT_ASCENSION_CLUSTER"] >= ra_min)
+                        & (filtered["RIGHT_ASCENSION_CLUSTER"] <= ra_max)
+                        & (filtered["DECLINATION_CLUSTER"] >= dec_min)
+                        & (filtered["DECLINATION_CLUSTER"] <= dec_max)
+                    )
+                    viewport_data = filtered[in_vp]
+                    viewport_label = (
+                        f"RA [{ra_min:.2f}, {ra_max:.2f}], "
+                        f"Dec [{dec_min:.2f}, {dec_max:.2f}]"
+                    )
+                    print(
+                        f"[ClusterData] Viewport filter: {len(viewport_data)}/{len(filtered)} "
+                        f"clusters — {viewport_label}"
+                    )
+                else:
+                    viewport_data = filtered
+                    viewport_label = "full sky"
+                    print(f"[ClusterData] No viewport — using all {len(filtered)} clusters")
+
+                if len(viewport_data) == 0:
+                    msg = "No clusters in current viewport"
+                    return (
+                        self._create_empty_cluster_plot(msg),
+                        self._create_empty_cluster_plot(msg),
+                    )
+
+                z_vals = np.array(viewport_data["Z_CLUSTER"], dtype=float)
+                snr_vals = np.array(viewport_data["SNR_CLUSTER"], dtype=float)
+
+                # Remove non-finite values
+                valid_z = np.isfinite(z_vals)
+                z_vals = z_vals[valid_z]
+                snr_vals = snr_vals[valid_z]
+
+                n_clusters = len(z_vals)
+                alg_label = alg if alg != "BOTH" else "PZWAV + AMICO"
+
+                # ---- Z distribution figure (histogram + KDE) ----
+                z_fig = self._create_z_distribution_plot(
+                    z_vals, n_clusters, alg_label, viewport_label
+                )
+
+                # ---- SNR vs Z scatter figure ----
+                snr_fig = self._create_snr_z_scatter(
+                    z_vals, snr_vals, n_clusters, alg_label, viewport_label
+                )
+
+                return z_fig, snr_fig
+
+            except Exception as exc:
+                import traceback
+
+                print(f"[ClusterData] Error: {exc}")
+                print(traceback.format_exc())
+                msg = str(exc)
+                return (
+                    self._create_empty_cluster_plot(f"Error: {msg}"),
+                    self._create_empty_cluster_plot(f"Error: {msg}"),
+                )
+
+    def _create_z_distribution_plot(self, z_vals, n_clusters, alg_label, viewport_label):
+        """Create Z_CLUSTER histogram + KDE overlay figure."""
+        fig = go.Figure()
+
+        # Histogram
+        fig.add_trace(
+            go.Histogram(
+                x=z_vals,
+                nbinsx=40,
+                name="Z_CLUSTER histogram",
+                marker_color="steelblue",
+                opacity=0.6,
+                histnorm="probability density",
+                showlegend=True,
+            )
+        )
+
+        # KDE overlay
+        try:
+            from scipy.stats import gaussian_kde
+
+            if len(z_vals) >= 3:
+                kde = gaussian_kde(z_vals)
+                z_grid = np.linspace(z_vals.min(), z_vals.max(), 300)
+                kde_values = kde(z_grid)
+                fig.add_trace(
+                    go.Scatter(
+                        x=z_grid,
+                        y=kde_values,
+                        mode="lines",
+                        name="KDE",
+                        line=dict(color="darkorange", width=2),
+                        showlegend=True,
+                    )
+                )
+        except ImportError:
+            pass  # scipy not available; histogram only
+
+        fig.update_layout(
+            title=dict(
+                text=f"Z_CLUSTER distribution — {alg_label} ({n_clusters} clusters, {viewport_label})",
+                font=dict(size=12),
+            ),
+            xaxis_title="Z_CLUSTER",
+            yaxis_title="Probability Density",
+            margin=dict(l=40, r=15, t=45, b=40),
+            legend=dict(font=dict(size=10), orientation="h", y=1.12),
+            hovermode="x unified",
+            barmode="overlay",
+            plot_bgcolor="white",
+            paper_bgcolor="white",
+        )
+        return fig
+
+    def _create_snr_z_scatter(self, z_vals, snr_vals, n_clusters, alg_label, viewport_label):
+        """Create SNR_CLUSTER vs Z_CLUSTER scatter figure."""
+        fig = go.Figure()
+
+        fig.add_trace(
+            go.Scattergl(
+                x=z_vals,
+                y=snr_vals,
+                mode="markers",
+                name=alg_label,
+                marker=dict(
+                    size=5,
+                    color=snr_vals,
+                    colorscale="Viridis",
+                    showscale=True,
+                    colorbar=dict(title="SNR", thickness=10, len=0.7),
+                    opacity=0.7,
+                ),
+                text=[
+                    f"Z: {z:.3f}<br>SNR: {s:.2f}"
+                    for z, s in zip(z_vals, snr_vals)
+                ],
+                hovertemplate="%{text}<extra></extra>",
+            )
+        )
+
+        fig.update_layout(
+            title=dict(
+                text=f"SNR vs Z — {alg_label} ({n_clusters} clusters, {viewport_label})",
+                font=dict(size=12),
+            ),
+            xaxis_title="Z_CLUSTER",
+            yaxis_title="SNR_CLUSTER",
+            margin=dict(l=40, r=60, t=45, b=40),
+            hovermode="closest",
+            plot_bgcolor="white",
+            paper_bgcolor="white",
+        )
+        return fig
+
+    def _create_empty_cluster_plot(self, message="No data available"):
+        """Create a placeholder figure with an informational message."""
+        fig = go.Figure()
+        fig.update_layout(
+            margin=dict(l=20, r=20, t=30, b=20),
+            annotations=[
+                dict(
+                    text=message,
+                    xref="paper",
+                    yref="paper",
+                    x=0.5,
+                    y=0.5,
+                    xanchor="center",
+                    yanchor="middle",
+                    showarrow=False,
+                    font=dict(size=12, color="gray"),
+                )
+            ],
+            xaxis=dict(visible=False),
+            yaxis=dict(visible=False),
+            plot_bgcolor="white",
+            paper_bgcolor="white",
+        )
+        return fig

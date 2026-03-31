@@ -187,33 +187,111 @@ class AppLayout:
                                                                 # PHZ Plot Tab Content
                                                                 html.Div(
                                                                     [
-                                                                        dcc.Loading(
-                                                                            id="loading-phz",
-                                                                            children=[
-                                                                                dcc.Graph(
-                                                                                    id="phz-pdf-plot",
-                                                                                    style={
-                                                                                        "height": "65vh",
-                                                                                        "width": "100%",
-                                                                                        "min-height": "450px",
-                                                                                    },
-                                                                                    config={
-                                                                                        "displayModeBar": True,
-                                                                                        "displaylogo": False,
-                                                                                        "modeBarButtonsToRemove": [
-                                                                                            "lasso2d",
-                                                                                            "select2d",
-                                                                                            "pan2d",
-                                                                                            "zoom2d",
-                                                                                            "autoScale2d",
-                                                                                            "resetScale2d",
-                                                                                        ],
-                                                                                        "responsive": True,
-                                                                                    },
-                                                                                )
+                                                                        # Inner sub-tabs within PHZ Analysis
+                                                                        # Content placed inside dbc.Tab children so DBC manages
+                                                                        # show/hide natively (avoids empty implicit tab panes)
+                                                                        dbc.Tabs(
+                                                                            [
+                                                                                dbc.Tab(
+                                                                                    label="📡 CATRED Data",
+                                                                                    tab_id="phz-catred-subtab",
+                                                                                    children=[
+                                                                                        dcc.Loading(
+                                                                                            id="loading-phz",
+                                                                                            children=[
+                                                                                                dcc.Graph(
+                                                                                                    id="phz-pdf-plot",
+                                                                                                    style={
+                                                                                                        "height": "58vh",
+                                                                                                        "width": "100%",
+                                                                                                        "min-height": "400px",
+                                                                                                    },
+                                                                                                    config={
+                                                                                                        "displayModeBar": True,
+                                                                                                        "displaylogo": False,
+                                                                                                        "modeBarButtonsToRemove": [
+                                                                                                            "lasso2d",
+                                                                                                            "select2d",
+                                                                                                            "pan2d",
+                                                                                                            "zoom2d",
+                                                                                                            "autoScale2d",
+                                                                                                            "resetScale2d",
+                                                                                                        ],
+                                                                                                        "responsive": True,
+                                                                                                    },
+                                                                                                )
+                                                                                            ],
+                                                                                            type="circle",
+                                                                                        )
+                                                                                    ],
+                                                                                ),
+                                                                                dbc.Tab(
+                                                                                    label="🔭 Cluster Data",
+                                                                                    tab_id="phz-cluster-subtab",
+                                                                                    children=[
+                                                                                        dbc.Button(
+                                                                                            [
+                                                                                                html.I(className="fas fa-sync-alt me-2"),
+                                                                                                "Refresh (current viewport)",
+                                                                                            ],
+                                                                                            id="phz-cluster-refresh-btn",
+                                                                                            color="primary",
+                                                                                            outline=True,
+                                                                                            size="sm",
+                                                                                            className="mb-2 w-100",
+                                                                                        ),
+                                                                                        dcc.Loading(
+                                                                                            id="loading-cluster-z-dist",
+                                                                                            children=[
+                                                                                                dcc.Graph(
+                                                                                                    id="phz-cluster-z-dist-plot",
+                                                                                                    style={
+                                                                                                        "height": "27vh",
+                                                                                                        "width": "100%",
+                                                                                                        "min-height": "190px",
+                                                                                                    },
+                                                                                                    config={
+                                                                                                        "displayModeBar": True,
+                                                                                                        "displaylogo": False,
+                                                                                                        "modeBarButtonsToRemove": [
+                                                                                                            "lasso2d",
+                                                                                                            "select2d",
+                                                                                                        ],
+                                                                                                        "responsive": True,
+                                                                                                    },
+                                                                                                )
+                                                                                            ],
+                                                                                            type="circle",
+                                                                                        ),
+                                                                                        dcc.Loading(
+                                                                                            id="loading-cluster-snr-z",
+                                                                                            children=[
+                                                                                                dcc.Graph(
+                                                                                                    id="phz-cluster-snr-z-plot",
+                                                                                                    style={
+                                                                                                        "height": "27vh",
+                                                                                                        "width": "100%",
+                                                                                                        "min-height": "190px",
+                                                                                                    },
+                                                                                                    config={
+                                                                                                        "displayModeBar": True,
+                                                                                                        "displaylogo": False,
+                                                                                                        "modeBarButtonsToRemove": [
+                                                                                                            "lasso2d",
+                                                                                                            "select2d",
+                                                                                                        ],
+                                                                                                        "responsive": True,
+                                                                                                    },
+                                                                                                )
+                                                                                            ],
+                                                                                            type="circle",
+                                                                                        ),
+                                                                                    ],
+                                                                                ),
                                                                             ],
-                                                                            type="circle",
-                                                                        )
+                                                                            id="phz-inner-tabs",
+                                                                            active_tab="phz-catred-subtab",
+                                                                        ),
                                                                     ],
                                                                     id="phz-tab-content",
                                                                     style={"display": "block"},
