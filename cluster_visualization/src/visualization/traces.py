@@ -895,7 +895,7 @@ class TraceCreator:
                             [
                                 cluster,
                                 amico_data[
-                                    amico_data["ID_DET_CLUSTER"] == cluster["CROSS_ID_CLUSTER"]
+                                    amico_data["ID_UNIQUE_CLUSTER"] == cluster["CROSS_ID_CLUSTER"]
                                 ],
                             ]
                             for cluster in pzwav_viewport
@@ -907,7 +907,7 @@ class TraceCreator:
                             [
                                 cluster,
                                 amico_data[
-                                    amico_data["ID_DET_CLUSTER"] == cluster["CROSS_ID_CLUSTER"]
+                                    amico_data["ID_UNIQUE_CLUSTER"] == cluster["CROSS_ID_CLUSTER"]
                                 ],
                             ]
                             for cluster in pzwav_data
