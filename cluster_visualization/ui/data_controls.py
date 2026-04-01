@@ -445,7 +445,7 @@ class DataControls:
                                 dcc.Dropdown(
                                     id="mosaic-source-selector",
                                     options=[
-                                        {"label": "MER FITS tiles", "value": "local_mer"},
+                                        {"label": "DpdMerBksMosaic", "value": "local_mer"},
                                         {"label": "ESA DSS2 Color", "value": "CDS/P/DSS2/color"},
                                     ],
                                     value="CDS/P/DSS2/color",

@@ -2,7 +2,7 @@
 
 This document describes how the `MOSAICHandler` fetches, georeferences, and
 renders mosaic imagery from the public [CDS hips2fits](https://alasky.cds.unistra.fr/hips-image-services/hips2fits)
-service as an alternative to the local Euclid MER FITS tiles.
+service as an alternative to the local Euclid DpdMerBksMosaic.
 
 ---
 

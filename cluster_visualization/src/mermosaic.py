@@ -199,7 +199,7 @@ class MOSAICHandler:
         return [
             {
                 "id": "local_mer",
-                "label": "MER FITS tiles",
+                "label": "DpdMerBksMosaic",
                 "attribution": "Local Euclid MER FITS",
             }
         ]

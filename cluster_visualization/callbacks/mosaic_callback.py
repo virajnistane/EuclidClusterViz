@@ -65,7 +65,7 @@ class MOSAICCallbacks:
 
             if not self.mosaic_handler:
                 return (
-                    [{"label": "MER FITS tiles", "value": "local_mer"}],
+                    [{"label": "DpdMerBksMosaic", "value": "local_mer"}],
                     "local_mer",
                     "Attribution: Local Euclid MER FITS",
                     esa_format_style,
@@ -74,7 +74,7 @@ class MOSAICCallbacks:
             sources = self.mosaic_handler.get_available_mosaic_sources(provider=provider)
             if not sources:
                 return (
-                    [{"label": "MER FITS tiles", "value": "local_mer"}],
+                    [{"label": "DpdMerBksMosaic", "value": "local_mer"}],
                     "local_mer",
                     "Attribution: Local Euclid MER FITS",
                     esa_format_style,
