@@ -396,10 +396,17 @@ class PHZCallbacks:
             [
                 State("cluster-plot", "figure"),
                 State("algorithm-dropdown", "value"),
+                State("snr-range-slider-pzwav", "value"),
+                State("snr-range-slider-amico", "value"),
+                State("redshift-range-slider", "value"),
             ],
             prevent_initial_call=True,
         )
-        def update_cluster_data_plots(active_tab, _refresh_clicks, n_bins, cluster_figure, algorithm):
+        def update_cluster_data_plots(
+            active_tab, _refresh_clicks, n_bins,
+            cluster_figure, algorithm,
+            snr_range_pzwav, snr_range_amico, redshift_range,
+        ):
             # Allow trigger from sub-tab switch, refresh button, or bins slider
             ctx = dash.callback_context
             triggered_id = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
@@ -485,6 +492,52 @@ class PHZCallbacks:
                         self._create_empty_cluster_plot(msg),
                     )
 
+                # ---- SNR filter ----
+                has_det_code_vp = "DET_CODE_NB" in viewport_data.dtype.names
+                snr_pzwav_lower = snr_range_pzwav[0] if snr_range_pzwav else None
+                snr_pzwav_upper = snr_range_pzwav[1] if snr_range_pzwav else None
+                snr_amico_lower = snr_range_amico[0] if snr_range_amico else None
+                snr_amico_upper = snr_range_amico[1] if snr_range_amico else None
+
+                snr_mask = np.ones(len(viewport_data), dtype=bool)
+                if has_det_code_vp:
+                    pzwav_rows = viewport_data["DET_CODE_NB"] == 2
+                    amico_rows = viewport_data["DET_CODE_NB"] == 1
+                    if snr_pzwav_lower is not None:
+                        snr_mask &= ~pzwav_rows | (viewport_data["SNR_CLUSTER"] >= snr_pzwav_lower)
+                    if snr_pzwav_upper is not None:
+                        snr_mask &= ~pzwav_rows | (viewport_data["SNR_CLUSTER"] <= snr_pzwav_upper)
+                    if snr_amico_lower is not None:
+                        snr_mask &= ~amico_rows | (viewport_data["SNR_CLUSTER"] >= snr_amico_lower)
+                    if snr_amico_upper is not None:
+                        snr_mask &= ~amico_rows | (viewport_data["SNR_CLUSTER"] <= snr_amico_upper)
+                else:
+                    # No DET_CODE_NB — apply pzwav range as generic SNR filter
+                    snr_lower = snr_pzwav_lower if snr_pzwav_lower is not None else snr_amico_lower
+                    snr_upper = snr_pzwav_upper if snr_pzwav_upper is not None else snr_amico_upper
+                    if snr_lower is not None:
+                        snr_mask &= viewport_data["SNR_CLUSTER"] >= snr_lower
+                    if snr_upper is not None:
+                        snr_mask &= viewport_data["SNR_CLUSTER"] <= snr_upper
+                viewport_data = viewport_data[snr_mask]
+
+                # ---- Redshift filter ----
+                z_lower = redshift_range[0] if redshift_range else None
+                z_upper = redshift_range[1] if redshift_range else None
+                z_mask = np.ones(len(viewport_data), dtype=bool)
+                if z_lower is not None:
+                    z_mask &= viewport_data["Z_CLUSTER"] >= z_lower
+                if z_upper is not None:
+                    z_mask &= viewport_data["Z_CLUSTER"] <= z_upper
+                viewport_data = viewport_data[z_mask]
+
+                if len(viewport_data) == 0:
+                    msg = "No clusters after SNR/redshift filtering"
+                    return (
+                        self._create_empty_cluster_plot(msg),
+                        self._create_empty_cluster_plot(msg),
+                    )
+
                 # ---- Build per-algorithm series ----
                 # Each series: (label, z_vals, snr_vals, hist_color, kde_color)
                 _ALG_COLORS = {
@@ -496,7 +549,7 @@ class PHZCallbacks:
                     series = []
                     z_all   = np.array(viewport_data["Z_CLUSTER"],   dtype=float)
                     snr_all = np.array(viewport_data["SNR_CLUSTER"],  dtype=float)
-                    if has_det_code:
+                    if has_det_code_vp:
                         det_codes = np.array(viewport_data["DET_CODE_NB"])
                         for code, label in [(2, "PZWAV"), (1, "AMICO")]:
                             mask = det_codes == code
@@ -508,7 +561,7 @@ class PHZCallbacks:
                     else:
                         # DET_CODE_NB absent (stale cache) — treat as single combined series
                         valid = np.isfinite(z_all)
-                        series.append(("PZWAV + AMICO", z_all[valid], snr_all[valid], "steelblue", "dodgerblue"))
+                        series.append(("PZWAV + AMICO", z_all[valid], snr_all[valid], "steelblue", "dodgerblue"))                
                 else:
                     z_vals   = np.array(viewport_data["Z_CLUSTER"],   dtype=float)
                     snr_vals = np.array(viewport_data["SNR_CLUSTER"],  dtype=float)
