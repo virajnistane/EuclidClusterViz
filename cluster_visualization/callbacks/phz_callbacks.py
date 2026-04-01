@@ -433,10 +433,11 @@ class PHZCallbacks:
                 import numpy as np  # ensure available inside closure
 
                 # ---- Algorithm filter ----
+                has_det_code = "DET_CODE_NB" in merged.dtype.names
                 if alg == "PZWAV":
-                    mask_alg = merged["DET_CODE_NB"] == 2
+                    mask_alg = (merged["DET_CODE_NB"] == 2) if has_det_code else np.ones(len(merged), dtype=bool)
                 elif alg == "AMICO":
-                    mask_alg = merged["DET_CODE_NB"] == 1
+                    mask_alg = (merged["DET_CODE_NB"] == 1) if has_det_code else np.ones(len(merged), dtype=bool)
                 else:  # BOTH
                     mask_alg = np.ones(len(merged), dtype=bool)
 
@@ -493,16 +494,21 @@ class PHZCallbacks:
 
                 if alg == "BOTH":
                     series = []
-                    det_codes = np.array(viewport_data["DET_CODE_NB"])
                     z_all   = np.array(viewport_data["Z_CLUSTER"],   dtype=float)
                     snr_all = np.array(viewport_data["SNR_CLUSTER"],  dtype=float)
-                    for code, label in [(2, "PZWAV"), (1, "AMICO")]:
-                        mask = det_codes == code
-                        z_s, snr_s = z_all[mask], snr_all[mask]
-                        valid = np.isfinite(z_s)
-                        z_s, snr_s = z_s[valid], snr_s[valid]
-                        hc, kc = _ALG_COLORS[label]
-                        series.append((label, z_s, snr_s, hc, kc))
+                    if has_det_code:
+                        det_codes = np.array(viewport_data["DET_CODE_NB"])
+                        for code, label in [(2, "PZWAV"), (1, "AMICO")]:
+                            mask = det_codes == code
+                            z_s, snr_s = z_all[mask], snr_all[mask]
+                            valid = np.isfinite(z_s)
+                            z_s, snr_s = z_s[valid], snr_s[valid]
+                            hc, kc = _ALG_COLORS[label]
+                            series.append((label, z_s, snr_s, hc, kc))
+                    else:
+                        # DET_CODE_NB absent (stale cache) — treat as single combined series
+                        valid = np.isfinite(z_all)
+                        series.append(("PZWAV + AMICO", z_all[valid], snr_all[valid], "steelblue", "dodgerblue"))
                 else:
                     z_vals   = np.array(viewport_data["Z_CLUSTER"],   dtype=float)
                     snr_vals = np.array(viewport_data["SNR_CLUSTER"],  dtype=float)

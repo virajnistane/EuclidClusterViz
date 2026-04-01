@@ -1296,7 +1296,10 @@ class MainPlotCallbacks:
     ):
         """Calculate filtered cluster count for BOTH mode with separate SNR ranges"""
         # Filter PZWAV clusters (DET_CODE_NB == 2)
-        pzwav_data = cluster_data[cluster_data["DET_CODE_NB"] == 2]
+        if "DET_CODE_NB" in cluster_data.dtype.names:
+            pzwav_data = cluster_data[cluster_data["DET_CODE_NB"] == 2]
+        else:
+            pzwav_data = cluster_data
         if snr_pzwav_lower is not None and snr_pzwav_upper is not None:
             pzwav_data = pzwav_data[
                 (pzwav_data["SNR_CLUSTER"] >= snr_pzwav_lower)
@@ -1304,7 +1307,10 @@ class MainPlotCallbacks:
             ]
 
         # Filter AMICO clusters (DET_CODE_NB == 1)
-        amico_data = cluster_data[cluster_data["DET_CODE_NB"] == 1]
+        if "DET_CODE_NB" in cluster_data.dtype.names:
+            amico_data = cluster_data[cluster_data["DET_CODE_NB"] == 1]
+        else:
+            amico_data = cluster_data[:0]  # empty — avoid double-counting when column absent
         if snr_amico_lower is not None and snr_amico_upper is not None:
             amico_data = amico_data[
                 (amico_data["SNR_CLUSTER"] >= snr_amico_lower)

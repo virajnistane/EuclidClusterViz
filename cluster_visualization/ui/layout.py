@@ -317,7 +317,7 @@ class AppLayout:
                                                                                 ),
                                                                             ],
                                                                             id="phz-inner-tabs",
-                                                                            active_tab="phz-catred-subtab",
+                                                                            active_tab="phz-cluster-subtab",
                                                                         ),
                                                                     ],
                                                                     id="phz-tab-content",

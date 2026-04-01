@@ -387,7 +387,17 @@ class DataLoader:
 
                     print(f"Loading merged catalog from: {os.path.basename(fitsfile)}")
                     with fits.open(fitsfile, mode="readonly", memmap=True) as hdul:
-                        all_data.append(hdul[1].data)
+                        _arr = np.array(hdul[1].data)
+                    # Inject synthetic DET_CODE_NB if absent (per-algorithm catalogs lack it)
+                    if "DET_CODE_NB" not in _arr.dtype.names:
+                        _det_code = 2 if det_xml_key == "mergedetcat_pzwav" else 1
+                        _new_dt = np.dtype(_arr.dtype.descr + [("DET_CODE_NB", np.int32)])
+                        _new_arr = np.empty(len(_arr), dtype=_new_dt)
+                        for _col in _arr.dtype.names:
+                            _new_arr[_col] = _arr[_col]
+                        _new_arr["DET_CODE_NB"] = _det_code
+                        _arr = _new_arr
+                    all_data.append(_arr)
 
                     if det_xml_key == "mergedetcat_pzwav":
                         print(f"Loaded {len(all_data[-1])} PZWAV merged clusters")
@@ -420,7 +430,16 @@ class DataLoader:
 
                 print(f"Loading merged catalog from: {os.path.basename(fitsfile)}")
                 with fits.open(fitsfile, mode="readonly", memmap=True) as hdul:
-                    data_merged = hdul[1].data
+                    data_merged = np.array(hdul[1].data)
+                # Inject synthetic DET_CODE_NB if absent (per-algorithm catalogs lack it)
+                if "DET_CODE_NB" not in data_merged.dtype.names:
+                    _det_code = 2 if algorithm == "PZWAV" else 1
+                    _new_dt = np.dtype(data_merged.dtype.descr + [("DET_CODE_NB", np.int32)])
+                    _new_arr = np.empty(len(data_merged), dtype=_new_dt)
+                    for _col in data_merged.dtype.names:
+                        _new_arr[_col] = data_merged[_col]
+                    _new_arr["DET_CODE_NB"] = _det_code
+                    data_merged = _new_arr
 
                 print(f"Loaded {len(data_merged)} {algorithm} merged clusters")
 
