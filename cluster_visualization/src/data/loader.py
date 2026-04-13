@@ -144,6 +144,11 @@ class DataLoader:
         catred_dsr = self.config.get_catred_dsr() if self.config else None
         effcovmask_fileinfo_df = self._load_effcovmask_info(paths)
         effcovmask_dsr = self.config.get_effcovmask_dsr() if self.config else None
+        corrected_mask_path = (
+            self.config.get_corrected_mask_fits()
+            if self.config and hasattr(self.config, "get_corrected_mask_fits")
+            else None
+        )
 
         # # Calculate SNR range for UI slider
         # snr_min = float(data_detcluster_mergedcat['SNR_CLUSTER'].min())
@@ -163,6 +168,7 @@ class DataLoader:
             "catred_dsr": catred_dsr,
             "effcovmask_info": effcovmask_fileinfo_df,
             "effcovmask_dsr": effcovmask_dsr,
+            "corrected_mask_path": corrected_mask_path,
             "algorithm": select_algorithm,
             "snr_threshold_lower": None,  # Will be set by UI
             "snr_threshold_upper": None,  # Will be set by UI

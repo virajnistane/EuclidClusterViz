@@ -315,6 +315,17 @@ class Config:
             return dsr.strip("'\"")  # Remove quotes if present
         return None
 
+    def get_corrected_mask_fits(self):
+        """Get path to combined/corrected HEALPix mask FITS file.
+
+        Returns None if not configured. When set, this mask is used as the
+        default instead of per-tile effective coverage masks.
+        """
+        if self.config_parser.has_option("paths", "corrected_mask_fits"):
+            path = self.config_parser.get("paths", "corrected_mask_fits")
+            return path.strip()
+        return None
+
     def _get_mosaic_option(self, option_name: str, fallback=None):
         """Get a value from [mosaic] section with optional fallback."""
         if self.config_parser.has_option("mosaic", option_name):

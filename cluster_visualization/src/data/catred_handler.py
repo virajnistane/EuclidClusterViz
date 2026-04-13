@@ -85,19 +85,47 @@ class Mask:
 
 
 def get_masked_catred(
-    tile_id, effcovmask_info, effcovmask_dsr, catred_info, catred_dsr, maglim=24.0, threshold=0.8
+    tile_id,
+    effcovmask_info,
+    effcovmask_dsr,
+    catred_info,
+    catred_dsr,
+    maglim=24.0,
+    threshold=0.8,
+    corrected_mask_path=None,
+    mask_type="corrected",
 ):
-    """Get masked CATRED data for a tile using effective coverage mask and magnitude limit."""
-    try:
-        if effcovmask_dsr is None:
-            raise ValueError("effcovmask_dsr must be provided to load effective coverage mask.")
+    """Get masked CATRED data for a tile.
 
-        # Load mask for the tile
-        mask_file = effcovmask_info.loc[
-            (effcovmask_info["mertileid"] == tile_id)
-            & (effcovmask_info["dataset_release"] == effcovmask_dsr)
-        ].squeeze()["fits_file"]
-        msk = Mask(mask_file)  # Pass file path to constructor
+    Args:
+        corrected_mask_path: Path to the combined corrected HEALPix mask FITS file.
+            When *None* the per-tile effective coverage mask is used.
+        mask_type: ``'corrected'`` (default) – use *corrected_mask_path* when
+            available; ``'effcov'`` – always use the per-tile mask.
+    """
+    import os as _os
+
+    try:
+        # Decide which mask to load.
+        _use_corrected = (
+            mask_type == "corrected"
+            and corrected_mask_path is not None
+            and _os.path.exists(str(corrected_mask_path))
+        )
+
+        if _use_corrected:
+            msk = Mask(str(corrected_mask_path))
+        else:
+            if effcovmask_dsr is None:
+                raise ValueError(
+                    "effcovmask_dsr must be provided when using the per-tile effective coverage mask."
+                )
+            # Load mask for the tile
+            mask_file = effcovmask_info.loc[
+                (effcovmask_info["mertileid"] == tile_id)
+                & (effcovmask_info["dataset_release"] == effcovmask_dsr)
+            ].squeeze()["fits_file"]
+            msk = Mask(mask_file)
 
         # Load CATRED data
         catred_file = catred_info.loc[
@@ -402,6 +430,7 @@ class CATREDHandler:
         maglim: Optional[float] = None,
         threshold: float = 0.8,
         box: Optional[Dict[str, float]] = None,
+        mask_type: str = "corrected",
     ) -> Dict[str, List]:
         """
         Load full CATRED data for a specific MER tile with effective coverage values for client-side filtering.
@@ -457,6 +486,8 @@ class CATREDHandler:
                 data.get("catred_dsr", None),
                 maglim=maglim,
                 threshold=threshold,
+                corrected_mask_path=data.get("corrected_mask_path"),
+                mask_type=mask_type,
             )  # Load all data
 
             if len(full_src_with_coverage) == 0:
@@ -519,6 +550,7 @@ class CATREDHandler:
         threshold: float = 0.8,
         maglim: Optional[float] = None,
         box: Optional[Dict[str, float]] = None,
+        mask_type: str = "corrected",
     ) -> Dict[str, List]:
         """
         Load masked CATRED data for a specific MER tile based on effective coverage and magnitude limit.
@@ -575,6 +607,8 @@ class CATREDHandler:
                 data.get("catred_dsr", None),
                 maglim=maglim,
                 threshold=threshold,
+                corrected_mask_path=data.get("corrected_mask_path"),
+                mask_type=mask_type,
             )
 
             if len(filtered_src) == 0:

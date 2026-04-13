@@ -87,6 +87,15 @@ class MOSAICHandler:
         self.effcovmask_fileinfo_df = dataloader._load_effcovmask_info(paths)
         self.effcovmask_dsr = self.config.get_effcovmask_dsr() if self.config else None
 
+        # Corrected (combined) HEALPix mask — loaded lazily on first use
+        self._corrected_mask_path: Optional[str] = (
+            self.config.get_corrected_mask_fits()
+            if self.config and hasattr(self.config, "get_corrected_mask_fits")
+            else None
+        )
+        # Cached payload: (pixels, weights, ra, dec, nside) — populated by _load_corrected_mask()
+        self._corrected_mask_data: Optional[tuple] = None
+
         self.mosaic_header = None
         self.mosaic_data: Optional[np.ndarray] = None
         self.mosaic_wcs = None
@@ -774,6 +783,120 @@ class MOSAICHandler:
                 message=".*HEALPix pixel index.*",
             )
             return Table.read(hpmask_fits, format="fits", hdu=1)
+
+    def _load_corrected_mask(self) -> Optional[tuple]:
+        """Lazily load and cache the combined corrected HEALPix mask FITS file.
+
+        Returns a tuple (pixels, weights, ra, dec, nside) where all arrays are
+        numpy arrays for the full mask, or None if the mask is not configured /
+        not found.
+        """
+        if self._corrected_mask_data is not None:
+            return self._corrected_mask_data
+
+        if not self._corrected_mask_path:
+            print("[CORRECTED MASK] No corrected_mask_fits path configured")
+            return None
+
+        if not os.path.exists(self._corrected_mask_path):
+            print(
+                f"[CORRECTED MASK] File not found: {self._corrected_mask_path!r}. "
+                "Falling back to per-tile effective coverage mask."
+            )
+            return None
+
+        print(f"[CORRECTED MASK] Loading from {self._corrected_mask_path}")
+        t0 = time.time()
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UnitsWarning)
+            with fits.open(self._corrected_mask_path, mode="readonly", memmap=True) as hf:
+                hdr = hf[1].header
+                nside = int(hdr.get("NSIDE", 16384))
+                ordering = str(hdr.get("ORDERING", "NESTED")).upper()
+                nested = ordering == "NESTED"
+                pixels = np.asarray(hf[1].data["PIXEL"], dtype=np.int64)
+                weights = np.asarray(hf[1].data["WEIGHT"], dtype=np.float32)
+
+        ra, dec = hp.pix2ang(nside=nside, ipix=pixels, nest=nested, lonlat=True)
+        self._corrected_mask_data = (pixels, weights, ra, dec, nside)
+        print(
+            f"[CORRECTED MASK] Loaded {len(pixels):,} pixels (nside={nside}) "
+            f"in {time.time() - t0:.2f}s"
+        )
+        return self._corrected_mask_data
+
+    def _get_mask_footprint_in_viewport(
+        self,
+        ra_min: float,
+        ra_max: float,
+        dec_min: float,
+        dec_max: float,
+        mask_type: str = "corrected",
+        mertileid: Optional[int] = None,
+    ) -> tuple:
+        """Return (pixels, weights) arrays filtered to the given viewport.
+
+        Args:
+            ra_min, ra_max, dec_min, dec_max: Viewport bounds in degrees.
+            mask_type: ``'corrected'`` uses the global corrected mask; ``'effcov'``
+                uses the per-tile effective coverage mask (requires *mertileid*).
+            mertileid: MER tile ID required when mask_type == 'effcov'.
+
+        Returns:
+            Tuple (pixels_arr, weights_arr) as numpy arrays.  Both are empty
+            arrays when no matching pixels are found or an error occurs.
+        """
+        padding = 0.01  # small margin to include boundary pixels
+        empty = (np.array([], dtype=np.int64), np.array([], dtype=np.float32))
+
+        # Normalise bounds — Plotly sky plots reverse the RA axis so range[0] > range[1]
+        ra_lo = min(ra_min, ra_max)
+        ra_hi = max(ra_min, ra_max)
+        dec_lo = min(dec_min, dec_max)
+        dec_hi = max(dec_min, dec_max)
+
+        if mask_type == "corrected":
+            data = self._load_corrected_mask()
+            if data is None:
+                return empty
+            pixels, weights, ra, dec, _ = data
+            mask = (
+                (weights > 0)
+                & (ra >= ra_lo - padding)
+                & (ra <= ra_hi + padding)
+                & (dec >= dec_lo - padding)
+                & (dec <= dec_hi + padding)
+            )
+            return pixels[mask], weights[mask]
+
+        else:  # effcov — per-tile, requires mertileid
+            if mertileid is None:
+                print("[MASK] mertileid required for mask_type='effcov'")
+                return empty
+            try:
+                matches = self.effcovmask_fileinfo_df.loc[
+                    (self.effcovmask_fileinfo_df["mertileid"] == mertileid)
+                    & (self.effcovmask_fileinfo_df["dataset_release"] == self.effcovmask_dsr)
+                ]
+                if matches.empty:
+                    print(f"[MASK] No effcov mask file found for tile {mertileid}")
+                    return empty
+                hpmask_fits = matches.squeeze()["fits_file"]
+                footprint = self._read_effcovmask_table(hpmask_fits)
+                fp_ra, fp_dec = hp.pix2ang(
+                    nside=16384, ipix=footprint["PIXEL"], nest=True, lonlat=True
+                )
+                mask = (
+                    (footprint["WEIGHT"] > 0)
+                    & (fp_ra >= ra_lo - padding)
+                    & (fp_ra <= ra_hi + padding)
+                    & (fp_dec >= dec_lo - padding)
+                    & (fp_dec <= dec_hi + padding)
+                )
+                return np.asarray(footprint["PIXEL"][mask]), np.asarray(footprint["WEIGHT"][mask])
+            except Exception as exc:
+                print(f"[MASK] Error loading effcov mask for tile {mertileid}: {exc}")
+                return empty
 
     def _find_intersecting_tiles(
         self,
@@ -1484,15 +1607,21 @@ class MOSAICHandler:
         provider: Optional[str] = None,
         source_id: Optional[str] = None,
         tile_bounds: Optional[Tuple[float, float, float, float]] = None,
-    ) -> Optional[go.Heatmap]:
-        """Create a Plotly heatmap trace for a mask overlay."""
+        mask_type: str = "corrected",
+    ) -> Optional[List]:
+        """Create Plotly scatter traces for a mask overlay.
+
+        Args:
+            mask_type: ``'corrected'`` (default) uses the global combined mask;
+                ``'effcov'`` uses the per-tile effective coverage mask.
+        """
         trace_start = time.time()
 
-        # Fast path: use tile bounds directly (works for all providers and avoids heavy FITS/WCS loads).
+        # Determine the viewport bounds for pixel filtering.
         if tile_bounds is not None:
             ra_min_mosaic, ra_max_mosaic, dec_min_mosaic, dec_max_mosaic = tile_bounds
         else:
-            # Fallback for call paths that do not pass tile bounds.
+            # Fallback: derive bounds from local FITS/WCS.
             mosaic_info = self.get_mosaic_fits_data_by_mertile(
                 mertileid,
                 provider="local_fits",
@@ -1513,45 +1642,29 @@ class MOSAICHandler:
         print(f"RA range: {ra_min_mosaic:.4f} to {ra_max_mosaic:.4f}")
         print(f"Dec range: {dec_min_mosaic:.4f} to {dec_max_mosaic:.4f}")
 
-        # Load the effective coverage mask for this MER tile
+        # Load footprint pixels filtered to this viewport.
         io_start = time.time()
-        hpmask_fits = self.effcovmask_fileinfo_df.loc[
-            (self.effcovmask_fileinfo_df["mertileid"] == mertileid)
-            & (self.effcovmask_fileinfo_df["dataset_release"] == self.effcovmask_dsr)
-        ].squeeze()["fits_file"]
-        footprint = self._read_effcovmask_table(hpmask_fits)
+        pix_arr, wt_arr = self._get_mask_footprint_in_viewport(
+            ra_min_mosaic, ra_max_mosaic, dec_min_mosaic, dec_max_mosaic,
+            mask_type=mask_type,
+            mertileid=mertileid,
+        )
         io_time = time.time() - io_start
-        print(f"Loaded HEALPix footprint with {len(footprint)} pixels from {hpmask_fits}")
-        footprint["ra"], footprint["dec"] = hp.pix2ang(
-            nside=16384, ipix=footprint["PIXEL"], nest=True, lonlat=True
-        )
+        n_pix = len(pix_arr)
+        print(f"Footprint pixels in viewport ({mask_type}): {n_pix}")
+        if n_pix > 0:
+            print(f"Weight range: {wt_arr.min():.3f} to {wt_arr.max():.3f}")
 
-        # Filter footprint pixels to the full MER tile region
-        _pix_mask = (
-            (footprint["WEIGHT"] > 0)
-            & (footprint["ra"] >= ra_min_mosaic - 0.01)
-            & (footprint["ra"] <= ra_max_mosaic + 0.01)
-            & (footprint["dec"] >= dec_min_mosaic - 0.01)
-            & (footprint["dec"] <= dec_max_mosaic + 0.01)
-        )
-        filter_time = time.time() - io_start - io_time
-
-        print(f"Footprint pixels in full mosaic: {_pix_mask.sum()}")
-        if _pix_mask.sum() > 0:
-            print(
-                f"Weight range: {footprint['WEIGHT'][_pix_mask].min():.3f} to {footprint['WEIGHT'][_pix_mask].max():.3f}"
-            )
-
-        # Create grouped traces for HEALPix footprint polygons
+        # Create grouped traces for HEALPix footprint polygons.
         footprint_traces: List[go.Scatter] = []
         weight_min, weight_max = 0.8, 1.0
 
-        if _pix_mask.sum() > 0:
-            print(f"Creating grouped traces for {_pix_mask.sum()} HEALPix polygons...")
+        if n_pix > 0:
+            print(f"Creating grouped traces for {n_pix} HEALPix polygons...")
             polygon_start = time.time()
             footprint_traces = self._create_grouped_mask_traces(
-                pixels=np.asarray(footprint["PIXEL"][_pix_mask]),
-                weights=np.asarray(footprint["WEIGHT"][_pix_mask]),
+                pixels=pix_arr,
+                weights=wt_arr,
                 opacity=opacity,
                 colorscale=colorscale,
                 name_prefix="Mask overlay",
@@ -1563,7 +1676,7 @@ class MOSAICHandler:
         else:
             polygon_time = 0.0
 
-        # Add a colorbar trace (invisible heatmap that only shows the colorbar)
+        # Add a colorbar trace (invisible heatmap that only shows the colorbar).
         if footprint_traces and add_colorbar:
             colorbar_trace = self._create_mask_colorbar_trace(
                 weight_min, weight_max, colorscale, title="Coverage<br>Weight"
@@ -1573,7 +1686,7 @@ class MOSAICHandler:
         total_trace_time = time.time() - trace_start
         print(
             "[TIMING] Mask trace breakdown for tile "
-            f"{mertileid}: io={io_time:.2f}s, filter={filter_time:.2f}s, "
+            f"{mertileid} ({mask_type}): io={io_time:.2f}s, "
             f"polygon={polygon_time:.2f}s, total={total_trace_time:.2f}s"
         )
 
@@ -1683,8 +1796,14 @@ class MOSAICHandler:
         opacity: float = 0.6,
         colorscale: str = "viridis",
         add_colorbar: bool = True,
+        mask_type: str = "corrected",
     ) -> Optional[List[go.Scatter]]:
-        """Create Plotly scatter traces for a mask overlay cutout."""
+        """Create Plotly scatter traces for a mask overlay cutout.
+
+        Args:
+            mask_type: ``'corrected'`` (default) uses the global combined mask;
+                ``'effcov'`` uses the per-tile effective coverage mask.
+        """
 
         ra_cen, dec_cen = clickdata["cluster_ra"], clickdata["cluster_dec"]
 
@@ -1715,14 +1834,15 @@ class MOSAICHandler:
             print(f"Warning: Could not get cutout for MER tile {mertileid}")
             print("Returning full mask overlay traces instead")
             # Create mask overlay traces for full tile instead
-            mask_traces = self.create_mask_overlay_trace(mertileid=mertileid, opacity=opacity)
+            mask_traces = self.create_mask_overlay_trace(
+                mertileid=mertileid, opacity=opacity, mask_type=mask_type
+            )
             return mask_traces
 
         # Get the full mosaic WCS and shape
         print(f"Full mask overlay array shape: {data_cutout.shape}")
-        # print(f"Full mosaic WCS: {wcs_mosaic}")
 
-        # Get RA/Dec limits from the full mosaic
+        # Get RA/Dec limits from the cutout WCS
         ny, nx = data_cutout.shape
         corners = wcs_cutout.pixel_to_world([0, nx - 1, nx - 1, 0], [0, 0, ny - 1, ny - 1])
         ra_min_mosaic, ra_max_mosaic = corners.ra.deg.min(), corners.ra.deg.max()
@@ -1731,41 +1851,26 @@ class MOSAICHandler:
         print(f"RA range: {ra_min_mosaic:.4f} to {ra_max_mosaic:.4f}")
         print(f"Dec range: {dec_min_mosaic:.4f} to {dec_max_mosaic:.4f}")
 
-        # Load the effective coverage mask for this MER tile
-        hpmask_fits = self.effcovmask_fileinfo_df.loc[
-            (self.effcovmask_fileinfo_df["mertileid"] == mertileid)
-            & (self.effcovmask_fileinfo_df["dataset_release"] == self.effcovmask_dsr)
-        ].squeeze()["fits_file"]
-        footprint = self._read_effcovmask_table(hpmask_fits)
-        print(f"Loaded HEALPix footprint with {len(footprint)} pixels from {hpmask_fits}")
-        footprint["ra"], footprint["dec"] = hp.pix2ang(
-            nside=16384, ipix=footprint["PIXEL"], nest=True, lonlat=True
+        # Load footprint pixels filtered to the cutout viewport.
+        pix_arr, wt_arr = self._get_mask_footprint_in_viewport(
+            ra_min_mosaic, ra_max_mosaic, dec_min_mosaic, dec_max_mosaic,
+            mask_type=mask_type,
+            mertileid=mertileid,
         )
-
-        # Filter footprint pixels to the full MER tile region
-        _pix_mask = (
-            (footprint["WEIGHT"] > 0)
-            & (footprint["ra"] >= ra_min_mosaic - 0.01)
-            & (footprint["ra"] <= ra_max_mosaic + 0.01)
-            & (footprint["dec"] >= dec_min_mosaic - 0.01)
-            & (footprint["dec"] <= dec_max_mosaic + 0.01)
-        )
-
-        print(f"Footprint pixels in selected (mosaic) area: {_pix_mask.sum()}")
-        if _pix_mask.sum() > 0:
-            print(
-                f"Weight range: {footprint['WEIGHT'][_pix_mask].min():.3f} to {footprint['WEIGHT'][_pix_mask].max():.3f}"
-            )
+        n_pix = len(pix_arr)
+        print(f"Footprint pixels in cutout area ({mask_type}): {n_pix}")
+        if n_pix > 0:
+            print(f"Weight range: {wt_arr.min():.3f} to {wt_arr.max():.3f}")
 
         # Create grouped traces for HEALPix footprint polygons
         footprint_traces: List[go.Scatter] = []
         weight_min, weight_max = 0.8, 1.0
 
-        if _pix_mask.sum() > 0:
-            print(f"Creating grouped traces for {_pix_mask.sum()} HEALPix cutout polygons...")
+        if n_pix > 0:
+            print(f"Creating grouped traces for {n_pix} HEALPix cutout polygons...")
             footprint_traces = self._create_grouped_mask_traces(
-                pixels=np.asarray(footprint["PIXEL"][_pix_mask]),
-                weights=np.asarray(footprint["WEIGHT"][_pix_mask]),
+                pixels=pix_arr,
+                weights=wt_arr,
                 opacity=opacity,
                 colorscale=colorscale,
                 name_prefix="Mask overlay (cutout)",
@@ -1891,9 +1996,14 @@ class MOSAICHandler:
         colorscale: str = "viridis",
         provider: Optional[str] = None,
         source_id: Optional[str] = None,
+        mask_type: str = "corrected",
     ) -> List[go.Scatter]:
-        """
-        Load mask overlay traces with strict performance limits and timing
+        """Load mask overlay traces for the current zoom viewport.
+
+        Args:
+            mask_type: ``'corrected'`` (default) loads the combined corrected
+                mask in a single pass. ``'effcov'`` loops over intersecting
+                MER tiles and loads per-tile effective coverage masks.
         """
         start_time = time.time()
         mask_traces: List[go.Scatter] = []
@@ -1909,66 +2019,102 @@ class MOSAICHandler:
             return mask_traces
 
         ra_min, ra_max, dec_min, dec_max = zoom_ranges
+        if any(v is None for v in (ra_min, ra_max, dec_min, dec_max)):
+            print("Debug: Incomplete zoom ranges for mask overlay loading")
+            return mask_traces
+        assert ra_min is not None and ra_max is not None
+        assert dec_min is not None and dec_max is not None
         print(
             f"Debug: Loading mask overlays for zoom area: RA({ra_min:.3f}, {ra_max:.3f}), "
-            f"Dec({dec_min:.3f}, {dec_max:.3f}), provider={provider_norm}, source={source_id}"
+            f"Dec({dec_min:.3f}, {dec_max:.3f}), mask_type={mask_type}, "
+            f"provider={provider_norm}, source={source_id}"
         )
 
-        # Find intersecting tiles
-        mertiles_to_load = self._find_intersecting_tiles(data, ra_min, ra_max, dec_min, dec_max)
-        if not mertiles_to_load:
-            print("Debug: No MER tiles with mosaics found in zoom area")
-            return mask_traces
+        weight_min, weight_max = 0.8, 1.0
 
-        # PERFORMANCE LIMITS: Strict limits for interactive experience
-        max_masks = 5  # Maximum 5 mask overlays per zoom
-        max_processing_time = 30  # Maximum 30 seconds total processing time
-        tile_processing_time_total = 0.0
-        if len(mertiles_to_load) > max_masks:
-            print(f"Debug: Limiting to first {max_masks} mask overlays for performance")
-            mertiles_to_load = mertiles_to_load[:max_masks]
-        # Create traces for each mask overlay with timing checks
-        for i, mertileid in enumerate(mertiles_to_load):
-            # Check if we're running out of time
-            elapsed_time = time.time() - start_time
-            if elapsed_time > max_processing_time:
-                print(f"[TIMEOUT] Stopping mask overlay loading after {elapsed_time:.2f}s")
-                break
-
-            print(
-                f"[PROGRESS] Processing mask overlay {i+1}/{len(mertiles_to_load)}: tile {mertileid}"
+        if mask_type == "corrected":
+            # ----------------------------------------------------------------
+            # Corrected mask: single global pass — no per-tile loop needed.
+            # ----------------------------------------------------------------
+            pix_arr, wt_arr = self._get_mask_footprint_in_viewport(
+                ra_min, ra_max, dec_min, dec_max, mask_type="corrected"
             )
+            n_pix = len(pix_arr)
+            print(f"[CORRECTED MASK] Viewport pixels: {n_pix}")
 
-            try:
-                trace_start = time.time()
-                # Don't add colorbar for each tile, we'll add one at the end
-                tile_bounds = self._extract_tile_bounds(data, mertileid)
-                footprint_traces = self.create_mask_overlay_trace(
-                    mertileid,
-                    opacity,
-                    colorscale,
-                    add_colorbar=False,
-                    provider=provider_norm,
-                    source_id=source_id,
-                    tile_bounds=tile_bounds,
+            if n_pix > 0:
+                mask_traces = self._create_grouped_mask_traces(
+                    pixels=pix_arr,
+                    weights=wt_arr,
+                    opacity=opacity,
+                    colorscale=colorscale,
+                    name_prefix="Mask overlay",
+                    n_bins=12,
+                    weight_min=weight_min,
+                    weight_max=weight_max,
                 )
-                trace_time = time.time() - trace_start
-                tile_processing_time_total += trace_time
+            else:
+                print("[CORRECTED MASK] No pixels found in viewport")
 
-                if footprint_traces:
-                    mask_traces.extend(footprint_traces)
-                    print(
-                        f"[SUCCESS] Created mask overlay traces for MER tile {mertileid} in {trace_time:.2f}s"
+        else:
+            # ----------------------------------------------------------------
+            # Effective coverage mask: per-tile loop (original logic).
+            # ----------------------------------------------------------------
+            mertiles_to_load = self._find_intersecting_tiles(data, ra_min, ra_max, dec_min, dec_max)
+            if not mertiles_to_load:
+                print("Debug: No MER tiles found in zoom area")
+                return mask_traces
+
+            max_masks = 5
+            max_processing_time = 30
+            tile_processing_time_total = 0.0
+            if len(mertiles_to_load) > max_masks:
+                print(f"Debug: Limiting to first {max_masks} mask overlays for performance")
+                mertiles_to_load = mertiles_to_load[:max_masks]
+
+            for i, mertileid in enumerate(mertiles_to_load):
+                elapsed_time = time.time() - start_time
+                if elapsed_time > max_processing_time:
+                    print(f"[TIMEOUT] Stopping mask overlay loading after {elapsed_time:.2f}s")
+                    break
+
+                print(
+                    f"[PROGRESS] Processing mask overlay {i+1}/{len(mertiles_to_load)}: "
+                    f"tile {mertileid}"
+                )
+
+                try:
+                    trace_start = time.time()
+                    tile_bounds = self._extract_tile_bounds(data, mertileid)
+                    footprint_traces = self.create_mask_overlay_trace(
+                        mertileid,
+                        opacity,
+                        colorscale,
+                        add_colorbar=False,
+                        provider=provider_norm,
+                        source_id=source_id,
+                        tile_bounds=tile_bounds,
+                        mask_type="effcov",
                     )
-                else:
-                    print(f"[WARNING] No mask overlay traces created for MER tile {mertileid}")
+                    trace_time = time.time() - trace_start
+                    tile_processing_time_total += trace_time
 
-            except Exception as e:
-                print(f"[ERROR] Failed to create mask overlay traces for tile {mertileid}: {e}")
+                    if footprint_traces:
+                        mask_traces.extend(footprint_traces)
+                        print(
+                            f"[SUCCESS] Created mask overlay traces for MER tile {mertileid} "
+                            f"in {trace_time:.2f}s"
+                        )
+                    else:
+                        print(f"[WARNING] No mask overlay traces created for MER tile {mertileid}")
+
+                except Exception as e:
+                    print(
+                        f"[ERROR] Failed to create mask overlay traces for tile {mertileid}: {e}"
+                    )
 
         # Add a single colorbar for all mask overlays
         if mask_traces:
-            weight_min, weight_max = 0.8, 1.0
             colorbar_trace = self._create_mask_colorbar_trace(
                 weight_min, weight_max, colorscale, title="Coverage<br>Weight"
             )
@@ -1977,8 +2123,7 @@ class MOSAICHandler:
         total_time = time.time() - start_time
         print(
             f"[TIMING] Total mask overlay loading completed in {total_time:.2f}s "
-            f"(tile_processing={tile_processing_time_total:.2f}s, "
-            f"overhead={max(total_time - tile_processing_time_total, 0.0):.2f}s)"
+            f"(mask_type={mask_type})"
         )
         return mask_traces
 

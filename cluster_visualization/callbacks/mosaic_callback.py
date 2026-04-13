@@ -353,6 +353,7 @@ class MOSAICCallbacks:
                 State("algorithm-dropdown", "value"),
                 State("mosaic-provider-selector", "value"),
                 State("mosaic-source-selector", "value"),
+                State("mask-type-selector", "value"),
             ],
             prevent_initial_call=True,
         )
@@ -364,15 +365,18 @@ class MOSAICCallbacks:
             algorithm,
             mosaic_provider,
             mosaic_source,
+            mask_type,
         ):
             """Render mosaic images when button is clicked"""
             try:
+                mask_type = mask_type or "corrected"
                 print(f"🔍 Mask overlay callback triggered! n_clicks={n_clicks}")
                 print(
                     f"   -> relayout_data keys: {list(relayout_data.keys()) if relayout_data else None}"
                 )
                 print(
-                    f"   -> algorithm: {algorithm}, provider: {mosaic_provider}, source: {mosaic_source}"
+                    f"   -> algorithm: {algorithm}, provider: {mosaic_provider}, "
+                    f"source: {mosaic_source}, mask_type: {mask_type}"
                 )
                 print(f"   -> current_figure exists: {current_figure is not None}")
 
@@ -380,7 +384,7 @@ class MOSAICCallbacks:
                     print(f"   -> Returning early: n_clicks is {n_clicks}")
                     return current_figure
 
-                print("🚀 Proceeding with Healpix (effective coverage) mask loading...")
+                print(f"🚀 Proceeding with HEALPix mask loading (mask_type={mask_type})...")
                 try:
                     print(f"   -> Loading data for algorithm: {algorithm}")
                     # Load current data
@@ -397,6 +401,7 @@ class MOSAICCallbacks:
                                 colorscale="viridis",
                                 provider=mosaic_provider,
                                 source_id=mosaic_source,
+                                mask_type=mask_type,
                             )
                         )
                         print(

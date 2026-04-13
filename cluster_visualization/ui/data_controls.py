@@ -643,6 +643,34 @@ class DataControls:
                                     ],
                                     className="text-muted d-block text-left mb-2",
                                 ),
+                                # Mask type selector
+                                html.Div(
+                                    [
+                                        html.Label(
+                                            "Mask type:",
+                                            className="form-label small text-muted mb-1",
+                                        ),
+                                        dbc.RadioItems(
+                                            id="mask-type-selector",
+                                            options=[
+                                                {
+                                                    "label": "Corrected Mask",
+                                                    "value": "corrected",
+                                                },
+                                                {
+                                                    "label": "Eff. Coverage Mask",
+                                                    "value": "effcov",
+                                                },
+                                            ],
+                                            value="corrected",
+                                            inline=True,
+                                            className="mb-2",
+                                            inputClassName="me-1",
+                                            labelClassName="me-3 small",
+                                        ),
+                                    ],
+                                    className="mb-2",
+                                ),
                                 # Healpix mask visibility and delete controls
                                 html.Div(
                                     [
