@@ -1467,7 +1467,7 @@ class MOSAICHandler:
                 "RA: %{x:.6f}°<br>"
                 "Dec: %{y:.6f}°<br>"
                 "Intensity: %{z:.3f}<br>"
-                f"Tile Size: {bounds.get('ra_size_deg', 'unknown'):.4f}° × {bounds.get('dec_size_deg', 'unknown'):.4f}°<br>"
+                f"Tile Size: {bounds.get('ra_size_deg', 'unknown'):.4f}° x {bounds.get('dec_size_deg', 'unknown'):.4f}°<br>"
                 "<extra>Mosaic Image</extra>"
             ),
             customdata=np.full((height, width), source_label),

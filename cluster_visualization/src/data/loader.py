@@ -389,7 +389,7 @@ class DataLoader:
                     with fits.open(fitsfile, mode="readonly", memmap=True) as hdul:
                         _arr = np.array(hdul[1].data)
                     # Inject synthetic DET_CODE_NB if absent (per-algorithm catalogs lack it)
-                    if "DET_CODE_NB" not in _arr.dtype.names:
+                    if _arr.dtype.names is not None and "DET_CODE_NB" not in _arr.dtype.names:
                         _det_code = 2 if det_xml_key == "mergedetcat_pzwav" else 1
                         _new_dt = np.dtype(_arr.dtype.descr + [("DET_CODE_NB", np.int32)])
                         _new_arr = np.empty(len(_arr), dtype=_new_dt)
@@ -432,7 +432,7 @@ class DataLoader:
                 with fits.open(fitsfile, mode="readonly", memmap=True) as hdul:
                     data_merged = np.array(hdul[1].data)
                 # Inject synthetic DET_CODE_NB if absent (per-algorithm catalogs lack it)
-                if "DET_CODE_NB" not in data_merged.dtype.names:
+                if data_merged.dtype.names is not None and "DET_CODE_NB" not in data_merged.dtype.names:
                     _det_code = 2 if algorithm == "PZWAV" else 1
                     _new_dt = np.dtype(data_merged.dtype.descr + [("DET_CODE_NB", np.int32)])
                     _new_arr = np.empty(len(data_merged), dtype=_new_dt)
