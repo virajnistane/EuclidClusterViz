@@ -1517,23 +1517,29 @@ class MOSAICHandler:
             # JPEG path:  both-axes flip    → z[0,0] = (min Dec, min RA)
             processed_image = np.asarray(mosaic_info["data"], dtype=np.float32)
 
-            # Resize to match the display canvas so Plotly/browser does not
-            # apply low-quality bilinear upscaling.  Orientation is already
-            # correct, so we resize only — no additional flip.
+            # Keep ESA image at native resolution (e.g. 768x768).
+            # Up-scaling to 1920x1920 with LANCZOS wastes CPU and inflates the
+            # JSON payload to ~20 MB; Plotly/browser GPU interpolates natively.
             esa_h, esa_w = processed_image.shape
-            target_w = self.img_width
-            target_h = self.img_height
-            if esa_w != target_w or esa_h != target_h:
-                processed_image = np.array(
-                    Image.fromarray(processed_image).resize(
-                        (target_w, target_h), Image.Resampling.LANCZOS
-                    ),
-                    dtype=np.float32,
-                )
-                processed_image = np.clip(processed_image, 0.0, 1.0)
-                print(
-                    f"Debug: ESA cutout LANCZOS-resized {esa_w}×{esa_h} → {target_w}×{target_h}"
-                )
+
+            # # Resize to match the display canvas so Plotly/browser does not
+            # # apply low-quality bilinear upscaling.  Orientation is already
+            # # correct, so we resize only — no additional flip.
+            # target_w = self.img_width
+            # target_h = self.img_height
+            # if esa_w != target_w or esa_h != target_h:
+            #     processed_image = np.array(
+            #         Image.fromarray(processed_image).resize(
+            #             (target_w, target_h), Image.Resampling.LANCZOS
+            #         ),
+            #         dtype=np.float32,
+            #     )
+            #     processed_image = np.clip(processed_image, 0.0, 1.0)
+            #     print(
+            #         f"Debug: ESA cutout LANCZOS-resized {esa_w}×{esa_h} → {target_w}×{target_h}"
+            #     )
+
+            print(f"Debug: ESA cutout at native {esa_w}x{esa_h} (no server-side upscale)")
 
             bounds = mosaic_info.get("bounds")
             if bounds is None:
@@ -1593,7 +1599,6 @@ class MOSAICHandler:
                 f"Tile Size: {bounds.get('ra_size_deg', 'unknown'):.4f}° x {bounds.get('dec_size_deg', 'unknown'):.4f}°<br>"
                 "<extra>Mosaic Image</extra>"
             ),
-            customdata=np.full((height, width), source_label),
         )
 
         return trace
