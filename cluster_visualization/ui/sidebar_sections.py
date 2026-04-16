@@ -365,6 +365,107 @@ class SidebarSections:
                 ),
             ]
         )
+    
+    @staticmethod
+    def create_idcluster_section():
+        """Create cluster-ID based filtering section with enhanced styling"""
+        return html.Div(
+            [
+                html.Div(
+                    [
+                        html.I(className="fas fa-id-badge me-1 text-danger"),
+                        html.Label("Cluster-ID based Filtering:", className="fw-bold mb-1"),
+                    ],
+                    className="d-flex align-items-left mb-0",
+                ),
+                dbc.Card(
+                    [
+                        dbc.CardBody(
+                            [
+                                dbc.Badge(
+                                    id="idcluster-status-display",
+                                    color="light",
+                                    className="w-100 mb-2 p-2 fs-6",
+                                    style={
+                                        "background": "linear-gradient(45deg, #ffe8e8, #fff0f0)",
+                                        "color": "#5a2d2d",
+                                        "border-radius": "8px",
+                                        "border": "1px solid rgba(231, 76, 60, 0.3)",
+                                        "fontSize": "0.75rem",
+                                    },
+                                    children="No ID list uploaded",
+                                ),
+                                # Cluster-ID file selector
+                                html.Div(
+                                    [
+                                        dcc.Upload(
+                                            id="idcluster-upload",
+                                            children=html.Div(
+                                                [
+                                                    html.I(className="fas fa-upload me-2"),
+                                                    "Upload"
+                                                ]
+                                            ),
+                                            accept=".txt,.csv",
+                                            style={
+                                                "width": "100%",
+                                                "height": "40px",
+                                                "lineHeight": "40px",
+                                                "borderWidth": "1px",
+                                                "borderStyle": "dashed",
+                                                "borderRadius": "8px",
+                                                "textAlign": "center",
+                                                "backgroundColor": "#fff0f0",
+                                                "borderColor": "#e74c3c",
+                                                "color": "#e74c3c",
+                                                "fontWeight": "500",
+                                            },
+                                            multiple=False,
+                                        ),
+                                        html.Small(
+                                            "Cluster-ID List (.txt or .csv, one ID per line)",
+                                            className="text-muted d-block me-1",
+                                            style={
+                                                "fontSize": "1rem", 
+                                                "marginTop": "5px",
+                                                "textAlign": "center",
+                                                },
+                                        ),
+                                    ],
+                                    className="mb-1",
+                                    style={
+                                        "padding": "5px 20px",
+                                        "margin": "10px 0",
+                                        "minHeight": "60px",
+                                    },
+                                ),
+                                # Apply button
+                                dbc.Button(
+                                    [
+                                        html.I(className="fas fa-filter me-2"),
+                                        "Apply Cluster-ID Filter",
+                                    ],
+                                    id="idcluster-render-button",
+                                    color="danger",
+                                    size="sm",
+                                    className="w-100 shadow-sm btn-enhanced",
+                                    n_clicks=0,
+                                    disabled=True,
+                                    style={"border-radius": "8px", "font-weight": "600"},
+                                ),
+                            ],
+                            className="p-4",
+                        )
+                    ],
+                    className="border-0 shadow-sm",
+                    style={
+                        "background": "linear-gradient(135deg, #fff0f0, #ffffff)",
+                        "border-radius": "12px",
+                    },
+                ),
+            ]
+        )
+
 
     @staticmethod
     def create_display_options_section():
