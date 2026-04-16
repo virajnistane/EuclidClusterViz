@@ -10,7 +10,7 @@ This module handles the creation of all Plotly traces including:
 """
 
 import json
-from typing import Any, Dict, List, Optional, Tuple, TypedDict
+from typing import Any, Dict, List, Optional, Tuple, TypedDict, Union
 
 import numpy as np
 import plotly.graph_objs as go
@@ -71,6 +71,7 @@ class TraceCreator:
         snr_threshold_upper_amico: Optional[float] = None,
         z_threshold_lower: Optional[float] = None,
         z_threshold_upper: Optional[float] = None,
+        idcluster_list: Optional[List[int]] = None,
         threshold: float = 0.8,
         maglim: Optional[float] = None,
         show_merged_clusters: bool = True,
@@ -108,6 +109,16 @@ class TraceCreator:
         datamod_detcluster_mergedcat = self._apply_redshift_filtering(
             data["data_detcluster_mergedcat"], z_threshold_lower, z_threshold_upper
         )
+
+        try:
+            assert data["paths"]["use_gluematchcat"] == True and idcluster_list is not None
+            datamod_detcluster_mergedcat = self._apply_idcluster_filtering(
+                datamod_detcluster_mergedcat, idcluster_list
+            )
+        except:
+            print(
+                "Debug: ID-cluster based filtering skipped - either not using gluematchcat or idcluster_list is None"
+            )
 
         # Check zoom threshold for CATRED data display
         zoom_threshold_met = self._check_zoom_threshold(relayout_data, show_mer_tiles)
@@ -467,6 +478,25 @@ class TraceCreator:
             return result
         else:
             return cluster_data
+
+    def _apply_idcluster_filtering(
+            self,
+            cluster_data: np.ndarray,
+            idcluster_list: Optional[Union[List[int], np.ndarray]],
+    ) -> np.ndarray:
+        """Apply IDCLUSTER filtering to merged cluster data."""
+        if idcluster_list is None:
+            return cluster_data
+        
+        try:
+            mask = np.isin(cluster_data['ID_UNIQUE_CLUSTER'], idcluster_list)
+            filtered_data = cluster_data[mask]
+        except Exception as e:
+            print(f"Error applying IDCLUSTER filtering: {e}")
+            print(f"IDCLUSTER list provided: {idcluster_list}")
+            return cluster_data
+        
+        return filtered_data
 
     def _check_zoom_threshold(self, relayout_data: Optional[Dict], show_mer_tiles: bool) -> bool:
         """Check if zoom level meets threshold for CATRED data display (< 2 degrees)."""

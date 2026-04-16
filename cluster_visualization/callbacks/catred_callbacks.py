@@ -11,6 +11,8 @@ import pandas as pd  # type: ignore[import]
 import plotly.graph_objs as go  # type: ignore[import]
 from dash import Input, Output, State, html
 
+from cluster_visualization.callbacks.utils import get_idclusters_array
+
 
 class CATREDCallbacks:
     """Handles CATRED data-related callbacks"""
@@ -123,6 +125,9 @@ class CATREDCallbacks:
             matching_clusters,
             snr_range_pzwav,
             snr_range_amico,
+            redshift_range,
+            idcluster_upload_contents,
+            idcluster_upload_filename,
             show_polygons,
             show_mer_tiles,
             free_aspect_ratio,
@@ -168,6 +173,17 @@ class CATREDCallbacks:
                 else:  # BOTH
                     snr_lower = (snr_pzwav_lower, snr_amico_lower)
                     snr_upper = (snr_pzwav_upper, snr_amico_upper)
+
+                # Extract redshift values from range slider
+                z_lower = redshift_range[0] if redshift_range and len(redshift_range) == 2 else None
+                z_upper = redshift_range[1] if redshift_range and len(redshift_range) == 2 else None
+
+                # Process uploaded ID cluster list if provided
+                if idcluster_upload_contents:
+                    idcluster_list = get_idclusters_array(idcluster_upload_contents, idcluster_upload_filename)
+                else:
+                    idcluster_list = None
+
 
                 # Load data for selected algorithm
                 set_progress((30, f"Loading {algorithm} cluster data..."))
@@ -215,6 +231,9 @@ class CATREDCallbacks:
                     snr_threshold_upper_pzwav=snr_pzwav_upper,
                     snr_threshold_lower_amico=snr_amico_lower,
                     snr_threshold_upper_amico=snr_amico_upper,
+                    z_threshold_lower=z_lower,
+                    z_threshold_upper=z_upper,
+                    idcluster_list=idcluster_list,
                     threshold=threshold,
                     show_merged_clusters=show_merged_clusters,
                     matching_clusters=matching_clusters,
@@ -302,6 +321,8 @@ class CATREDCallbacks:
                 State("snr-range-slider-pzwav", "value"),
                 State("snr-range-slider-amico", "value"),
                 State("redshift-range-slider", "value"),
+                State("idcluster-upload", "contents"),
+                State("idcluster-upload", "filename"),
                 State("polygon-switch", "value"),
                 State("mer-switch", "value"),
                 State("aspect-ratio-switch", "value"),
@@ -320,6 +341,8 @@ class CATREDCallbacks:
             snr_range_pzwav,
             snr_range_amico,
             redshift_range,
+            idcluster_upload_contents,
+            idcluster_upload_filename,
             show_polygons,
             show_mer_tiles,
             free_aspect_ratio,
@@ -365,6 +388,10 @@ class CATREDCallbacks:
                 z_lower = redshift_range[0] if redshift_range and len(redshift_range) == 2 else None
                 z_upper = redshift_range[1] if redshift_range and len(redshift_range) == 2 else None
 
+                idcluster_list = None
+                if idcluster_upload_contents and idcluster_upload_filename:
+                    idcluster_list = get_idclusters_array(idcluster_upload_contents, idcluster_upload_filename)
+
                 # Clear CATRED traces cache
                 if self.catred_handler:
                     self.catred_handler.clear_traces_cache()
@@ -408,7 +435,8 @@ class CATREDCallbacks:
                     snr_threshold_lower_amico=snr_amico_lower,
                     snr_threshold_upper_amico=snr_amico_upper,
                     z_threshold_lower=z_lower,
-                    z_threshold_upper=z_upper,  # 🔧 ADD REDSHIFT PARAMS
+                    z_threshold_upper=z_upper, 
+                    idcluster_list=idcluster_list, 
                     show_merged_clusters=show_merged_clusters,
                     matching_clusters=matching_clusters,
                 )
@@ -503,6 +531,7 @@ class CATREDCallbacks:
         snr_threshold_upper_amico=None,
         z_threshold_lower=None,
         z_threshold_upper=None,
+        idcluster_list=None,
         threshold=0.8,
         show_merged_clusters=True,
         matching_clusters=False,
@@ -525,6 +554,7 @@ class CATREDCallbacks:
                 snr_threshold_upper_amico=snr_threshold_upper_amico,
                 z_threshold_lower=z_threshold_lower,
                 z_threshold_upper=z_threshold_upper,
+                idcluster_list=idcluster_list,
                 threshold=threshold,
                 show_merged_clusters=show_merged_clusters,
                 matching_clusters=matching_clusters,
@@ -547,6 +577,7 @@ class CATREDCallbacks:
                 snr_threshold_upper_amico=snr_threshold_upper_amico,
                 z_threshold_lower=z_threshold_lower,
                 z_threshold_upper=z_threshold_upper,
+                idcluster_list=idcluster_list,
                 threshold=threshold,
                 show_merged_clusters=show_merged_clusters,
                 matching_clusters=matching_clusters,
@@ -749,6 +780,7 @@ class CATREDCallbacks:
         snr_threshold_upper_amico=None,
         z_threshold_lower=None,
         z_threshold_upper=None,
+        idcluster_list=None,
         threshold=0.8,
         show_merged_clusters=True,
         matching_clusters=False,

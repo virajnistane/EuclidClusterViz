@@ -52,6 +52,7 @@ class DataLoader:
         """
         self.config = config
         self.data_cache = {}  # In-memory cache
+        self.paths = {}
 
         # Initialize memory manager
         if MEMORY_MANAGER_AVAILABLE:
@@ -178,6 +179,7 @@ class DataLoader:
             "snr_max_amico": snr_max_amico,
             "z_min": z_min,
             "z_max": z_max,
+            "paths": paths,
         }
 
         # Check if we have room to cache in memory

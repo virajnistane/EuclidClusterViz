@@ -7,7 +7,14 @@ from pathlib import Path
 import glob
 from dash import Input, Output, State, html, dash, ALL, callback_context
 import dash_bootstrap_components as dbc
+import base64
+import csv
+import io
 
+try:
+    from cluster_visualization.callbacks.utils import get_idclusters_array
+except ImportError:
+    print("Warning: Could not import get_idclusters_array from utils. ID cluster upload functionality may be affected.")
 
 class UICallbacks:
     """Handles UI-related callbacks"""
@@ -169,6 +176,32 @@ class UICallbacks:
             n_clicks = n_clicks or 0
             disabled = n_clicks == 0
             return disabled, disabled, disabled
+
+        @self.app.callback(
+            [
+                Output("idcluster-render-button", "disabled"),
+                Output("idcluster-status-display", "children"),
+            ],
+            [
+                Input("idcluster-upload", "contents"),
+                Input("idcluster-upload", "filename"),
+            ],
+            prevent_initial_call=False,
+        )
+        def enable_idcluster_button(upload_contents, upload_filename):
+            """Enable Cluster-ID filter button and show uploaded entry count."""
+            if not upload_contents or not upload_filename:
+                return True, "No ID list uploaded"
+
+            try:
+                idcluster_array = get_idclusters_array(upload_contents, upload_filename)
+                count = int(idcluster_array.size) if idcluster_array is not None else 0
+                status = f"Uploaded {count} cluster IDs"
+
+                return False, status
+
+            except Exception as error:
+                return True, f"Upload error: {error}"
 
         @self.app.callback(
             Output("matching-clusters-switch", "disabled"),
@@ -785,3 +818,23 @@ class UICallbacks:
                     ],
                     className="text-info",
                 ), os.path.basename(file_path)
+
+    # Helper functions
+
+    # def _count_uploaded_id_entries(self, upload_contents, filename):
+    #     """Count uploaded entries for txt/dat files or CSV values."""
+    #     if not upload_contents or not filename:
+    #         return 0
+
+    #     _, content_string = upload_contents.split(",", 1)
+    #     decoded_text = base64.b64decode(content_string).decode("utf-8", errors="ignore")
+    #     suffix = Path(filename).suffix.lower()
+
+    #     if suffix in {".txt", ".dat"}:
+    #         return sum(1 for line in decoded_text.splitlines() if line.strip())
+
+    #     if suffix == ".csv":
+    #         reader = csv.reader(io.StringIO(decoded_text))
+    #         return sum(1 for row in reader for value in row if str(value).strip())
+
+    #     return 0

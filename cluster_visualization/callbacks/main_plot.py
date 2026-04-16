@@ -5,6 +5,11 @@ Handles primary rendering logic for the main cluster visualization plot,
 including initial rendering, real-time option updates, and SNR filtering.
 """
 
+import base64
+import io
+from typing import Optional, cast
+from numpy.typing import NDArray
+
 import dash  # type: ignore[import]
 import dash_bootstrap_components as dbc  # type: ignore[import]
 import numpy as np
@@ -12,6 +17,10 @@ import pandas as pd  # type: ignore[import]
 import plotly.graph_objs as go  # type: ignore[import]
 from dash import Input, Output, State, html
 
+try:
+    from cluster_visualization.callbacks.utils import get_idclusters_array
+except ImportError:
+    print("Warning: Could not import get_idclusters_array from utils. ID cluster upload functionality may be affected.")
 
 class MainPlotCallbacks:
     """Handles main plot rendering callbacks"""
@@ -210,6 +219,7 @@ class MainPlotCallbacks:
                 Input("snr-render-button-pzwav", "n_clicks"),
                 Input("snr-render-button-amico", "n_clicks"),
                 Input("redshift-render-button", "n_clicks"),
+                Input("idcluster-render-button", "n_clicks"),
                 Input("rerender-ovals-button", "n_clicks"),
             ],
             [
@@ -218,6 +228,8 @@ class MainPlotCallbacks:
                 State("snr-range-slider-pzwav", "value"),
                 State("snr-range-slider-amico", "value"),
                 State("redshift-range-slider", "value"),
+                State("idcluster-upload", "contents"),
+                State("idcluster-upload", "filename"),
                 State("polygon-switch", "value"),
                 State("mer-switch", "value"),
                 State("aspect-ratio-switch", "value"),
@@ -234,6 +246,7 @@ class MainPlotCallbacks:
                 (Output("snr-render-button-pzwav", "disabled"), True, False),
                 (Output("snr-render-button-amico", "disabled"), True, False),
                 (Output("redshift-render-button", "disabled"), True, False),
+                (Output("idcluster-render-button", "disabled"), True, False),
             ],
             progress=[
                 Output("data-load-progress", "value"),
@@ -246,12 +259,15 @@ class MainPlotCallbacks:
             snr_pzwav_n_clicks,
             snr_amico_n_clicks,
             redshift_n_clicks,
+            idcluster_n_clicks,
             rerender_ovals_n_clicks,
             algorithm,
             matching_clusters,
             snr_range_pzwav,
             snr_range_amico,
             redshift_range,
+            idcluster_upload_contents,
+            idcluster_upload_filename,
             show_polygons,
             show_mer_tiles,
             free_aspect_ratio,
@@ -269,6 +285,7 @@ class MainPlotCallbacks:
                     snr_pzwav_n_clicks,
                     snr_amico_n_clicks,
                     redshift_n_clicks,
+                    idcluster_n_clicks,
                     rerender_ovals_n_clicks,
                 ]
             ):
@@ -296,6 +313,11 @@ class MainPlotCallbacks:
                 z_lower = redshift_range[0] if redshift_range and len(redshift_range) == 2 else None
                 z_upper = redshift_range[1] if redshift_range and len(redshift_range) == 2 else None
 
+                idcluster_list = None
+                if idcluster_upload_contents and idcluster_upload_filename:
+                    set_progress((10, f"Processing uploaded cluster IDs from {idcluster_upload_filename}..."))
+                    idcluster_list = get_idclusters_array(idcluster_upload_contents, idcluster_upload_filename)
+
                 # Load data for selected algorithm
                 set_progress((20, f"Loading {algorithm} catalog..."))
                 data = self.load_data(algorithm)
@@ -318,6 +340,7 @@ class MainPlotCallbacks:
                     snr_threshold_upper_amico=snr_amico_upper,
                     z_threshold_lower=z_lower,
                     z_threshold_upper=z_upper,
+                    idcluster_list=idcluster_list,
                     threshold=threshold,
                     maglim=maglim,
                     show_merged_clusters=show_merged_clusters,
@@ -428,6 +451,8 @@ class MainPlotCallbacks:
                 State("snr-range-slider-pzwav", "value"),
                 State("snr-range-slider-amico", "value"),
                 State("redshift-range-slider", "value"),
+                State("idcluster-upload", "contents"),
+                State("idcluster-upload", "filename"),
                 State("catred-threshold-slider", "value"),
                 State("magnitude-limit-slider", "value"),
                 State("cluster-plot", "relayoutData"),
@@ -447,6 +472,8 @@ class MainPlotCallbacks:
             snr_range_pzwav,
             snr_range_amico,
             redshift_range,
+            idcluster_upload_contents,
+            idcluster_upload_filename,
             threshold,
             maglim,
             relayout_data,
@@ -487,6 +514,13 @@ class MainPlotCallbacks:
                 z_lower = redshift_range[0] if redshift_range and len(redshift_range) == 2 else None
                 z_upper = redshift_range[1] if redshift_range and len(redshift_range) == 2 else None
 
+                # Process uploaded ID cluster list if provided
+                if idcluster_upload_contents:
+                    idcluster_list = get_idclusters_array(idcluster_upload_contents, idcluster_upload_filename)
+                else:
+                    idcluster_list = None
+
+
                 # Load data for selected algorithm
                 data = self.load_data(algorithm)
 
@@ -516,6 +550,7 @@ class MainPlotCallbacks:
                     snr_threshold_upper_amico=snr_amico_upper,
                     z_threshold_lower=z_lower,
                     z_threshold_upper=z_upper,
+                    idcluster_list=idcluster_list,
                     threshold=threshold,
                     maglim=maglim,
                     show_merged_clusters=show_merged_clusters,
@@ -1026,6 +1061,7 @@ class MainPlotCallbacks:
         snr_threshold_upper_amico=None,
         z_threshold_lower=None,
         z_threshold_upper=None,
+        idcluster_list=None,
         threshold=0.8,
         maglim=None,
         show_merged_clusters=True,
@@ -1048,6 +1084,7 @@ class MainPlotCallbacks:
                 snr_threshold_upper_amico=snr_threshold_upper_amico,
                 z_threshold_lower=z_threshold_lower,
                 z_threshold_upper=z_threshold_upper,
+                idcluster_list=idcluster_list,
                 threshold=threshold,
                 maglim=maglim,
                 show_merged_clusters=show_merged_clusters,
@@ -1069,6 +1106,7 @@ class MainPlotCallbacks:
                 snr_threshold_upper_amico=snr_threshold_upper_amico,
                 z_threshold_lower=z_threshold_lower,
                 z_threshold_upper=z_threshold_upper,
+                idcluster_list=idcluster_list,
                 threshold=threshold,
                 show_merged_clusters=show_merged_clusters,
                 matching_clusters=matching_clusters,
@@ -1332,6 +1370,58 @@ class MainPlotCallbacks:
 
         return len(combined_data)
 
+    def _get_idclusters_array(
+            self, 
+            upload_contents, 
+            upload_filename
+        ) -> Optional[NDArray[np.int64]]:
+        """Extract cluster IDs from uploaded txt/dat/csv contents."""
+        if not upload_contents or not upload_filename:
+            return None
+
+        try:
+            _, content_string = upload_contents.split(",", 1)
+            decoded_text = base64.b64decode(content_string).decode("utf-8", errors="ignore")
+            suffix = upload_filename.lower().rsplit(".", 1)[-1]
+
+            if suffix in ("txt", "dat"):
+                values = [
+                    int(line.strip())
+                    for line in decoded_text.splitlines()
+                    if line.strip()
+                ]
+                return np.asarray(values, dtype=int)
+
+            if suffix == "csv":
+                df = pd.read_csv(io.StringIO(decoded_text))
+
+                preferred_columns = ["ID_UNIQUE_CLUSTER", "idclusters", "ID", "id"]
+                for col in preferred_columns:
+                    if col in df.columns:
+                        series = pd.to_numeric(df[col], errors="coerce").dropna()
+                        arr = series.to_numpy(dtype=np.int64)
+                        return cast(NDArray[np.int64], arr)
+
+                numeric_df = df.apply(pd.to_numeric, errors="coerce")
+                numeric_cols = numeric_df.columns[numeric_df.notna().any()].tolist()
+
+                if len(numeric_cols) == 1:
+                    arr = numeric_df[numeric_cols[0]].dropna().to_numpy(dtype=np.int64)
+                    return cast(NDArray[np.int64], arr)
+                
+                if len(numeric_cols) > 1:
+                    values = numeric_df[numeric_cols].to_numpy().ravel()
+                    values = values[~pd.isna(values)]
+                    return np.asarray(values, dtype=np.int64)
+
+                raise ValueError("No numeric ID column found in CSV.")
+
+            raise ValueError(f"Unsupported file type: {upload_filename}")
+
+        except Exception as e:
+            print(f"Error processing uploaded file: {e}")
+            return None
+
     def _create_status_info(
         self,
         algorithm,
@@ -1451,6 +1541,7 @@ class MainPlotCallbacks:
         snr_threshold_upper_amico=None,
         z_threshold_lower=None,
         z_threshold_upper=None,
+        idcluster_list=None,
         threshold=0.8,
         show_merged_clusters=True,
         matching_clusters=False,
