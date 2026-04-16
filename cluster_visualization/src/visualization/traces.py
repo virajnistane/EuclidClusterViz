@@ -10,7 +10,8 @@ This module handles the creation of all Plotly traces including:
 """
 
 import json
-from typing import Any, Dict, List, Optional, Tuple, TypedDict, Union
+from typing import Any, Dict, List, Optional, Tuple, TypedDict, Union, cast
+from numpy.typing import NDArray
 
 import numpy as np
 import plotly.graph_objs as go
@@ -23,6 +24,7 @@ except ImportError:
     print("Warning: Spatial indexing not available - using fallback proximity detection")
     SPATIAL_INDEX_AVAILABLE = False
 
+StructuredArray = NDArray[np.void]
 
 class TraceCreator:
     """Handles creation of all Plotly traces for cluster visualization."""
@@ -72,6 +74,8 @@ class TraceCreator:
         z_threshold_lower: Optional[float] = None,
         z_threshold_upper: Optional[float] = None,
         idcluster_list: Optional[List[int]] = None,
+        angular_tolerance: float = 2.0,
+        z_tolerance: float = 0.02,
         threshold: float = 0.8,
         maglim: Optional[float] = None,
         show_merged_clusters: bool = True,
@@ -173,6 +177,14 @@ class TraceCreator:
             )
 
         # Create tile traces and polygons
+        # Compute merged_selected for per-tile proximity filtering
+        if idcluster_list is not None and len(idcluster_list) > 0:
+            merged_selected = datamod_detcluster_mergedcat[
+                np.isin(datamod_detcluster_mergedcat["ID_UNIQUE_CLUSTER"], np.asarray(idcluster_list))
+            ]
+        else:
+            merged_selected = None
+
         tile_traces = self._create_tile_traces_and_polygons(
             data,
             traces,
@@ -185,6 +197,9 @@ class TraceCreator:
             z_threshold_lower,
             z_threshold_upper,
             catred_points,
+            merged_selected=merged_selected,
+            angular_tolerance=angular_tolerance,
+            z_tolerance=z_tolerance,
         )
 
         # Add tile cluster traces to top layer
@@ -477,6 +492,33 @@ class TraceCreator:
             result = cluster_data[cluster_data["Z_CLUSTER"] >= z_threshold_lower]
             return result
         else:
+            return cluster_data
+
+    def _filter_detfits_by_unique_ids(
+        self,
+        cluster_data: np.ndarray,
+        merged_selected: np.ndarray,
+        angular_tolerance: float = 2.0,
+        z_tolerance: float = 0.02,
+    ) -> StructuredArray:
+        """Filter per-tile cluster data by RA/Dec + Z proximity to merged selected clusters."""
+        if merged_selected is None or len(merged_selected) == 0 or len(cluster_data) == 0:
+            return cluster_data
+        try:
+            tol_deg = angular_tolerance / 3600.0
+            m_ra  = np.asarray(merged_selected["RIGHT_ASCENSION_CLUSTER"], dtype=float)
+            m_dec = np.asarray(merged_selected["DECLINATION_CLUSTER"],     dtype=float)
+            m_z   = np.asarray(merged_selected["Z_CLUSTER"],               dtype=float)
+            t_ra  = np.asarray(cluster_data["RIGHT_ASCENSION_CLUSTER"],    dtype=float)
+            t_dec = np.asarray(cluster_data["DECLINATION_CLUSTER"],        dtype=float)
+            t_z   = np.asarray(cluster_data["Z_CLUSTER"],                  dtype=float)
+            d2     = (t_ra[:, None] - m_ra[None, :]) ** 2 + (t_dec[:, None] - m_dec[None, :]) ** 2
+            ang_ok = np.sqrt(d2) <= tol_deg
+            z_ok   = np.abs(t_z[:, None] - m_z[None, :]) <= z_tolerance
+            keep   = np.any(ang_ok & z_ok, axis=1)
+            return cast(StructuredArray, cluster_data[keep])
+        except Exception as e:
+            print(f"Debug: _filter_detfits_by_unique_ids failed: {e}")
             return cluster_data
 
     def _apply_idcluster_filtering(
@@ -1487,6 +1529,9 @@ class TraceCreator:
         z_threshold_lower: Optional[float],
         z_threshold_upper: Optional[float],
         catred_points: Optional[List] = None,
+        merged_selected: Optional[np.ndarray] = None,
+        angular_tolerance: float = 2.0,
+        z_tolerance: float = 0.02,
     ) -> List:
         """Create individual tile traces with proximity-based enhancement."""
         tile_traces = []
@@ -1529,6 +1574,24 @@ class TraceCreator:
             datamod_detcluster_by_cltile = self._apply_redshift_filtering(
                 datamod_detcluster_by_cltile, z_threshold_lower, z_threshold_upper
             )
+
+            # Apply ID-based proximity filter if merged_selected is provided
+            if merged_selected is not None and len(merged_selected) > 0:
+                tile_alg = value.get("algorithm", None)
+                has_det_code_merged = (
+                    "DET_CODE_NB" in merged_selected.dtype.names
+                    if len(merged_selected) > 0
+                    else False
+                )
+                if has_det_code_merged and tile_alg in ("PZWAV", "AMICO"):
+                    code_map = {"AMICO": 1, "PZWAV": 2}
+                    alg_mask = np.isin(merged_selected["DET_CODE_NB"], [code_map[tile_alg]])
+                    ms_alg = merged_selected[alg_mask] if np.any(alg_mask) else merged_selected
+                else:
+                    ms_alg = merged_selected
+                datamod_detcluster_by_cltile = self._filter_detfits_by_unique_ids(
+                    datamod_detcluster_by_cltile, ms_alg, angular_tolerance, z_tolerance
+                )
 
             # Configure legend behavior for BOTH algorithm case
             if data["algorithm"] == "BOTH" and tile_algorithm:
