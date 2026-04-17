@@ -54,22 +54,39 @@ class CATREDCallbacks:
             Output("catred-render-button", "disabled"),
             [Input("cluster-plot", "relayoutData"), Input("mer-switch", "value")],
             #  Input('catred-mode-switch', 'value')],
-            [State("render-button", "n_clicks")],
+            [State("render-button", "n_clicks"), State("cluster-plot", "figure")],
             prevent_initial_call=True,
         )
-        def update_mer_button_state(relayout_data, show_mer_tiles, n_clicks):
+        def update_mer_button_state(relayout_data, show_mer_tiles, n_clicks, current_figure):
             # Only enable if main app has been rendered and conditions are met
-            if n_clicks == 0:
+            if n_clicks in (None, 0):
                 return True  # Disabled
 
             if not show_mer_tiles:
                 return True  # Disabled - switches not turned on
 
-            if not relayout_data:
-                return True  # Disabled - no zoom data
+            # Prefer relayoutData, but fall back to figure layout ranges when relayoutData
+            # is partial/missing (e.g. dragmode changes or after rerenders).
+            ra_range = dec_range = None
+            if relayout_data:
+                ra_range, dec_range = self._extract_zoom_ranges(relayout_data)
 
-            # Check zoom level
-            ra_range, dec_range = self._extract_zoom_ranges(relayout_data)
+            if (ra_range is None or dec_range is None) and current_figure:
+                try:
+                    layout = current_figure.get("layout", {})
+                    xaxis = layout.get("xaxis", {})
+                    yaxis = layout.get("yaxis", {})
+                    x_range = xaxis.get("range")
+                    y_range = yaxis.get("range")
+                    if x_range and len(x_range) == 2:
+                        ra_range = abs(x_range[1] - x_range[0])
+                    if y_range and len(y_range) == 2:
+                        dec_range = abs(y_range[1] - y_range[0])
+                except Exception:
+                    pass
+
+            if ra_range is None or dec_range is None:
+                return True  # Disabled - no reliable zoom data
 
             # Enable button if zoomed in enough
             if (

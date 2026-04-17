@@ -49,13 +49,19 @@ class UICallbacks:
         # Use a dummy interval to trigger initial callback and then button clicks
         @self.app.callback(
             Output("render-button", "children"),
-            [Input("render-button", "n_clicks")],
+            [Input("render-button", "n_clicks"),
+             Input("snr-render-button-pzwav", "n_clicks"),
+             Input("snr-render-button-amico", "n_clicks"),
+             Input("redshift-render-button", "n_clicks"),
+             Input("idcluster-render-button", "n_clicks")],
             prevent_initial_call=False,
         )
-        def update_main_button_text(n_clicks):
+        def update_main_button_text(n_clicks, snr_pzwav_clicks, snr_amico_clicks, redshift_clicks, idcluster_clicks):
             """Update main render button text"""
             if n_clicks is None:
                 n_clicks = 0
+            if any([snr_pzwav_clicks, snr_amico_clicks, redshift_clicks, idcluster_clicks]):
+                n_clicks += 1
             return "🚀 Initial Render" if n_clicks == 0 else f"✅ Live Updates Active ({n_clicks})"
 
         @self.app.callback(
