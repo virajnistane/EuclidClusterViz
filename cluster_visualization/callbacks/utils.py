@@ -25,13 +25,25 @@ def get_idclusters_array(
             decoded_text = base64.b64decode(content_string).decode("utf-8", errors="ignore")
             suffix = upload_filename.lower().rsplit(".", 1)[-1]
 
-            if suffix in ("txt", "dat"):
+            if suffix == "txt":
                 values = [
                     int(line.strip())
                     for line in decoded_text.splitlines()
                     if line.strip()
                 ]
                 return np.asarray(values, dtype=int)
+
+            if suffix == "dat":
+                values = []
+                for line in decoded_text.splitlines():
+                    stripped = line.strip()
+                    if not stripped:
+                        continue
+
+                    first_col = stripped.split()[0]
+                    values.append(int(first_col))
+
+                return np.asarray(values, dtype=np.int64)
 
             if suffix == "csv":
                 df = pd.read_csv(io.StringIO(decoded_text))
