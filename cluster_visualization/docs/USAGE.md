@@ -69,12 +69,19 @@ All methods provide comprehensive visualization with:
 - ✅ **Cluster Matching**: Visual indication of matched PZWAV-AMICO pairs
 - ✅ **Cluster Analysis**: Dedicated tab for cutouts, CATRED boxes, and mask overlays
 - ✅ **CATRED Integration**: High-resolution catalog with PHZ probability plots
+- ✅ **Cluster-ID Upload Filtering**: Upload `.txt`, `.dat`, or `.csv` files to constrain merged-catalog views; multi-column `.dat` files use the first column as the ID list
 - ✅ **Mosaic & Mask Overlays**: Background images and coverage visualization
 - ✅ **Trace Management**: Independent control of all overlay layers
 - ✅ **Interactive Controls**: Zoom, pan, polygon fill toggle, aspect ratio
 - ✅ **Smart Filtering**: Client-side SNR and redshift filtering
+- ✅ **PHZ Cluster Data Filtering**: PHZ cluster-data plots follow the same algorithm, viewport, SNR, redshift, and uploaded ID constraints as the current view
 - ✅ **Hover Information**: Detailed cluster, tile, and catalog data
 - ✅ **Color-coded Tiles**: Each tile has unique colors for identification
+
+## Notes on Current Behavior
+
+- The CATRED render button is enabled only when MER tiles are shown and the current plot window is zoomed to less than 2 degrees in both RA and Dec.
+- The CATRED zoom check uses the current plot layout as a fallback when Plotly emits partial `relayoutData`, so switching between pan and zoom tools should no longer incorrectly disable the button.
 
 ## 📖 Detailed Feature Guides
 

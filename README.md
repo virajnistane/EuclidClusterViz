@@ -140,11 +140,12 @@ The EDEN-3.1 environment lacks several critical modules (`healpy`, `dash`, `plot
 - **Cluster Matching**: Visual overlay showing matched PZWAV-AMICO cluster pairs with connecting ovals (BOTH mode only)
 - **Interactive Cluster Analysis**: Dedicated tab with cutout generation, CATRED box views, and mask cutouts
 - **Smart Filtering**: Client-side SNR and redshift filtering with preserved zoom states
+- **Uploaded ID Filtering**: Restrict merged-catalog analysis using uploaded cluster-ID lists from `.txt`, `.dat`, or `.csv` files
 - **CATRED Integration**: High-resolution masked data with effective coverage thresholding
 - **Mosaic Visualization**: Dynamic MER tile mosaic loading with opacity controls and ESA/local provider selection
 - **ESA Sky HiPS Integration**: Fetch cutouts from public CDS hips2fits service in FITS (32-bit) or JPEG format
 - **HEALPix Mask Overlay**: Effective coverage footprint visualization with configurable opacity
-- **PHZ Analysis**: Interactive photometric redshift probability distribution plots with improved click detection
+- **PHZ Analysis**: Interactive photometric redshift probability distribution plots with improved click detection and a cluster-data sub-tab that follows algorithm, viewport, SNR, redshift, and uploaded ID filters
 
 ### 🎨 **Cluster Analysis Tools**
 - **Cutout Generation**: Create MER mosaic cutouts centered on selected clusters with configurable size and opacity
@@ -163,6 +164,7 @@ The EDEN-3.1 environment lacks several critical modules (`healpy`, `dash`, `plot
 - **Real-time Updates**: Live button text updates showing click counts and status
 - **Responsive Design**: Optimized layout for different screen sizes and zoom levels
 - **Intuitive Workflow**: Guided user experience with helpful tooltips and status indicators
+- **Stable CATRED Render Gating**: CATRED render button state now follows the actual plot zoom window robustly across zoom, pan, dragmode changes, and rerenders
 - **Mosaic & Mask Management**: Separate controls for background images and HEALPix footprint overlays
 - **ESA Format Selector**: Dropdown to choose FITS (high quality) or JPEG (faster) for ESA Sky cutouts — visible only when ESA provider is active
 - **Collapsible Sections**: Organized controls with expandable/collapsible cards
@@ -328,6 +330,7 @@ Highlighted control sections:
 - 🔵 **Cluster Matching**: Enable matched cluster visualization (available in BOTH mode only)
 - 🔵 **SNR Filtering**: Real-time signal-to-noise filtering with separate controls for PZWAV/AMICO
 - 🔵 **Redshift Filtering**: Photometric redshift constraints
+- 🔵 **Cluster-ID Upload Filter**: Upload `.txt`, `.dat`, or `.csv` ID lists to restrict merged-catalog views; `.dat` files may contain multiple columns and column 0 is used as the ID source
 - 🔵 **Display Options**: Polygon fills, MER tiles, aspect ratio
 - 🔵 **High-res CATRED data**: Advanced catalog integration with dynamic controls
 - 🔵 **Mosaic Image Controls**: Background image overlays with opacity control
@@ -347,6 +350,11 @@ Interactive cluster-specific analysis:
   - Configurable size and opacity
   - Separate trace visibility controls
 - 📊 **Analysis Results**: Display analysis outcomes and statistics
+
+#### **PHZ Analysis**
+- 📈 **PHZ_PDF Viewer**: Click CATRED points to inspect photometric redshift probability distributions
+- 📊 **Cluster Data Sub-tab**: Histogram and SNR-vs-redshift views are generated from the merged catalog after applying the current algorithm, viewport, SNR, redshift, and uploaded cluster-ID filters
+- 🔁 **Manual Refresh**: Use the cluster-data refresh button or update the ID filter to recompute the PHZ cluster-data plots
 
 ## Configuration
 
