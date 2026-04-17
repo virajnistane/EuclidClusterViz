@@ -406,7 +406,7 @@ class SidebarSections:
                                                     "Upload"
                                                 ]
                                             ),
-                                            accept=".txt,.csv",
+                                            accept=".txt,.csv,.dat",
                                             style={
                                                 "width": "100%",
                                                 "height": "40px",
@@ -423,7 +423,7 @@ class SidebarSections:
                                             multiple=False,
                                         ),
                                         html.Small(
-                                            "Cluster-ID List (.txt or .csv, one ID per line)",
+                                            "Cluster-ID List (.txt/.csv/.dat, one ID per line)",
                                             className="text-muted d-block me-1",
                                             style={
                                                 "fontSize": "1rem", 
