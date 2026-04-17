@@ -10,6 +10,14 @@ import numpy as np
 import plotly.graph_objs as go  # type: ignore[import]
 from dash import Input, Output, State
 
+try:
+    from cluster_visualization.callbacks.utils import get_idclusters_array
+except ImportError:
+    print(
+        "Warning: Could not import get_idclusters_array from utils. "
+        "PHZ cluster-data ID filtering may be affected."
+    )
+
 
 class PHZCallbacks:
     """Handles PHZ_PDF plot callbacks"""
@@ -392,6 +400,7 @@ class PHZCallbacks:
                 Input("phz-inner-tabs", "active_tab"),
                 Input("phz-cluster-refresh-btn", "n_clicks"),
                 Input("phz-cluster-nbins-slider", "value"),
+                Input("idcluster-render-button", "n_clicks"),
             ],
             [
                 State("cluster-plot", "figure"),
@@ -399,13 +408,16 @@ class PHZCallbacks:
                 State("snr-range-slider-pzwav", "value"),
                 State("snr-range-slider-amico", "value"),
                 State("redshift-range-slider", "value"),
+                State("idcluster-upload", "contents"),
+                State("idcluster-upload", "filename"),
             ],
             prevent_initial_call=True,
         )
         def update_cluster_data_plots(
-            active_tab, _refresh_clicks, n_bins,
+            active_tab, _refresh_clicks, n_bins, _idcluster_clicks,
             cluster_figure, algorithm,
             snr_range_pzwav, snr_range_amico, redshift_range,
+            idcluster_upload_contents, idcluster_upload_filename,
         ):
             # Allow trigger from sub-tab switch, refresh button, or bins slider
             ctx = dash.callback_context
@@ -449,6 +461,29 @@ class PHZCallbacks:
                     mask_alg = np.ones(len(merged), dtype=bool)
 
                 filtered = merged[mask_alg]
+
+                # ---- Optional ID_UNIQUE_CLUSTER filter (uploaded list) ----
+                idcluster_list = None
+                if idcluster_upload_contents and idcluster_upload_filename:
+                    try:
+                        idcluster_list = get_idclusters_array(
+                            idcluster_upload_contents, idcluster_upload_filename
+                        )
+                    except Exception as exc:
+                        print(f"[ClusterData] ID upload parse skipped: {exc}")
+
+                if idcluster_list is not None and len(idcluster_list) > 0:
+                    if "ID_UNIQUE_CLUSTER" in filtered.dtype.names:
+                        filtered = filtered[
+                            np.isin(filtered["ID_UNIQUE_CLUSTER"], np.asarray(idcluster_list))
+                        ]
+                        print(
+                            f"[ClusterData] ID filter applied: {len(filtered)} clusters remain"
+                        )
+                    else:
+                        print(
+                            "[ClusterData] ID filter skipped: ID_UNIQUE_CLUSTER not present"
+                        )
 
                 # ---- Viewport filter ----
                 ra_range = None
