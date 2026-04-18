@@ -707,10 +707,13 @@ class ClusterModalCallbacks:
 
                                 for trace in existing_traces:
                                     trace_name = trace.get("name", "")
-                                    if "Tile" in trace_name and (
-                                        "CORE" in trace_name
-                                        or "LEV1" in trace_name
-                                        or "MerTile" in trace_name
+                                    if "MER-Tile" in trace_name or (
+                                        "Tile" in trace_name
+                                        and (
+                                            "CORE" in trace_name
+                                            or "LEV1" in trace_name
+                                            or "MerTile" in trace_name
+                                        )
                                     ):
                                         polygon_traces.append(trace)
                                     elif "Mosaic" in trace_name:
@@ -721,13 +724,13 @@ class ClusterModalCallbacks:
                                         catred_traces.append(trace)
                                     elif any(
                                         keyword in trace_name
-                                        for keyword in ["Merged Data", "Tile", "clusters"]
+                                        for keyword in ["Merged", "Tile", "clusters"]
                                     ):
                                         cluster_traces.append(trace)
                                     else:
                                         other_traces.append(trace)
 
-                                # Layer order: polygons (bottom) → mosaic → CATRED → other → cluster traces (top)
+                                # Layer order: polygons (bottom) → mosaic → mosaic cutout → mask overlays → CATRED → other → cluster traces (top)
                                 new_data = (
                                     polygon_traces
                                     + mosaic_traces
@@ -1005,10 +1008,13 @@ class ClusterModalCallbacks:
 
                             for trace in existing_traces:
                                 trace_name = trace.get("name", "")
-                                if "Tile" in trace_name and (
-                                    "CORE" in trace_name
-                                    or "LEV1" in trace_name
-                                    or "MerTile" in trace_name
+                                if "MER-Tile" in trace_name or (
+                                    "Tile" in trace_name
+                                    and (
+                                        "CORE" in trace_name
+                                        or "LEV1" in trace_name
+                                        or "MerTile" in trace_name
+                                    )
                                 ):
                                     polygon_traces.append(trace)
                                 elif "Mosaic" in trace_name and not trace_name.startswith(
@@ -1025,7 +1031,7 @@ class ClusterModalCallbacks:
                                     catred_traces.append(trace)
                                 elif any(
                                     keyword in trace_name
-                                    for keyword in ["Merged Data", "Tile", "clusters"]
+                                    for keyword in ["Merged", "Tile", "clusters"]
                                 ):
                                     cluster_traces.append(trace)
                                 else:
@@ -1131,7 +1137,7 @@ class ClusterModalCallbacks:
                     isinstance(trace, dict)
                     and "name" in trace
                     and trace["name"]
-                    and ("CATRED" in trace["name"] and "MER Tile" in trace["name"])
+                    and "CATRED" in trace["name"]
                 ):
                     # Convert dict to Scattergl object for consistency
                     existing_trace = go.Scattergl(

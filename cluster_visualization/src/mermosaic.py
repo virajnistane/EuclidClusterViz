@@ -199,6 +199,32 @@ class MOSAICHandler:
         minx, miny, maxx, maxy = tile_polygon.bounds
         return (float(minx), float(maxx), float(miny), float(maxy))
 
+    def _build_mertileid_to_tileid_map(self, data: Dict[str, Any]) -> Dict[int, str]:
+        """Build a mapping from MER tile ID to CL-tile ID by reading cltiledef JSON files.
+
+        The CL-tile ID is the integer tile identifier used in trace names such as
+        ``"MER-Tile {mertileid} - CL-Tile {tileid}"``.  It is stored per-tile in the
+        cltiledef JSON under ``LEV1.ID_INTERSECTED``.
+
+        Returns an empty dict when the data structure is missing or files cannot be read.
+        """
+        mapping: Dict[int, str] = {}
+        if "data_detcluster_by_cltile" not in data:
+            return mapping
+        for tile_key, value in data["data_detcluster_by_cltile"].items():
+            tileid = str(value.get("tile_id", tile_key))
+            cltiledef_file = value.get("cltiledef_file")
+            if not cltiledef_file:
+                continue
+            try:
+                with open(cltiledef_file, "r") as fh:
+                    tile_def = json.load(fh)
+                for mertileid in tile_def.get("LEV1", {}).get("ID_INTERSECTED", []):
+                    mapping[int(mertileid)] = tileid
+            except Exception as exc:
+                print(f"[MOSAIC] Could not read cltiledef {cltiledef_file}: {exc}")
+        return mapping
+
     def get_available_mosaic_sources(self, provider: Optional[str] = None) -> List[Dict[str, str]]:
         """Return available sources for selected mosaic provider."""
         provider_norm = self._normalize_provider(provider)
@@ -857,17 +883,27 @@ class MOSAICHandler:
 
         if mask_type == "corrected":
             data = self._load_corrected_mask()
-            if data is None:
-                return empty
-            pixels, weights, ra, dec, _ = data
-            mask = (
-                (weights > 0)
-                & (ra >= ra_lo - padding)
-                & (ra <= ra_hi + padding)
-                & (dec >= dec_lo - padding)
-                & (dec <= dec_hi + padding)
-            )
-            return pixels[mask], weights[mask]
+            if data is not None:
+                pixels, weights, ra, dec, _ = data
+                mask = (
+                    (weights > 0)
+                    & (ra >= ra_lo - padding)
+                    & (ra <= ra_hi + padding)
+                    & (dec >= dec_lo - padding)
+                    & (dec <= dec_hi + padding)
+                )
+                result_pix, result_wt = pixels[mask], weights[mask]
+                if len(result_pix) > 0:
+                    return result_pix, result_wt
+            # Corrected mask returned no data — fall back to per-tile effcov if available
+            if mertileid is not None:
+                print(
+                    f"[MASK] Corrected mask empty for viewport; falling back to effcov for tile {mertileid}"
+                )
+                return self._get_mask_footprint_in_viewport(
+                    ra_min, ra_max, dec_min, dec_max, mask_type="effcov", mertileid=mertileid
+                )
+            return empty
 
         else:  # effcov — per-tile, requires mertileid
             if mertileid is None:
@@ -1387,42 +1423,44 @@ class MOSAICHandler:
         weight_max: float,
         colorscale: str = "viridis",
         title: str = "Weight",
-    ) -> go.Heatmap:
+    ) -> go.Scatter:
         """
-        Create an invisible heatmap trace that only displays a colorbar for mask overlays.
+        Create a standalone colorbar trace for HEALPix mask overlays.
 
-        This trace provides a visual reference for the weight values of HEALPix mask pixels
-        without adding any visible data to the plot.
+        Uses a ``go.Scatter(x=[None], y=[None])`` with a marker colorscale — the
+        canonical Plotly pattern for rendering a colorbar without adding visible data.
+        The previous ``go.Heatmap(visible='legendonly', showlegend=False)`` approach was
+        self-contradicting: ``legendonly`` means "only via legend" but ``showlegend=False``
+        removed it from the legend, so the colorbar was never rendered.
         """
-        # Create a minimal 2x2 array with the weight range
-        z_colorbar = np.array([[weight_min, weight_max], [weight_min, weight_max]])
-
-        # Create the colorbar trace
-        # Use visible='legendonly' to prevent the dummy coordinates from affecting axis ranges
-        colorbar_trace = go.Heatmap(
-            z=z_colorbar,
-            x=[0, 1],  # Minimal coordinates (won't affect plot range)
-            y=[0, 1],
-            colorscale=colorscale,
-            showscale=True,  # Show the colorbar
-            visible="legendonly",  # Hide from plot but show colorbar
-            hoverinfo="skip",  # Don't show hover info for this trace
+        colorbar_trace = go.Scatter(
+            x=[None],
+            y=[None],
+            mode="markers",
             showlegend=False,
+            hoverinfo="skip",
             name="Mask Colorbar",
-            colorbar=dict(
-                title=dict(text=title, side="right", font=dict(size=12)),
-                thickness=15,
-                len=0.5,  # 50% of plot height
-                x=1.02,  # Position slightly to the right of the plot
-                xanchor="left",
-                y=0.5,  # Center vertically
-                yanchor="middle",
-                tickmode="linear",
-                tick0=weight_min,
-                dtick=(weight_max - weight_min) / 5,  # 5 ticks
-                tickfont=dict(size=10),
-                outlinewidth=1,
-                outlinecolor="gray",
+            marker=dict(
+                colorscale=colorscale,
+                showscale=True,
+                color=[weight_min, weight_max],
+                cmin=weight_min,
+                cmax=weight_max,
+                colorbar=dict(
+                    title=dict(text=title, side="right", font=dict(size=12)),
+                    thickness=15,
+                    len=0.5,
+                    x=1.02,
+                    xanchor="left",
+                    y=0.5,
+                    yanchor="middle",
+                    tickmode="linear",
+                    tick0=weight_min,
+                    dtick=(weight_max - weight_min) / 5,
+                    tickfont=dict(size=10),
+                    outlinewidth=1,
+                    outlinecolor="gray",
+                ),
             ),
         )
 
@@ -1496,6 +1534,7 @@ class MOSAICHandler:
         provider: Optional[str] = None,
         source_id: Optional[str] = None,
         tile_bounds: Optional[Tuple[float, float, float, float]] = None,
+        tileid: Optional[str] = None,
     ) -> Optional[go.Heatmap]:
         """Create a Plotly heatmap trace for a mosaic image."""
         provider_norm = self._normalize_provider(provider)
@@ -1580,6 +1619,9 @@ class MOSAICHandler:
         source_label = source_id or mosaic_info.get("source_id") or "local_mer"
         provider_label = "ESA" if provider_norm == "esa_sky" else "MER"
 
+        # Build CL-Tile line for hovertemplate when available
+        cltile_hover_line = f"CL-Tile: {tileid}<br>" if tileid is not None else ""
+
         # Create the heatmap trace
         trace = go.Heatmap(
             z=processed_image,
@@ -1591,6 +1633,7 @@ class MOSAICHandler:
             name=f"Mosaic ({provider_label}) {mertileid}",
             hovertemplate=(
                 f"MER Tile: {mertileid}<br>"
+                f"{cltile_hover_line}"
                 f"Provider: {provider_label}<br>"
                 f"Source: {source_label}<br>"
                 "RA: %{x:.6f}°<br>"
@@ -1743,7 +1786,15 @@ class MOSAICHandler:
             print(f"Warning: Could not get cutout for MER tile {mertileid}")
             return None
         else:
-            processed_image = self._process_mosaic_image(data_cutout)
+            # Use actual cutout pixel dimensions (capped at 512) as the rendering target.
+            # Without this, _process_mosaic_image upsamples a ~100×100 cutout to the
+            # default 1920×1920 via LANCZOS (≈369× magnification, ~59M kernel operations).
+            # Sequential overlays (mask, CATRED) are blocked until this finishes.
+            cutout_h, cutout_w = data_cutout.shape[:2]
+            target_dim = min(max(cutout_h, cutout_w, 64), 512)
+            processed_image = self._process_mosaic_image(
+                data_cutout, target_width_and_height=(target_dim, target_dim)
+            )
 
         # Calculate coordinate bounds
         # bounds = self._calculate_image_bounds(
@@ -1773,6 +1824,11 @@ class MOSAICHandler:
         print(f"       - Dec range: {bounds['dec_min']:.6f}° to {bounds['dec_max']:.6f}°")
         print(f"       - Image shape: {height} × {width} pixels")
 
+        # Look up CL-Tile ID for this MER tile
+        mertileid_to_tileid = self._build_mertileid_to_tileid_map(data)
+        tileid = mertileid_to_tileid.get(mertileid)
+        cltile_hover_line = f"CL-Tile: {tileid}<br>" if tileid is not None else ""
+
         # Create the heatmap trace
         trace = go.Heatmap(
             z=processed_image,
@@ -1784,6 +1840,7 @@ class MOSAICHandler:
             name=f"MER-Mosaic cutout #{clickdata.get('nclicks', 1)}",
             hovertemplate=(
                 f"MER Tile: {mertileid}<br>"
+                f"{cltile_hover_line}"
                 "RA: %{x:.6f}°<br>"
                 "Dec: %{y:.6f}°<br>"
                 "Intensity: %{z:.3f}<br>"
@@ -1950,6 +2007,8 @@ class MOSAICHandler:
             mertiles_to_load = mertiles_to_load[:max_mosaics]
 
         # Create traces for each mosaic with timing checks
+        mertileid_to_tileid = self._build_mertileid_to_tileid_map(data)
+
         for i, mertileid in enumerate(mertiles_to_load):
             # Check if we're running out of time
             elapsed_time = time.time() - start_time
@@ -1971,6 +2030,7 @@ class MOSAICHandler:
                     provider=provider_norm,
                     source_id=source_id,
                     tile_bounds=tile_bounds,
+                    tileid=mertileid_to_tileid.get(mertileid),
                 )
                 trace_time = time.time() - trace_start
 
