@@ -16,13 +16,10 @@ from numpy.typing import NDArray
 import numpy as np
 import plotly.graph_objs as go
 
-try:
-    from cluster_visualization.utils.spatial_index import CATREDSpatialIndex
-
-    SPATIAL_INDEX_AVAILABLE = True
-except ImportError:
-    print("Warning: Spatial indexing not available - using fallback proximity detection")
-    SPATIAL_INDEX_AVAILABLE = False
+from cluster_visualization.src.visualization.catred_proximity import (
+    CatredProximityDetector,
+    create_glow_trace,
+)
 
 StructuredArray = NDArray[np.void]
 
@@ -44,16 +41,11 @@ class TraceCreator:
         )
         self.catred_handler = catred_handler
 
-        # Initialize cache attributes with proper types
-        self._catred_bounds_cache: Optional[Dict[str, Any]] = None
-        self._subsampled_catred_cache: Optional[Tuple[int, List]] = None
-        self._catred_index_hash: Optional[int] = None
+        # Proximity detection state (spatial index + caches) lives here
+        self.proximity_detector = CatredProximityDetector()
 
         # For fallback when no CATRED handler is available
         self.current_catred_data = None
-
-        # Spatial index for fast proximity queries
-        self.catred_spatial_index = None
 
     def create_traces(
         self,
@@ -248,9 +240,7 @@ class TraceCreator:
         all_points = []
 
         # Clear bounds cache when getting new CATRED data (important for multiple renders)
-        if self._catred_bounds_cache is not None:
-            self._catred_bounds_cache = None
-            print("Debug: Cleared old CATRED bounds cache for new data")
+        self.proximity_detector.clear_bounds_cache()
 
         # Collect coordinates from manual CATRED data
         if manual_catred_data and manual_catred_data.get("ra"):
@@ -275,8 +265,7 @@ class TraceCreator:
                 self.current_catred_data = None
                 print("Debug: CATRED data cleared - reverting marker enhancements")
             # Clear bounds cache as well
-            if self._catred_bounds_cache is not None:
-                self._catred_bounds_cache = None
+            self.proximity_detector.clear_bounds_cache()
 
         if catred_box_data and catred_box_data.get("ra"):
             for ra, dec in zip(catred_box_data["ra"], catred_box_data["dec"]):
@@ -299,158 +288,7 @@ class TraceCreator:
             self.current_catred_data = None
             print("Debug: TraceCreator CATRED data explicitly cleared")
 
-        # Clear bounds cache as well
-        self._catred_bounds_cache = None
-        print("Debug: CATRED bounds cache cleared")
-        if self._subsampled_catred_cache is not None:
-            self._subsampled_catred_cache = None
-            print("Debug: Subsampled CATRED cache cleared")
-
-    def _get_subsampled_catred_points(self, catred_points: List) -> List:
-        """Get subsampled CATRED points for proximity detection, with caching."""
-        if not catred_points:
-            return catred_points
-
-        # Create a simple hash to detect changes in CATRED data
-        catred_hash = hash(str(len(catred_points)) + str(catred_points[0] if catred_points else ""))
-
-        # Check if we have cached subsampled points for this dataset
-        if self._subsampled_catred_cache is not None:
-            cached_hash, cached_points = self._subsampled_catred_cache
-            if cached_hash == catred_hash:
-                return cached_points
-
-        # For very large datasets, subsample CATRED points for proximity detection
-        if len(catred_points) > 20000:  # Lower threshold for better performance
-            import numpy as np
-
-            # Use every 5th point for proximity detection to speed up calculation
-            sampled_points = catred_points[::5]
-            print(
-                f"Debug: Subsampled {len(sampled_points)} from {len(catred_points)} CATRED points for proximity"
-            )
-        else:
-            sampled_points = catred_points
-
-        # Cache the result
-        self._subsampled_catred_cache = (catred_hash, sampled_points)
-        return sampled_points
-
-    def _check_proximity_with_spatial_index(
-        self,
-        ra_array: np.ndarray,
-        dec_array: np.ndarray,
-        catred_points: List,
-        proximity_threshold: float = 0.1,
-    ) -> np.ndarray:
-        """
-        Check proximity using spatial index for massive speedup.
-
-        Performance: O(N log M) instead of O(N*M) where:
-        - N = number of clusters to check
-        - M = number of CATRED points
-
-        For 10k clusters × 100k CATRED points:
-        - Old: ~1 billion comparisons (~30-60 seconds)
-        - New: ~170k tree queries (~0.5-2 seconds)
-        - Speedup: 15-120x faster!
-
-        Args:
-            ra_array: Cluster RA coordinates
-            dec_array: Cluster Dec coordinates
-            catred_points: List of [ra, dec] CATRED points
-            proximity_threshold: Radius in degrees (default 0.1 = 6 arcmin)
-
-        Returns:
-            Boolean mask: True where cluster is near CATRED data
-        """
-        import time
-
-        start_time = time.time()
-
-        # Build spatial index if not already built or if CATRED data changed
-        catred_array = np.array(catred_points)
-        catred_hash = hash(tuple(catred_array.flatten()[:1000]))  # Hash first 1000 values
-
-        if (
-            self.catred_spatial_index is None
-            or not hasattr(self, "_catred_index_hash")
-            or self._catred_index_hash != catred_hash
-        ):
-            print(f"Building spatial index for {len(catred_points):,} CATRED points...")
-            self.catred_spatial_index = CATREDSpatialIndex(
-                catred_array[:, 0], catred_array[:, 1], subsample_threshold=100000  # RA  # Dec
-            )
-            self._catred_index_hash = catred_hash
-
-        # Use spatial index for batch proximity check
-        is_near = np.zeros(len(ra_array), dtype=bool)
-
-        for i, (ra, dec) in enumerate(zip(ra_array, dec_array)):
-            is_near[i] = self.catred_spatial_index.check_proximity_single(
-                ra, dec, proximity_threshold
-            )
-
-        elapsed = time.time() - start_time
-        n_near = np.sum(is_near)
-        print(
-            f"Proximity check completed: {n_near:,}/{len(ra_array):,} clusters near CATRED data ({elapsed:.2f}s)"
-        )
-
-        return is_near
-
-    def _is_point_near_catred_region(
-        self, ra: float, dec: float, catred_points: List, proximity_threshold: float = 0.01
-    ) -> bool:
-        """Check if a point is within proximity threshold of any CATRED data point.
-
-        NOTE: This is the legacy O(N) method. When CATRED data is large (>1000 points),
-        use _check_proximity_with_spatial_index() instead for 10-100x speedup.
-        """
-        if not catred_points:
-            return False
-
-        # Get cached subsampled points
-        sampled_points = self._get_subsampled_catred_points(catred_points)
-
-        # Create a simple hash of the sampled points to detect changes
-        points_to_hash = sampled_points[:100] if len(sampled_points) > 100 else sampled_points
-        catred_points_hash = hash(tuple(points_to_hash))
-
-        # Pre-compute CATRED bounds for quick rejection (with validation)
-        if (
-            self._catred_bounds_cache is None
-            or self._catred_bounds_cache.get("hash") != catred_points_hash
-        ):
-            import numpy as np
-
-            catred_array = np.array(sampled_points)
-            self._catred_bounds_cache = {
-                "ra_min": np.min(catred_array[:, 0]) - proximity_threshold,
-                "ra_max": np.max(catred_array[:, 0]) + proximity_threshold,
-                "dec_min": np.min(catred_array[:, 1]) - proximity_threshold,
-                "dec_max": np.max(catred_array[:, 1]) + proximity_threshold,
-                "hash": catred_points_hash,
-            }
-            print(
-                f"Debug: CATRED bounds cache created/updated - {len(sampled_points)} sampled points, hash: {catred_points_hash}"
-            )
-
-        # Quick bounding box rejection
-        bounds = self._catred_bounds_cache
-        if not (
-            bounds["ra_min"] <= ra <= bounds["ra_max"]
-            and bounds["dec_min"] <= dec <= bounds["dec_max"]
-        ):
-            return False
-
-        # Only do expensive distance calculation if within bounding box (use sampled points)
-        for catred_ra, catred_dec in sampled_points:
-            distance_sq = (ra - catred_ra) ** 2 + (dec - catred_dec) ** 2
-            if distance_sq <= proximity_threshold**2:  # Avoid sqrt
-                return True
-
-        return False
+        self.proximity_detector.clear()
 
     def _apply_snr_filtering(
         self, cluster_data: np.ndarray, snr_lower: Optional[float], snr_upper: Optional[float]
@@ -797,34 +635,6 @@ class TraceCreator:
 
         return hover_texts
 
-    def _create_glow_trace(
-        self,
-        x_coords,
-        y_coords,
-        size: int,
-        shape: str = "square",
-        opacity: float = 0.3,
-        showlegend: bool = False,
-        name: str = "",
-    ) -> go.Scattergl:
-        """Create a glow effect trace for enhanced markers."""
-        return go.Scattergl(
-            x=x_coords,
-            y=y_coords,
-            mode="markers",
-            marker=dict(
-                size=size,  # Size passed from caller
-                symbol=shape,  # 'square'
-                color="yellow",
-                opacity=opacity,  # Semi-transparent for glow effect
-                line=dict(width=2, color="yellow"),
-            ),
-            name=name if name != "" else "Cluster in Proximity",
-            showlegend=showlegend,  # Don't show in legend
-            hoverinfo="skip",  # Don't show hover for glow layer
-            hovertemplate=None,  # Explicitly disable hover template
-        )
-
     def _create_oval_for_cluster_pair(
         self, pzwav_cluster, amico_cluster, color: str = "rgba(0, 255, 0, 0.3)"
     ) -> go.Scatter:
@@ -1163,27 +973,11 @@ class TraceCreator:
                 data_traces.append(merged_trace)
         else:
             # CATRED data present - create separate traces based on proximity to CATRED points
-            # Use spatial indexing for 10-100x speedup!
-            if SPATIAL_INDEX_AVAILABLE and len(catred_points) > 1000:
-                print(
-                    f"Using spatial index for proximity detection with {len(catred_points):,} CATRED points"
-                )
-                near_catred_mask = self._check_proximity_with_spatial_index(
-                    datamod_detcluster_mergedcat["RIGHT_ASCENSION_CLUSTER"],
-                    datamod_detcluster_mergedcat["DECLINATION_CLUSTER"],
-                    catred_points,
-                )
-            else:
-                print(f"Using legacy proximity detection ({len(catred_points):,} CATRED points)")
-                near_catred_mask = np.array(
-                    [
-                        self._is_point_near_catred_region(ra, dec, catred_points)
-                        for ra, dec in zip(
-                            datamod_detcluster_mergedcat["RIGHT_ASCENSION_CLUSTER"],
-                            datamod_detcluster_mergedcat["DECLINATION_CLUSTER"],
-                        )
-                    ]
-                )
+            near_catred_mask = self.proximity_detector.check_proximity_batch(
+                datamod_detcluster_mergedcat["RIGHT_ASCENSION_CLUSTER"],
+                datamod_detcluster_mergedcat["DECLINATION_CLUSTER"],
+                catred_points,
+            )
 
             away_from_catred_data = datamod_detcluster_mergedcat[~near_catred_mask]
             near_catred_data = datamod_detcluster_mergedcat[near_catred_mask]
@@ -1345,7 +1139,7 @@ class TraceCreator:
 
                     # PZWAV enhanced traces
                     if len(pzwav_near) > 0:
-                        glow_trace_pzwav = self._create_glow_trace(
+                        glow_trace_pzwav = create_glow_trace(
                             pzwav_near["RIGHT_ASCENSION_CLUSTER"],
                             pzwav_near["DECLINATION_CLUSTER"],
                             size=28,
@@ -1394,7 +1188,7 @@ class TraceCreator:
 
                     # AMICO enhanced traces
                     if len(amico_near) > 0:
-                        glow_trace_amico = self._create_glow_trace(
+                        glow_trace_amico = create_glow_trace(
                             amico_near["RIGHT_ASCENSION_CLUSTER"],
                             amico_near["DECLINATION_CLUSTER"],
                             size=28,
@@ -1459,7 +1253,7 @@ class TraceCreator:
                         )
 
                     # Add glow effect trace first (background)
-                    glow_trace = self._create_glow_trace(
+                    glow_trace = create_glow_trace(
                         near_catred_data["RIGHT_ASCENSION_CLUSTER"],
                         near_catred_data["DECLINATION_CLUSTER"],
                         size=28,
@@ -1652,28 +1446,11 @@ class TraceCreator:
                 tile_traces.append(tile_trace)
             else:
                 # CATRED data present - create separate traces based on proximity to CATRED points
-                if SPATIAL_INDEX_AVAILABLE and len(catred_points) > 1000:
-                    print(
-                        f"Using spatial index for proximity detection with {len(catred_points):,} CATRED points"
-                    )
-                    near_catred_mask = self._check_proximity_with_spatial_index(
-                        datamod_detcluster_by_cltile["RIGHT_ASCENSION_CLUSTER"],
-                        datamod_detcluster_by_cltile["DECLINATION_CLUSTER"],
-                        catred_points,
-                    )
-                else:
-                    print(
-                        f"Using legacy proximity detection ({len(catred_points):,} CATRED points)"
-                    )
-                    near_catred_mask = np.array(
-                        [
-                            self._is_point_near_catred_region(ra, dec, catred_points)
-                            for ra, dec in zip(
-                                datamod_detcluster_by_cltile["RIGHT_ASCENSION_CLUSTER"],
-                                datamod_detcluster_by_cltile["DECLINATION_CLUSTER"],
-                            )
-                        ]
-                    )
+                near_catred_mask = self.proximity_detector.check_proximity_batch(
+                    datamod_detcluster_by_cltile["RIGHT_ASCENSION_CLUSTER"],
+                    datamod_detcluster_by_cltile["DECLINATION_CLUSTER"],
+                    catred_points,
+                )
 
                 away_from_catred_data = datamod_detcluster_by_cltile[~near_catred_mask]
                 near_catred_data = datamod_detcluster_by_cltile[near_catred_mask]
@@ -1725,7 +1502,7 @@ class TraceCreator:
                 if len(near_catred_data) > 0:
                     # Add glow effect trace first (background) - use square for PZWAV, diamond for AMICO
                     glow_shape = "square" if tile_algorithm == "PZWAV" else "diamond"
-                    glow_trace = self._create_glow_trace(
+                    glow_trace = create_glow_trace(
                         near_catred_data["RIGHT_ASCENSION_CLUSTER"],
                         near_catred_data["DECLINATION_CLUSTER"],
                         20,

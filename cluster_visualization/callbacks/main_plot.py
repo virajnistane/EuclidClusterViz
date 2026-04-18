@@ -527,12 +527,16 @@ class MainPlotCallbacks:
                 # Extract existing CATRED traces from current figure to preserve them
                 existing_catred_traces = self._extract_existing_catred_traces(current_figure)
                 existing_mosaic_traces = self._extract_existing_mosaic_traces(current_figure)
+                existing_mask_overlay_traces = self._extract_existing_mask_overlay_traces(current_figure)
 
                 print(
                     f"Debug: Options update - preserving {len(existing_catred_traces)} CATRED traces"
                 )
                 print(
                     f"Debug: Options update - preserving {len(existing_mosaic_traces)} Mosaic traces"
+                )
+                print(
+                    f"Debug: Options update - preserving {len(existing_mask_overlay_traces)} Mask overlay traces"
                 )
 
                 # Create traces with existing CATRED traces preserved and separate SNR thresholds
@@ -544,6 +548,7 @@ class MainPlotCallbacks:
                     catred_masked,
                     existing_catred_traces=existing_catred_traces,
                     existing_mosaic_traces=existing_mosaic_traces,
+                    existing_mask_overlay_traces=existing_mask_overlay_traces,
                     snr_threshold_lower_pzwav=snr_pzwav_lower,
                     snr_threshold_upper_pzwav=snr_pzwav_upper,
                     snr_threshold_lower_amico=snr_amico_lower,
@@ -1054,6 +1059,7 @@ class MainPlotCallbacks:
         catred_masked,
         existing_catred_traces=None,
         existing_mosaic_traces=None,
+        existing_mask_overlay_traces=None,
         manual_catred_data=None,
         snr_threshold_lower_pzwav=None,
         snr_threshold_upper_pzwav=None,
@@ -1077,6 +1083,7 @@ class MainPlotCallbacks:
                 catred_masked,
                 existing_catred_traces=existing_catred_traces,
                 existing_mosaic_traces=existing_mosaic_traces,
+                existing_mask_overlay_traces=existing_mask_overlay_traces,
                 manual_catred_data=manual_catred_data,
                 snr_threshold_lower_pzwav=snr_threshold_lower_pzwav,
                 snr_threshold_upper_pzwav=snr_threshold_upper_pzwav,
@@ -1098,8 +1105,10 @@ class MainPlotCallbacks:
                 show_mer_tiles,
                 relayout_data,
                 catred_masked,
-                existing_mer_traces=existing_catred_traces,
-                manual_mer_data=manual_catred_data,
+                existing_catred_traces=existing_catred_traces,
+                existing_mosaic_traces=existing_mosaic_traces,
+                existing_mask_overlay_traces=existing_mask_overlay_traces,
+                manual_catred_data=manual_catred_data,
                 snr_threshold_lower_pzwav=snr_threshold_lower_pzwav,
                 snr_threshold_upper_pzwav=snr_threshold_upper_pzwav,
                 snr_threshold_lower_amico=snr_threshold_lower_amico,
@@ -1230,10 +1239,7 @@ class MainPlotCallbacks:
                     isinstance(trace, dict)
                     and "name" in trace
                     and trace["name"]
-                    and (
-                        "CATRED High-Res Data" in trace["name"]
-                        or "CATRED Tiles High-Res Data" in trace["name"]
-                    )
+                    and "CATRED" in trace["name"]
                 ):
                     # Convert dict to Scattergl object for consistency
                     existing_trace = go.Scattergl(
@@ -1293,6 +1299,65 @@ class MainPlotCallbacks:
                         f"Debug: Preserved existing mosaic trace: {trace['name']} (type: {trace_type})"
                     )
         return existing_mosaic_traces
+
+    def _extract_existing_mask_overlay_traces(self, current_figure):
+        """Extract existing mask overlay traces from current figure"""
+        existing_mask_overlay_traces = []
+        if current_figure and "data" in current_figure:
+            for trace in current_figure["data"]:
+                if (
+                    isinstance(trace, dict)
+                    and "name" in trace
+                    and trace["name"]
+                    and (
+                        "Mask overlay" in trace["name"]
+                        or trace["name"] == "Mask Colorbar"
+                    )
+                ):
+                    trace_type = trace.get("type", "scatter")
+                    if trace_type == "scatter":
+                        if trace.get("name") == "Mask Colorbar":
+                            # Colorbar-only scatter — must preserve the marker dict
+                            # (contains colorscale, cmin/cmax, and colorbar spec).
+                            existing_trace = go.Scatter(
+                                x=trace.get("x"),
+                                y=trace.get("y"),
+                                mode=trace.get("mode", "markers"),
+                                showlegend=trace.get("showlegend", False),
+                                hoverinfo=trace.get("hoverinfo", "skip"),
+                                name=trace.get("name", "Mask Colorbar"),
+                                marker=trace.get("marker", {}),
+                            )
+                        else:
+                            existing_trace = go.Scatter(
+                                x=trace.get("x", []),
+                                y=trace.get("y", []),
+                                mode=trace.get("mode", "lines"),
+                                fill=trace.get("fill"),
+                                fillcolor=trace.get("fillcolor", "rgba(0,0,0,0)"),
+                                line=trace.get("line", {}),
+                                name=trace.get("name", "Mask overlay"),
+                                opacity=trace.get("opacity", 0.6),
+                                hoverinfo=trace.get("hoverinfo", "text"),
+                                showlegend=trace.get("showlegend", False),
+                            )
+                    elif trace_type == "heatmap":
+                        existing_trace = go.Heatmap(
+                            z=trace.get("z"),
+                            x=trace.get("x"),
+                            y=trace.get("y"),
+                            name=trace.get("name", "Mask overlay"),
+                            opacity=trace.get("opacity", 0.6),
+                            colorscale=trace.get("colorscale", "viridis"),
+                            showscale=trace.get("showscale", False),
+                        )
+                    else:
+                        existing_trace = trace
+                    existing_mask_overlay_traces.append(existing_trace)
+                    print(
+                        f"Debug: Preserved existing mask overlay trace: {trace['name']} (type: {trace_type})"
+                    )
+        return existing_mask_overlay_traces
 
     def _calculate_filtered_count(self, cluster_data, snr_lower, snr_upper, z_lower, z_upper):
         """Calculate filtered cluster count based on SNR range"""
@@ -1532,9 +1597,10 @@ class MainPlotCallbacks:
         show_mer_tiles,
         relayout_data,
         catred_masked,
-        existing_mer_traces=None,
+        existing_catred_traces=None,
         existing_mosaic_traces=None,
-        manual_mer_data=None,
+        existing_mask_overlay_traces=None,
+        manual_catred_data=None,
         snr_threshold_lower_pzwav=None,
         snr_threshold_upper_pzwav=None,
         snr_threshold_lower_amico=None,

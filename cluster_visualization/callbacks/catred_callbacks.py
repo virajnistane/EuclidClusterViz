@@ -630,10 +630,7 @@ class CATREDCallbacks:
                     isinstance(trace, dict)
                     and "name" in trace
                     and trace["name"]
-                    and (
-                        "CATRED High-Res Data" in trace["name"]
-                        or "CATRED Tiles High-Res Data" in trace["name"]
-                    )
+                    and "CATRED" in trace["name"]
                 ):
                     # Convert dict to Scattergl object for consistency
                     existing_trace = go.Scattergl(
@@ -866,9 +863,11 @@ class CATREDCallbacks:
                 let allCatredHidden = true;
                 
                 // First pass: check if there are CATRED traces and their visibility state
+                // NOTE: use startsWith('CATRED') not includes('CATRED') — the latter
+                // accidentally matches cluster traces like "PZWAV (Merged, near CATRED)".
                 for (let i = 0; i < newFigure.data.length; i++) {
                     let trace = newFigure.data[i];
-                    if (trace.name && (trace.name.includes('CATRED') || trace.name.includes('MER High-Res Data'))) {
+                    if (trace.name && (trace.name.startsWith('CATRED') || trace.name.includes('MER High-Res Data'))) {
                         hasCatredTraces = true;
                         if (trace.visible !== false && trace.visible !== 'legendonly') {
                             allCatredHidden = false;
@@ -885,7 +884,7 @@ class CATREDCallbacks:
                 
                 for (let i = 0; i < newFigure.data.length; i++) {
                     let trace = newFigure.data[i];
-                    if (trace.name && (trace.name.includes('CATRED') || trace.name.includes('MER High-Res Data'))) {
+                    if (trace.name && (trace.name.startsWith('CATRED') || trace.name.includes('MER High-Res Data'))) {
                         newFigure.data[i].visible = newVisibility;
                     }
                 }
@@ -919,7 +918,7 @@ class CATREDCallbacks:
                 // Check if there are any CATRED traces
                 let hasCatredTraces = false;
                 for (let i = 0; i < figure.data.length; i++) {
-                    if (figure.data[i].name && (figure.data[i].name.includes('CATRED') || figure.data[i].name.includes('MER High-Res Data'))) {
+                    if (figure.data[i].name && (figure.data[i].name.startsWith('CATRED') || figure.data[i].name.includes('MER High-Res Data'))) {
                         hasCatredTraces = true;
                         break;
                     }
