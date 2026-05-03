@@ -875,11 +875,12 @@ class TraceCreator:
                             )
                         ],
                         customdata=[
-                            [snr, z, det_code]
-                            for snr, z, det_code in zip(
+                            [snr, z, det_code, cluster_id]
+                            for snr, z, det_code, cluster_id in zip(
                                 pzwav_data["SNR_CLUSTER"],
                                 pzwav_data["Z_CLUSTER"],
                                 pzwav_data["DET_CODE_NB"],
+                                pzwav_data["ID_UNIQUE_CLUSTER"],
                             )
                         ],
                         hoverinfo="text",
@@ -909,11 +910,12 @@ class TraceCreator:
                             )
                         ],
                         customdata=[
-                            [snr, z, det_code]
-                            for snr, z, det_code in zip(
+                            [snr, z, det_code, cluster_id]
+                            for snr, z, det_code, cluster_id in zip(
                                 amico_data["SNR_CLUSTER"],
                                 amico_data["Z_CLUSTER"],
                                 amico_data["DET_CODE_NB"],
+                                amico_data["ID_UNIQUE_CLUSTER"],
                             )
                         ],
                         hoverinfo="text",
@@ -960,11 +962,12 @@ class TraceCreator:
                         )
                     ],
                     customdata=[
-                        [snr, z, det_code]
-                        for snr, z, det_code in zip(
+                        [snr, z, det_code, cluster_id]
+                        for snr, z, det_code, cluster_id in zip(
                             datamod_detcluster_mergedcat["SNR_CLUSTER"],
                             datamod_detcluster_mergedcat["Z_CLUSTER"],
                             det_code_values_customdata,
+                            datamod_detcluster_mergedcat["ID_UNIQUE_CLUSTER"],
                         )
                     ],
                     hoverinfo="text",
@@ -1021,11 +1024,12 @@ class TraceCreator:
                                 )
                             ],
                             customdata=[
-                                [snr, z, det_code]
-                                for snr, z, det_code in zip(
+                                [snr, z, det_code, cluster_id]
+                                for snr, z, det_code, cluster_id in zip(
                                     pzwav_away["SNR_CLUSTER"],
                                     pzwav_away["Z_CLUSTER"],
                                     pzwav_away["DET_CODE_NB"],
+                                    pzwav_away["ID_UNIQUE_CLUSTER"],
                                 )
                             ],
                             hoverinfo="text",
@@ -1055,11 +1059,12 @@ class TraceCreator:
                                 )
                             ],
                             customdata=[
-                                [snr, z, det_code]
-                                for snr, z, det_code in zip(
+                                [snr, z, det_code, cluster_id]
+                                for snr, z, det_code, cluster_id in zip(
                                     amico_away["SNR_CLUSTER"],
                                     amico_away["Z_CLUSTER"],
                                     amico_away["DET_CODE_NB"],
+                                    amico_away["ID_UNIQUE_CLUSTER"],
                                 )
                             ],
                             hoverinfo="text",
@@ -1108,11 +1113,12 @@ class TraceCreator:
                             )
                         ],
                         customdata=[
-                            [snr, z, det_code]
-                            for snr, z, det_code in zip(
+                            [snr, z, det_code, cluster_id]
+                            for snr, z, det_code, cluster_id in zip(
                                 away_from_catred_data["SNR_CLUSTER"],
                                 away_from_catred_data["Z_CLUSTER"],
                                 det_code_values_customdata,
+                                away_from_catred_data["ID_UNIQUE_CLUSTER"],
                             )
                         ],
                         hoverinfo="text",
