@@ -99,3 +99,5 @@ target/
 profile_default/
 ipython_config.py
 
+# Singularity images
+*.sif

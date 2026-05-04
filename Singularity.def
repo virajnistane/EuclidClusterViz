@@ -1,0 +1,89 @@
+Bootstrap: docker
+From: python:3.11-slim
+
+%labels
+    Author Viraj Nistane
+    Description ClusterViz Dash app — Euclid cluster visualization
+    Version 1.0.0
+
+%post
+    # System deps needed by healpy, astropy, Pillow
+    apt-get update -qq && apt-get install -y --no-install-recommends \
+        gcc g++ gfortran \
+        libcfitsio-dev \
+        libffi-dev \
+        libpng-dev \
+        libjpeg-dev \
+        pkg-config \
+        && rm -rf /var/lib/apt/lists/*
+
+    pip install --no-cache-dir --upgrade pip
+
+    # Install all runtime dependencies (pinned versions from pyproject.toml)
+    pip install --no-cache-dir \
+        "plotly==5.17.0" \
+        "pandas==2.1.4" \
+        "numpy>=1.26.0,<2.0" \
+        "astropy>=5.0" \
+        "healpy>=1.16.0" \
+        "shapely==2.0.2" \
+        "dash[diskcache]==2.14.1" \
+        "dash-bootstrap-components==1.5.0" \
+        "Pillow>=9.2.0" \
+        "psutil>=5.9.0" \
+        "diskcache>=5.6.3" \
+        "matplotlib"
+
+    # Pre-compile all .py files to .pyc so Python skips parsing on startup
+    python -m compileall /usr/local/lib/python3.11/site-packages/astropy  -q || true
+    python -m compileall /usr/local/lib/python3.11/site-packages/healpy   -q || true
+    python -m compileall /usr/local/lib/python3.11/site-packages/shapely  -q || true
+    python -m compileall /usr/local/lib/python3.11/site-packages/plotly   -q || true
+    python -m compileall /usr/local/lib/python3.11/site-packages/dash     -q || true
+
+%environment
+    # Tell Python where to find the project
+    export PYTHONPATH=/app:$PYTHONPATH
+    # Silence astropy download attempts in offline HPC environments
+    export ASTROPY_CONFIG_DIR=/tmp/astropy_cfg
+    export MPLCONFIGDIR=/tmp/mpl_cfg
+    # Skip the EDEN check — environment is guaranteed by the image
+    export CLUSTERVIZ_SKIP_EDEN_CHECK=1
+
+%files
+    # Copy the project into the image at build time
+    # Run: apptainer build clusterviz.sif Singularity.def
+    # from the ClusterViz/ directory
+    . /app
+
+%runscript
+    cd /app
+    # Default to /app/config.ini unless caller already passes --config
+    case "$*" in
+        *--config*) exec python cluster_visualization/src/cluster_dash_app.py "$@" ;;
+        *)          exec python cluster_visualization/src/cluster_dash_app.py --config /app/config.ini "$@" ;;
+    esac
+
+%help
+    ClusterViz Singularity/Apptainer image.
+
+    Build:
+        apptainer build clusterviz.sif Singularity.def
+
+    Run (default port 8050):
+        apptainer run clusterviz.sif
+
+    Run with custom config:
+        apptainer run clusterviz.sif --config /path/to/config.ini
+
+    Run with external access:
+        apptainer run clusterviz.sif --external
+
+    Mount your data directory (read-only):
+        apptainer run --bind /data/euclid:/data/euclid:ro clusterviz.sif
+
+    Bind cache directory across sessions to keep disk cache:
+        apptainer run --bind $HOME/.cache/clusterviz:$HOME/.cache/clusterviz clusterviz.sif
+
+    PBS job example (add to your job script):
+        apptainer run --bind /scratch/$USER:/scratch/$USER clusterviz.sif --external

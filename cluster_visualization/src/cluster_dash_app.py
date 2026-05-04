@@ -53,7 +53,7 @@ def check_environment():
     import importlib.metadata
 
     eden_path = "/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1"
-    if eden_path not in os.environ.get("PATH", ""):
+    if eden_path not in os.environ.get("PATH", "") and not os.environ.get("CLUSTERVIZ_SKIP_EDEN_CHECK"):
         print("⚠️  WARNING: EDEN environment not detected!")
         print(f"   source {eden_path}/bin/activate")
         print("")
