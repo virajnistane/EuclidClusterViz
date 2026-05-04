@@ -1132,6 +1132,33 @@ class ClusterModalCallbacks:
         """Setup callbacks for cluster candidate tagging and CSV save workflow."""
 
         @self.app.callback(
+            Output("tag-panel-cluster-preview", "children"),
+            [Input("selected-cluster-merged-record", "data")],
+            prevent_initial_call=True,
+        )
+        def update_tag_panel_preview(record):
+            if record is None:
+                return html.Small("No cluster selected.", className="text-muted")
+            cid = record.get("ID_UNIQUE_CLUSTER", "?")
+            ra = record.get("RIGHT_ASCENSION_CLUSTER", "?")
+            dec = record.get("DECLINATION_CLUSTER", "?")
+            snr = record.get("SNR_CLUSTER", "?")
+            z = record.get("Z_CLUSTER", "?")
+            try:
+                ra = f"{float(ra):.5f}°"
+                dec = f"{float(dec):.5f}°"
+                snr = f"{float(snr):.2f}"
+                z = f"{float(z):.4f}"
+            except (TypeError, ValueError):
+                pass
+            return html.Div([
+                html.Span("Tagging: ", className="fw-bold text-warning me-1"),
+                html.Span(f"ID {cid}", className="fw-bold me-2"),
+                html.Span(f"RA {ra}  Dec {dec}", className="me-2 text-muted"),
+                html.Span(f"SNR {snr}  z {z}", className="text-muted"),
+            ])
+
+        @self.app.callback(
             [
                 Output("tagged-clusters-store", "data"),
                 Output("tagged-clusters-summary", "children"),

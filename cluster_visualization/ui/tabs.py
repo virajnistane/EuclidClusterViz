@@ -793,6 +793,15 @@ class TabContent:
                                         ),
                                         dbc.CardBody(
                                             [
+                                                html.Div(
+                                                    id="tag-panel-cluster-preview",
+                                                    className="mb-3 p-2 rounded",
+                                                    style={"background": "#f8f9fa", "font-size": "0.85rem"},
+                                                    children=html.Small(
+                                                        "No cluster selected.",
+                                                        className="text-muted",
+                                                    ),
+                                                ),
                                                 dbc.Row(
                                                     [
                                                         dbc.Col(
