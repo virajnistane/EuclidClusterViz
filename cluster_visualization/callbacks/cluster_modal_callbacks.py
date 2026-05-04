@@ -1171,7 +1171,7 @@ class ClusterModalCallbacks:
             tagged_rows = tagged_rows if isinstance(tagged_rows, list) else []
             updated_record = dict(selected_record)
             updated_record["cluster_tag"] = selected_tag
-            updated_record["dataset_label"] = (dataset_label or "").strip()
+            updated_record["dataset_label"] = (dataset_label or "").strip().lower()
             updated_rows = self._upsert_tagged_rows(tagged_rows, updated_record)
 
             cluster_id = updated_record.get("ID_UNIQUE_CLUSTER", "unknown")
@@ -1521,7 +1521,7 @@ class ClusterModalCallbacks:
         return self._reorder_tag_column(df)
 
     def _merge_tagged_dataframes(self, existing_df: pd.DataFrame, new_df: pd.DataFrame) -> pd.DataFrame:
-        """Append new tagged rows while replacing duplicates by ID_UNIQUE_CLUSTER."""
+        """Append new tagged rows, replacing duplicates by (ID_UNIQUE_CLUSTER, dataset_label)."""
         existing_df = self._reorder_tag_column(existing_df)
         new_df = self._reorder_tag_column(new_df)
 
@@ -1533,10 +1533,24 @@ class ClusterModalCallbacks:
         existing_df = existing_df.reindex(columns=all_cols)
         new_df = new_df.reindex(columns=all_cols)
 
-        if "ID_UNIQUE_CLUSTER" in existing_df.columns and "ID_UNIQUE_CLUSTER" in new_df.columns:
+        has_id = "ID_UNIQUE_CLUSTER" in existing_df.columns and "ID_UNIQUE_CLUSTER" in new_df.columns
+        has_label = "dataset_label" in existing_df.columns and "dataset_label" in new_df.columns
+
+        if has_id:
             existing_ids = pd.to_numeric(existing_df["ID_UNIQUE_CLUSTER"], errors="coerce")
             new_ids = pd.to_numeric(new_df["ID_UNIQUE_CLUSTER"], errors="coerce")
-            existing_df = existing_df[~existing_ids.isin(new_ids.dropna())]
+
+            if has_label:
+                new_keys = set(
+                    zip(new_ids.dropna().astype(int), new_df.loc[new_ids.notna(), "dataset_label"].fillna(""))
+                )
+                existing_keys = list(
+                    zip(existing_ids.fillna(-1).astype(int), existing_df["dataset_label"].fillna(""))
+                )
+                keep_mask = [key not in new_keys for key in existing_keys]
+                existing_df = existing_df[keep_mask]
+            else:
+                existing_df = existing_df[~existing_ids.isin(new_ids.dropna())]
 
         merged_df = pd.concat([existing_df, new_df], ignore_index=True)
         return self._reorder_tag_column(merged_df)

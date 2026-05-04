@@ -832,7 +832,7 @@ class TabContent:
                                                                 dbc.Input(
                                                                     id="tab-tag-dataset-label",
                                                                     type="text",
-                                                                    placeholder="Optional label (e.g. run name, session)",
+                                                                    placeholder="Optional label — saved as lowercase (e.g. run1, session_a)",
                                                                     className="mb-2",
                                                                 ),
                                                             ],
