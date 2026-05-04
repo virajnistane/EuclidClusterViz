@@ -15,7 +15,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
-import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.graph_objs as go
@@ -24,7 +23,6 @@ from astropy.io import fits
 from astropy.table import Table
 from astropy.units import UnitsWarning
 from PIL import Image
-from shapely.geometry import box
 
 try:
     from cluster_visualization.src.config import Config
@@ -843,6 +841,7 @@ class MOSAICHandler:
                 pixels = np.asarray(hf[1].data["PIXEL"], dtype=np.int64)
                 weights = np.asarray(hf[1].data["WEIGHT"], dtype=np.float32)
 
+        import healpy as hp
         ra, dec = hp.pix2ang(nside=nside, ipix=pixels, nest=nested, lonlat=True)
         self._corrected_mask_data = (pixels, weights, ra, dec, nside)
         print(
@@ -919,6 +918,7 @@ class MOSAICHandler:
                     return empty
                 hpmask_fits = matches.squeeze()["fits_file"]
                 footprint = self._read_effcovmask_table(hpmask_fits)
+                import healpy as hp
                 fp_ra, fp_dec = hp.pix2ang(
                     nside=16384, ipix=footprint["PIXEL"], nest=True, lonlat=True
                 )
@@ -943,6 +943,7 @@ class MOSAICHandler:
         dec_max: Optional[float],
     ) -> List[int]:
         """Find MER tiles whose polygons intersect with the zoom box."""
+        from shapely.geometry import box
         zoom_box = box(ra_min, dec_min, ra_max, dec_max)
         mertiles_to_load: List[int] = []
 
@@ -1484,6 +1485,7 @@ class MOSAICHandler:
 
         for pix, weight in zip(pixels, weights):
             # Build polygon directly in world coordinates
+            import healpy as hp
             ra, dec = hp.vec2ang(hp.boundaries(16384, int(pix), step=2, nest=True).T, lonlat=True)
             ra = np.append(ra, ra[0]).tolist()
             dec = np.append(dec, dec[0]).tolist()
@@ -2270,6 +2272,7 @@ class MOSAICHandler:
                 print(f"Warning: Exception while loading mosaic WCS for MER tile {mertileid}: {e}")
                 return None, None
 
+        import healpy as hp
         ra, dec = hp.vec2ang(hp.boundaries(nside, pixel_id, step=step, nest=nest).T, lonlat=True)
 
         # Convert RA/Dec to pixel coordinates
