@@ -1140,12 +1140,13 @@ class ClusterModalCallbacks:
             [Input("tab-tag-button", "n_clicks")],
             [
                 State("tab-tag-value", "value"),
+                State("tab-tag-dataset-label", "value"),
                 State("selected-cluster-merged-record", "data"),
                 State("tagged-clusters-store", "data"),
             ],
             prevent_initial_call=True,
         )
-        def tag_selected_cluster(tag_clicks, selected_tag, selected_record, tagged_rows):
+        def tag_selected_cluster(tag_clicks, selected_tag, dataset_label, selected_record, tagged_rows):
             """Tag currently selected merged cluster candidate as good/bad/dubious."""
             if not tag_clicks:
                 return dash.no_update, dash.no_update, dash.no_update
@@ -1170,6 +1171,7 @@ class ClusterModalCallbacks:
             tagged_rows = tagged_rows if isinstance(tagged_rows, list) else []
             updated_record = dict(selected_record)
             updated_record["cluster_tag"] = selected_tag
+            updated_record["dataset_label"] = (dataset_label or "").strip()
             updated_rows = self._upsert_tagged_rows(tagged_rows, updated_record)
 
             cluster_id = updated_record.get("ID_UNIQUE_CLUSTER", "unknown")
@@ -1494,17 +1496,21 @@ class ClusterModalCallbacks:
         )
 
     def _reorder_tag_column(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Place cluster_tag column immediately after ID_UNIQUE_CLUSTER when present."""
+        """Place cluster_tag and dataset_label immediately after ID_UNIQUE_CLUSTER when present."""
+        df = df.copy()
         if "cluster_tag" not in df.columns:
-            df = df.copy()
             df["cluster_tag"] = ""
+        if "dataset_label" not in df.columns:
+            df["dataset_label"] = ""
 
-        cols = [col for col in df.columns if col != "cluster_tag"]
+        tag_cols = ["cluster_tag", "dataset_label"]
+        cols = [col for col in df.columns if col not in tag_cols]
         if "ID_UNIQUE_CLUSTER" in cols:
             insert_at = cols.index("ID_UNIQUE_CLUSTER") + 1
-            cols.insert(insert_at, "cluster_tag")
+            for i, tc in enumerate(tag_cols):
+                cols.insert(insert_at + i, tc)
         else:
-            cols.append("cluster_tag")
+            cols.extend(tag_cols)
         return df[cols]
 
     def _rows_to_tagged_dataframe(self, tagged_rows: List[Dict[str, Any]]) -> pd.DataFrame:

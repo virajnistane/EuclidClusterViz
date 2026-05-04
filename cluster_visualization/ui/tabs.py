@@ -826,6 +826,26 @@ class TabContent:
                                                         dbc.Col(
                                                             [
                                                                 html.Label(
+                                                                    "Dataset Label:",
+                                                                    className="form-label",
+                                                                ),
+                                                                dbc.Input(
+                                                                    id="tab-tag-dataset-label",
+                                                                    type="text",
+                                                                    placeholder="Optional label (e.g. run name, session)",
+                                                                    className="mb-2",
+                                                                ),
+                                                            ],
+                                                            width=8,
+                                                        ),
+                                                    ],
+                                                    className="g-2",
+                                                ),
+                                                dbc.Row(
+                                                    [
+                                                        dbc.Col(
+                                                            [
+                                                                html.Label(
                                                                     "CSV Output Path:",
                                                                     className="form-label",
                                                                 ),
@@ -836,7 +856,7 @@ class TabContent:
                                                                     className="mb-2",
                                                                 ),
                                                             ],
-                                                            width=8,
+                                                            width=12,
                                                         ),
                                                     ],
                                                     className="g-2",
