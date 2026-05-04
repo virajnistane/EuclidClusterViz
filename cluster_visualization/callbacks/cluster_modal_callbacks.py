@@ -513,21 +513,24 @@ class ClusterModalCallbacks:
                 Output("tab-cutout-options", "is_open"),
                 Output("tab-catred-box-options", "is_open"),
                 Output("tab-mask-cutout-options", "is_open"),
+                Output("tab-tagging-options", "is_open")
             ],
             [
                 Input("tab-cutout-button", "n_clicks"),
                 Input("tab-catred-box-button", "n_clicks"),
                 Input("tab-mask-cutout-button", "n_clicks"),
+                Input("tab-tag-panel-button", "n_clicks"),
             ],
             [
                 State("tab-cutout-options", "is_open"),
                 State("tab-catred-box-options", "is_open"),
                 State("tab-mask-cutout-options", "is_open"),
+                State("tab-tagging-options", "is_open")
             ],
             prevent_initial_call=True,
         )
         def toggle_tab_options(
-            cutout_clicks, catred_clicks, mask_clicks, cutout_open, catred_open, mask_open
+            cutout_clicks, catred_clicks, mask_clicks, tagging_clicks, cutout_open, catred_open, mask_open, tagging_open
         ):
             """Toggle tab options - only one collapse open at a time"""
             ctx = dash.callback_context
@@ -545,8 +548,11 @@ class ClusterModalCallbacks:
             elif button_id == "tab-mask-cutout-button":
                 # Toggle mask cutout, close others
                 return False, False, not mask_open
+            elif button_id == "tab-tag-panel-button":
+                # Toggle tagging options, close others
+                return False, False, False, not tagging_open
 
-            return cutout_open, catred_open, mask_open
+            return cutout_open, catred_open, mask_open, tagging_open
 
         # Handle tab action buttons
         @self.app.callback(
