@@ -535,21 +535,17 @@ class ClusterModalCallbacks:
             """Toggle tab options - only one collapse open at a time"""
             ctx = dash.callback_context
             if not ctx.triggered:
-                return cutout_open, catred_open, mask_open
+                return cutout_open, catred_open, mask_open, tagging_open
 
             button_id = ctx.triggered[0]["prop_id"].split(".")[0]
 
             if button_id == "tab-cutout-button":
-                # Toggle cutout, close others
-                return not cutout_open, False, False
+                return not cutout_open, False, False, False
             elif button_id == "tab-catred-box-button":
-                # Toggle CATRED box, close others
-                return False, not catred_open, False
+                return False, not catred_open, False, False
             elif button_id == "tab-mask-cutout-button":
-                # Toggle mask cutout, close others
-                return False, False, not mask_open
+                return False, False, not mask_open, False
             elif button_id == "tab-tag-panel-button":
-                # Toggle tagging options, close others
                 return False, False, False, not tagging_open
 
             return cutout_open, catred_open, mask_open, tagging_open
