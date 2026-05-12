@@ -44,65 +44,38 @@ from dash import DiskcacheManager
 import numpy as np
 import pandas as pd
 import plotly.graph_objs as go
-from astropy.io import fits
 from dash import Input, Output, State, callback, dcc, html
 from flask import request
-from shapely.geometry import Polygon as ShapelyPolygon
-from shapely.geometry import box
 
 
 def check_environment():
-    """Check if EDEN environment is activated and required modules are available"""
-    # Check EDEN environment
-    eden_path = "/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1"
-    eden_active = eden_path in os.environ.get("PATH", "")
+    """Check EDEN environment activation and required package versions."""
+    import importlib.metadata
 
-    if not eden_active:
+    eden_path = "/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1"
+    if eden_path not in os.environ.get("PATH", "") and not os.environ.get("CLUSTERVIZ_SKIP_EDEN_CHECK"):
         print("⚠️  WARNING: EDEN environment not detected!")
-        print("   For best compatibility, activate EDEN environment first:")
         print(f"   source {eden_path}/bin/activate")
         print("")
 
-    # Check critical modules
-    missing_modules = []
-    try:
-        import dash
-        import dash_bootstrap_components
-        import plotly
+    required = ["dash", "dash-bootstrap-components", "plotly", "numpy", "pandas", "astropy", "shapely"]
+    missing = []
+    for pkg in required:
+        try:
+            importlib.metadata.version(pkg)
+        except importlib.metadata.PackageNotFoundError:
+            missing.append(pkg)
 
-        print("✓ Dash modules available")
-    except ImportError as e:
-        missing_modules.append(f"Dash modules: {e}")
-
-    try:
-        import numpy
-        import pandas
-
-        print("✓ Data processing modules available")
-    except ImportError as e:
-        missing_modules.append(f"Data modules: {e}")
-
-    try:
-        import shapely
-        from astropy.io import fits
-
-        print("✓ Scientific modules available")
-    except ImportError as e:
-        missing_modules.append(f"Scientific modules: {e}")
-
-    if missing_modules:
-        print("⚠️  ERROR: Missing required modules!")
-        for module in missing_modules:
-            print(f"   - {module}")
-        print("")
+    if missing:
+        print("⚠️  ERROR: Missing required packages: " + ", ".join(missing))
         print("   Solutions:")
         print("   1. Use virtual environment: ./cluster_visualization/scripts/run_dash_app_venv.sh")
         print("   2. Setup virtual environment: ./setup_venv.sh")
-        print("   3. Install manually: pip install dash dash-bootstrap-components")
+        print("   3. Install manually: pip install " + " ".join(missing))
         print("")
         return False
 
-    print("✓ All required modules available")
+    print("✓ All required packages available")
     return True
 
 
@@ -475,6 +448,18 @@ def main():
         print("🔒 Local access only (binding to 127.0.0.1)")
 
     app = ClusterVisualizationApp()
+
+    # # Pre-warm disk cache in background so first render is fast
+    # def _prewarm():
+    #     try:
+    #         for algo in ("PZWAV", "AMICO", "BOTH"):
+    #             app.data_loader.load_data(select_algorithm=algo)
+    #             print(f"✓ Pre-warm complete: {algo}")
+    #     except Exception as e:
+    #         print(f"⚠️  Pre-warm failed: {e}")
+
+    # threading.Thread(target=_prewarm, daemon=True).start()
+    # print("🔥 Background data pre-warm started")
 
     # Try different ports if default is busy using modular core if available
     if app.core:

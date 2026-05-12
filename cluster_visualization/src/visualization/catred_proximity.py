@@ -105,7 +105,8 @@ class CatredProximityDetector:
                 [
                     self._check_single_legacy(ra, dec, catred_points)
                     for ra, dec in zip(ra_array, dec_array)
-                ]
+                ],
+                dtype=bool,
             )
 
     # ------------------------------------------------------------------

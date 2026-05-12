@@ -64,6 +64,7 @@ test = [
 docs = [
     "sphinx>=5.0",
     "sphinx-rtd-theme>=1.0",
+    "myst-parser>=0.18",
 ]
 
 # All optional dependencies combined
@@ -77,6 +78,7 @@ all = [
     "pytest-mock>=3.10",
     "sphinx>=5.0",
     "sphinx-rtd-theme>=1.0",
+    "myst-parser>=0.18",
     "isort>=6.1.0",
 ]
 

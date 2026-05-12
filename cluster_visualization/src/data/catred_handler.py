@@ -15,14 +15,7 @@ import pandas as pd  # type: ignore[import]
 from astropy.io import fits  # type: ignore[import]
 from astropy.table import Table  # type: ignore[import]
 
-try:
-    import healpy as hp  # type: ignore[import]
-except ImportError:
-    raise ImportError("healpy is required for CATRED operations. Install with: pip install healpy")
-
 from typing import Any, Dict, List, Optional, Tuple
-
-from shapely.geometry import box  # type: ignore[import]
 
 
 class Mask:
@@ -80,6 +73,7 @@ class Mask:
         Returns:
             HEALPix cell indices
         """
+        import healpy as hp  # type: ignore[import]
         pixelarr: np.ndarray = hp.ang2pix(self.nside, ra, dec, lonlat=True, nest=self.nested)
         return pixelarr
 
@@ -399,6 +393,7 @@ class CATREDHandler:
         self, data: Dict[str, Any], ra_min: float, ra_max: float, dec_min: float, dec_max: float
     ) -> List[int]:
         """Find MER tiles whose polygons intersect with the zoom box."""
+        from shapely.geometry import box  # type: ignore[import]
         zoom_box = box(ra_min, dec_min, ra_max, dec_max)
         mertiles_to_load = []
 

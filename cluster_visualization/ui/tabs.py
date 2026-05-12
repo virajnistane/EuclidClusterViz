@@ -198,7 +198,8 @@ class TabContent:
                                         dbc.Button(
                                             [
                                                 html.I(className="fas fa-crop me-2"),
-                                                "Generate Cutout ...",
+                                                "Generate Cutout",
+                                                html.I(className="fas fa-chevron-down ms-2"),
                                             ],
                                             id="tab-cutout-button",
                                             color="primary",
@@ -218,7 +219,8 @@ class TabContent:
                                         dbc.Button(
                                             [
                                                 html.I(className="fas fa-magnifying-glass me-2"),
-                                                "CATRED Data Box ...",
+                                                "CATRED Data Box",
+                                                html.I(className="fas fa-chevron-down ms-2"),
                                             ],
                                             id="tab-catred-box-button",
                                             color="success",
@@ -242,7 +244,8 @@ class TabContent:
                                         dbc.Button(
                                             [
                                                 html.I(className="fas fa-layer-group me-2"),
-                                                "Healpix Mask Cutout ...",
+                                                "Healpix Mask Cutout",
+                                                html.I(className="fas fa-chevron-down ms-2"),
                                             ],
                                             id="tab-mask-cutout-button",
                                             color="info",
@@ -261,17 +264,18 @@ class TabContent:
                                     [
                                         dbc.Button(
                                             [
-                                                html.I(className="fas fa-download me-2"),
-                                                "Export Data",
+                                                html.I(className="fas fa-tag me-2"),
+                                                "Tag Cluster",
+                                                html.I(className="fas fa-chevron-down ms-2"),
                                             ],
-                                            id="tab-export-button",
+                                            id="tab-tag-panel-button",
                                             color="warning",
-                                            disabled=True,
+                                            disabled=False,
                                             className="w-100 mb-2",
                                             n_clicks=0,
                                         ),
                                         html.Small(
-                                            "Coming soon ...",
+                                            "Use the Candidate Tagging panel below",
                                             className="text-muted d-block text-center",
                                         ),
                                     ],
@@ -771,6 +775,148 @@ class TabContent:
                             is_open=False,
                             className="mb-3",
                         ),
+                        # Tagging options (expandable)
+                        dbc.Collapse(
+                            [
+                                dbc.Card(
+                                    [
+                                        dbc.CardHeader(
+                                            [
+                                                html.H6(
+                                                    [
+                                                        html.I(className="fas fa-tags me-2"),
+                                                        "Candidate Tagging",
+                                                    ],
+                                                    className="mb-0 text-warning",
+                                                )
+                                            ]
+                                        ),
+                                        dbc.CardBody(
+                                            [
+                                                html.Div(
+                                                    id="tag-panel-cluster-preview",
+                                                    className="mb-3 p-2 rounded",
+                                                    style={"background": "#f8f9fa", "font-size": "0.85rem"},
+                                                    children=html.Small(
+                                                        "No cluster selected.",
+                                                        className="text-muted",
+                                                    ),
+                                                ),
+                                                dbc.Row(
+                                                    [
+                                                        dbc.Col(
+                                                            [
+                                                                html.Label(
+                                                                    "Selected Tag:",
+                                                                    className="form-label",
+                                                                ),
+                                                                dbc.Select(
+                                                                    id="tab-tag-value",
+                                                                    options=[
+                                                                        {
+                                                                            "label": "Good",
+                                                                            "value": "good",
+                                                                        },
+                                                                        {
+                                                                            "label": "Bad",
+                                                                            "value": "bad",
+                                                                        },
+                                                                        {
+                                                                            "label": "Dubious",
+                                                                            "value": "dubious",
+                                                                        },
+                                                                    ],
+                                                                    value="good",
+                                                                    className="mb-2",
+                                                                ),
+                                                            ],
+                                                            width=4,
+                                                        ),
+                                                        dbc.Col(
+                                                            [
+                                                                html.Label(
+                                                                    "Dataset Label:",
+                                                                    className="form-label",
+                                                                ),
+                                                                dbc.Input(
+                                                                    id="tab-tag-dataset-label",
+                                                                    type="text",
+                                                                    placeholder="Optional label — saved as lowercase (e.g. run1, session_a)",
+                                                                    className="mb-2",
+                                                                ),
+                                                            ],
+                                                            width=8,
+                                                        ),
+                                                    ],
+                                                    className="g-2",
+                                                ),
+                                                dbc.Row(
+                                                    [
+                                                        dbc.Col(
+                                                            [
+                                                                html.Label(
+                                                                    "CSV Output Path:",
+                                                                    className="form-label",
+                                                                ),
+                                                                dbc.Input(
+                                                                    id="tagged-clusters-output-path",
+                                                                    type="text",
+                                                                    placeholder="/path/to/tagged_clusters.csv",
+                                                                    className="mb-2",
+                                                                ),
+                                                            ],
+                                                            width=12,
+                                                        ),
+                                                    ],
+                                                    className="g-2",
+                                                ),
+                                                html.Div(
+                                                    [
+                                                        dbc.Button(
+                                                            [
+                                                                html.I(className="fas fa-tag me-2"),
+                                                                "Add / Update Tag",
+                                                            ],
+                                                            id="tab-tag-button",
+                                                            color="warning",
+                                                            className="me-2",
+                                                            n_clicks=0,
+                                                        ),
+                                                        dbc.Button(
+                                                            [
+                                                                html.I(className="fas fa-save me-2"),
+                                                                "Save Tagged CSV",
+                                                            ],
+                                                            id="tab-save-tagged-clusters-button",
+                                                            color="secondary",
+                                                            n_clicks=0,
+                                                        ),
+                                                    ],
+                                                    className="d-flex flex-wrap gap-2 mb-2",
+                                                ),
+                                                html.Small(
+                                                    "Tagged rows are kept in session and saved with a tag column immediately after ID_UNIQUE_CLUSTER.",
+                                                    className="text-muted d-block mb-2",
+                                                ),
+                                                html.Div(
+                                                    id="tagged-clusters-summary",
+                                                    children=[
+                                                        html.Small(
+                                                            "No tagged clusters yet.",
+                                                            className="text-muted",
+                                                        )
+                                                    ],
+                                                ),
+                                            ]
+                                        ),
+                                    ],
+                                    className="mb-3",
+                                ),
+                            ],
+                            id="tab-tagging-options",
+                            is_open=False,
+                            className="mb-3",
+                        ),
                         # Progress bar for tab actions
                         html.Div(
                             [
@@ -803,6 +949,58 @@ class TabContent:
                                 ),
                             ]
                         ),
+                        dbc.Modal(
+                            [
+                                dbc.ModalHeader(
+                                    dbc.ModalTitle("Tagged CSV Already Exists")
+                                ),
+                                dbc.ModalBody(
+                                    [
+                                        html.P(
+                                            "The selected CSV already exists. Choose how to save the tagged cluster data."
+                                        ),
+                                        html.Div(id="tagged-clusters-save-conflict-message"),
+                                    ]
+                                ),
+                                dbc.ModalFooter(
+                                    [
+                                        dbc.Button(
+                                            "Overwrite",
+                                            id="tagged-clusters-overwrite-button",
+                                            color="danger",
+                                            className="me-2",
+                                            n_clicks=0,
+                                        ),
+                                        dbc.Button(
+                                            "Save With Suffix",
+                                            id="tagged-clusters-save-suffix-button",
+                                            color="warning",
+                                            className="me-2",
+                                            n_clicks=0,
+                                        ),
+                                        dbc.Button(
+                                            "Append",
+                                            id="tagged-clusters-append-button",
+                                            color="primary",
+                                            className="me-2",
+                                            n_clicks=0,
+                                        ),
+                                        dbc.Button(
+                                            "Cancel",
+                                            id="tagged-clusters-cancel-save-button",
+                                            color="secondary",
+                                            n_clicks=0,
+                                        ),
+                                    ]
+                                ),
+                            ],
+                            id="tagged-clusters-save-conflict-modal",
+                            is_open=False,
+                            centered=True,
+                        ),
+                        dcc.Store(id="selected-cluster-merged-record", data=None),
+                        dcc.Store(id="tagged-clusters-store", data=[]),
+                        dcc.Store(id="tagged-clusters-pending-save", data=None),
                     ],
                     id="cluster-selected-content",
                     style={"display": "none"},

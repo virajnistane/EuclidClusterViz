@@ -7,8 +7,12 @@ like cutout generation, PHZ analysis, and data export.
 
 import dash  # type: ignore[import]
 import dash_bootstrap_components as dbc  # type: ignore[import]
+import numpy as np
+import os
+import pandas as pd
 import plotly.graph_objs as go  # type: ignore[import]
 from dash import Input, Output, State, callback_context, html
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class ClusterModalCallbacks:
@@ -47,6 +51,7 @@ class ClusterModalCallbacks:
         self._setup_action_callbacks()
         self._setup_sidebar_callbacks()
         self._setup_tab_callbacks()  # 🆕 Add tab callbacks
+        self._setup_cluster_tagging_callbacks()
         self._setup_parameter_sync_callbacks()
         self._setup_trace_management_callbacks()  # 🆕 Add trace management callbacks
 
@@ -59,6 +64,7 @@ class ClusterModalCallbacks:
                 Output("cluster-selected-content", "style"),
                 Output("cluster-info-display-tab", "children"),
                 Output("analysis-tabs", "active_tab"),
+                Output("selected-cluster-merged-record", "data"),
             ],
             [Input("cluster-plot", "clickData")],
             [State("algorithm-dropdown", "value")],
@@ -67,7 +73,13 @@ class ClusterModalCallbacks:
         def handle_cluster_click(clickData, algorithm):
             """Handle cluster point clicks and show in cluster analysis tab"""
             if not clickData or not clickData.get("points"):
-                return dash.no_update, dash.no_update, dash.no_update, dash.no_update
+                return (
+                    dash.no_update,
+                    dash.no_update,
+                    dash.no_update,
+                    dash.no_update,
+                    dash.no_update,
+                )
             point = clickData["points"][0]
 
             # Get the trace index and look up the actual trace name
@@ -85,6 +97,12 @@ class ClusterModalCallbacks:
                     dec = point.get("y", "N/A")
                     snr = customdata[0] if len(customdata) > 0 else "N/A"
                     redshift = customdata[1] if len(customdata) > 1 else "N/A"
+                    merged_record, resolution_note = self._resolve_merged_record_for_click(
+                        point, algorithm
+                    )
+                    merged_cluster_id = (
+                        merged_record.get("ID_UNIQUE_CLUSTER") if merged_record is not None else None
+                    )
 
                     # Get trace name from hover text or use curve number
                     trace_name = f"Curve {curve_number}"
@@ -104,6 +122,9 @@ class ClusterModalCallbacks:
                         "trace_name": trace_name,
                         "curve_number": curve_number,
                         "point_data": point,
+                        "merged_record": merged_record,
+                        "merged_cluster_id": merged_cluster_id,
+                        "resolution_note": resolution_note,
                     }
 
                     print(
@@ -143,6 +164,13 @@ class ClusterModalCallbacks:
                                 f"{algorithm} | {trace_name}",
                             ]
                         ),
+                        html.Div(
+                            [
+                                html.Strong("Merged Candidate ID: ", className="text-primary"),
+                                str(merged_cluster_id) if merged_cluster_id is not None else "Not resolved",
+                            ]
+                        ),
+                        html.Small(resolution_note, className="text-muted"),
                     ]
 
                     # Hide no-selection, show selected content, populate info, switch to cluster tab
@@ -151,10 +179,17 @@ class ClusterModalCallbacks:
                         {"display": "block"},  # Show selected content
                         tab_content,  # Populate cluster info
                         "cluster-tab",  # Switch to cluster tab
+                        merged_record,
                     )
 
             # If clicked point is not a valid cluster, don't change anything
-            return dash.no_update, dash.no_update, dash.no_update, dash.no_update
+            return (
+                dash.no_update,
+                dash.no_update,
+                dash.no_update,
+                dash.no_update,
+                dash.no_update,
+            )
 
     def _setup_modal_close_callbacks(self):
         """Setup callbacks to close the modal"""
@@ -478,40 +513,42 @@ class ClusterModalCallbacks:
                 Output("tab-cutout-options", "is_open"),
                 Output("tab-catred-box-options", "is_open"),
                 Output("tab-mask-cutout-options", "is_open"),
+                Output("tab-tagging-options", "is_open")
             ],
             [
                 Input("tab-cutout-button", "n_clicks"),
                 Input("tab-catred-box-button", "n_clicks"),
                 Input("tab-mask-cutout-button", "n_clicks"),
+                Input("tab-tag-panel-button", "n_clicks"),
             ],
             [
                 State("tab-cutout-options", "is_open"),
                 State("tab-catred-box-options", "is_open"),
                 State("tab-mask-cutout-options", "is_open"),
+                State("tab-tagging-options", "is_open")
             ],
             prevent_initial_call=True,
         )
         def toggle_tab_options(
-            cutout_clicks, catred_clicks, mask_clicks, cutout_open, catred_open, mask_open
+            cutout_clicks, catred_clicks, mask_clicks, tagging_clicks, cutout_open, catred_open, mask_open, tagging_open
         ):
             """Toggle tab options - only one collapse open at a time"""
             ctx = dash.callback_context
             if not ctx.triggered:
-                return cutout_open, catred_open, mask_open
+                return cutout_open, catred_open, mask_open, tagging_open
 
             button_id = ctx.triggered[0]["prop_id"].split(".")[0]
 
             if button_id == "tab-cutout-button":
-                # Toggle cutout, close others
-                return not cutout_open, False, False
+                return not cutout_open, False, False, False
             elif button_id == "tab-catred-box-button":
-                # Toggle CATRED box, close others
-                return False, not catred_open, False
+                return False, not catred_open, False, False
             elif button_id == "tab-mask-cutout-button":
-                # Toggle mask cutout, close others
-                return False, False, not mask_open
+                return False, False, not mask_open, False
+            elif button_id == "tab-tag-panel-button":
+                return False, False, False, not tagging_open
 
-            return cutout_open, catred_open, mask_open
+            return cutout_open, catred_open, mask_open, tagging_open
 
         # Handle tab action buttons
         @self.app.callback(
@@ -525,7 +562,6 @@ class ClusterModalCallbacks:
                 Input("tab-generate-cutout", "n_clicks"),
                 Input("tab-view-catred-box", "n_clicks"),
                 Input("tab-generate-mask-cutout", "n_clicks"),
-                Input("tab-export-button", "n_clicks"),
             ],
             #
             [
@@ -571,7 +607,6 @@ class ClusterModalCallbacks:
                 (Output("tab-generate-cutout", "disabled"), True, False),
                 (Output("tab-view-catred-box", "disabled"), True, False),
                 (Output("tab-generate-mask-cutout", "disabled"), True, False),
-                (Output("tab-export-button", "disabled"), True, False),
             ],
             progress=[
                 Output("tab-action-progress", "value"),
@@ -583,7 +618,6 @@ class ClusterModalCallbacks:
             cutout_clicks,
             catred_box_clicks,
             mask_cutout_clicks,
-            export_clicks,
             algorithm,
             snr_range_pzwav,
             snr_range_amico,
@@ -621,6 +655,8 @@ class ClusterModalCallbacks:
 
             if not self.selected_cluster:
                 return (
+                    dash.no_update,
+                    dash.no_update,
                     html.P("⚠️ No cluster selected", className="text-warning"),
                     dbc.Alert("⚠️ No cluster selected", color="warning"),
                 )
@@ -1086,47 +1122,494 @@ class ClusterModalCallbacks:
 
                 return current_figure, empty_phz_fig, results_content, status_msg
 
-            elif button_id == "tab-export-button":
-                results_content = dbc.Card(
-                    [
-                        dbc.CardHeader(
-                            [
-                                html.H6(
-                                    [html.I(className="fas fa-download me-2"), "Data Export"],
-                                    className="mb-0 text-warning",
-                                )
-                            ]
-                        ),
-                        dbc.CardBody(
-                            [
-                                html.P(
-                                    [
-                                        html.Strong("Data: "),
-                                        f"RA={cluster['ra']:.6f}, Dec={cluster['dec']:.6f}, SNR={cluster['snr']}, z={cluster['redshift']}",
-                                        html.Br(),
-                                        html.Strong("Format: "),
-                                        "CSV/JSON",
-                                        html.Br(),
-                                        html.Strong("Status: "),
-                                        html.Span("Ready for Download", className="text-success"),
-                                    ]
-                                )
-                            ]
-                        ),
-                    ]
+            return dash.no_update, dash.no_update, dash.no_update, dash.no_update
+
+    def _setup_cluster_tagging_callbacks(self):
+        """Setup callbacks for cluster candidate tagging and CSV save workflow."""
+
+        @self.app.callback(
+            Output("tag-panel-cluster-preview", "children"),
+            [Input("selected-cluster-merged-record", "data")],
+            prevent_initial_call=True,
+        )
+        def update_tag_panel_preview(record):
+            if record is None:
+                return html.Small("No cluster selected.", className="text-muted")
+            cid = record.get("ID_UNIQUE_CLUSTER", "?")
+            ra = record.get("RIGHT_ASCENSION_CLUSTER", "?")
+            dec = record.get("DECLINATION_CLUSTER", "?")
+            snr = record.get("SNR_CLUSTER", "?")
+            z = record.get("Z_CLUSTER", "?")
+            try:
+                ra = f"{float(ra):.5f}°"
+                dec = f"{float(dec):.5f}°"
+                snr = f"{float(snr):.2f}"
+                z = f"{float(z):.4f}"
+            except (TypeError, ValueError):
+                pass
+            return html.Div([
+                html.Span("Tagging: ", className="fw-bold text-warning me-1"),
+                html.Span(f"ID {cid}", className="fw-bold me-2"),
+                html.Span(f"RA {ra}  Dec {dec}", className="me-2 text-muted"),
+                html.Span(f"SNR {snr}  z {z}", className="text-muted"),
+            ])
+
+        @self.app.callback(
+            [
+                Output("tagged-clusters-store", "data"),
+                Output("tagged-clusters-summary", "children"),
+                Output("status-info", "children", allow_duplicate=True),
+            ],
+            [Input("tab-tag-button", "n_clicks")],
+            [
+                State("tab-tag-value", "value"),
+                State("tab-tag-dataset-label", "value"),
+                State("selected-cluster-merged-record", "data"),
+                State("tagged-clusters-store", "data"),
+            ],
+            prevent_initial_call=True,
+        )
+        def tag_selected_cluster(tag_clicks, selected_tag, dataset_label, selected_record, tagged_rows):
+            """Tag currently selected merged cluster candidate as good/bad/dubious."""
+            if not tag_clicks:
+                return dash.no_update, dash.no_update, dash.no_update
+
+            if selected_record is None:
+                return (
+                    dash.no_update,
+                    dash.no_update,
+                    dbc.Alert(
+                        "⚠️ No merged cluster resolved for current click.",
+                        color="warning",
+                    ),
                 )
 
-                status_msg = dbc.Alert(
-                    [
-                        html.H6("💾 Data Export Ready", className="mb-2"),
-                        html.P(f"📊 Cluster data prepared for download"),
-                    ],
-                    color="warning",
+            if selected_tag not in {"good", "bad", "dubious"}:
+                return (
+                    dash.no_update,
+                    dash.no_update,
+                    dbc.Alert("⚠️ Invalid tag. Choose good, bad, or dubious.", color="warning"),
                 )
 
-                return dash.no_update, dash.no_update, results_content, status_msg
+            tagged_rows = tagged_rows if isinstance(tagged_rows, list) else []
+            updated_record = dict(selected_record)
+            updated_record["cluster_tag"] = selected_tag
+            updated_record["dataset_label"] = (dataset_label or "").strip().lower()
+            updated_rows = self._upsert_tagged_rows(tagged_rows, updated_record)
+
+            cluster_id = updated_record.get("ID_UNIQUE_CLUSTER", "unknown")
+            return (
+                updated_rows,
+                self._build_tagged_summary(updated_rows),
+                dbc.Alert(
+                    f"🏷️ Tagged cluster {cluster_id} as '{selected_tag}'.",
+                    color="success",
+                ),
+            )
+
+        @self.app.callback(
+            [
+                Output("tagged-clusters-save-conflict-modal", "is_open"),
+                Output("tagged-clusters-pending-save", "data"),
+                Output("tagged-clusters-save-conflict-message", "children"),
+                Output("status-info", "children", allow_duplicate=True),
+            ],
+            [
+                Input("tab-save-tagged-clusters-button", "n_clicks"),
+                Input("tagged-clusters-overwrite-button", "n_clicks"),
+                Input("tagged-clusters-save-suffix-button", "n_clicks"),
+                Input("tagged-clusters-append-button", "n_clicks"),
+                Input("tagged-clusters-cancel-save-button", "n_clicks"),
+            ],
+            [
+                State("tagged-clusters-output-path", "value"),
+                State("tagged-clusters-store", "data"),
+                State("tagged-clusters-pending-save", "data"),
+            ],
+            prevent_initial_call=True,
+        )
+        def save_tagged_clusters(
+            save_clicks,
+            overwrite_clicks,
+            suffix_clicks,
+            append_clicks,
+            cancel_clicks,
+            output_path,
+            tagged_rows,
+            pending_save,
+        ):
+            """Save tagged merged-catalog rows with overwrite/suffix/append behavior."""
+            ctx = callback_context
+            if not ctx.triggered:
+                return dash.no_update, dash.no_update, dash.no_update, dash.no_update
+
+            trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
+            tagged_rows = tagged_rows if isinstance(tagged_rows, list) else []
+
+            if trigger_id == "tab-save-tagged-clusters-button":
+                if not tagged_rows:
+                    return (
+                        False,
+                        None,
+                        "",
+                        dbc.Alert("⚠️ No tagged clusters to save.", color="warning"),
+                    )
+
+                resolved_path = os.path.expanduser((output_path or "").strip())
+                if not resolved_path:
+                    return (
+                        False,
+                        None,
+                        "",
+                        dbc.Alert("⚠️ Enter a valid CSV output path.", color="warning"),
+                    )
+
+                if os.path.exists(resolved_path):
+                    return (
+                        True,
+                        {"path": resolved_path},
+                        html.Small(f"Existing file: {resolved_path}", className="text-muted"),
+                        dbc.Alert("⚠️ File exists. Choose overwrite, suffix, or append.", color="warning"),
+                    )
+
+                _, total_rows = self._write_tagged_rows_to_csv(
+                    resolved_path, tagged_rows, mode="overwrite"
+                )
+                return (
+                    False,
+                    None,
+                    "",
+                    dbc.Alert(
+                        f"✅ Saved {total_rows} tagged clusters to {resolved_path}",
+                        color="success",
+                    ),
+                )
+
+            if trigger_id == "tagged-clusters-cancel-save-button":
+                return False, None, "", dbc.Alert("Save cancelled.", color="secondary")
+
+            if trigger_id in {
+                "tagged-clusters-overwrite-button",
+                "tagged-clusters-save-suffix-button",
+                "tagged-clusters-append-button",
+            }:
+                pending_path = (
+                    pending_save.get("path")
+                    if isinstance(pending_save, dict)
+                    else os.path.expanduser((output_path or "").strip())
+                )
+                if not pending_path:
+                    return (
+                        False,
+                        None,
+                        "",
+                        dbc.Alert("⚠️ Missing pending save path.", color="warning"),
+                    )
+
+                if trigger_id == "tagged-clusters-overwrite-button":
+                    _, total_rows = self._write_tagged_rows_to_csv(
+                        pending_path, tagged_rows, mode="overwrite"
+                    )
+                    return (
+                        False,
+                        None,
+                        "",
+                        dbc.Alert(
+                            f"✅ Overwrote {pending_path} with {total_rows} tagged rows.",
+                            color="success",
+                        ),
+                    )
+
+                if trigger_id == "tagged-clusters-save-suffix-button":
+                    suffixed_path = self._get_suffixed_output_path(pending_path)
+                    _, total_rows = self._write_tagged_rows_to_csv(
+                        suffixed_path, tagged_rows, mode="overwrite"
+                    )
+                    return (
+                        False,
+                        None,
+                        "",
+                        dbc.Alert(
+                            f"✅ Saved {total_rows} tagged rows to {suffixed_path}",
+                            color="success",
+                        ),
+                    )
+
+                if trigger_id == "tagged-clusters-append-button":
+                    appended_rows, total_rows = self._write_tagged_rows_to_csv(
+                        pending_path, tagged_rows, mode="append"
+                    )
+                    return (
+                        False,
+                        None,
+                        "",
+                        dbc.Alert(
+                            f"✅ Appended {appended_rows} rows into {pending_path} (total: {total_rows}).",
+                            color="success",
+                        ),
+                    )
 
             return dash.no_update, dash.no_update, dash.no_update, dash.no_update
+
+    def _resolve_merged_record_for_click(
+        self, point: Dict[str, Any], algorithm: str
+    ) -> Tuple[Optional[Dict[str, Any]], str]:
+        """Resolve a clicked plot point to a row in data_detcluster_mergedcat."""
+        try:
+            data = self.data_loader.load_data(select_algorithm=algorithm)
+        except Exception as exc:
+            return None, f"Failed to load merged catalog: {exc}"
+
+        merged_catalog = data.get("data_detcluster_mergedcat") if isinstance(data, dict) else None
+        if merged_catalog is None or len(merged_catalog) == 0:
+            return None, "Merged catalog unavailable."
+
+        customdata = point.get("customdata", [])
+        if not isinstance(customdata, (list, tuple, np.ndarray)):
+            customdata = [customdata]
+
+        if len(customdata) >= 4:
+            by_id = self._find_merged_record_by_cluster_id(merged_catalog, customdata[3])
+            if by_id is not None:
+                return by_id, f"Resolved from ID_UNIQUE_CLUSTER={by_id.get('ID_UNIQUE_CLUSTER')}"
+
+        record, distance_arcsec = self._match_merged_record_by_proximity(
+            merged_catalog,
+            ra=point.get("x"),
+            dec=point.get("y"),
+            snr=customdata[0] if len(customdata) > 0 else None,
+            redshift=customdata[1] if len(customdata) > 1 else None,
+            det_code=customdata[2] if len(customdata) > 2 else None,
+        )
+        if record is None:
+            return None, "Could not resolve merged row for selected point."
+
+        confidence = "high" if distance_arcsec <= 5.0 else "low"
+        return (
+            record,
+            f"Resolved by nearest RA/Dec + SNR/z ({distance_arcsec:.2f} arcsec, confidence: {confidence}).",
+        )
+
+    def _find_merged_record_by_cluster_id(
+        self, merged_catalog: np.ndarray, cluster_id: Any
+    ) -> Optional[Dict[str, Any]]:
+        """Find merged row by ID_UNIQUE_CLUSTER."""
+        if "ID_UNIQUE_CLUSTER" not in merged_catalog.dtype.names:
+            return None
+        try:
+            cluster_id_int = int(cluster_id)
+        except (TypeError, ValueError):
+            return None
+
+        matches = merged_catalog[merged_catalog["ID_UNIQUE_CLUSTER"] == cluster_id_int]
+        if len(matches) == 0:
+            return None
+        return self._structured_row_to_dict(matches[0])
+
+    def _match_merged_record_by_proximity(
+        self,
+        merged_catalog: np.ndarray,
+        ra: Any,
+        dec: Any,
+        snr: Any,
+        redshift: Any,
+        det_code: Any,
+    ) -> Tuple[Optional[Dict[str, Any]], float]:
+        """Match click coordinates to merged rows using RA/Dec and property tie-breakers."""
+        try:
+            ra_val = float(ra)
+            dec_val = float(dec)
+        except (TypeError, ValueError):
+            return None, float("inf")
+
+        candidates = merged_catalog
+        if "DET_CODE_NB" in merged_catalog.dtype.names:
+            try:
+                det_code_int = int(det_code)
+                det_filtered = merged_catalog[merged_catalog["DET_CODE_NB"] == det_code_int]
+                if len(det_filtered) > 0:
+                    candidates = det_filtered
+            except (TypeError, ValueError):
+                pass
+
+        if len(candidates) == 0:
+            return None, float("inf")
+
+        ra_arr = np.asarray(candidates["RIGHT_ASCENSION_CLUSTER"], dtype=float)
+        dec_arr = np.asarray(candidates["DECLINATION_CLUSTER"], dtype=float)
+        dist_deg = np.sqrt((ra_arr - ra_val) ** 2 + (dec_arr - dec_val) ** 2)
+
+        try:
+            snr_val = float(snr)
+            snr_diff = np.abs(np.asarray(candidates["SNR_CLUSTER"], dtype=float) - snr_val)
+        except (TypeError, ValueError):
+            snr_diff = np.zeros(len(candidates), dtype=float)
+
+        try:
+            z_val = float(redshift)
+            z_diff = np.abs(np.asarray(candidates["Z_CLUSTER"], dtype=float) - z_val)
+        except (TypeError, ValueError):
+            z_diff = np.zeros(len(candidates), dtype=float)
+
+        best_index = int(np.lexsort((z_diff, snr_diff, dist_deg))[0])
+        best_row = candidates[best_index]
+        return self._structured_row_to_dict(best_row), float(dist_deg[best_index] * 3600.0)
+
+    def _structured_row_to_dict(self, row: Any) -> Dict[str, Any]:
+        """Convert numpy structured-array row to plain Python dict."""
+        row_dict: Dict[str, Any] = {}
+        for field_name in row.dtype.names:
+            value = row[field_name]
+            if isinstance(value, np.generic):
+                value = value.item()
+            if isinstance(value, bytes):
+                value = value.decode("utf-8", errors="ignore")
+            row_dict[field_name] = value
+        return row_dict
+
+    def _record_identity(self, record: Dict[str, Any]) -> Tuple[Any, Any, Any, Any]:
+        """Build identity key for upsert behavior in tagged cluster store."""
+        if record.get("ID_UNIQUE_CLUSTER") is not None:
+            return ("id", record.get("ID_UNIQUE_CLUSTER"), None, None)
+        return (
+            "coords",
+            record.get("RIGHT_ASCENSION_CLUSTER"),
+            record.get("DECLINATION_CLUSTER"),
+            record.get("SNR_CLUSTER"),
+        )
+
+    def _upsert_tagged_rows(
+        self, tagged_rows: List[Dict[str, Any]], updated_record: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Insert/replace tagged row by identity key."""
+        target_key = self._record_identity(updated_record)
+        updated_rows: List[Dict[str, Any]] = []
+        replaced = False
+
+        for row in tagged_rows:
+            if self._record_identity(row) == target_key:
+                updated_rows.append(updated_record)
+                replaced = True
+            else:
+                updated_rows.append(row)
+
+        if not replaced:
+            updated_rows.append(updated_record)
+        return updated_rows
+
+    def _build_tagged_summary(self, tagged_rows: List[Dict[str, Any]]):
+        """Build summary UI for current tagged rows in session."""
+        if not tagged_rows:
+            return html.Small("No tagged clusters yet.", className="text-muted")
+
+        counts = {"good": 0, "bad": 0, "dubious": 0}
+        for row in tagged_rows:
+            tag_value = row.get("cluster_tag")
+            if tag_value in counts:
+                counts[tag_value] += 1
+
+        return html.Div(
+            [
+                html.Strong(f"Tagged clusters: {len(tagged_rows)}"),
+                html.Div(
+                    f"good={counts['good']}, bad={counts['bad']}, dubious={counts['dubious']}",
+                    className="small text-muted",
+                ),
+            ]
+        )
+
+    def _reorder_tag_column(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Place cluster_tag and dataset_label immediately after ID_UNIQUE_CLUSTER when present."""
+        df = df.copy()
+        if "cluster_tag" not in df.columns:
+            df["cluster_tag"] = ""
+        if "dataset_label" not in df.columns:
+            df["dataset_label"] = ""
+
+        tag_cols = ["cluster_tag", "dataset_label"]
+        cols = [col for col in df.columns if col not in tag_cols]
+        if "ID_UNIQUE_CLUSTER" in cols:
+            insert_at = cols.index("ID_UNIQUE_CLUSTER") + 1
+            for i, tc in enumerate(tag_cols):
+                cols.insert(insert_at + i, tc)
+        else:
+            cols.extend(tag_cols)
+        return df[cols]
+
+    def _rows_to_tagged_dataframe(self, tagged_rows: List[Dict[str, Any]]) -> pd.DataFrame:
+        """Convert tagged row dictionaries to dataframe with required column order."""
+        if not tagged_rows:
+            return pd.DataFrame()
+        df = pd.DataFrame(tagged_rows)
+        return self._reorder_tag_column(df)
+
+    def _merge_tagged_dataframes(self, existing_df: pd.DataFrame, new_df: pd.DataFrame) -> pd.DataFrame:
+        """Append new tagged rows, replacing duplicates by (ID_UNIQUE_CLUSTER, dataset_label)."""
+        existing_df = self._reorder_tag_column(existing_df)
+        new_df = self._reorder_tag_column(new_df)
+
+        all_cols: List[str] = list(existing_df.columns)
+        for col in new_df.columns:
+            if col not in all_cols:
+                all_cols.append(col)
+
+        existing_df = existing_df.reindex(columns=all_cols)
+        new_df = new_df.reindex(columns=all_cols)
+
+        has_id = "ID_UNIQUE_CLUSTER" in existing_df.columns and "ID_UNIQUE_CLUSTER" in new_df.columns
+        has_label = "dataset_label" in existing_df.columns and "dataset_label" in new_df.columns
+
+        if has_id:
+            existing_ids = pd.to_numeric(existing_df["ID_UNIQUE_CLUSTER"], errors="coerce")
+            new_ids = pd.to_numeric(new_df["ID_UNIQUE_CLUSTER"], errors="coerce")
+
+            if has_label:
+                new_keys = set(
+                    zip(new_ids.dropna().astype(int), new_df.loc[new_ids.notna(), "dataset_label"].fillna(""))
+                )
+                existing_keys = list(
+                    zip(existing_ids.fillna(-1).astype(int), existing_df["dataset_label"].fillna(""))
+                )
+                keep_mask = [key not in new_keys for key in existing_keys]
+                existing_df = existing_df[keep_mask]
+            else:
+                existing_df = existing_df[~existing_ids.isin(new_ids.dropna())]
+
+        merged_df = pd.concat([existing_df, new_df], ignore_index=True)
+        return self._reorder_tag_column(merged_df)
+
+    def _get_suffixed_output_path(self, output_path: str) -> str:
+        """Generate next available suffixed output path."""
+        root, ext = os.path.splitext(output_path)
+        if not ext:
+            ext = ".csv"
+        suffix = 1
+        while True:
+            candidate = f"{root}_{suffix}{ext}"
+            if not os.path.exists(candidate):
+                return candidate
+            suffix += 1
+
+    def _write_tagged_rows_to_csv(
+        self, output_path: str, tagged_rows: List[Dict[str, Any]], mode: str
+    ) -> Tuple[int, int]:
+        """Write tagged rows to CSV and return (written_rows, final_total_rows)."""
+        tagged_df = self._rows_to_tagged_dataframe(tagged_rows)
+        if tagged_df.empty:
+            return 0, 0
+
+        output_dir = os.path.dirname(output_path)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+
+        if mode == "append" and os.path.exists(output_path):
+            existing_df = pd.read_csv(output_path)
+            merged_df = self._merge_tagged_dataframes(existing_df, tagged_df)
+            merged_df.to_csv(output_path, index=False)
+            return len(tagged_df), len(merged_df)
+
+        tagged_df.to_csv(output_path, index=False)
+        return len(tagged_df), len(tagged_df)
 
     def _extract_existing_catred_traces(self, current_figure):
         """Extract existing CATRED traces from current figure"""

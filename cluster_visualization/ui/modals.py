@@ -92,15 +92,15 @@ class Modals:
                                 dbc.Col(
                                     [
                                         dbc.Button(
-                                            [html.I(className="fas fa-table me-2"), "Export Data"],
-                                            id="cluster-export-button",
+                                            [html.I(className="fas fa-table me-2"), "Tag Cluster"],
+                                            id="cluster-tag-button",
                                             color="warning",
                                             disabled=True,
                                             className="w-100 mb-2",
                                             n_clicks=0,
                                         ),
                                         html.Small(
-                                            "Export cluster data and metadata",
+                                            "Tag this cluster as good/bad/dubious candidate",
                                             className="text-muted",
                                         ),
                                     ],
