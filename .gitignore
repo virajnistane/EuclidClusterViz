@@ -87,6 +87,7 @@ instance/
 
 # Sphinx documentation
 docs/_build/
+cluster_visualization/docs/_build/
 
 # PyBuilder
 .pybuilder/
