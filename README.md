@@ -1,5 +1,9 @@
 # ESA Euclid Mission: Cluster Detection Visualization
 
+[![Documentation](https://readthedocs.org/projects/euclidclusterviz/badge/?version=latest)](https://euclidclusterviz.readthedocs.io/en/latest/)
+
+**📖 Documentation**: https://euclidclusterviz.readthedocs.io/en/latest/
+
 An advanced interactive web-based visualization platform for astronomical cluster detection data from the ESA Euclid Mission. This sophisticated Dash application provides real-time analysis capabilities with comprehensive data integration, advanced filtering controls, interactive cluster analysis tools, and seamless remote access support.
 
 ## 📑 Table of Contents

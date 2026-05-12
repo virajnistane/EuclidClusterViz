@@ -93,7 +93,7 @@ cluster-viz-test = "cluster_visualization.tests.run_all_tests:main"
 [project.urls]
 Homepage = "https://github.com/virajnistane/EuclidClusterViz"
 Repository = "https://github.com/virajnistane/EuclidClusterViz"
-Documentation = "https://github.com/virajnistane/EuclidClusterViz/tree/dashapp/cluster_visualization/docs"
+Documentation = "https://euclidclusterviz.readthedocs.io/en/latest/"
 "Bug Tracker" = "https://github.com/virajnistane/EuclidClusterViz/issues"
 
 [tool.hatch.build.targets.wheel]
