@@ -124,6 +124,9 @@ Examples:
     parser.add_argument(
         "--remote", action="store_true", help="Alias for --external (for backward compatibility)"
     )
+    parser.add_argument(
+        "--debug", action="store_true", help="Run the app in debug mode with hot-reloading"
+    )
     return parser.parse_args()
 
 
@@ -441,7 +444,8 @@ def main():
 
     # Check for external access flag
     external_access = args.external or args.remote
-
+    debug = args.debug
+    
     if external_access:
         print("🌐 External access enabled (binding to 0.0.0.0)")
     else:
@@ -465,7 +469,7 @@ def main():
     if app.core:
         app.core.try_multiple_ports(
             ports=[8050, 8051, 8052, 8053],
-            debug=False,
+            debug=debug,
             auto_open=False,
             external_access=external_access,
         )
@@ -473,7 +477,7 @@ def main():
         # Fallback implementation
         for port in [8050, 8051, 8052, 8053]:
             try:
-                app.run(port=port, debug=False, auto_open=False, external_access=external_access)
+                app.run(port=port, debug=debug, auto_open=False, external_access=external_access)
                 break
             except OSError as e:
                 if "Address already in use" in str(e):

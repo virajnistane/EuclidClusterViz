@@ -31,6 +31,10 @@ while [[ $# -gt 0 ]]; do
             SHOW_HELP=true
             shift
             ;;
+        --debug)
+            CONFIG_ARG="$CONFIG_ARG --debug"
+            shift
+            ;;
         *)
             echo "Unknown option: $1"
             echo "Use --help for usage information"
@@ -49,6 +53,7 @@ if [ "$SHOW_HELP" = true ]; then
     echo "  --config FILE            Use custom configuration file"
     echo "  --test-dependencies      Test all dependencies and exit"
     echo "  --help, -h               Show this help message"
+    echo "  --debug                  Run the app in debug mode with hot-reloading"
     echo ""
     echo "EXAMPLES:"
     echo "  ./launch.sh"
@@ -59,6 +64,9 @@ if [ "$SHOW_HELP" = true ]; then
     echo ""
     echo "  ./launch.sh --test-dependencies"
     echo "    Test all Python dependencies and project structure"
+    echo ""
+    echo "  ./launch.sh --debug"
+    echo "    Run the Dash application in debug mode with hot-reloading"
     echo ""
     echo "DESCRIPTION:"
     echo "  Launches the Euclid Cluster Visualization Dash application."
