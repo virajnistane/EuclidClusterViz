@@ -10,6 +10,7 @@ This module handles the creation of all Plotly traces including:
 """
 
 import json
+import time
 from typing import Any, Dict, List, Optional, Tuple, TypedDict, Union, cast
 from numpy.typing import NDArray
 
@@ -20,6 +21,7 @@ from cluster_visualization.src.visualization.catred_proximity import (
     CatredProximityDetector,
     create_glow_trace,
 )
+from cluster_visualization.utils.profiler import TraceProfiler
 
 StructuredArray = NDArray[np.void]
 
@@ -46,6 +48,9 @@ class TraceCreator:
 
         # For fallback when no CATRED handler is available
         self.current_catred_data = None
+
+        # Performance profiler (set CLUSTERVIZ_PROFILE=0 to disable)
+        self._profiler = TraceProfiler()
 
     def create_traces(
         self,
@@ -93,6 +98,7 @@ class TraceCreator:
         Returns:
             List of Plotly trace objects ready for figure display"""
         traces: List = []  # Polygon traces (bottom layer)
+        _t_create = time.perf_counter()
 
         # Apply SNR filtering to merged data
         # if data['algorithm'] == 'PZWAV':
@@ -154,6 +160,7 @@ class TraceCreator:
             pass
 
         # Add cluster traces to separate list (top layer) - merged clusters always shown
+        _t = time.perf_counter()
         self._add_merged_cluster_trace(
             cluster_traces,
             datamod_detcluster_mergedcat,
@@ -167,16 +174,20 @@ class TraceCreator:
             catred_points=catred_points,
             relayout_data=relayout_data,
         )
+        self._profiler.record("create_traces:merged_cluster_trace", time.perf_counter() - _t)
 
         # Create tile polygons
+        _t = time.perf_counter()
         for tile_key, value in data["data_detcluster_by_cltile"].items():
             tileid = value.get("tile_id", tile_key)
             self._create_cltile_polygons(
                 traces, data, tileid, value, show_polygons, show_mer_tiles, legendgroup=None
             )
+        self._profiler.record("create_traces:polygon_loop", time.perf_counter() - _t)
 
         # Add unmerged cluster traces if requested
         if show_unmerged_clusters:
+            _t = time.perf_counter()
             self._add_unmerged_cluster_traces(
                 cluster_traces,
                 data,
@@ -189,6 +200,7 @@ class TraceCreator:
                 z_threshold_upper,
                 catred_points,
             )
+            self._profiler.record("create_traces:unmerged_traces", time.perf_counter() - _t)
 
         # Prepare mosaic traces (preserve existing ones)
         mosaic_traces = existing_mosaic_traces or []
@@ -210,6 +222,7 @@ class TraceCreator:
         # (tile data + box data). The background callback worker writes here; the main-process
         # PHZ click callback reads it back via the diskcache fallback.
         if hasattr(self, "current_catred_data") and self.current_catred_data:
+            _t = time.perf_counter()
             try:
                 import diskcache as _dc
                 import os as _os
@@ -220,8 +233,12 @@ class TraceCreator:
                       f"(keys: {list(self.current_catred_data.keys())})")
             except Exception as _exc:
                 print(f"Warning: Could not persist CATRED data to state cache: {_exc}")
+            self._profiler.record("create_traces:diskcache", time.perf_counter() - _t)
 
-        return traces + mosaic_traces + mask_overlay_traces + catred_traces + cluster_traces
+        _result = traces + mosaic_traces + mask_overlay_traces + catred_traces + cluster_traces
+        self._profiler.record("create_traces:total", time.perf_counter() - _t_create)
+        self._profiler.tick_render()
+        return _result
 
     def _get_catred_data_points(
         self,
@@ -1385,7 +1402,10 @@ class TraceCreator:
         if len(mergedcat) == 0:
             return [], []
 
+        _t_total = time.perf_counter()
+
         # Build flat arrays from all tiles
+        _t = time.perf_counter()
         flat_x_pzwav: List[np.ndarray] = []
         flat_y_pzwav: List[np.ndarray] = []
         flat_tid_pzwav: List[np.ndarray] = []
@@ -1416,6 +1436,7 @@ class TraceCreator:
                 flat_x_pzwav.append(x)
                 flat_y_pzwav.append(dec)
                 flat_tid_pzwav.append(tid)
+        self._profiler.record("tile_colors:flat_build", time.perf_counter() - _t)
 
         colors: List[str] = ["gray"] * len(mergedcat)
         tile_ids: List[str] = ["?"] * len(mergedcat)
@@ -1446,11 +1467,17 @@ class TraceCreator:
 
             try:
                 from scipy.spatial import cKDTree
+                _t = time.perf_counter()
                 tree = cKDTree(np.column_stack([all_x, all_y]))
+                self._profiler.record("tile_colors:kdtree_build", time.perf_counter() - _t)
+                _t = time.perf_counter()
                 _, idx = tree.query(np.column_stack([m_x, m_dec]))
+                self._profiler.record("tile_colors:kdtree_query", time.perf_counter() - _t)
             except ImportError:
+                _t = time.perf_counter()
                 d2 = (m_x[:, None] - all_x[None, :]) ** 2 + (m_dec[:, None] - all_y[None, :]) ** 2
                 idx = np.argmin(d2, axis=1)
+                self._profiler.record("tile_colors:numpy_fallback", time.perf_counter() - _t)
 
             matched_tids = all_tid[idx]
             for i, tid in zip(merged_indices, matched_tids):
@@ -1460,6 +1487,7 @@ class TraceCreator:
                 except IndexError:
                     colors[i] = "gray"
 
+        self._profiler.record("tile_colors:total", time.perf_counter() - _t_total)
         return colors, tile_ids
 
     def _find_unmerged_mask(

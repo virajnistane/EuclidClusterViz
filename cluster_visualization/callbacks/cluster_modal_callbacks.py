@@ -128,7 +128,7 @@ class ClusterModalCallbacks:
                     }
 
                     print(
-                        f"🎯 Cluster clicked: RA={ra:.4f}, Dec={dec:.4f}, SNR={snr}, z={redshift}"
+                        f"🎯 Cluster clicked: RA={ra:.3f}, Dec={dec:.3f}, SNR={snr:.2f}, z={redshift:.2f}"
                     )
 
                     # Create tab content with cluster information
@@ -139,7 +139,7 @@ class ClusterModalCallbacks:
                                     [
                                         html.Strong("Coordinates", className="text-primary"),
                                         html.Div(
-                                            [f"RA: {ra:.6f}°", html.Br(), f"Dec: {dec:.6f}°"],
+                                            [f"RA: {ra:.3f}°", html.Br(), f"Dec: {dec:.3f}°"],
                                             className="mt-1",
                                         ),
                                     ],
@@ -149,7 +149,7 @@ class ClusterModalCallbacks:
                                     [
                                         html.Strong("Properties", className="text-primary"),
                                         html.Div(
-                                            [f"SNR: {snr}", html.Br(), f"z: {redshift}"],
+                                            [f"z: {redshift:.2f}", f"SNR: {snr:.2f}", html.Br()],
                                             className="mt-1",
                                         ),
                                     ],
@@ -161,7 +161,7 @@ class ClusterModalCallbacks:
                         html.Div(
                             [
                                 html.Strong("Source: ", className="text-primary"),
-                                f"{algorithm} | {trace_name}",
+                                f"{algorithm}",
                             ]
                         ),
                         html.Div(
@@ -273,7 +273,7 @@ class ClusterModalCallbacks:
                         html.H6("🔬 Cutout Generation Requested", className="mb-2"),
                         html.P(
                             [
-                                f"📍 Target: RA {cluster['ra']:.6f}°, Dec {cluster['dec']:.6f}°",
+                                f"📍 Target: RA {cluster['ra']:.3f}°, Dec {cluster['dec']:.3f}°",
                                 html.Br(),
                                 f"📏 Size: {cutout_size} arcmin",
                                 html.Br(),
@@ -302,11 +302,11 @@ class ClusterModalCallbacks:
                         html.H6("📈 PHZ Analysis Requested", className="mb-2"),
                         html.P(
                             [
-                                f"🎯 Target: RA {cluster['ra']:.6f}°, Dec {cluster['dec']:.6f}°",
+                                f"🎯 Target: RA {cluster['ra']:.3f}°, Dec {cluster['dec']:.3f}°",
                                 html.Br(),
-                                f"🔢 Current z: {cluster['redshift']}",
+                                f"🔢 Current z: {cluster['redshift']:.2f}",
                                 html.Br(),
-                                f"📊 SNR: {cluster['snr']}",
+                                f"📊 SNR: {cluster['snr']:.2f}",
                             ]
                         ),
                         html.Small(
@@ -329,7 +329,7 @@ class ClusterModalCallbacks:
                         html.H6("🖼️ CATRED Box Requested", className="mb-2"),
                         html.P(
                             [
-                                f"📍 Target: RA {cluster['ra']:.6f}°, Dec {cluster['dec']:.6f}°, z {cluster['redshift']:.6f}",
+                                f"📍 Target: RA {cluster['ra']:.3f}°, Dec {cluster['dec']:.3f}°, z {cluster['redshift']:.3f}",
                                 html.Br(),
                                 f"🔍 Algorithm: {cluster['algorithm']}",
                             ]
@@ -343,7 +343,7 @@ class ClusterModalCallbacks:
                 )
 
                 print(
-                    f"🖼️ CATRED box requested for cluster at RA={cluster['ra']}, Dec={cluster['dec']}"
+                    f"🖼️ CATRED box requested for cluster at RA={cluster['ra']:.3f}°, Dec={cluster['dec']:.3f}°"
                 )
                 return status_msg
 
@@ -354,9 +354,9 @@ class ClusterModalCallbacks:
                         html.H6("💾 Data Export Requested", className="mb-2"),
                         html.P(
                             [
-                                f"📍 Target: RA {cluster['ra']:.6f}°, Dec {cluster['dec']:.6f}°",
+                                f"📍 Target: RA {cluster['ra']:.3f}°, Dec {cluster['dec']:.3f}°",
                                 html.Br(),
-                                f"📊 Data: SNR={cluster['snr']}, z={cluster['redshift']}",
+                                f"📊 Data: SNR={cluster['snr']:.2f}, z={cluster['redshift']:.2f}",
                             ]
                         ),
                         html.Small(
@@ -368,7 +368,7 @@ class ClusterModalCallbacks:
                 )
 
                 print(
-                    f"💾 Data export requested for cluster at RA={cluster['ra']}, Dec={cluster['dec']}"
+                    f"💾 Data export requested for cluster at RA={cluster['ra']:.3f}°, Dec={cluster['dec']:.3f}°"
                 )
                 return status_msg
 
@@ -436,7 +436,7 @@ class ClusterModalCallbacks:
                         html.H6("🔬 Generating Cutout...", className="mb-2"),
                         html.P(
                             [
-                                f"📍 RA {cluster['ra']:.6f}°, Dec {cluster['dec']:.6f}°",
+                                f"📍 RA {cluster['ra']:.3f}°, Dec {cluster['dec']:.3f}°",
                                 html.Br(),
                                 f"📏 {cutout_size} arcmin | 📊 {cutout_type.title()}",
                             ]
@@ -447,7 +447,7 @@ class ClusterModalCallbacks:
                 )
 
                 print(
-                    f"🔬 Sidebar cutout: RA={cluster['ra']}, Dec={cluster['dec']}, Size={cutout_size}, Type={cutout_type}"
+                    f"🔬 Sidebar cutout: RA={cluster['ra']:.3f}°, Dec={cluster['dec']:.3f}°, Size={cutout_size}, Type={cutout_type}"
                 )
                 return status_msg
 
@@ -455,7 +455,7 @@ class ClusterModalCallbacks:
                 status_msg = dbc.Alert(
                     [
                         html.H6("📈 PHZ Analysis", className="mb-2"),
-                        html.P(f"🎯 z={cluster['redshift']} | SNR={cluster['snr']}"),
+                        html.P(f"🎯 z={cluster['redshift']:.3f} | SNR={cluster['snr']:.3f}"),
                     ],
                     color="success",
                 )
@@ -465,7 +465,7 @@ class ClusterModalCallbacks:
                 status_msg = dbc.Alert(
                     [
                         html.H6("🖼️ Loading CATRED Box...", className="mb-2"),
-                        html.P(f"📍 RA {cluster['ra']:.4f}°, Dec {cluster['dec']:.4f}°"),
+                        html.P(f"📍 RA {cluster['ra']:.3f}°, Dec {cluster['dec']:.3f}°"),
                     ],
                     color="primary",
                 )
@@ -686,7 +686,7 @@ class ClusterModalCallbacks:
                                 html.P(
                                     [
                                         html.Strong("Target: "),
-                                        f"RA {cluster['ra']:.6f}°, Dec {cluster['dec']:.6f}°",
+                                        f"RA {cluster['ra']:.3f}°, Dec {cluster['dec']:.3f}°",
                                         html.Br(),
                                         html.Strong("Size: "),
                                         f"{cutout_size} arcmin",
@@ -810,14 +810,14 @@ class ClusterModalCallbacks:
                     [
                         html.H6("🔬 Cutout generated", className="mb-2"),
                         html.P(
-                            f"📍 RA {cluster['ra']:.6f}°, Dec {cluster['dec']:.6f}° | 📏 {cutout_size} arcmin"
+                            f"📍 RA {cluster['ra']:.3f}°, Dec {cluster['dec']:.3f}° | 📏 {cutout_size} arcmin"
                         ),
                     ],
                     color="info",
                 )
 
                 print(
-                    f"🔬 Tab cutout: RA={cluster['ra']}, Dec={cluster['dec']}, Size={cutout_size}, Type={cutout_type}"
+                    f"🔬 Tab cutout: RA={cluster['ra']:.3f}°, Dec={cluster['dec']:.3f}°, Size={cutout_size}, Type={cutout_type}"
                 )
                 return current_figure, empty_phz_fig, results_content, status_msg
 
@@ -840,7 +840,7 @@ class ClusterModalCallbacks:
                                 html.P(
                                     [
                                         html.Strong("Target: "),
-                                        f"RA {cluster['ra']:.4f}°, Dec {cluster['dec']:.4f}°",
+                                        f"RA {cluster['ra']:.3f}°, Dec {cluster['dec']:.3f}°",
                                         html.Br(),
                                         html.Strong("Box Size: "),
                                         f"{catred_box_size} arcmin",
@@ -954,7 +954,7 @@ class ClusterModalCallbacks:
                 status_msg = dbc.Alert(
                     [
                         html.H6("🖼️ CATRED Box loaded", className="mb-2"),
-                        html.P(f"📍 RA {cluster['ra']:.4f}°, Dec {cluster['dec']:.4f}°"),
+                        html.P(f"📍 RA {cluster['ra']:.3f}°, Dec {cluster['dec']:.3f}°"),
                     ],
                     color="primary",
                 )
@@ -980,10 +980,10 @@ class ClusterModalCallbacks:
                                 html.P(
                                     [
                                         html.Strong("Current z: "),
-                                        f"{cluster['redshift']}",
+                                        f"{cluster['redshift']:.3f}",
                                         html.Br(),
                                         html.Strong("SNR: "),
-                                        f"{cluster['snr']}",
+                                        f"{cluster['snr']:.3f}",
                                         html.Br(),
                                         html.Strong("Status: "),
                                         html.Span("Analysis Complete", className="text-success"),
@@ -1115,7 +1115,7 @@ class ClusterModalCallbacks:
                 status_msg = dbc.Alert(
                     [
                         html.H6("🗺️ Healpix Mask Cutout Complete", className="mb-2"),
-                        html.P(f"🎯 z={cluster['redshift']} | SNR={cluster['snr']}"),
+                        html.P(f"🎯 z={cluster['redshift']:.2f} | SNR={cluster['snr']:.2f}"),
                     ],
                     color="success",
                 )
@@ -1141,10 +1141,10 @@ class ClusterModalCallbacks:
             snr = record.get("SNR_CLUSTER", "?")
             z = record.get("Z_CLUSTER", "?")
             try:
-                ra = f"{float(ra):.5f}°"
-                dec = f"{float(dec):.5f}°"
+                ra = f"{float(ra):.3f}°"
+                dec = f"{float(dec):.3f}°"
                 snr = f"{float(snr):.2f}"
-                z = f"{float(z):.4f}"
+                z = f"{float(z):.2f}"
             except (TypeError, ValueError):
                 pass
             return html.Div([
