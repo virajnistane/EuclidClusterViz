@@ -54,7 +54,7 @@ class SidebarSections:
 
     @staticmethod
     def create_merged_clusters_section():
-        """Create merged clusters section"""
+        """Create unmerged clusters toggle section"""
         return html.Div(
             [
                 dbc.Card(
@@ -65,8 +65,8 @@ class SidebarSections:
                                     [
                                         html.I(className="fas fa-layer-group me-0 text-primary"),
                                         dbc.Switch(
-                                            id="merged-clusters-switch",
-                                            label="Show merged catalog members",
+                                            id="unmerged-clusters-switch",
+                                            label="Show unmerged clusters",
                                             value=False,
                                             className="ms-0",
                                         ),
@@ -76,7 +76,7 @@ class SidebarSections:
                                 html.Small(
                                     [
                                         html.I(className="fas fa-info-circle me-0"),
-                                        "Cluster detections from Merge_Cl code, merged over Cluster-Tiles",
+                                        "Clusters in individual tiles but absent from merged catalog",
                                     ],
                                     className="text-muted ms-0",
                                 ),

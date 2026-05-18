@@ -120,7 +120,7 @@ class CATREDCallbacks:
                 State("polygon-switch", "value"),
                 State("mer-switch", "value"),
                 State("aspect-ratio-switch", "value"),
-                State("merged-clusters-switch", "value"),
+                State("unmerged-clusters-switch", "value"),
                 State("catred-mode-switch", "value"),
                 State("catred-threshold-slider", "value"),
                 State("magnitude-limit-slider", "value"),
@@ -151,7 +151,7 @@ class CATREDCallbacks:
             show_polygons,
             show_mer_tiles,
             free_aspect_ratio,
-            show_merged_clusters,
+            show_unmerged_clusters,
             catred_masked,
             threshold,
             maglim,
@@ -255,7 +255,7 @@ class CATREDCallbacks:
                     z_threshold_upper=z_upper,
                     idcluster_list=idcluster_list,
                     threshold=threshold,
-                    show_merged_clusters=show_merged_clusters,
+                    show_unmerged_clusters=show_unmerged_clusters,
                     matching_clusters=matching_clusters,
                 )
 
@@ -346,7 +346,7 @@ class CATREDCallbacks:
                 State("polygon-switch", "value"),
                 State("mer-switch", "value"),
                 State("aspect-ratio-switch", "value"),
-                State("merged-clusters-switch", "value"),
+                State("unmerged-clusters-switch", "value"),
                 State("catred-mode-switch", "value"),
                 State("cluster-plot", "relayoutData"),
                 State("cluster-plot", "figure"),
@@ -366,7 +366,7 @@ class CATREDCallbacks:
             show_polygons,
             show_mer_tiles,
             free_aspect_ratio,
-            show_merged_clusters,
+            show_unmerged_clusters,
             catred_masked,
             relayout_data,
             current_figure,
@@ -455,9 +455,9 @@ class CATREDCallbacks:
                     snr_threshold_lower_amico=snr_amico_lower,
                     snr_threshold_upper_amico=snr_amico_upper,
                     z_threshold_lower=z_lower,
-                    z_threshold_upper=z_upper, 
+                    z_threshold_upper=z_upper,
                     idcluster_list=idcluster_list, 
-                    show_merged_clusters=show_merged_clusters,
+                    show_unmerged_clusters=show_unmerged_clusters,
                     matching_clusters=matching_clusters,
                 )
 
@@ -553,7 +553,7 @@ class CATREDCallbacks:
         z_threshold_upper=None,
         idcluster_list=None,
         threshold=0.8,
-        show_merged_clusters=True,
+        show_unmerged_clusters=False,
         matching_clusters=False,
     ):
         """Create traces using modular or fallback method"""
@@ -576,7 +576,7 @@ class CATREDCallbacks:
                 z_threshold_upper=z_threshold_upper,
                 idcluster_list=idcluster_list,
                 threshold=threshold,
-                show_merged_clusters=show_merged_clusters,
+                show_unmerged_clusters=show_unmerged_clusters,
                 matching_clusters=matching_clusters,
             )
         else:
@@ -599,7 +599,7 @@ class CATREDCallbacks:
                 z_threshold_upper=z_threshold_upper,
                 idcluster_list=idcluster_list,
                 threshold=threshold,
-                show_merged_clusters=show_merged_clusters,
+                show_unmerged_clusters=show_unmerged_clusters,
                 matching_clusters=matching_clusters,
             )
 
@@ -799,7 +799,7 @@ class CATREDCallbacks:
         z_threshold_upper=None,
         idcluster_list=None,
         threshold=0.8,
-        show_merged_clusters=True,
+        show_unmerged_clusters=False,
         matching_clusters=False,
     ):
         """Fallback trace creation method"""

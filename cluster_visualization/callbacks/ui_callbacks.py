@@ -211,15 +211,14 @@ class UICallbacks:
 
         @self.app.callback(
             Output("matching-clusters-switch", "disabled"),
-            [Input("algorithm-dropdown", "value"), Input("merged-clusters-switch", "disabled")],
+            [Input("algorithm-dropdown", "value")],
             prevent_initial_call=False,
         )
-        def toggle_matching_clusters_switch(algorithm, merged_clusters):
-            """Enable matching-clusters-switch only when algorithm is BOTH and merged_clusters is enabled"""
-            # Enable the switch only when algorithm is 'BOTH' and merged_clusters is True
-            is_disabled = (algorithm != "BOTH") and (not merged_clusters)
+        def toggle_matching_clusters_switch(algorithm):
+            """Enable matching-clusters-switch only when algorithm is BOTH"""
+            is_disabled = algorithm != "BOTH"
             print(
-                f"🔄 Algorithm dropdown callback: algorithm={algorithm}, merged_clusters={merged_clusters}, matching-switch-disabled={is_disabled}"
+                f"🔄 Algorithm dropdown callback: algorithm={algorithm}, matching-switch-disabled={is_disabled}"
             )
             return is_disabled
 

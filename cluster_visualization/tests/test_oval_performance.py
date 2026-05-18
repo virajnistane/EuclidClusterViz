@@ -60,7 +60,7 @@ def test_oval_rendering():
     traces = trace_creator.create_traces(
         data,
         show_polygons=True,
-        show_merged_clusters=True,
+        show_unmerged_clusters=False,
         matching_clusters=True,  # This triggers oval creation
     )
     trace_time = time.time() - start

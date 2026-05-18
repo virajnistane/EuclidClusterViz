@@ -572,7 +572,7 @@ class ClusterModalCallbacks:
                 State("polygon-switch", "value"),
                 State("mer-switch", "value"),
                 State("aspect-ratio-switch", "value"),
-                State("merged-clusters-switch", "value"),
+                State("unmerged-clusters-switch", "value"),
                 #
                 State("tab-cutout-size", "value"),
                 State("tab-cutout-type", "value"),
@@ -625,7 +625,7 @@ class ClusterModalCallbacks:
             show_polygons,
             show_mer_tiles,
             free_aspect_ratio,
-            show_merged_clusters,
+            show_unmerged_clusters,
             cutout_size,
             cutout_type,
             cutout_opacity,
@@ -935,7 +935,7 @@ class ClusterModalCallbacks:
                         snr_threshold_lower_amico=snr_amico_lower,
                         snr_threshold_upper_amico=snr_amico_upper,
                         threshold=catred_mask_threshold,
-                        show_merged_clusters=show_merged_clusters,
+                        show_unmerged_clusters=show_unmerged_clusters,
                     )
 
                 if self.figure_manager:

@@ -233,7 +233,7 @@ class MainPlotCallbacks:
                 State("polygon-switch", "value"),
                 State("mer-switch", "value"),
                 State("aspect-ratio-switch", "value"),
-                State("merged-clusters-switch", "value"),
+                State("unmerged-clusters-switch", "value"),
                 State("catred-mode-switch", "value"),
                 State("catred-threshold-slider", "value"),
                 State("magnitude-limit-slider", "value"),
@@ -271,7 +271,7 @@ class MainPlotCallbacks:
             show_polygons,
             show_mer_tiles,
             free_aspect_ratio,
-            show_merged_clusters,
+            show_unmerged_clusters,
             catred_masked,
             threshold,
             maglim,
@@ -343,7 +343,7 @@ class MainPlotCallbacks:
                     idcluster_list=idcluster_list,
                     threshold=threshold,
                     maglim=maglim,
-                    show_merged_clusters=show_merged_clusters,
+                    show_unmerged_clusters=show_unmerged_clusters,
                     matching_clusters=matching_clusters,
                 )
 
@@ -442,7 +442,7 @@ class MainPlotCallbacks:
                 Input("polygon-switch", "value"),
                 Input("mer-switch", "value"),
                 Input("aspect-ratio-switch", "value"),
-                Input("merged-clusters-switch", "value"),
+                Input("unmerged-clusters-switch", "value"),
                 Input("catred-mode-switch", "value"),
             ],
             [
@@ -465,7 +465,7 @@ class MainPlotCallbacks:
             show_polygons,
             show_mer_tiles,
             free_aspect_ratio,
-            show_merged_clusters,
+            show_unmerged_clusters,
             catred_masked,
             n_clicks,
             matching_clusters,
@@ -558,7 +558,7 @@ class MainPlotCallbacks:
                     idcluster_list=idcluster_list,
                     threshold=threshold,
                     maglim=maglim,
-                    show_merged_clusters=show_merged_clusters,
+                    show_unmerged_clusters=show_unmerged_clusters,
                     matching_clusters=matching_clusters,
                 )
 
@@ -1070,7 +1070,7 @@ class MainPlotCallbacks:
         idcluster_list=None,
         threshold=0.8,
         maglim=None,
-        show_merged_clusters=True,
+        show_unmerged_clusters=False,
         matching_clusters=False,
     ):
         """Create traces using modular or fallback method"""
@@ -1094,7 +1094,7 @@ class MainPlotCallbacks:
                 idcluster_list=idcluster_list,
                 threshold=threshold,
                 maglim=maglim,
-                show_merged_clusters=show_merged_clusters,
+                show_unmerged_clusters=show_unmerged_clusters,
                 matching_clusters=matching_clusters,
             )
         else:
@@ -1117,7 +1117,7 @@ class MainPlotCallbacks:
                 z_threshold_upper=z_threshold_upper,
                 idcluster_list=idcluster_list,
                 threshold=threshold,
-                show_merged_clusters=show_merged_clusters,
+                show_unmerged_clusters=show_unmerged_clusters,
                 matching_clusters=matching_clusters,
             )
 
@@ -1609,7 +1609,7 @@ class MainPlotCallbacks:
         z_threshold_upper=None,
         idcluster_list=None,
         threshold=0.8,
-        show_merged_clusters=True,
+        show_unmerged_clusters=False,
         matching_clusters=False,
     ):
         """Fallback trace creation method"""

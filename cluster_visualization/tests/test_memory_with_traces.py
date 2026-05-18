@@ -54,7 +54,7 @@ def test_memory_with_traces():
 
     print("\n3. Creating traces for PZWAV...")
     traces_pzwav = trace_creator.create_traces(
-        data_pzwav, show_polygons=True, show_merged_clusters=True
+        data_pzwav, show_polygons=True, show_unmerged_clusters=False
     )
     print(f"   ✓ Created {len(traces_pzwav)} traces")
 
@@ -66,7 +66,7 @@ def test_memory_with_traces():
     print(f"   ✓ Loaded {len(data_amico['data_detcluster_mergedcat'])} clusters")
 
     traces_amico = trace_creator.create_traces(
-        data_amico, show_polygons=True, show_merged_clusters=True
+        data_amico, show_polygons=True, show_unmerged_clusters=False
     )
     print(f"   ✓ Created {len(traces_amico)} traces")
 
@@ -81,7 +81,7 @@ def test_memory_with_traces():
     print(f"   ✓ Loaded {len(data_both['data_detcluster_mergedcat'])} clusters")
 
     traces_both = trace_creator.create_traces(
-        data_both, show_polygons=True, show_merged_clusters=True
+        data_both, show_polygons=True, show_unmerged_clusters=False
     )
     print(f"   ✓ Created {len(traces_both)} traces")
 
