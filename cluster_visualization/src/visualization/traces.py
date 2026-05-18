@@ -49,6 +49,9 @@ class TraceCreator:
         # For fallback when no CATRED handler is available
         self.current_catred_data = None
 
+        # Tile definition cache: path -> parsed JSON (avoids repeated disk reads per render)
+        self._tile_def_cache: Dict[str, Any] = {}
+
         # Performance profiler (set CLUSTERVIZ_PROFILE=0 to disable)
         self._profiler = TraceProfiler()
 
@@ -176,7 +179,7 @@ class TraceCreator:
         )
         self._profiler.record("create_traces:merged_cluster_trace", time.perf_counter() - _t)
 
-        # Create tile polygons
+        # Create CL-tile polygons
         _t = time.perf_counter()
         for tile_key, value in data["data_detcluster_by_cltile"].items():
             tileid = value.get("tile_id", tile_key)
@@ -1630,9 +1633,12 @@ class TraceCreator:
         legendgroup: Optional[str] = None,
     ) -> None:
         """Create polygon traces for a single tile (LEV1, CORE, and optionally MER)."""
-        # Load tile definition
-        with open(tile_value["cltiledef_file"], "r") as f:
-            tile = json.load(f)
+        # Load tile definition (cached to avoid repeated file I/O on every render)
+        tile_path = tile_value["cltiledef_file"]
+        if tile_path not in self._tile_def_cache:
+            with open(tile_path, "r") as f:
+                self._tile_def_cache[tile_path] = json.load(f)
+        tile = self._tile_def_cache[tile_path]
 
         # LEV1 polygon (always outline)
         lev1_polygon = tile["LEV1"]["POLYGON"][0]

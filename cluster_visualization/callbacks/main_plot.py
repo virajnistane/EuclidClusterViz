@@ -422,6 +422,9 @@ class MainPlotCallbacks:
 
                 # Create empty PHZ_PDF plot
                 empty_phz_fig = self._create_empty_phz_plot()
+                
+                _fig_json = fig.to_json()
+                print(f"Debug: Figure JSON {len(_fig_json) / 1024:.0f} KB, {len(traces)} traces, {len(data['data_detcluster_mergedcat'])} merged clusters")
 
                 return fig, empty_phz_fig, status
 
@@ -637,6 +640,9 @@ class MainPlotCallbacks:
                 # Create empty PHZ_PDF plot
                 empty_phz_fig = self._create_empty_phz_plot()
 
+                _fig_json = fig.to_json()
+                print(f"Debug: Figure JSON {len(_fig_json) / 1024:.0f} KB, {len(traces)} traces, {len(data['data_detcluster_mergedcat'])} merged clusters")
+                
                 return fig, empty_phz_fig, status
 
             except Exception as e:
