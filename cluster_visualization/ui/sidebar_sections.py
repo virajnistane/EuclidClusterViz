@@ -159,9 +159,13 @@ class SidebarSections:
                                 html.Small(
                                     [
                                         html.I(className="fas fa-info-circle me-0"),
-                                        "Ovals show in viewport only - zoom in, then re-render",
+                                        html.Span(
+                                            "Zoom in, then click Re-render",
+                                            id="viewport-zoom-indicator",
+                                            style={"color": "#6c757d"},
+                                        ),
                                     ],
-                                    className="text-muted ms-0",
+                                    className="ms-0",
                                 ),
                             ]
                         )

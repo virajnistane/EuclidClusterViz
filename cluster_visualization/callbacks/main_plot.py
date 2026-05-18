@@ -60,6 +60,7 @@ class MainPlotCallbacks:
         self._setup_snr_pzwav_clientside_callback()
         self._setup_snr_amico_clientside_callback()
         self._setup_redshift_clientside_callback()
+        self._setup_viewport_zoom_indicator_callback()
 
     def _setup_snr_slider_pzwav_callback(self):
         """Setup SNR slider initialization callback"""
@@ -1052,6 +1053,53 @@ class MainPlotCallbacks:
             [Input("redshift-range-slider", "value")],
             [State("cluster-plot", "figure")],
             prevent_initial_call=True,
+        )
+
+    def _setup_viewport_zoom_indicator_callback(self):
+        """Clientside callback: update viewport zoom indicator from relayoutData."""
+        self.app.clientside_callback(
+            """
+            function(relayoutData) {
+                if (!relayoutData) {
+                    return ['Zoom in, then click Re-render', {'color': '#6c757d'}];
+                }
+
+                var raRange = null, decRange = null;
+
+                if ('xaxis.range[0]' in relayoutData && 'xaxis.range[1]' in relayoutData) {
+                    raRange = Math.abs(relayoutData['xaxis.range[1]'] - relayoutData['xaxis.range[0]']);
+                } else if ('xaxis.range' in relayoutData) {
+                    raRange = Math.abs(relayoutData['xaxis.range'][1] - relayoutData['xaxis.range'][0]);
+                }
+
+                if ('yaxis.range[0]' in relayoutData && 'yaxis.range[1]' in relayoutData) {
+                    decRange = Math.abs(relayoutData['yaxis.range[1]'] - relayoutData['yaxis.range[0]']);
+                } else if ('yaxis.range' in relayoutData) {
+                    decRange = Math.abs(relayoutData['yaxis.range'][1] - relayoutData['yaxis.range'][0]);
+                }
+
+                if (raRange === null || decRange === null) {
+                    return ['Zoom in, then click Re-render', {'color': '#6c757d'}];
+                }
+
+                var label = raRange.toFixed(1) + '\u00b0 \u00d7 ' + decRange.toFixed(1) + '\u00b0';
+                var maxDim = Math.max(raRange, decRange);
+
+                if (maxDim < 5.0) {
+                    return ['\u2713 ' + label + ' \u2014 ready to render ovals', {'color': '#198754'}];
+                } else if (maxDim < 15.0) {
+                    return ['\u26a0 ' + label + ' \u2014 zoom in for fewer ovals', {'color': '#fd7e14'}];
+                } else {
+                    return ['\u2715 ' + label + ' \u2014 too wide, zoom in first', {'color': '#dc3545'}];
+                }
+            }
+            """,
+            [
+                Output("viewport-zoom-indicator", "children"),
+                Output("viewport-zoom-indicator", "style"),
+            ],
+            Input("cluster-plot", "relayoutData"),
+            prevent_initial_call=False,
         )
 
     def load_data(self, algorithm):
