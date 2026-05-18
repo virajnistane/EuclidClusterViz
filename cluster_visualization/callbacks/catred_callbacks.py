@@ -121,6 +121,7 @@ class CATREDCallbacks:
                 State("mer-switch", "value"),
                 State("aspect-ratio-switch", "value"),
                 State("unmerged-clusters-switch", "value"),
+                State("cltile-info-switch", "value"),
                 State("catred-mode-switch", "value"),
                 State("catred-threshold-slider", "value"),
                 State("magnitude-limit-slider", "value"),
@@ -152,6 +153,7 @@ class CATREDCallbacks:
             show_mer_tiles,
             free_aspect_ratio,
             show_unmerged_clusters,
+            show_cltile_info,
             catred_masked,
             threshold,
             maglim,
@@ -256,6 +258,7 @@ class CATREDCallbacks:
                     idcluster_list=idcluster_list,
                     threshold=threshold,
                     show_unmerged_clusters=show_unmerged_clusters,
+                    show_cltile_info=show_cltile_info,
                     matching_clusters=matching_clusters,
                 )
 
@@ -347,6 +350,7 @@ class CATREDCallbacks:
                 State("mer-switch", "value"),
                 State("aspect-ratio-switch", "value"),
                 State("unmerged-clusters-switch", "value"),
+                State("cltile-info-switch", "value"),
                 State("catred-mode-switch", "value"),
                 State("cluster-plot", "relayoutData"),
                 State("cluster-plot", "figure"),
@@ -367,6 +371,7 @@ class CATREDCallbacks:
             show_mer_tiles,
             free_aspect_ratio,
             show_unmerged_clusters,
+            show_cltile_info,
             catred_masked,
             relayout_data,
             current_figure,
@@ -458,6 +463,7 @@ class CATREDCallbacks:
                     z_threshold_upper=z_upper,
                     idcluster_list=idcluster_list, 
                     show_unmerged_clusters=show_unmerged_clusters,
+                    show_cltile_info=show_cltile_info,
                     matching_clusters=matching_clusters,
                 )
 
@@ -554,6 +560,7 @@ class CATREDCallbacks:
         idcluster_list=None,
         threshold=0.8,
         show_unmerged_clusters=False,
+        show_cltile_info=True,
         matching_clusters=False,
     ):
         """Create traces using modular or fallback method"""
@@ -577,6 +584,7 @@ class CATREDCallbacks:
                 idcluster_list=idcluster_list,
                 threshold=threshold,
                 show_unmerged_clusters=show_unmerged_clusters,
+                show_cltile_info=show_cltile_info,
                 matching_clusters=matching_clusters,
             )
         else:
@@ -600,6 +608,7 @@ class CATREDCallbacks:
                 idcluster_list=idcluster_list,
                 threshold=threshold,
                 show_unmerged_clusters=show_unmerged_clusters,
+                show_cltile_info=show_cltile_info,
                 matching_clusters=matching_clusters,
             )
 
@@ -800,6 +809,7 @@ class CATREDCallbacks:
         idcluster_list=None,
         threshold=0.8,
         show_unmerged_clusters=False,
+        show_cltile_info=True,
         matching_clusters=False,
     ):
         """Fallback trace creation method"""

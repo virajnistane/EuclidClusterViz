@@ -80,6 +80,7 @@ class TraceCreator:
         maglim: Optional[float] = None,
         show_unmerged_clusters: bool = False,
         matching_clusters: bool = False,
+        show_cltile_info: bool = True,
     ) -> List:
         """
         Create all Plotly traces for the visualization.
@@ -176,17 +177,18 @@ class TraceCreator:
             snr_threshold_upper_amico=snr_threshold_upper_amico,
             catred_points=catred_points,
             relayout_data=relayout_data,
+            show_cltile_info=show_cltile_info,
         )
         self._profiler.record("create_traces:merged_cluster_trace", time.perf_counter() - _t)
 
         # Create CL-tile polygons
-        _t = time.perf_counter()
+        # _t = time.perf_counter()
         for tile_key, value in data["data_detcluster_by_cltile"].items():
             tileid = value.get("tile_id", tile_key)
             self._create_cltile_polygons(
                 traces, data, tileid, value, show_polygons, show_mer_tiles, legendgroup=None
             )
-        self._profiler.record("create_traces:polygon_loop", time.perf_counter() - _t)
+        # self._profiler.record("create_traces:polygon_loop", time.perf_counter() - _t)
 
         # Add unmerged cluster traces if requested
         if show_unmerged_clusters:
@@ -735,6 +737,7 @@ class TraceCreator:
         snr_threshold_upper_amico: Optional[float] = None,
         catred_points: Optional[List] = None,
         relayout_data: Optional[Dict] = None,
+        show_cltile_info: bool = True,
     ) -> None:
         """Add merged cluster detection trace with proximity-based enhancement."""
 
@@ -871,8 +874,8 @@ class TraceCreator:
                 if len(pzwav_data) > 0:
                     pzwav_colors, pzwav_tile_ids = (
                         self._compute_merged_tile_colors(pzwav_data, data_detcluster_by_cltile)
-                        if data_detcluster_by_cltile
-                        else (["gray"] * len(pzwav_data), ["?"] * len(pzwav_data))
+                        if (show_cltile_info and data_detcluster_by_cltile)
+                        else (["royalblue"] * len(pzwav_data), ["?"] * len(pzwav_data))
                     )
                     pzwav_trace = go.Scattergl(
                         x=pzwav_data["RIGHT_ASCENSION_CLUSTER"],
@@ -895,13 +898,13 @@ class TraceCreator:
                             )
                         ],
                         hovertemplate=(
-                            "<b>Cluster (PZWAV - Tile %{customdata[4]})</b><br>"
-                            "ID: %{customdata[3]}<br>"
-                            "<span style='color:red'>RA: %{x:.2f}°</span><br>"
-                            "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
-                            "Z: %{customdata[1]:.2f}<br>"
-                            "SNR: %{customdata[0]:.2f}<br>"
-                            "<extra></extra>"
+                            ("<b>Cluster (PZWAV - Tile %{customdata[4]})</b><br>" if show_cltile_info else "<b>Cluster (PZWAV)</b><br>")
+                            + "ID: %{customdata[3]}<br>"
+                            + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
+                            + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
+                            + "Z: %{customdata[1]:.2f}<br>"
+                            + "SNR: %{customdata[0]:.2f}<br>"
+                            + "<extra></extra>"
                         ),
                         hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
                     )
@@ -911,8 +914,8 @@ class TraceCreator:
                 if len(amico_data) > 0:
                     amico_colors, amico_tile_ids = (
                         self._compute_merged_tile_colors(amico_data, data_detcluster_by_cltile)
-                        if data_detcluster_by_cltile
-                        else (["gray"] * len(amico_data), ["?"] * len(amico_data))
+                        if (show_cltile_info and data_detcluster_by_cltile)
+                        else (["tomato"] * len(amico_data), ["?"] * len(amico_data))
                     )
                     amico_trace = go.Scattergl(
                         x=amico_data["RIGHT_ASCENSION_CLUSTER"],
@@ -935,13 +938,13 @@ class TraceCreator:
                             )
                         ],
                         hovertemplate=(
-                            "<b>Cluster (AMICO - Tile %{customdata[4]})</b><br>"
-                            "ID: %{customdata[3]}<br>"
-                            "<span style='color:red'>RA: %{x:.2f}°</span><br>"
-                            "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
-                            "Z: %{customdata[1]:.2f}<br>"
-                            "SNR: %{customdata[0]:.2f}<br>"
-                            "<extra></extra>"
+                            ("<b>Cluster (AMICO - Tile %{customdata[4]})</b><br>" if show_cltile_info else "<b>Cluster (AMICO)</b><br>")
+                            + "ID: %{customdata[3]}<br>"
+                            + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
+                            + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
+                            + "Z: %{customdata[1]:.2f}<br>"
+                            + "SNR: %{customdata[0]:.2f}<br>"
+                            + "<extra></extra>"
                         ),
                         hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
                     )
@@ -974,8 +977,8 @@ class TraceCreator:
                     self._compute_merged_tile_colors(
                         datamod_detcluster_mergedcat, data_detcluster_by_cltile
                     )
-                    if data_detcluster_by_cltile
-                    else (["gray"] * len(datamod_detcluster_mergedcat), ["?"] * len(datamod_detcluster_mergedcat))
+                    if (show_cltile_info and data_detcluster_by_cltile)
+                    else (["royalblue" if algorithm.lower() == "pzwav" else "tomato"] * len(datamod_detcluster_mergedcat), ["?"] * len(datamod_detcluster_mergedcat))
                 )
                 merged_trace = go.Scattergl(
                     x=datamod_detcluster_mergedcat["RIGHT_ASCENSION_CLUSTER"],
@@ -994,13 +997,13 @@ class TraceCreator:
                         )
                     ],
                     hovertemplate=(
-                        f"<b>Cluster ({algorithm} - Tile %{{customdata[4]}})</b><br>"
-                        "ID: %{customdata[3]}<br>"
-                        "<span style='color:red'>RA: %{x:.2f}°</span><br>"
-                        "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
-                        "Z: %{customdata[1]:.2f}<br>"
-                        "SNR: %{customdata[0]:.2f}<br>"
-                        "<extra></extra>"
+                        (f"<b>Cluster ({algorithm} - Tile %{{customdata[4]}})</b><br>" if show_cltile_info else f"<b>Cluster ({algorithm})</b><br>")
+                        + "ID: %{customdata[3]}<br>"
+                        + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
+                        + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
+                        + "Z: %{customdata[1]:.2f}<br>"
+                        + "SNR: %{customdata[0]:.2f}<br>"
+                        + "<extra></extra>"
                     ),
                     hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
                 )
@@ -1039,8 +1042,8 @@ class TraceCreator:
                             self._compute_merged_tile_colors(
                                 pzwav_away, data_detcluster_by_cltile
                             )
-                            if data_detcluster_by_cltile
-                            else (["gray"] * len(pzwav_away), ["?"] * len(pzwav_away))
+                            if (show_cltile_info and data_detcluster_by_cltile)
+                            else (["royalblue"] * len(pzwav_away), ["?"] * len(pzwav_away))
                         )
                         normal_trace_pzwav = go.Scattergl(
                             x=pzwav_away["RIGHT_ASCENSION_CLUSTER"],
@@ -1063,13 +1066,13 @@ class TraceCreator:
                                 )
                             ],
                             hovertemplate=(
-                                "<b>Cluster (PZWAV - Tile %{customdata[4]})</b><br>"
-                                "ID: %{customdata[3]}<br>"
-                                "<span style='color:red'>RA: %{x:.2f}°</span><br>"
-                                "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
-                                "Z: %{customdata[1]:.2f}<br>"
-                                "SNR: %{customdata[0]:.2f}<br>"
-                                "<extra></extra>"
+                                ("<b>Cluster (PZWAV - Tile %{customdata[4]})</b><br>" if show_cltile_info else "<b>Cluster (PZWAV)</b><br>")
+                                + "ID: %{customdata[3]}<br>"
+                                + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
+                                + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
+                                + "Z: %{customdata[1]:.2f}<br>"
+                                + "SNR: %{customdata[0]:.2f}<br>"
+                                + "<extra></extra>"
                             ),
                             hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
                         )
@@ -1081,8 +1084,8 @@ class TraceCreator:
                             self._compute_merged_tile_colors(
                                 amico_away, data_detcluster_by_cltile
                             )
-                            if data_detcluster_by_cltile
-                            else (["gray"] * len(amico_away), ["?"] * len(amico_away))
+                            if (show_cltile_info and data_detcluster_by_cltile)
+                            else (["tomato"] * len(amico_away), ["?"] * len(amico_away))
                         )
                         normal_trace_amico = go.Scattergl(
                             x=amico_away["RIGHT_ASCENSION_CLUSTER"],
@@ -1105,13 +1108,13 @@ class TraceCreator:
                                 )
                             ],
                             hovertemplate=(
-                                "<b>Cluster (AMICO - Tile %{customdata[4]})</b><br>"
-                                "ID: %{customdata[3]}<br>"
-                                "<span style='color:red'>RA: %{x:.2f}°</span><br>"
-                                "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
-                                "Z: %{customdata[1]:.2f}<br>"
-                                "SNR: %{customdata[0]:.2f}<br>"
-                                "<extra></extra>"
+                                ("<b>Cluster (AMICO - Tile %{customdata[4]})</b><br>" if show_cltile_info else "<b>Cluster (AMICO)</b><br>")
+                                + "ID: %{customdata[3]}<br>"
+                                + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
+                                + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
+                                + "Z: %{customdata[1]:.2f}<br>"
+                                + "SNR: %{customdata[0]:.2f}<br>"
+                                + "<extra></extra>"
                             ),
                             hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
                         )
@@ -1144,8 +1147,8 @@ class TraceCreator:
                         self._compute_merged_tile_colors(
                             away_from_catred_data, data_detcluster_by_cltile
                         )
-                        if data_detcluster_by_cltile
-                        else (["gray"] * len(away_from_catred_data), ["?"] * len(away_from_catred_data))
+                        if (show_cltile_info and data_detcluster_by_cltile)
+                        else (["royalblue" if algorithm.lower() == "pzwav" else "tomato"] * len(away_from_catred_data), ["?"] * len(away_from_catred_data))
                     )
                     normal_trace = go.Scattergl(
                         x=away_from_catred_data["RIGHT_ASCENSION_CLUSTER"],
@@ -1166,13 +1169,13 @@ class TraceCreator:
                             )
                         ],
                         hovertemplate=(
-                            f"<b>Cluster ({algorithm} - Tile %{{customdata[4]}})</b><br>"
-                            "ID: %{customdata[3]}<br>"
-                            "<span style='color:red'>RA: %{x:.2f}°</span><br>"
-                            "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
-                            "Z: %{customdata[1]:.2f}<br>"
-                            "SNR: %{customdata[0]:.2f}<br>"
-                            "<extra></extra>"
+                            (f"<b>Cluster ({algorithm} - Tile %{{customdata[4]}})</b><br>" if show_cltile_info else f"<b>Cluster ({algorithm})</b><br>")
+                            + "ID: %{customdata[3]}<br>"
+                            + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
+                            + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
+                            + "Z: %{customdata[1]:.2f}<br>"
+                            + "SNR: %{customdata[0]:.2f}<br>"
+                            + "<extra></extra>"
                         ),
                         hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
                     )
@@ -1201,8 +1204,8 @@ class TraceCreator:
                             self._compute_merged_tile_colors(
                                 pzwav_near, data_detcluster_by_cltile
                             )
-                            if data_detcluster_by_cltile
-                            else (["gray"] * len(pzwav_near), ["?"] * len(pzwav_near))
+                            if (show_cltile_info and data_detcluster_by_cltile)
+                            else (["royalblue"] * len(pzwav_near), ["?"] * len(pzwav_near))
                         )
                         glow_trace_pzwav = create_glow_trace(
                             pzwav_near["RIGHT_ASCENSION_CLUSTER"],
@@ -1239,13 +1242,13 @@ class TraceCreator:
                                 )
                             ],
                             hovertemplate=(
-                                "<b>Cluster (PZWAV - Tile %{customdata[4]})</b><br>"
-                                "ID: %{customdata[3]}<br>"
-                                "<span style='color:red'>RA: %{x:.2f}°</span><br>"
-                                "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
-                                "Z: %{customdata[1]:.2f}<br>"
-                                "SNR: %{customdata[0]:.2f}<br>"
-                                "<extra></extra>"
+                                ("<b>Cluster (PZWAV - Tile %{customdata[4]})</b><br>" if show_cltile_info else "<b>Cluster (PZWAV)</b><br>")
+                                + "ID: %{customdata[3]}<br>"
+                                + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
+                                + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
+                                + "Z: %{customdata[1]:.2f}<br>"
+                                + "SNR: %{customdata[0]:.2f}<br>"
+                                + "<extra></extra>"
                             ),
                             hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
                         )
@@ -1257,8 +1260,8 @@ class TraceCreator:
                             self._compute_merged_tile_colors(
                                 amico_near, data_detcluster_by_cltile
                             )
-                            if data_detcluster_by_cltile
-                            else (["gray"] * len(amico_near), ["?"] * len(amico_near))
+                            if (show_cltile_info and data_detcluster_by_cltile)
+                            else (["tomato"] * len(amico_near), ["?"] * len(amico_near))
                         )
                         glow_trace_amico = create_glow_trace(
                             amico_near["RIGHT_ASCENSION_CLUSTER"],
@@ -1295,13 +1298,13 @@ class TraceCreator:
                                 )
                             ],
                             hovertemplate=(
-                                "<b>Cluster (AMICO - Tile %{customdata[4]})</b><br>"
-                                "ID: %{customdata[3]}<br>"
-                                "<span style='color:red'>RA: %{x:.2f}°</span><br>"
-                                "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
-                                "Z: %{customdata[1]:.2f}<br>"
-                                "SNR: %{customdata[0]:.2f}<br>"
-                                "<extra></extra>"
+                                ("<b>Cluster (AMICO - Tile %{customdata[4]})</b><br>" if show_cltile_info else "<b>Cluster (AMICO)</b><br>")
+                                + "ID: %{customdata[3]}<br>"
+                                + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
+                                + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
+                                + "Z: %{customdata[1]:.2f}<br>"
+                                + "SNR: %{customdata[0]:.2f}<br>"
+                                + "<extra></extra>"
                             ),
                             hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
                         )
@@ -1327,8 +1330,8 @@ class TraceCreator:
                         self._compute_merged_tile_colors(
                             near_catred_data, data_detcluster_by_cltile
                         )
-                        if data_detcluster_by_cltile
-                        else (["gray"] * len(near_catred_data), ["?"] * len(near_catred_data))
+                        if (show_cltile_info and data_detcluster_by_cltile)
+                        else (["royalblue" if algorithm.lower() == "pzwav" else "tomato"] * len(near_catred_data), ["?"] * len(near_catred_data))
                     )
                     # Add glow effect trace first (background)
                     glow_trace = create_glow_trace(
@@ -1372,13 +1375,13 @@ class TraceCreator:
                             )
                         ],
                         hovertemplate=(
-                            f"<b>Cluster ({algorithm} - Tile %{{customdata[4]}})</b><br>"
-                            "ID: %{customdata[3]}<br>"
-                            "<span style='color:red'>RA: %{x:.2f}°</span><br>"
-                            "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
-                            "Z: %{customdata[1]:.2f}<br>"
-                            "SNR: %{customdata[0]:.2f}<br>"
-                            "<extra></extra>"
+                            (f"<b>Cluster ({algorithm} - Tile %{{customdata[4]}})</b><br>" if show_cltile_info else f"<b>Cluster ({algorithm})</b><br>")
+                            + "ID: %{customdata[3]}<br>"
+                            + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
+                            + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
+                            + "Z: %{customdata[1]:.2f}<br>"
+                            + "SNR: %{customdata[0]:.2f}<br>"
+                            + "<extra></extra>"
                         ),
                         hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
                     )
@@ -1693,6 +1696,7 @@ class TraceCreator:
             and not data["catred_info"].empty
             and "polygon" in data["catred_info"].columns
         ):
+            _t_mer = time.perf_counter()
             self._create_mer_tile_polygons(
                 polygon_traces,
                 data,
@@ -1700,6 +1704,7 @@ class TraceCreator:
                 tileid,
                 legendgroup=legendgroup if legendgroup is not None else f"cl_tile_{tileid}",
             )
+            self._profiler.record("create_traces:mer_polygon_loop", time.perf_counter() - _t_mer)
 
     def _create_mer_tile_polygons(
         self,

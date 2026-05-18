@@ -63,6 +63,38 @@ class SidebarSections:
                             [
                                 html.Div(
                                     [
+                                        html.I(className="fas fa-map-marker-alt me-0 text-primary"),
+                                        dbc.Switch(
+                                            id="cltile-info-switch",
+                                            label="Show CL-tile information",
+                                            value=True,
+                                            className="ms-0",
+                                        ),
+                                    ],
+                                    className="d-flex align-items-left mb-0",
+                                ),
+                                html.Small(
+                                    [
+                                        html.I(className="fas fa-info-circle me-0"),
+                                        "Color clusters by tile; show MER tile polygons",
+                                    ],
+                                    className="text-muted ms-0",
+                                ),
+                            ]
+                        )
+                    ],
+                    className="mb-3 border-0 shadow-sm",
+                    style={
+                        "background": "linear-gradient(45deg, #f0f8ff, #ffffff)",
+                        "border-radius": "10px",
+                    },
+                ),
+                dbc.Card(
+                    [
+                        dbc.CardBody(
+                            [
+                                html.Div(
+                                    [
                                         html.I(className="fas fa-layer-group me-0 text-primary"),
                                         dbc.Switch(
                                             id="unmerged-clusters-switch",
@@ -88,7 +120,7 @@ class SidebarSections:
                         "background": "linear-gradient(45deg, #f0f8ff, #ffffff)",
                         "border-radius": "10px",
                     },
-                )
+                ),
             ]
         )
 
@@ -478,36 +510,11 @@ class SidebarSections:
                             [
                                 html.Div(
                                     [
-                                        html.I(className="fas fa-shapes me-0 text-info"),
-                                        dbc.Switch(
-                                            id="polygon-switch",
-                                            label="Fill CL-tiles (CORE) polygons",
-                                            value=False,
-                                            className="ms-0",
-                                        ),
-                                    ],
-                                    className="d-flex align-items-left mb-1",
-                                )
-                            ]
-                        )
-                    ],
-                    className="mb-3 border-0 shadow-sm",
-                    style={
-                        "background": "linear-gradient(45deg, #e8f8f8, #ffffff)",
-                        "border-radius": "10px",
-                    },
-                ),
-                dbc.Card(
-                    [
-                        dbc.CardBody(
-                            [
-                                html.Div(
-                                    [
                                         html.I(className="fas fa-th me-0 text-warning"),
                                         dbc.Switch(
                                             id="mer-switch",
                                             label="Show MER tiles (up to LEV2 in CL-tiles)",
-                                            value=True,
+                                            value=False,
                                             className="ms-0",
                                         ),
                                     ],
@@ -526,6 +533,31 @@ class SidebarSections:
                     className="mb-3 border-0 shadow-sm",
                     style={
                         "background": "linear-gradient(45deg, #fff8e1, #ffffff)",
+                        "border-radius": "10px",
+                    },
+                ),
+                dbc.Card(
+                    [
+                        dbc.CardBody(
+                            [
+                                html.Div(
+                                    [
+                                        html.I(className="fas fa-shapes me-0 text-info"),
+                                        dbc.Switch(
+                                            id="polygon-switch",
+                                            label="Fill CL-tiles (CORE) polygons",
+                                            value=False,
+                                            className="ms-0",
+                                        ),
+                                    ],
+                                    className="d-flex align-items-left mb-1",
+                                )
+                            ]
+                        )
+                    ],
+                    className="mb-3 border-0 shadow-sm",
+                    style={
+                        "background": "linear-gradient(45deg, #e8f8f8, #ffffff)",
                         "border-radius": "10px",
                     },
                 ),

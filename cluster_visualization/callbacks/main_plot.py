@@ -234,6 +234,7 @@ class MainPlotCallbacks:
                 State("mer-switch", "value"),
                 State("aspect-ratio-switch", "value"),
                 State("unmerged-clusters-switch", "value"),
+                State("cltile-info-switch", "value"),
                 State("catred-mode-switch", "value"),
                 State("catred-threshold-slider", "value"),
                 State("magnitude-limit-slider", "value"),
@@ -272,6 +273,7 @@ class MainPlotCallbacks:
             show_mer_tiles,
             free_aspect_ratio,
             show_unmerged_clusters,
+            show_cltile_info,
             catred_masked,
             threshold,
             maglim,
@@ -345,6 +347,7 @@ class MainPlotCallbacks:
                     maglim=maglim,
                     show_unmerged_clusters=show_unmerged_clusters,
                     matching_clusters=matching_clusters,
+                    show_cltile_info=show_cltile_info,
                 )
 
                 # Create figure
@@ -446,6 +449,7 @@ class MainPlotCallbacks:
                 Input("mer-switch", "value"),
                 Input("aspect-ratio-switch", "value"),
                 Input("unmerged-clusters-switch", "value"),
+                Input("cltile-info-switch", "value"),
                 Input("catred-mode-switch", "value"),
             ],
             [
@@ -469,6 +473,7 @@ class MainPlotCallbacks:
             show_mer_tiles,
             free_aspect_ratio,
             show_unmerged_clusters,
+            show_cltile_info,
             catred_masked,
             n_clicks,
             matching_clusters,
@@ -563,6 +568,7 @@ class MainPlotCallbacks:
                     maglim=maglim,
                     show_unmerged_clusters=show_unmerged_clusters,
                     matching_clusters=matching_clusters,
+                    show_cltile_info=show_cltile_info,
                 )
 
                 # Create figure
@@ -642,7 +648,7 @@ class MainPlotCallbacks:
 
                 _fig_json = fig.to_json()
                 print(f"Debug: Figure JSON {len(_fig_json) / 1024:.0f} KB, {len(traces)} traces, {len(data['data_detcluster_mergedcat'])} merged clusters")
-                
+
                 return fig, empty_phz_fig, status
 
             except Exception as e:
@@ -1078,6 +1084,7 @@ class MainPlotCallbacks:
         maglim=None,
         show_unmerged_clusters=False,
         matching_clusters=False,
+        show_cltile_info=True,
     ):
         """Create traces using modular or fallback method"""
         if self.trace_creator:
@@ -1102,6 +1109,7 @@ class MainPlotCallbacks:
                 maglim=maglim,
                 show_unmerged_clusters=show_unmerged_clusters,
                 matching_clusters=matching_clusters,
+                show_cltile_info=show_cltile_info,
             )
         else:
             # Fallback to inline trace creation
@@ -1125,6 +1133,7 @@ class MainPlotCallbacks:
                 threshold=threshold,
                 show_unmerged_clusters=show_unmerged_clusters,
                 matching_clusters=matching_clusters,
+                show_cltile_info=show_cltile_info,
             )
 
     # Helper methods for fallback and utility functions
@@ -1616,6 +1625,7 @@ class MainPlotCallbacks:
         idcluster_list=None,
         threshold=0.8,
         show_unmerged_clusters=False,
+        show_cltile_info=True,
         matching_clusters=False,
     ):
         """Fallback trace creation method"""
