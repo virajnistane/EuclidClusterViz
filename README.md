@@ -2,7 +2,8 @@
 
 [![Documentation](https://readthedocs.org/projects/euclidclusterviz/badge/?version=latest)](https://euclidclusterviz.readthedocs.io/en/latest/)
 
-**📖 Documentation**: https://euclidclusterviz.readthedocs.io/en/latest/
+**📖 Main Documentation**: https://euclidclusterviz.readthedocs.io/en/latest/
+**📚 Detailed Guides**: [See cluster_visualization/docs/ for feature guides and technical documentation](cluster_visualization/docs/README.md)
 
 An advanced interactive web-based visualization platform for astronomical cluster detection data from the ESA Euclid Mission. This sophisticated Dash application provides real-time analysis capabilities with comprehensive data integration, advanced filtering controls, interactive cluster analysis tools, and seamless remote access support.
 
@@ -36,6 +37,7 @@ An advanced interactive web-based visualization platform for astronomical cluste
 - [Enterprise Benefits & Comparison](#-enterprise-benefits--comparison)
 - [Recent Development Milestones](#-recent-development-milestones)
 - [Technical Specifications & Data Insights](#-technical-specifications--data-insights)
+- [Detailed Feature Guides](#-detailed-feature-guides)
 
 ---
 
@@ -1043,6 +1045,14 @@ The application now supports independent control of multiple overlay layers:
 - ✅ **Professional Documentation**: Comprehensive README reflecting sophisticated architecture
 - ✅ **Trace Management**: Granular control over visibility and clearing of all overlay types
 
+### **May 2026: Performance & UX Enhancements**
+- ✅ **CL-tile Information Toggle**: New sidebar control to toggle tile-based coloring and MER tile polygon rendering
+- ✅ **Tile Definition Caching**: In-memory caching of tile metadata JSON to eliminate repeated disk I/O (33% reduction in render time)
+- ✅ **Viewport Zoom Indicator**: Real-time zoom level display with 3-state rendering guidance for matched clusters
+- ✅ **Optimized Polygon Rendering**: Conditional MER tile polygon rendering via smart logic
+- ✅ **Smart Fallback Colors**: Algorithm-specific cluster colors when tile coloring disabled
+- ✅ **Conditional Hovertemplates**: Dynamic hover text with optional tile ID suffix
+
 ## 📊 Technical Specifications & Data Insights
 
 ### **Dataset Statistics**
@@ -1065,4 +1075,18 @@ Spatial Analysis: shapely for coordinate transformations and polygon operations
 UI Framework: Bootstrap 5 with custom responsive styling
 Performance: Client-side callbacks, lazy loading, smart caching
 Monitoring: Flask middleware for SSH tunnel validation and user tracking
+```
+
+---
+
+## 📖 Detailed Feature Guides
+
+For in-depth documentation on specific features and recent improvements, see the docs folder:
+
+- **[Tile Caching & CL-tile Controls](cluster_visualization/docs/TILE_CACHING_AND_CONTROLS.md)** — Tile definition caching (30-40% faster renders), toggle control for MER polygons and tile colors
+- **[Zoom-Based Oval Rendering](cluster_visualization/docs/ZOOM_BASED_OVAL_RENDERING.md)** — Matched cluster rendering with viewport zoom indicator, performance characteristics
+- **[Cluster Analysis Guide](cluster_visualization/docs/CLUSTER_ANALYSIS_GUIDE.md)** — Cutouts, CATRED boxes, mask overlays, trace management
+- **[Configuration Guide](cluster_visualization/docs/CONFIGURATION_GUIDE.md)** — Setup and configuration options
+- **[Complete Documentation](cluster_visualization/docs/README.md)** — Full feature reference with all technical details
+- **[Usage Guide](cluster_visualization/docs/USAGE.md)** — Interactive feature walkthrough with current UI capabilities
 ```

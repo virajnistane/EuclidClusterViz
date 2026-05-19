@@ -22,6 +22,34 @@ The matched cluster oval feature now uses **zoom-based rendering** to prevent pe
 - This prevents constant re-rendering and maintains performance
 - Click **Re-render button** whenever you want to update ovals for new viewport
 
+### Viewport Zoom Indicator
+
+The sidebar displays a real-time **zoom level indicator** next to the Re-render button that shows:
+
+**Ready State** (Green ✓)
+```
+✓ 2.1° × 1.8° — ready to render ovals
+```
+- Maximum dimension < 5°
+- Safe to render matched clusters
+
+**Caution State** (Orange ⚠)
+```
+⚠ 8.3° × 6.1° — zoom in for fewer ovals
+```
+- Maximum dimension 5–15°
+- Can render, but may create many ovals (slow)
+- Recommended to zoom in further for fewer, clearer ovals
+
+**Too Wide State** (Red ✗)
+```
+✗ 42.0° × 35.0° — too wide, zoom in first
+```
+- Maximum dimension > 15°
+- Will attempt to render 2000+ ovals
+- System will warn and limit to top 2000 by SNR
+- Zoom in first to keep ovals below 500
+
 ---
 
 ## Performance Characteristics

@@ -53,8 +53,10 @@ source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 | CATRED Integration | ✅ **Working** | High-resolution catalog with PHZ analysis |
 | Mosaic Overlays | ✅ **Working** | Background images and mask visualization |
 | Polygon Fill Toggle | ✅ **Working** | Toggle CORE polygon fill on/off |
+| CL-tile Information Toggle | ✅ **NEW** | Color clusters by tile; optionally show MER tile polygons |
 | Interactive Controls | ✅ **Working** | Zoom, pan, aspect ratio, size adjustment |
-| Performance Optimization | ✅ **Working** | Client-side filtering and smart caching |
+| Performance Optimization | ✅ **Working** | Client-side filtering, tile caching, smart rendering |
+| Viewport Zoom Indicator | ✅ **NEW** | Real-time zoom level display with rendering guidance |
 
 ## 🚀 Immediate Solution
 
@@ -73,22 +75,47 @@ All methods provide comprehensive visualization with:
 - ✅ **Mosaic & Mask Overlays**: Background images and coverage visualization
 - ✅ **Trace Management**: Independent control of all overlay layers
 - ✅ **Interactive Controls**: Zoom, pan, polygon fill toggle, aspect ratio
+- ✅ **Tile Information Control**: Toggle to show/hide tile coloring and MER tile polygons
 - ✅ **Smart Filtering**: Client-side SNR and redshift filtering
 - ✅ **PHZ Cluster Data Filtering**: PHZ cluster-data plots follow the same algorithm, viewport, SNR, redshift, and uploaded ID constraints as the current view
-- ✅ **Hover Information**: Detailed cluster, tile, and catalog data
-- ✅ **Color-coded Tiles**: Each tile has unique colors for identification
+- ✅ **Hover Information**: Detailed cluster, tile, and catalog data with optional tile IDs
+- ✅ **Color-coded Tiles**: Each tile has unique colors for identification (when enabled)
+- ✅ **Viewport Zoom Guidance**: Real-time indicator showing zoom level and rendering readiness for matched clusters
 
 ## Notes on Current Behavior
 
 - The CATRED render button is enabled only when MER tiles are shown and the current plot window is zoomed to less than 2 degrees in both RA and Dec.
 - The CATRED zoom check uses the current plot layout as a fallback when Plotly emits partial `relayoutData`, so switching between pan and zoom tools should no longer incorrectly disable the button.
 
+## 🆕 Recent UI Improvements
+
+### CL-tile Information Toggle
+
+Located in the **Merged Clusters** section:
+- **Enabled by default** — shows tile-based colors and MER tile polygons
+- **Disable to improve performance** — removes MER tile polygon rendering (O(9 × 366ms) per render)
+- When disabled: clusters use flat algorithm colors (PZWAV: royal blue, AMICO: tomato) and hover shows `Cluster (PZWAV)` without tile suffix
+- **Tile Definition Caching**: Tile metadata is cached in memory after first load to eliminate repeated JSON file reads
+
+### Viewport Zoom Indicator
+
+Real-time indicator in the **Matched Clusters** section shows current zoom level and rendering readiness:
+
+| State | Display | Meaning |
+|-------|---------|---------|
+| Ready | ✓ 2.1° × 1.8° — ready to render ovals | < 5° max dimension; safe to render |
+| Caution | ⚠ 8.3° × 6.1° — zoom in for fewer ovals | 5–15° max dimension; slow but possible |
+| Too Wide | ✗ 42.0° × 35.0° — too wide, zoom in first | > 15° max dimension; will limit to 2000 ovals |
+
+Updates in real-time as you zoom/pan, no server calls needed.
+
 ## 📖 Detailed Feature Guides
 
 For in-depth information on specific features:
 - **[Cluster Analysis](CLUSTER_ANALYSIS_GUIDE.md)** - Cutouts, CATRED boxes, mask overlays, trace management
 - **[Configuration](CONFIGURATION_GUIDE.md)** - Setup and configuration options
-- **[Performance](PERFORMANCE_OPTIMIZATION_SUMMARY.md)** - Optimization details
+- **[Tile Caching & Controls](TILE_CACHING_AND_CONTROLS.md)** - CL-tile toggle, tile definition caching, performance
+- **[Zoom-Based Oval Rendering](ZOOM_BASED_OVAL_RENDERING.md)** - Matched cluster rendering with viewport indicator
 - **[Remote Access](../../../README.md#-quick-remote-access-setup)** - SSH port forwarding setup
 
 ## 🎉 Problem Solved
