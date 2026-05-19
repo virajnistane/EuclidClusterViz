@@ -57,9 +57,9 @@ class MainPlotCallbacks:
         self._setup_main_render_callback()
         self._setup_options_update_callback()
         self._setup_threshold_clientside_callback()
-        self._setup_snr_pzwav_clientside_callback()
-        self._setup_snr_amico_clientside_callback()
-        self._setup_redshift_clientside_callback()
+        # self._setup_snr_pzwav_clientside_callback()
+        # self._setup_snr_amico_clientside_callback()
+        # self._setup_redshift_clientside_callback()
         self._setup_viewport_zoom_indicator_callback()
 
     def _setup_snr_slider_pzwav_callback(self):
