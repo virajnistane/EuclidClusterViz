@@ -76,7 +76,10 @@ class SidebarSections:
                                 html.Small(
                                     [
                                         html.I(className="fas fa-info-circle me-0"),
-                                        "Color clusters by tile; show MER tile polygons",
+                                        html.Span(
+                                            "Color clusters by tile; show CL-tile polygons",
+                                            id="cltile-info-switch-help-text",
+                                        ),
                                     ],
                                     className="text-muted ms-0",
                                 ),
@@ -108,7 +111,10 @@ class SidebarSections:
                                 html.Small(
                                     [
                                         html.I(className="fas fa-info-circle me-0"),
-                                        "Clusters in individual tiles but absent from merged catalog",
+                                        html.Span(
+                                            "Clusters in individual tiles but absent from merged catalog",
+                                            id="unmerged-clusters-switch-help-text",
+                                        ),
                                     ],
                                     className="text-muted ms-0",
                                 ),

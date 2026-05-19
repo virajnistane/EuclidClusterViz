@@ -41,6 +41,8 @@ except ImportError:
 class DataLoader:
     """Handles loading and caching of cluster detection data."""
 
+    NO_INDIVIDUAL_CLTILE_DATA_MESSAGE = "No individual CL-tile data available"
+
     def __init__(self, config=None, use_disk_cache=True, max_memory_gb=None):
         """
         Initialize DataLoader with configuration.
@@ -140,6 +142,7 @@ class DataLoader:
             snr_max_amico,
         ) = self._load_data_detcluster_mergedcat_with_minmax_snr(paths, select_algorithm)
         data_detcluster_by_cltile = self._load_data_detcluster_by_cltile(paths, select_algorithm)
+        has_individual_cltile_data = bool(data_detcluster_by_cltile)
 
         catred_fileinfo_df = self._load_catred_info(paths)
         catred_dsr = self.config.get_catred_dsr() if self.config else None
@@ -165,6 +168,10 @@ class DataLoader:
         data = {
             "data_detcluster_mergedcat": data_detcluster_mergedcat,
             "data_detcluster_by_cltile": data_detcluster_by_cltile,
+            "has_individual_cltile_data": has_individual_cltile_data,
+            "individual_cltile_data_message": (
+                "" if has_individual_cltile_data else self.NO_INDIVIDUAL_CLTILE_DATA_MESSAGE
+            ),
             "catred_info": catred_fileinfo_df,
             "catred_dsr": catred_dsr,
             "effcovmask_info": effcovmask_fileinfo_df,
@@ -215,7 +222,140 @@ class DataLoader:
 
         return data
 
-    def _get_paths(self, algorithm: str) -> Dict[str, str]:
+    def get_individual_cltile_data_availability(self, algorithm: str) -> Tuple[bool, str]:
+        """Return whether individual CL-tile data is available for the selected algorithm."""
+        if self.config is None:
+            return False, self.NO_INDIVIDUAL_CLTILE_DATA_MESSAGE
+
+        try:
+            detfiles_list_files_dict = self._resolve_detintile_list_files(algorithm)
+        except Exception as error:
+            print(f"Warning: Failed to resolve DetInTile list files for {algorithm}: {error}")
+            return False, self.NO_INDIVIDUAL_CLTILE_DATA_MESSAGE
+
+        has_individual_cltile_data = self._has_resolved_detintile_entries(detfiles_list_files_dict)
+        if has_individual_cltile_data:
+            return True, ""
+
+        return False, self.NO_INDIVIDUAL_CLTILE_DATA_MESSAGE
+
+    def _resolve_detintile_list_files(self, algorithm: str) -> Dict[str, Any]:
+        """Resolve DetInTile list files from config, falling back to merged XML metadata when needed."""
+        assert self.config, "Configuration is not set"
+
+        detfiles_list_files_dict: Dict[str, Any] = self.config.get_detintile_list_files(algorithm)
+        if self._has_resolved_detintile_entries(detfiles_list_files_dict):
+            return detfiles_list_files_dict
+
+        self._populate_detintile_paths_from_merged_xml(algorithm)
+
+        detfiles_list_files_dict_2: Dict[str, Any] = self.config.get_detintile_list_files(algorithm)
+        return detfiles_list_files_dict_2
+
+    def _populate_detintile_paths_from_merged_xml(self, algorithm: str) -> None:
+        """Attempt to populate missing DetInTile list paths from merged catalog XML metadata."""
+        assert self.config, "Configuration is not set"
+
+        gluematchcat_xml = self.config.get_gluematchcat_clusters_xml()
+        use_gluematchcat = gluematchcat_xml is not None and os.path.exists(gluematchcat_xml)
+
+        if use_gluematchcat:
+            self._set_detintile_paths_from_merged_xml(gluematchcat_xml)
+            return
+
+        mergedetcat_xml_files_dict: Dict[str, str] = self.config.get_mergedetcat_xml_files(algorithm)
+        if algorithm == "BOTH":
+            for alg in ["PZWAV", "AMICO"]:
+                merged_xml = mergedetcat_xml_files_dict.get(f"mergedetcat_{alg.lower()}")
+                if merged_xml and os.path.exists(merged_xml):
+                    self._set_detintile_paths_from_merged_xml(merged_xml)
+            return
+
+        merged_xml = mergedetcat_xml_files_dict.get(f"mergedetcat_{algorithm.lower()}")
+        if merged_xml and os.path.exists(merged_xml):
+            self._set_detintile_paths_from_merged_xml(merged_xml)
+
+    def _has_resolved_detintile_entries(
+        self, detfiles_list_files_dict: Optional[Dict[str, str]]
+    ) -> bool:
+        """Check whether any DetInTile list resolves to at least one readable XML entry."""
+        if not detfiles_list_files_dict:
+            return False
+
+        return any(
+            self._detintile_list_has_any_entries(list_path)
+            for list_path in detfiles_list_files_dict.values()
+        )
+
+    def _detintile_list_has_any_entries(self, detfiles_list_path: str) -> bool:
+        """Check whether a DetInTile JSON list contains at least one resolvable XML file."""
+        if not detfiles_list_path or not os.path.exists(detfiles_list_path):
+            return False
+
+        try:
+            with open(detfiles_list_path, "r") as file_handle:
+                detfiles_list = json.load(file_handle)
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            return False
+
+        if not isinstance(detfiles_list, list):
+            return False
+
+        return any(self._resolve_detintile_xml_path(xml_file) for xml_file in detfiles_list)
+
+    def _resolve_detintile_list_path(self, detintile_list_path: str) -> Optional[str]:
+        """Resolve a DetInTile list file path against configured working directories."""
+        if not detintile_list_path:
+            return None
+
+        if os.path.isabs(detintile_list_path) and os.path.exists(detintile_list_path):
+            return detintile_list_path
+
+        if os.path.exists(detintile_list_path):
+            return detintile_list_path
+
+        for dir_check in self._get_detintile_candidate_dirs():
+            potential_path = os.path.join(dir_check, detintile_list_path)
+            if os.path.exists(potential_path):
+                return potential_path
+
+        return None
+
+    def _resolve_detintile_xml_path(self, detintile_xml_path: str) -> Optional[str]:
+        """Resolve a DetInTile XML path against configured working directories."""
+        if not detintile_xml_path:
+            return None
+
+        if os.path.isabs(detintile_xml_path) and os.path.exists(detintile_xml_path):
+            return detintile_xml_path
+
+        for dir_check in self._get_detintile_candidate_dirs():
+            potential_path = os.path.join(dir_check, detintile_xml_path)
+            if os.path.exists(potential_path):
+                return potential_path
+
+        return None
+
+    def _get_detintile_candidate_dirs(self) -> List[str]:
+        """Return candidate directories used to resolve DetInTile paths."""
+        if not self.config:
+            return []
+
+        candidate_dirs: List[str] = []
+        for dir_path in [self.config.mergedetcat_dir, self.config.detintile_dir]:
+            if not dir_path:
+                continue
+            candidate_dirs.append(dir_path)
+            candidate_dirs.append(os.path.join(dir_path, "inputs"))
+
+        deduplicated_dirs: List[str] = []
+        for dir_path in candidate_dirs:
+            if dir_path not in deduplicated_dirs:
+                deduplicated_dirs.append(dir_path)
+
+        return deduplicated_dirs
+
+    def _get_paths(self, algorithm: str) -> Dict[str, Any]:
         """Get file paths based on configuration or fallback."""
         assert self.config, "Configuration is not set"
 
@@ -223,30 +363,18 @@ class DataLoader:
         gluematchcat_xml = self.config.get_gluematchcat_clusters_xml()
         use_gluematchcat = gluematchcat_xml is not None and os.path.exists(gluematchcat_xml)
 
-        if use_gluematchcat:
-            # If using gluematchcat, we can extract detintile paths from the merged catalog XML
-            self._set_detintile_paths_from_merged_xml(
-                gluematchcat_xml
-            )
-        else:
-            # If not using gluematchcat, we need to get the separate mergedetcat XML files for the selected algorithm
+        if not use_gluematchcat:
+            # If not using gluematchcat, we need the separate mergedetcat XML files for merged data.
             mergedetcat_xml_files_dict: Dict[str, str] = self.config.get_mergedetcat_xml_files(
                 algorithm
             )
-            if algorithm == "BOTH":
-                print(f"✓ Using separate MergeDetCat files for BOTH algorithms")
-                print(f"✓ Extracting DetInTile paths from both merged catalog XML files")
-                for alg in ["PZWAV", "AMICO"]:
-                    self._set_detintile_paths_from_merged_xml(
-                        mergedetcat_xml_files_dict[f"mergedetcat_{alg.lower()}"]
-                    )
-            else:
-                self._set_detintile_paths_from_merged_xml(
-                    mergedetcat_xml_files_dict[f"mergedetcat_{algorithm.lower()}"]
-                )
+        else:
+            mergedetcat_xml_files_dict = {}
+
+        self._populate_detintile_paths_from_merged_xml(algorithm)
 
         # Always get detintile files for per-tile data
-        detfiles_list_files_dict = self.config.get_detintile_list_files(algorithm)
+        detfiles_list_files_dict = self._resolve_detintile_list_files(algorithm)
 
         if use_gluematchcat:
             print(f"✓ Using GlueMatchCat for merged data (includes both PZWAV and AMICO)")
@@ -278,7 +406,7 @@ class DataLoader:
 
         return paths
 
-    def _validate_paths(self, paths: Dict[str, str]) -> None:
+    def _validate_paths(self, paths: Dict[str, Any]) -> None:
         """Validate that critical paths exist."""
         if paths.get("use_gluematchcat"):
             critical_paths = ["gluematchcat_xml", "gluematchcat_dir", "detintile_dir"]
@@ -303,7 +431,7 @@ class DataLoader:
                     )
 
     def _load_data_detcluster_mergedcat_with_minmax_snr(
-        self, paths: Dict[str, str], algorithm: str
+        self, paths: Dict[str, Any], algorithm: str
     ) -> Tuple[np.ndarray, Optional[float], Optional[float], Optional[float], Optional[float]]:
         """Load merged detection catalog from XML and FITS files."""
         # Try disk cache first
@@ -475,27 +603,18 @@ class DataLoader:
     def _set_detintile_paths_from_merged_xml(self, merged_catalog_xml: str) -> None:
         """Extract paths to individual tile detection files from gluematched/merged catalog XML and set in config."""
 
-        dirs_to_checks = [
-            self.config.mergedetcat_dir,
-            self.config.detintile_dir,
-            os.path.join(self.config.mergedetcat_dir, "inputs"),
-            os.path.join(self.config.detintile_dir, "inputs"),
-        ]
-
         try:
             detintile_pzwav_list = self.get_xml_element(
                 merged_catalog_xml, "Parameters/Parameter[Key='InputDetectionsFiles_PZWAV']/StringValue"
             ).text
 
-            if not os.path.isabs(detintile_pzwav_list) and not os.path.exists(detintile_pzwav_list):
-                for dir_check in dirs_to_checks:
-                    potential_path = os.path.join(dir_check, detintile_pzwav_list)
-                    if os.path.exists(potential_path):
-                        detintile_pzwav_list = potential_path
-                        break
-            self.config.config_parser.set("files", "detintile_pzwav_list", detintile_pzwav_list)
+            resolved_pzwav_list = self._resolve_detintile_list_path(detintile_pzwav_list)
+            if resolved_pzwav_list:
+                self.config.config_parser.set("files", "detintile_pzwav_list", resolved_pzwav_list)
+            else:
+                raise FileNotFoundError(detintile_pzwav_list)
             print(
-                f"Set detintile_pzwav_list path from merged catalog XML: {detintile_pzwav_list}"
+                f"Set detintile_pzwav_list path from merged catalog XML: {resolved_pzwav_list}"
             )
         except Exception as e:
             print(f"Error occurred while setting detintile_pzwav_list: {e}")
@@ -504,21 +623,19 @@ class DataLoader:
             detintile_amico_list = self.get_xml_element(
                 merged_catalog_xml, "Parameters/Parameter[Key='InputDetectionsFiles_AMICO']/StringValue"
             ).text
-            if not os.path.isabs(detintile_amico_list) and not os.path.exists(detintile_amico_list):
-                for dir_check in dirs_to_checks:
-                    potential_path = os.path.join(dir_check, detintile_amico_list)
-                    if os.path.exists(potential_path):
-                        detintile_amico_list = potential_path
-                        break
-            self.config.config_parser.set("files", "detintile_amico_list", detintile_amico_list)
+            resolved_amico_list = self._resolve_detintile_list_path(detintile_amico_list)
+            if resolved_amico_list:
+                self.config.config_parser.set("files", "detintile_amico_list", resolved_amico_list)
+            else:
+                raise FileNotFoundError(detintile_amico_list)
             print(
-                f"Set detintile_amico_list path from merged catalog XML: {detintile_amico_list}"
+                f"Set detintile_amico_list path from merged catalog XML: {resolved_amico_list}"
             )
         except Exception as e:
             print(f"Error occurred while setting detintile_amico_list: {e}")
 
     def _load_data_detcluster_by_cltile(
-        self, paths: Dict[str, str], algorithm: str
+        self, paths: Dict[str, Any], algorithm: str
     ) -> Dict[str, Dict[str, Any]]:
         """Load individual tile detection data from separate detintile files."""
         # Try disk cache first
@@ -534,7 +651,7 @@ class DataLoader:
 
         # Cache miss - load data
         # Always load from separate detintile files (even when using gluematchcat for merged data)
-        detfiles_list_files_dict = paths["detfiles_list_files_dict"]
+        detfiles_list_files_dict: Dict[str, str] = paths["detfiles_list_files_dict"]
 
         data_by_tile = {}
         assert isinstance(detfiles_list_files_dict, dict)
@@ -555,46 +672,24 @@ class DataLoader:
 
             for file in detfiles_list:
                 # Extract tile information from XML files
+                xml_path = self._resolve_detintile_xml_path(file)
+                if not xml_path:
+                    print(f"Warning: XML file not found in expected directories: {file}")
+                    continue
 
-                try:
-                    assert os.path.isabs(file)
-                    print(f"Found absolute path for detintile XML: {file}")
-                    xml_path = file
-                    dirpath = os.path.dirname(xml_path)
-                    while not os.path.exists(os.path.join(dirpath, "data/")):
-                        dirpath = os.path.dirname(dirpath)
+                print(f"Resolved detintile XML path: {xml_path}")
+                dirpath = os.path.dirname(xml_path)
+                while dirpath and not os.path.exists(os.path.join(dirpath, "data/")):
+                    parent_dir = os.path.dirname(dirpath)
+                    if parent_dir == dirpath:
+                        break
+                    dirpath = parent_dir
 
-                    print(f"Determined directory path for data/ dir: {dirpath}")
+                if not os.path.exists(os.path.join(dirpath, "data/")):
+                    print(f"Warning: Could not determine data directory for detintile XML: {xml_path}")
+                    continue
 
-                except AssertionError:
-                    print(f"Warning: Expected absolute path for detintile XML, got relative path: {file}")
-                    
-                    dirs_to_checks = [
-                        paths["mergedetcat_dir"],
-                        paths["detintile_dir"],
-                        os.path.join(paths["mergedetcat_dir"], "inputs"),
-                        os.path.join(paths["detintile_dir"], "inputs"),
-                    ]
-
-                    try:
-                        xml_path = None
-                        dirpath = None
-                        for dir_check in dirs_to_checks:
-                            xml_path = os.path.join(dir_check, file)
-                            if os.path.exists(xml_path):
-                                break
-                        assert (
-                            xml_path is not None
-                        ), f"File not found in expected directories: {file}"
-
-                        dirpath = os.path.dirname(xml_path)
-                        while not os.path.exists(os.path.join(dirpath, "data/")):
-                            dirpath = os.path.dirname(dirpath)
-                    except AssertionError:
-                        print(f"Warning: XML file not found in expected directories: {file}")
-                        continue
-
-                    print(f"Determined directory path for data/ dir: {dirpath}")
+                print(f"Determined directory path for data/ dir: {dirpath}")
 
                 tile_file = self.get_xml_element(
                     xml_path, "Data/SpatialInformation/DataContainer/FileName"

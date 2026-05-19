@@ -11,7 +11,7 @@ The configuration is read from config.ini (or config_local.ini if it exists).
 import configparser
 import os
 import subprocess
-from typing import Optional, List
+from typing import Any, Dict, Optional, List
 
 
 def get_git_repo_root():
@@ -204,7 +204,7 @@ class Config:
         # Otherwise treat as single path (could be JSON file)
         return [self._expand_path(value)]
 
-    def get_detintile_list_files(self, det_algorithm):
+    def get_detintile_list_files(self, det_algorithm) -> Dict[str, Any]:
         """
         Get path to detection files list for selected algorithm
         args:

@@ -19,6 +19,10 @@ except ImportError:
 class UICallbacks:
     """Handles UI-related callbacks"""
 
+    DEFAULT_CLTILE_INFO_HELP_TEXT = "Color clusters by tile; show MER tile polygons"
+    DEFAULT_UNMERGED_HELP_TEXT = "Clusters in individual tiles but absent from merged catalog"
+    NO_INDIVIDUAL_CLTILE_DATA_MESSAGE = "No individual CL-tile data available"
+
     def __init__(self, app, config=None, data_loader=None):
         """
         Initialize UI callbacks.
@@ -224,6 +228,22 @@ class UICallbacks:
 
         @self.app.callback(
             [
+                Output("cltile-info-switch", "disabled"),
+                Output("cltile-info-switch", "value"),
+                Output("cltile-info-switch-help-text", "children"),
+                Output("unmerged-clusters-switch", "disabled"),
+                Output("unmerged-clusters-switch", "value"),
+                Output("unmerged-clusters-switch-help-text", "children"),
+            ],
+            [Input("algorithm-dropdown", "value"), Input("render-button", "n_clicks")],
+            prevent_initial_call=False,
+        )
+        def toggle_individual_cltile_switches(algorithm, _render_clicks):
+            """Disable CL-tile-dependent switches when individual tile data is unavailable."""
+            return self._get_individual_cltile_switch_state(algorithm)
+
+        @self.app.callback(
+            [
                 Output("browse-file-button", "disabled"),
                 Output("browse-file-button", "title"),
             ],
@@ -241,6 +261,28 @@ class UICallbacks:
                 return True, "GlueMatchCat XML file not configured in config.ini"
             
             return False, "Browse for file"
+
+    def _get_individual_cltile_switch_state(self, algorithm):
+        """Compute disabled/value/help text state for CL-tile-dependent switches."""
+        is_available = True
+        unavailable_message = self.NO_INDIVIDUAL_CLTILE_DATA_MESSAGE
+
+        if self.data_loader and hasattr(self.data_loader, "get_individual_cltile_data_availability"):
+            is_available, unavailable_message = self.data_loader.get_individual_cltile_data_availability(
+                algorithm
+            )
+
+        if is_available:
+            return (
+                False,
+                dash.no_update,
+                self.DEFAULT_CLTILE_INFO_HELP_TEXT,
+                False,
+                dash.no_update,
+                self.DEFAULT_UNMERGED_HELP_TEXT,
+            )
+
+        return True, False, unavailable_message, True, False, unavailable_message
 
     def _setup_catred_visibility_callback(self):
         """Setup clientside callback to show/hide CATRED controls based on catred-mode-switch"""

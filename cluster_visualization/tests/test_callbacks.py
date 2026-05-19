@@ -10,6 +10,8 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
+from dash import dash
+
 # Add the source directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "cluster_visualization"))
 
@@ -23,7 +25,7 @@ try:
 except ImportError:
     CALLBACKS_AVAILABLE = False
 
-from tests import create_test_data
+from cluster_visualization.tests import create_test_data
 
 
 class TestMainPlotCallbacks(unittest.TestCase):
@@ -279,6 +281,44 @@ class TestUICallbacks(unittest.TestCase):
         """Test UICallbacks initialization"""
         self.assertIsNotNone(self.ui_callbacks)
         self.assertEqual(self.ui_callbacks.app, self.mock_app)
+
+    def test_get_individual_cltile_switch_state_when_available(self):
+        """Keep CL-tile-related switches enabled when tile data is available."""
+        mock_loader = MagicMock()
+        mock_loader.get_individual_cltile_data_availability.return_value = (True, "")
+
+        ui_callbacks = UICallbacks(self.mock_app, data_loader=mock_loader)
+
+        result = ui_callbacks._get_individual_cltile_switch_state("PZWAV")
+
+        self.assertEqual(
+            result,
+            (
+                False,
+                dash.no_update,
+                ui_callbacks.DEFAULT_CLTILE_INFO_HELP_TEXT,
+                False,
+                dash.no_update,
+                ui_callbacks.DEFAULT_UNMERGED_HELP_TEXT,
+            ),
+        )
+
+    def test_get_individual_cltile_switch_state_when_unavailable(self):
+        """Force CL-tile-related switches off when tile data is unavailable."""
+        mock_loader = MagicMock()
+        mock_loader.get_individual_cltile_data_availability.return_value = (
+            False,
+            "No individual CL-tile data available",
+        )
+
+        ui_callbacks = UICallbacks(self.mock_app, data_loader=mock_loader)
+
+        result = ui_callbacks._get_individual_cltile_switch_state("PZWAV")
+
+        self.assertEqual(
+            result,
+            (True, False, "No individual CL-tile data available", True, False, "No individual CL-tile data available"),
+        )
 
 
 class TestPHZCallbacks(unittest.TestCase):
