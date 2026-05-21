@@ -43,6 +43,7 @@ class UICallbacks:
         self._setup_button_state_callbacks()
         self._setup_catred_visibility_callback()
         self._setup_catred_render_color_callback()
+        self._setup_catred_box_color_callback()
         self._setup_collapsible_callbacks()
         self._setup_config_display_callback()
         self._setup_file_configuration_callback()
@@ -345,6 +346,43 @@ class UICallbacks:
             """,
             Output("cluster-plot", "figure", allow_duplicate=True),
             Input("catred-render-marker-color", "value"),
+            State("cluster-plot", "figure"),
+            prevent_initial_call=True,
+        )
+
+    def _setup_catred_box_color_callback(self):
+        """Clientside callback: update CATRED Boxed trace marker color without re-render.
+
+        Mirrors _setup_catred_render_color_callback but targets traces named
+        'CATRED * - Boxed' (cluster-click box panel) instead of 'CATRED * MER Tile'.
+        """
+        self.app.clientside_callback(
+            """
+            function(markerColor, figure) {
+                if (!figure || !figure.data || !markerColor) {
+                    return window.dash_clientside.no_update;
+                }
+                var changed = false;
+                var newData = figure.data.map(function(trace) {
+                    if (trace.name &&
+                            trace.name.indexOf('CATRED') !== -1 &&
+                            trace.name.indexOf('Boxed') !== -1) {
+                        changed = true;
+                        return Object.assign({}, trace, {
+                            marker: Object.assign({}, trace.marker, {
+                                line: Object.assign({}, trace.marker && trace.marker.line,
+                                                    {color: markerColor})
+                            })
+                        });
+                    }
+                    return trace;
+                });
+                if (!changed) return window.dash_clientside.no_update;
+                return Object.assign({}, figure, {data: newData});
+            }
+            """,
+            Output("cluster-plot", "figure", allow_duplicate=True),
+            Input("tab-catred-marker-color-picker", "value"),
             State("cluster-plot", "figure"),
             prevent_initial_call=True,
         )
