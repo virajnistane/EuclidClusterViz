@@ -354,22 +354,22 @@ class UICallbacks:
             icon = "fas fa-chevron-up" if is_open else "fas fa-chevron-down"
             return is_open, [html.I(className=f"{icon} me-2"), "🎨 Display Options"]
 
-        # CatRed Sources Section
+        # Mask Section
         @self.app.callback(
-            [Output("catred-data-collapse", "is_open"), Output("catred-data-toggle", "children")],
-            [Input("catred-data-toggle", "n_clicks")],
+            [Output("mask-controls-collapse", "is_open"), Output("mask-controls-toggle", "children")],
+            [Input("mask-controls-toggle", "n_clicks")],
             prevent_initial_call=False,
         )
-        def toggle_catred_data(n_clicks):
-            """Toggle CatRed data section"""
+        def toggle_mask_controls(n_clicks):
+            """Toggle Mask section"""
             if n_clicks is None:
-                return False, [html.I(className="fas fa-chevron-right me-2"), "🔬 CatRed Sources"]
+                return False, [html.I(className="fas fa-chevron-right me-2"), "🎭 Mask"]
 
             is_open = (n_clicks % 2) == 1
             icon = "fas fa-chevron-up" if is_open else "fas fa-chevron-down"
-            return is_open, [html.I(className=f"{icon} me-2"), "🔬 CatRed Sources"]
+            return is_open, [html.I(className=f"{icon} me-2"), "🎭 Mask"]
 
-        # Mosaic / Healpix Mask Section
+        # Mosaic Section
         @self.app.callback(
             [
                 Output("image-controls-collapse", "is_open"),
@@ -383,12 +383,12 @@ class UICallbacks:
             if n_clicks is None:
                 return False, [
                     html.I(className="fas fa-chevron-right me-2"),
-                    "🖼️ Mosaic / Healpix Mask",
+                    "🖼️ Mosaic",
                 ]
 
             is_open = (n_clicks % 2) == 1
             icon = "fas fa-chevron-up" if is_open else "fas fa-chevron-down"
-            return is_open, [html.I(className=f"{icon} me-2"), "🖼️ Mosaic / Healpix Mask"]
+            return is_open, [html.I(className=f"{icon} me-2"), "🖼️ Mosaic"]
 
     def _setup_config_display_callback(self):
         """Setup callback to display configuration parameters"""

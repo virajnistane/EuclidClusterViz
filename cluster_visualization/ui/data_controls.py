@@ -26,7 +26,7 @@ class DataControls:
                                         html.I(className="fas fa-microscope me-0 text-warning"),
                                         dbc.Switch(
                                             id="catred-mode-switch",
-                                            label="Masked CATRED data",
+                                            label="Hide sources under Healpix Mask",
                                             value=True,
                                             className="ms-1",
                                         ),
@@ -550,6 +550,14 @@ class DataControls:
                         "border-radius": "12px",
                     },
                 ),
+            ]
+        )
+
+    @staticmethod
+    def create_healpix_mask_section():
+        """Create Healpix mask controls section with opacity slider and load/hide/delete."""
+        return html.Div(
+            [
                 dbc.Card(
                     [
                         dbc.CardHeader(

@@ -598,136 +598,6 @@ class AppLayout:
                         "border-radius": "12px",
                     },
                 ),
-                dbc.Card(
-                    [
-                        dbc.CardHeader(
-                            [
-                                html.Div(
-                                    [
-                                        html.I(className="fas fa-adjust me-2"),
-                                        html.H6("Mask Opacity", className="mb-0"),
-                                    ],
-                                    className="d-flex align-items-center",
-                                )
-                            ],
-                            className="border-0",
-                            style={
-                                "background": "linear-gradient(45deg, #74b9ff, #0984e3)",
-                                "color": "white",
-                                "border-radius": "8px 8px 0 0",
-                            },
-                        ),
-                        dbc.CardBody(
-                            [
-                                html.Div(
-                                    [
-                                        dcc.Slider(
-                                            id="mask-opacity-slider",
-                                            min=0.1,
-                                            max=1.0,
-                                            step=0.1,
-                                            value=0.4,
-                                            marks={
-                                                0.1: {
-                                                    "label": "10%",
-                                                    "style": {"color": "#666", "fontSize": "12px"},
-                                                },
-                                                0.5: {
-                                                    "label": "50%",
-                                                    "style": {
-                                                        "color": "#0984e3",
-                                                        "font-weight": "bold",
-                                                        "fontSize": "13px",
-                                                    },
-                                                },
-                                                1.0: {
-                                                    "label": "100%",
-                                                    "style": {"color": "#666", "fontSize": "12px"},
-                                                },
-                                            },
-                                            tooltip={
-                                                "placement": "bottom",
-                                                "always_visible": False,
-                                                "style": {"fontSize": "12px"},
-                                            },
-                                            disabled=False,
-                                            className="custom-slider",
-                                        )
-                                    ],
-                                    style={
-                                        "padding": "5px 10px",
-                                        "margin": "0",
-                                        "minHeight": "50px",
-                                    },
-                                )
-                            ],
-                            className="p-2",
-                        ),
-                    ],
-                    className="mb-1 border-0 shadow-sm",
-                    style={"border-radius": "12px"},
-                ),
-                dbc.Card(
-                    [
-                        dbc.CardBody(
-                            [
-                                dbc.Button(
-                                    [
-                                        html.I(className="fas fa-download me-2"),
-                                        "🖼️ Healpix Mask in Zoom",
-                                    ],
-                                    id="healpix-mask-button",
-                                    color="info",
-                                    size="sm",
-                                    className="w-100 mb-2 shadow-sm btn-enhanced",
-                                    n_clicks=0,
-                                    disabled=True,
-                                    style={"border-radius": "8px", "font-weight": "600"},
-                                ),
-                                html.Small(
-                                    [
-                                        html.I(className="fas fa-image me-1"),
-                                        "Load healpix mask overlay for visible MER tiles",
-                                    ],
-                                    className="text-muted d-block text-left mb-2",
-                                ),
-                                # Healpix mask visibility and delete controls
-                                html.Div(
-                                    [
-                                        dbc.Button(
-                                            [html.I(className="fas fa-eye me-1"), "Hide Mask"],
-                                            id="mask-toggle-visibility-button",
-                                            color="secondary",
-                                            size="sm",
-                                            outline=True,
-                                            className="me-1",
-                                            n_clicks=0,
-                                            disabled=True,
-                                            style={"border-radius": "6px", "font-size": "0.85rem"},
-                                        ),
-                                        dbc.Button(
-                                            [html.I(className="fas fa-trash me-1"), "Delete"],
-                                            id="mask-delete-button",
-                                            color="danger",
-                                            size="sm",
-                                            outline=True,
-                                            n_clicks=0,
-                                            disabled=True,
-                                            style={"border-radius": "6px", "font-size": "0.85rem"},
-                                        ),
-                                    ],
-                                    className="d-flex justify-content-between",
-                                ),
-                            ],
-                            className="p-3",
-                        )
-                    ],
-                    className="mb-3 border-0 shadow-sm",
-                    style={
-                        "background": "linear-gradient(45deg, #e8f4f8, #ffffff)",
-                        "border-radius": "12px",
-                    },
-                ),
             ]
         )
 
@@ -802,17 +672,20 @@ class AppLayout:
                     is_open=False,
                     color="primary",
                 ),
-                # Advanced Data Section
+                # Mask Section (CATRED controls + Healpix mask)
                 AppLayout._create_collapsible_card(
-                    "🔬 CatRed Sources",
-                    "catred-data",
-                    [DataControls.create_catred_data_section()],
+                    "🎭 Mask",
+                    "mask-controls",
+                    [
+                        DataControls.create_catred_data_section(),
+                        DataControls.create_healpix_mask_section(),
+                    ],
                     is_open=False,
                     color="warning",
                 ),
                 # Image Controls Section
                 AppLayout._create_collapsible_card(
-                    "🖼️ Mosaic / Healpix Mask",
+                    "🖼️ Mosaic",
                     "image-controls",
                     [DataControls.create_mosaic_controls_section()],
                     is_open=False,
