@@ -389,27 +389,77 @@ class CATREDHandler:
             return False
         return True
 
+    # Conservative margin (degrees) added around the viewport for Stage-1 pre-filter.
+    # Covers the max expected half-extent of a MER tile (~0.5°) with room to spare.
+    _TILE_MARGIN_DEG: float = 1.0
+
     def _find_intersecting_tiles(
         self, data: Dict[str, Any], ra_min: float, ra_max: float, dec_min: float, dec_max: float
     ) -> List[int]:
-        """Find MER tiles whose polygons intersect with the zoom box."""
-        from shapely.geometry import box  # type: ignore[import]
-        zoom_box = box(ra_min, dec_min, ra_max, dec_max)
-        mertiles_to_load = []
+        """Find MER tiles whose polygons intersect with the zoom box.
 
-        for uid, row in (
-            data["catred_info"]
-            .loc[data["catred_info"]["dataset_release"] == data.get("catred_dsr", None)]
-            .iterrows()
-        ):
-            mertileid = row["mertileid"]
-            poly = row["polygon"]
-            if poly is not None:
-                # Use proper geometric intersection: checks if polygons overlap in any way
-                # This handles cases where zoom box is inside polygon, polygon is inside zoom box,
-                # or they partially overlap
-                if poly.intersects(zoom_box):
-                    mertiles_to_load.append(mertileid)
+        Uses a two-stage filter for efficiency:
+          Stage 1 — vectorized bounding-box pre-filter (fast, may include false positives).
+          Stage 2 — precise shapely intersection on the Stage-1 candidates only.
+        """
+        from shapely.geometry import box  # type: ignore[import]
+
+        catred_dsr = data.get("catred_dsr", None)
+        dsr_df = data["catred_info"].loc[
+            data["catred_info"]["dataset_release"] == catred_dsr
+        ]
+
+        if dsr_df.empty:
+            return []
+
+        # Normalize RA bounds: the plot's RA axis is reversed (higher RA on the left),
+        # so xaxis.range[0] > xaxis.range[1].  Using raw values in overlap checks would
+        # produce a "must contain full range" condition instead of "any overlap".
+        ra_lo = min(ra_min, ra_max)
+        ra_hi = max(ra_min, ra_max)
+        dec_lo = min(dec_min, dec_max)
+        dec_hi = max(dec_min, dec_max)
+
+        margin = self._TILE_MARGIN_DEG
+
+        # --- Stage 1: fast bbox pre-filter ---
+        if "ra_center" in dsr_df.columns and "dec_center" in dsr_df.columns:
+            # Use tile-center coordinates when available (loaded with add_mertile_radec_center=True)
+            pre_mask = (
+                (dsr_df["ra_center"] >= ra_lo - margin)
+                & (dsr_df["ra_center"] <= ra_hi + margin)
+                & (dsr_df["dec_center"] >= dec_lo - margin)
+                & (dsr_df["dec_center"] <= dec_hi + margin)
+            )
+            candidates = dsr_df[pre_mask]
+            print(
+                f"Debug: Stage-1 center pre-filter: {len(candidates)}/{len(dsr_df)} tiles remain"
+            )
+        elif "polygon" in dsr_df.columns:
+            # Derive bbox from polygon bounds via vectorized apply
+            def _bbox_overlaps(poly):
+                if poly is None:
+                    return False
+                b = poly.bounds  # (minx, miny, maxx, maxy)
+                # Standard interval overlap: tile overlaps viewport iff
+                # tile_maxx >= vp_lo AND tile_minx <= vp_hi (for both axes)
+                return b[2] >= ra_lo and b[0] <= ra_hi and b[3] >= dec_lo and b[1] <= dec_hi
+
+            pre_mask = dsr_df["polygon"].apply(_bbox_overlaps)
+            candidates = dsr_df[pre_mask]
+            print(
+                f"Debug: Stage-1 bbox pre-filter: {len(candidates)}/{len(dsr_df)} tiles remain"
+            )
+        else:
+            candidates = dsr_df
+
+        # --- Stage 2: precise shapely intersection ---
+        zoom_box = box(ra_lo, dec_lo, ra_hi, dec_hi)
+        mertiles_to_load = []
+        for _, row in candidates.iterrows():
+            poly = row.get("polygon")
+            if poly is not None and poly.intersects(zoom_box):
+                mertiles_to_load.append(row["mertileid"])
 
         print(
             f"Debug: Found {len(mertiles_to_load)} MER tiles in zoom area: "

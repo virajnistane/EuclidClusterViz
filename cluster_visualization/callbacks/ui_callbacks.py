@@ -42,6 +42,7 @@ class UICallbacks:
         self._setup_button_text_callbacks()
         self._setup_button_state_callbacks()
         self._setup_catred_visibility_callback()
+        self._setup_catred_render_color_callback()
         self._setup_collapsible_callbacks()
         self._setup_config_display_callback()
         self._setup_file_configuration_callback()
@@ -307,6 +308,45 @@ class UICallbacks:
             #  Output('catred-controls-container', 'style')],
             [Input("catred-mode-switch", "value")],
             prevent_initial_call=False,
+        )
+
+    def _setup_catred_render_color_callback(self):
+        """Clientside callback: update CATRED MER Tile trace marker color without re-render.
+
+        Uses JS spread to shallow-clone only the affected trace objects, leaving large
+        data arrays (x, y, customdata) as shared references — no extra allocation.
+        Triggered by the color picker; figure is read as State so figure changes alone
+        do not re-trigger this callback.
+        """
+        self.app.clientside_callback(
+            """
+            function(markerColor, figure) {
+                if (!figure || !figure.data || !markerColor) {
+                    return window.dash_clientside.no_update;
+                }
+                var changed = false;
+                var newData = figure.data.map(function(trace) {
+                    if (trace.name &&
+                            trace.name.indexOf('CATRED') !== -1 &&
+                            trace.name.indexOf('MER Tile') !== -1) {
+                        changed = true;
+                        return Object.assign({}, trace, {
+                            marker: Object.assign({}, trace.marker, {
+                                line: Object.assign({}, trace.marker && trace.marker.line,
+                                                    {color: markerColor})
+                            })
+                        });
+                    }
+                    return trace;
+                });
+                if (!changed) return window.dash_clientside.no_update;
+                return Object.assign({}, figure, {data: newData});
+            }
+            """,
+            Output("cluster-plot", "figure", allow_duplicate=True),
+            Input("catred-render-marker-color", "value"),
+            State("cluster-plot", "figure"),
+            prevent_initial_call=True,
         )
 
     def _setup_collapsible_callbacks(self):

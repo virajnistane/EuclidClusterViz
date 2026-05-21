@@ -52,18 +52,14 @@ class CATREDCallbacks:
 
         @self.app.callback(
             Output("catred-render-button", "disabled"),
-            [Input("cluster-plot", "relayoutData"), Input("mer-switch", "value")],
-            #  Input('catred-mode-switch', 'value')],
+            [Input("cluster-plot", "relayoutData")],
             [State("render-button", "n_clicks"), State("cluster-plot", "figure")],
             prevent_initial_call=True,
         )
-        def update_mer_button_state(relayout_data, show_mer_tiles, n_clicks, current_figure):
-            # Only enable if main app has been rendered and conditions are met
+        def update_mer_button_state(relayout_data, n_clicks, current_figure):
+            # Only enable if main app has been rendered and zoomed in enough
             if n_clicks in (None, 0):
                 return True  # Disabled
-
-            if not show_mer_tiles:
-                return True  # Disabled - switches not turned on
 
             # Prefer relayoutData, but fall back to figure layout ranges when relayoutData
             # is partial/missing (e.g. dragmode changes or after rerenders).

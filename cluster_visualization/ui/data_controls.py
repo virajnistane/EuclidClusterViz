@@ -266,7 +266,30 @@ class DataControls:
                                         html.I(className="fas fa-search-plus me-0"),
                                         "Zoom in first, then click",
                                     ],
-                                    className="text-muted d-block text-left mb-3",
+                                    className="text-muted d-block text-left mb-2",
+                                ),
+                                # Marker color picker
+                                html.Div(
+                                    [
+                                        html.Label(
+                                            "Marker color",
+                                            className="form-label small text-muted mb-1",
+                                            style={"font-size": "0.8rem"},
+                                        ),
+                                        dbc.Input(
+                                            id="catred-render-marker-color",
+                                            type="color",
+                                            value="#000000",
+                                            className="w-100",
+                                            style={
+                                                "height": "28px",
+                                                "cursor": "pointer",
+                                                "border-radius": "6px",
+                                                "padding": "1px 2px",
+                                            },
+                                        ),
+                                    ],
+                                    className="mb-2",
                                 ),
                                 # CATRED visibility and delete controls
                                 html.Div(

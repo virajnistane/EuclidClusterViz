@@ -395,9 +395,9 @@ class TraceCreator:
 
     def _check_zoom_threshold(self, relayout_data: Optional[Dict], show_mer_tiles: bool) -> bool:
         """Check if zoom level meets threshold for CATRED data display (< 2 degrees)."""
-        if not relayout_data or not show_mer_tiles:
+        if not relayout_data:
             print(
-                f"Debug: Zoom check skipped - relayout_data: {relayout_data is not None}, show_mer_tiles: {show_mer_tiles}"
+                f"Debug: Zoom check skipped - no relayout_data available"
             )
             return False
 
@@ -447,14 +447,14 @@ class TraceCreator:
         zoom_threshold_met: bool,
     ) -> None:
         """Add manually loaded CATRED high-resolution data traces."""
-        if not (show_mer_tiles and manual_catred_data):
-            if show_mer_tiles and zoom_threshold_met:
+        if not manual_catred_data:
+            if zoom_threshold_met:
                 print(
                     f"Debug: CATRED scatter conditions met but no manual data provided - use render button"
                 )
             else:
                 print(
-                    f"Debug: CATRED scatter data conditions not met - show_mer_tiles: {show_mer_tiles}, "
+                    f"Debug: CATRED scatter data conditions not met - "
                     f"manual_data: {manual_catred_data is not None}"
                 )
             return
@@ -539,16 +539,10 @@ class TraceCreator:
         catred_box_data: Optional[Dict],
     ) -> None:
         """Add CATRED bounding box trace if applicable."""
-        if not (show_mer_tiles and catred_box_data):
-            if show_mer_tiles:
-                print(
-                    f"Debug: CATRED scatter conditions met but no manual data provided - use render button"
-                )
-            else:
-                print(
-                    f"Debug: CATRED scatter data conditions not met - show_mer_tiles: {show_mer_tiles}, "
-                    f"catred_box_data: {catred_box_data is not None}"
-                )
+        if not catred_box_data:
+            print(
+                f"Debug: CATRED box trace skipped - no catred_box_data provided"
+            )
             return
 
         if not catred_box_data.get("ra"):
