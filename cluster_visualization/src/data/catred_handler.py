@@ -9,6 +9,7 @@ This module handles loading and processing of MER tile data including:
 """
 
 import os
+import time
 
 import numpy as np
 import pandas as pd  # type: ignore[import]
@@ -16,6 +17,8 @@ from astropy.io import fits  # type: ignore[import]
 from astropy.table import Table  # type: ignore[import]
 
 from typing import Any, Dict, List, Optional, Tuple
+
+from cluster_visualization.utils.profiler import TraceProfiler
 
 
 class Mask:
@@ -194,6 +197,7 @@ class CATREDHandler:
         )
         self.catred_dsr = None  # Dataset release for CATRED files
         self.effcovmask_dsr = None  # Dataset release for effective coverage mask files
+        self._profiler = TraceProfiler()
 
     def get_radec_mertile(
         self, mertileid: int, data: Dict[str, Any], maglim: float = 24.0
@@ -422,6 +426,8 @@ class CATREDHandler:
 
         margin = self._TILE_MARGIN_DEG
 
+        _t_stage1 = time.perf_counter()
+
         # --- Stage 1: fast bbox pre-filter ---
         if "ra_center" in dsr_df.columns and "dec_center" in dsr_df.columns:
             # Use tile-center coordinates when available (loaded with add_mertile_radec_center=True)
@@ -453,6 +459,10 @@ class CATREDHandler:
         else:
             candidates = dsr_df
 
+        self._profiler.record("catred:find_tiles:stage1", time.perf_counter() - _t_stage1)
+
+        _t_stage2 = time.perf_counter()
+
         # --- Stage 2: precise shapely intersection ---
         zoom_box = box(ra_lo, dec_lo, ra_hi, dec_hi)
         mertiles_to_load = []
@@ -460,6 +470,8 @@ class CATREDHandler:
             poly = row.get("polygon")
             if poly is not None and poly.intersects(zoom_box):
                 mertiles_to_load.append(row["mertileid"])
+
+        self._profiler.record("catred:find_tiles:stage2", time.perf_counter() - _t_stage2)
 
         print(
             f"Debug: Found {len(mertiles_to_load)} MER tiles in zoom area: "
@@ -523,17 +535,18 @@ class CATREDHandler:
                 return {}
 
             # Get full CATRED data with coverage values (no threshold filtering)
-            full_src_with_coverage = get_masked_catred(
-                mertileid,
-                data["effcovmask_info"],
-                data.get("effcovmask_dsr", None),
-                data["catred_info"],
-                data.get("catred_dsr", None),
-                maglim=maglim,
-                threshold=threshold,
-                corrected_mask_path=data.get("corrected_mask_path"),
-                mask_type=mask_type,
-            )  # Load all data
+            with self._profiler.timer("catred:get_masked_catred"):
+                full_src_with_coverage = get_masked_catred(
+                    mertileid,
+                    data["effcovmask_info"],
+                    data.get("effcovmask_dsr", None),
+                    data["catred_info"],
+                    data.get("catred_dsr", None),
+                    maglim=maglim,
+                    threshold=threshold,
+                    corrected_mask_path=data.get("corrected_mask_path"),
+                    mask_type=mask_type,
+                )  # Load all data
 
             if len(full_src_with_coverage) == 0:
                 print(f"Debug: No CATRED sources found for mertile {mertileid}")
@@ -746,24 +759,29 @@ class CATREDHandler:
             print("Debug: No catred_info data available for coverage-based CATRED loading")
             return catred_scatter_data
 
+        _t_total = time.perf_counter()
+
         # Find mertileids whose polygons intersect with the current zoom box
-        mertiles_to_load = self._find_intersecting_tiles(
-            data,
-            zoom_data["ra_min"],
-            zoom_data["ra_max"],
-            zoom_data["dec_min"],
-            zoom_data["dec_max"],
-        )
+        with self._profiler.timer("catred:find_tiles"):
+            mertiles_to_load = self._find_intersecting_tiles(
+                data,
+                zoom_data["ra_min"],
+                zoom_data["ra_max"],
+                zoom_data["dec_min"],
+                zoom_data["dec_max"],
+            )
         print(f"Debug: Found {len(mertiles_to_load)} MER tiles in zoom area for coverage loading")
 
         # Load data with coverage for each MER tile
-        self._load_tile_data_with_coverage(
-            mertiles_to_load, data, catred_scatter_data, maglim, threshold
-        )
+        with self._profiler.timer("catred:load_tiles"):
+            self._load_tile_data_with_coverage(
+                mertiles_to_load, data, catred_scatter_data, maglim, threshold
+            )
 
         # Store current data for click callbacks
         self.current_catred_data = catred_scatter_data
 
+        self._profiler.record("catred:update_coverage", time.perf_counter() - _t_total)
         print(f"Debug: Total CATRED points with coverage loaded: {len(catred_scatter_data['ra'])}")
         return catred_scatter_data
 
@@ -777,7 +795,8 @@ class CATREDHandler:
     ) -> None:
         """Load data with coverage for each MER tile and accumulate in scatter data."""
         for mertileid in mertiles_to_load:
-            tile_data = self.get_radec_mertile_with_coverage(mertileid, data, maglim, threshold)
+            with self._profiler.timer("catred:tile_load"):
+                tile_data = self.get_radec_mertile_with_coverage(mertileid, data, maglim, threshold)
             if tile_data and "RIGHT_ASCENSION" in tile_data:
                 catred_scatter_data["ra"].extend(tile_data["RIGHT_ASCENSION"])
                 catred_scatter_data["dec"].extend(tile_data["DECLINATION"])
@@ -1055,14 +1074,17 @@ class CATREDHandler:
             # Extract zoom data from relayout_data
             zoom_data = self._extract_zoom_data_from_relayout(relayout_data)
 
+            _t0 = time.perf_counter()
             if catred_masked:
                 print(f"Debug: Loading masked CATRED data with coverage for client-side filtering")
-                return self.update_catred_data_with_coverage(zoom_data, data, maglim, threshold)
+                result = self.update_catred_data_with_coverage(zoom_data, data, maglim, threshold)
             else:  # unmasked
                 print("Debug: Loading unmasked CATRED data")
-                return self.update_catred_data_unmasked(
+                result = self.update_catred_data_unmasked(
                     zoom_data, data, maglim=1000.0
                 )  # Use high maglim for unmasked to avoid filtering
+            self._profiler.record("catred:load_scatter_data", time.perf_counter() - _t0)
+            return result
         except:
             print(f"Debug: catred_masked not a boolean, executing catred_masked='True' fallback")
             return {

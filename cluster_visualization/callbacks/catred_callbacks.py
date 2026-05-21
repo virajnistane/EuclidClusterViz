@@ -10,8 +10,10 @@ import dash_bootstrap_components as dbc  # type: ignore[import]
 import pandas as pd  # type: ignore[import]
 import plotly.graph_objs as go  # type: ignore[import]
 from dash import Input, Output, State, html
+import time
 
 from cluster_visualization.callbacks.utils import get_idclusters_array
+from cluster_visualization.utils.profiler import TraceProfiler
 
 
 class CATREDCallbacks:
@@ -164,6 +166,8 @@ class CATREDCallbacks:
             )
 
             try:
+                _profiler = TraceProfiler()
+                _t_total = time.perf_counter()
                 set_progress((10, "Extracting SNR values..."))
 
                 # Extract SNR values from range sliders (separate for PZWAV and AMICO)
@@ -205,13 +209,15 @@ class CATREDCallbacks:
 
                 # Load data for selected algorithm
                 set_progress((30, f"Loading {algorithm} cluster data..."))
-                data = self.load_data(algorithm)
+                with _profiler.timer("catred_cb:load_data"):
+                    data = self.load_data(algorithm)
 
                 # Load CATRED scatter data for current zoom window with threshold
                 set_progress((50, "Loading CATRED high-res sources..."))
-                catred_scatter_data = self.load_catred_scatter_data(
-                    data, relayout_data, catred_masked, threshold, maglim
-                )
+                with _profiler.timer("catred_cb:load_scatter"):
+                    catred_scatter_data = self.load_catred_scatter_data(
+                        data, relayout_data, catred_masked, threshold, maglim
+                    )
 
                 # Extract existing CATRED traces from current figure to preserve them
                 existing_catred_traces = self._extract_existing_catred_traces(current_figure)
@@ -235,28 +241,29 @@ class CATREDCallbacks:
                 )
 
                 # Create traces with the manually loaded CATRED data and existing traces
-                traces = self.create_traces(
-                    data,
-                    show_polygons,
-                    show_mer_tiles,
-                    relayout_data,
-                    catred_masked,
-                    manual_catred_data=catred_scatter_data,
-                    existing_catred_traces=existing_catred_traces,
-                    existing_mosaic_traces=existing_mosaic_traces,  # 🆕 PASS MOSAIC TRACES
-                    existing_mask_overlay_traces=existing_mask_overlay_traces,  # 🆕 PASS MASK OVERLAY TRACES
-                    snr_threshold_lower_pzwav=snr_pzwav_lower,
-                    snr_threshold_upper_pzwav=snr_pzwav_upper,
-                    snr_threshold_lower_amico=snr_amico_lower,
-                    snr_threshold_upper_amico=snr_amico_upper,
-                    z_threshold_lower=z_lower,
-                    z_threshold_upper=z_upper,
-                    idcluster_list=idcluster_list,
-                    threshold=threshold,
-                    show_unmerged_clusters=show_unmerged_clusters,
-                    show_cltile_info=show_cltile_info,
-                    matching_clusters=matching_clusters,
-                )
+                with _profiler.timer("catred_cb:create_traces"):
+                    traces = self.create_traces(
+                        data,
+                        show_polygons,
+                        show_mer_tiles,
+                        relayout_data,
+                        catred_masked,
+                        manual_catred_data=catred_scatter_data,
+                        existing_catred_traces=existing_catred_traces,
+                        existing_mosaic_traces=existing_mosaic_traces,  # 🆕 PASS MOSAIC TRACES
+                        existing_mask_overlay_traces=existing_mask_overlay_traces,  # 🆕 PASS MASK OVERLAY TRACES
+                        snr_threshold_lower_pzwav=snr_pzwav_lower,
+                        snr_threshold_upper_pzwav=snr_pzwav_upper,
+                        snr_threshold_lower_amico=snr_amico_lower,
+                        snr_threshold_upper_amico=snr_amico_upper,
+                        z_threshold_lower=z_lower,
+                        z_threshold_upper=z_upper,
+                        idcluster_list=idcluster_list,
+                        threshold=threshold,
+                        show_unmerged_clusters=show_unmerged_clusters,
+                        show_cltile_info=show_cltile_info,
+                        matching_clusters=matching_clusters,
+                    )
 
                 # Update the CATRED traces cache with the new trace count
                 if catred_scatter_data and catred_scatter_data["ra"]:
@@ -266,11 +273,12 @@ class CATREDCallbacks:
 
                 # Create figure
                 set_progress((80, "Building figure..."))
-                fig = (
-                    self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio)
-                    if self.figure_manager
-                    else self._create_fallback_figure(traces, algorithm, free_aspect_ratio)
-                )
+                with _profiler.timer("catred_cb:build_figure"):
+                    fig = (
+                        self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio)
+                        if self.figure_manager
+                        else self._create_fallback_figure(traces, algorithm, free_aspect_ratio)
+                    )
 
                 # Preserve zoom state
                 if self.figure_manager:
@@ -317,6 +325,9 @@ class CATREDCallbacks:
 
                 # Create empty PHZ_PDF plot for CATRED render
                 empty_phz_fig = self._create_empty_phz_plot()
+
+                _profiler.record("catred_cb:total", time.perf_counter() - _t_total)
+                _profiler.print_stats(header="CATRED render")
 
                 return fig, empty_phz_fig, status
 

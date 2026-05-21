@@ -182,6 +182,10 @@ class ClusterVisualizationCore:
             try:
                 self.run(port=port, **kwargs)
                 break
+            except SystemExit:
+                # werkzeug prints the error and calls sys.exit(1) on EADDRINUSE
+                print(f"Port {port} is busy, trying next port...")
+                continue
             except OSError as e:
                 if "Address already in use" in str(e):
                     print(f"Port {port} is busy, trying next port...")

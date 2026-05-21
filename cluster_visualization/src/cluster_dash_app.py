@@ -479,6 +479,10 @@ def main():
             try:
                 app.run(port=port, debug=debug, auto_open=False, external_access=external_access)
                 break
+            except SystemExit:
+                # werkzeug prints the error and calls sys.exit(1) on EADDRINUSE
+                print(f"Port {port} is busy, trying next port...")
+                continue
             except OSError as e:
                 if "Address already in use" in str(e):
                     print(f"Port {port} is busy, trying next port...")
