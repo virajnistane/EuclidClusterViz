@@ -90,6 +90,13 @@ cd /path/to/EuclidClusterViz
 ./launch.sh
 ```
 
+> **🔧 Troubleshooting — `bind [127.0.0.1]:8050: Address already in use`**
+> A previous tunnel is still holding port 8050 on your local machine. Kill it first:
+> ```bash
+> lsof -ti :8050 | xargs kill -9 2>/dev/null; true
+> ```
+> Then retry the `ssh -L` command.
+
 **Step 3: Access in your browser**
 ```
 http://localhost:8050
@@ -121,6 +128,11 @@ Host ecv-ccin2p3                     # or any other alias
 > python3 -c "import os; print(8050 + os.getuid() % 1000)"
 > ```
 > Use that number for `LocalForward`. It never changes.
+>
+> **🔧 Troubleshooting — `bind: Address already in use`**: kill the stale local tunnel first:
+> ```bash
+> lsof -ti :8050 | xargs kill -9 2>/dev/null; true
+> ```
 
 Once configured:
 ```bash
@@ -907,13 +919,40 @@ cluster_visualization/src/
 
 ## 🔧 Troubleshooting & Support
 
+### **Port Conflicts**
+
+#### `bind [127.0.0.1]:8050: Address already in use` (local machine)
+A previous SSH tunnel is still holding port 8050 locally. Kill it and retry:
+```bash
+lsof -ti :8050 | xargs kill -9 2>/dev/null; true
+ssh -L 8050:localhost:<YOUR_PORT> username@remote-server.domain
+```
+
+#### `8184 address already in use` / app falls back to port `9184` (remote)
+A stale ClusterViz process from a previous session is still running on your UID port. The app automatically kills its own stale process before binding, so restarting the app should self-heal. If it still falls back:
+```bash
+# On the remote node — find and kill your own stale process:
+lsof -ti :8184 -sTCP:LISTEN | xargs kill -9 2>/dev/null; true
+# Then relaunch
+./launch.sh
+```
+Replace `8184` with your actual UID port (`python3 -c "import os; print(8050 + os.getuid() % 1000)"`).
+
+#### App started on a fallback port (e.g. `9184`) but tunnel points to `8184`
+Update your tunnel to match the port printed at startup:
+```bash
+# Kill old tunnel locally:
+lsof -ti :8050 | xargs kill -9 2>/dev/null; true
+# Open new tunnel with the correct remote port:
+ssh -L 8050:localhost:9184 username@remote-server.domain
+```
+
 ### **Connection Issues**
 If you can't access the application:
 - Check the port printed at startup — it is personal to your UID, not always 8050
 - Verify your SSH tunnel maps `localhost:8050 → remote:<YOUR_PORT>` (command printed at startup)
 - Keep the SSH connection alive while using the app
 - Already logged in without `-L`? Open a **new terminal** on your local machine and run the tunnel command — no need to disconnect
-- Use the exact `ssh -L` command printed at startup to open the tunnel from a new local terminal
 
 ### **Environment & Dependencies**
 ```bash
@@ -1134,6 +1173,8 @@ Monitoring: Flask middleware for SSH tunnel validation and user tracking
 
 For in-depth documentation on specific features and recent improvements, see the docs folder:
 
+- **[Troubleshooting Guide](cluster_visualization/docs/TROUBLESHOOTING.md)** — Port conflicts, SSH tunnel issues, environment problems, performance
+- **[SSH Tunnel Monitoring](cluster_visualization/docs/SSH_TUNNEL_MONITORING.md)** — Per-user port assignment, connection monitoring, startup messages
 - **[Tile Caching & CL-tile Controls](cluster_visualization/docs/TILE_CACHING_AND_CONTROLS.md)** — Tile definition caching (30-40% faster renders), toggle control for MER polygons and tile colors
 - **[Zoom-Based Oval Rendering](cluster_visualization/docs/ZOOM_BASED_OVAL_RENDERING.md)** — Matched cluster rendering with viewport zoom indicator, performance characteristics
 - **[Cluster Analysis Guide](cluster_visualization/docs/CLUSTER_ANALYSIS_GUIDE.md)** — Cutouts, CATRED boxes, mask overlays, trace management

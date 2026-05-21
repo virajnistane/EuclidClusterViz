@@ -206,9 +206,43 @@ class ClusterVisualizationCore:
             if hasattr(self, "connection_monitor"):
                 self.connection_monitor.stop_monitoring()
 
+    @staticmethod
+    def _free_port_if_stale(port):
+        """Kill any process owned by the current user that is listening on port."""
+        import os as _os
+        import signal
+        import subprocess
+        try:
+            result = subprocess.run(
+                ["lsof", "-ti", f":{port}", "-sTCP:LISTEN"],
+                capture_output=True, text=True
+            )
+            pids = [int(p) for p in result.stdout.split() if p.strip()]
+            uid = _os.getuid()
+            for pid in pids:
+                try:
+                    proc_uid = _os.stat(f"/proc/{pid}").st_uid
+                except OSError:
+                    # /proc not available (non-Linux); fall back to checking via ps
+                    try:
+                        ps = subprocess.run(
+                            ["ps", "-o", "uid=", "-p", str(pid)],
+                            capture_output=True, text=True
+                        )
+                        proc_uid = int(ps.stdout.strip())
+                    except Exception:
+                        continue
+                if proc_uid == uid:
+                    _os.kill(pid, signal.SIGTERM)
+                    print(f"  Freed port {port} (terminated stale PID {pid})")
+        except Exception:
+            pass  # lsof unavailable — fall through to normal port-busy error
+
     def try_multiple_ports(self, ports=[8050, 8051, 8052], **kwargs):
         """Try to run on multiple ports if default is busy"""
         for port in ports:
+            self._free_port_if_stale(port)
+            time.sleep(0.5)  # allow socket to leave TIME_WAIT after SIGTERM
             try:
                 self.run(port=port, **kwargs)
                 break
