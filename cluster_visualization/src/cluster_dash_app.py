@@ -26,16 +26,14 @@ USAGE:
 """
 
 import argparse
-import getpass
-import json
+# import json
 import os
-import pickle
-import socket
+# import pickle
 import sys
 import threading
 import time
 import webbrowser
-from datetime import datetime, timedelta
+# from datetime import datetime, timedelta
 
 import dash
 import dash_bootstrap_components as dbc
@@ -195,76 +193,6 @@ from cluster_visualization.utils.colordefinitions import colors_list, colors_lis
 from cluster_visualization.utils.myutils import get_xml_element
 
 print(f"✓ Utilities loaded from: {utils_path}")
-
-
-class ConnectionMonitor:
-    """Monitor user connections to detect if anyone has connected to the app"""
-
-    def __init__(self):
-        self.connections = set()
-        self.start_time = datetime.now()
-        self.warning_sent = False
-        self.monitoring_active = True
-
-    def record_connection(self, user_agent=None, ip=None):
-        """Record a new connection"""
-        connection_id = f"{ip or 'unknown'}:{user_agent or 'unknown'}"
-        is_first_connection = len(self.connections) == 0
-        self.connections.add(connection_id)
-
-        if is_first_connection:
-            print(f"✓ User successfully connected at {datetime.now().strftime('%H:%M:%S')}")
-            if ip == "127.0.0.1" or ip == "localhost":
-                print("  ✓ SSH tunnel appears to be working correctly")
-            print(f"  Browser: {user_agent or 'unknown'}")
-            print(f"  Connection from: {ip or 'unknown'}")
-            print("")
-
-    def check_connections(self, warn_after_minutes=1):  # Back to 1 minute for production
-        """Check if any connections have been made and warn if not"""
-        if self.warning_sent or not self.monitoring_active:
-            return
-
-        elapsed = datetime.now() - self.start_time
-        if elapsed > timedelta(minutes=warn_after_minutes) and not self.connections:
-            self.warning_sent = True
-            elapsed_seconds = elapsed.total_seconds()
-
-            # Get the actual hostname
-            try:
-                hostname = socket.gethostbyaddr(socket.gethostname())[0]
-            except:
-                hostname = "remotehost"
-
-            print("\n" + "=" * 70)
-            print("⚠️  WARNING: No users have connected yet!")
-            print(f"   App has been running for {elapsed_seconds/60:.1f} minutes")
-            print("")
-            print("🔗 REQUIRED: SSH Tunnel Setup")
-            print("   This app runs on a remote server and requires SSH tunneling.")
-            print("   ")
-            print("   1. Open a NEW terminal on your LOCAL machine")
-            print("   2. Run this command:")
-            print(f"      ssh -L 8050:localhost:8050 {getpass.getuser()}@{hostname}")
-            print("   3. Keep that SSH connection alive")
-            print("   4. Open your browser to: http://localhost:8050")
-            print("")
-            print("=" * 70 + "\n")
-
-    def start_monitoring(self, check_interval=30):
-        """Start background monitoring thread"""
-
-        def monitor():
-            while self.monitoring_active:
-                self.check_connections()
-                time.sleep(check_interval)
-
-        thread = threading.Thread(target=monitor, daemon=True)
-        thread.start()
-
-    def stop_monitoring(self):
-        """Stop the monitoring"""
-        self.monitoring_active = False
 
 
 class ClusterVisualizationApp:
@@ -465,22 +393,28 @@ def main():
     # threading.Thread(target=_prewarm, daemon=True).start()
     # print("🔥 Background data pre-warm started")
 
-    # Try different ports if default is busy using modular core if available
+    # Derive per-user ports from UID so multiple users on same node never collide.
+    # UID is stable across all cluster nodes (set at account creation).
+    uid_offset = os.getuid() % 1000
+    user_ports = [
+        8050 + uid_offset,
+        8050 + uid_offset + 1000,
+        8050 + uid_offset + 2000,
+    ]
+
     if app.core:
         app.core.try_multiple_ports(
-            ports=[8050, 8051, 8052, 8053],
+            ports=user_ports,
             debug=debug,
             auto_open=False,
             external_access=external_access,
         )
     else:
-        # Fallback implementation
-        for port in [8050, 8051, 8052, 8053]:
+        for port in user_ports:
             try:
                 app.run(port=port, debug=debug, auto_open=False, external_access=external_access)
                 break
             except SystemExit:
-                # werkzeug prints the error and calls sys.exit(1) on EADDRINUSE
                 print(f"Port {port} is busy, trying next port...")
                 continue
             except OSError as e:

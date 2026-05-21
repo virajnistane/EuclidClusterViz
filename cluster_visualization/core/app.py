@@ -6,6 +6,7 @@ and server startup functionality.
 """
 
 import getpass
+import logging
 import socket
 import sys
 import threading
@@ -37,7 +38,7 @@ class ConnectionMonitor:
             print(f"  Connection from: {ip or 'unknown'}")
             print("")
 
-    def check_connections(self, warn_after_minutes=1):  # Back to 1 minute for production
+    def check_connections(self, warn_after_minutes=1, bound_port=None):
         """Check if any connections have been made and warn if not"""
         if self.warning_sent or not self.monitoring_active:
             return
@@ -47,11 +48,13 @@ class ConnectionMonitor:
             self.warning_sent = True
             elapsed_seconds = elapsed.total_seconds()
 
-            # Get the actual hostname
             try:
                 hostname = socket.gethostbyaddr(socket.gethostname())[0]
             except:
                 hostname = "remotehost"
+
+            remote_port = bound_port or 8050
+            user = getpass.getuser()
 
             print("\n" + "=" * 70)
             print("⚠️  WARNING: No users have connected yet!")
@@ -59,21 +62,23 @@ class ConnectionMonitor:
             print("")
             print("🔗 REQUIRED: SSH Tunnel Setup")
             print("   This app runs on a remote server and requires SSH tunneling.")
-            print("   ")
+            print("")
             print("   1. Open a NEW terminal on your LOCAL machine")
             print("   2. Run this command:")
-            print(f"      ssh -L 8050:localhost:8050 {getpass.getuser()}@{hostname}")
+            print(f"      ssh -L 8050:localhost:{remote_port} {user}@{hostname}")
             print("   3. Keep that SSH connection alive")
             print("   4. Open your browser to: http://localhost:8050")
             print("")
+            print("   Then open a NEW terminal and run the tunnel command above.")
             print("=" * 70 + "\n")
 
-    def start_monitoring(self, check_interval=10):  # Check every 10 seconds
+    def start_monitoring(self, check_interval=10, bound_port=None):
         """Start background monitoring thread"""
+        self._bound_port = bound_port
 
         def monitor():
             while self.monitoring_active:
-                self.check_connections()
+                self.check_connections(bound_port=self._bound_port)
                 time.sleep(check_interval)
 
         thread = threading.Thread(target=monitor, daemon=True)
@@ -144,21 +149,46 @@ class ClusterVisualizationCore:
         except:
             hostname = "remotehost"
 
+        import os as _os
+        project_root = (
+            _os.path.dirname(
+                _os.path.dirname(
+                    _os.path.dirname(
+                        _os.path.abspath(__file__)))))
+        
+        user = getpass.getuser()
         print("=== Cluster Visualization Dash App ===")
-        print(f"Server starting on: http://localhost:{port}")
+        print(f"Server starting on port {port}")
         print("")
-        print("📌 REMOTE ACCESS:")
-        print(f"   If accessing remotely, ensure your SSH tunnel is active:")
-        print(f"   ssh -L {port}:localhost:{port} {getpass.getuser()}@{hostname}")
-        print(f"   Then open: http://localhost:{port}")
+        print("┌─────────────────────────────────────────────────────────────┐")
+        print("│  🖥️  REMOTE ACCESS — run this on your LOCAL machine:         │")
+        print("│                                                             │")
+        print(f"│ 1) ssh -L 8050:localhost:{port} {user}@{hostname}")
+        print(f"│ 2) cd {project_root}")
+        print("│ 3) ./launch.sh                                              │")
+        print("│ 4) Then open in browser:  http://localhost:8050             │")
+        print("│                                                             │")
+        print("│  Run step 1 in a NEW terminal — keep the connection open.   │")
+        print("└─────────────────────────────────────────────────────────────┘")
         print("")
         print("Loading data and setting up visualization...")
         print("Press Ctrl+C to stop the server")
         print("")
+        # Suppress Dash/Flask/werkzeug startup banners — they show the remote port
+        # which confuses users who should use localhost:8050 via the SSH tunnel.
+        logging.getLogger("dash").setLevel(logging.WARNING)
+        logging.getLogger("dash.dash").setLevel(logging.WARNING)
+        logging.getLogger("werkzeug").setLevel(logging.ERROR)
+        # Flask CLI banner uses click.echo(), not logging — patch it out directly.
+        try:
+            import flask.cli as _flask_cli
+            _flask_cli.show_server_banner = lambda *a, **kw: None
+        except Exception:
+            pass
 
         # Start connection monitoring
         if hasattr(self, "connection_monitor"):
-            self.connection_monitor.start_monitoring()
+            self.connection_monitor.start_monitoring(bound_port=port)
             print("Connection monitoring started - will warn if no users connect within 1 minute")
             print("")
 

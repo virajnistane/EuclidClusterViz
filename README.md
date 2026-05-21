@@ -43,54 +43,99 @@ An advanced interactive web-based visualization platform for astronomical cluste
 
 ## 🔗 Quick Remote Access Setup
 
-Access the application on a remote server (**location of the stored data**) using SSH port forwarding:
+Access the application on a remote server (**location of the stored data**) using SSH port forwarding.
 
-### **Step 1: Connect with Port Forwarding**
-From your **local machine**, run:
+> **Port assignment**: The app automatically assigns each user a personal port derived from their system UID (`8050 + uid % 1000`). This ensures multiple users on the same node never collide. The exact port is printed at startup — you only need it for the manual tunnel method below.
 
+---
+
+### **Setup**
+
+**Step 0: Clone the repository on the remote server** (first time only)
+
+Log in to the cluster normally:
 ```bash
-# Connect to remote server with port forwarding
-ssh -L 8050:localhost:8050 username@remote-server.domain
-
-# Example for CC-IN2P3 systems:
-ssh -L 8050:localhost:8050 vnistane@cca.in2p3.fr
+ssh username@remote-server.domain
+# Example for CC-IN2P3:
+# ssh vnistane@cca.in2p3.fr
 ```
-
-### **Step 2: Clone the Repository**
-Once connected to the remote server, clone the repository:
-
+Then clone and set up:
 ```bash
-# Clone the repository
 git clone https://github.com/virajnistane/EuclidClusterViz.git
-cd EuclidClusterViz
-
-# Or use SSH if you have access:
-# git clone git@github.com:virajnistane/EuclidClusterViz.git
 ```
 
-### **Step 3: Launch the Application**
-Navigate to the project directory and launch:
-
+**Step 1: Start the app on the remote server**
 ```bash
-cd /path/to/ClusterViz  # or just 'cd EuclidClusterViz' if you just cloned
+cd /path/to/EuclidClusterViz
+./launch.sh
+```
+At startup the app prints your personal port and the exact tunnel command, e.g.:
+```
+┌─────────────────────────────────────────────────────────────┐
+│  🖥️  REMOTE ACCESS — run this on your LOCAL machine:        │
+│                                                             │
+│ 1) ssh -L 8050:localhost:<YOUR_PORT> <user-name>@<HOSTNAME> │
+│ 2) cd /path/to/ClusterViz                                   │
+│ 3) ./launch.sh                                              │
+│ 4) Then open in browser:  http://localhost:8050             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Step 2: Open an SSH tunnel from your local machine**
+```bash
+# Use the exact command printed at startup — note: local port is always 8050,
+# remote port is your personal UID-based port (printed at app startup)
+ssh -L 8050:localhost:<YOUR_PORT> username@remote-server.domain
+cd /path/to/EuclidClusterViz
 ./launch.sh
 ```
 
-### **Step 4: Access in Your Browser**
-Open your web browser on your **local machine** and navigate to:
+**Step 3: Access in your browser**
 ```
 http://localhost:8050
 ```
 
-**Important**: Keep the SSH connection alive while using the application.
+Keep the SSH connection alive while using the application.
 
-### **Alternative Ports** (if 8050 is in use)
-```bash
-# Try alternative ports
-ssh -L 8051:localhost:8050 username@remote-server.domain  # Access: http://localhost:8051
-ssh -L 8052:localhost:8050 username@remote-server.domain  # Access: http://localhost:8052
-ssh -L 8053:localhost:8050 username@remote-server.domain  # Access: http://localhost:8053
+---
+
+**Step 4 (optional): Add an SSH config entry** — then `ssh ecv-ccin2p3` does everything in one command
+
+Add the following to `~/.ssh/config` on your **local machine**, replacing the placeholders:
+
 ```
+Host ecv-ccin2p3                     # or any other alias
+  HostName <cluster-hostname>        # e.g. cca.in2p3.fr
+  User <your-username>               # e.g. vnistane
+  IdentityFile ~/.ssh/id_rsa         # path to your SSH key (omit if using password)
+  ForwardX11 yes
+  RequestTTY yes
+  RemoteCommand cd ~/ClusterViz && exec $SHELL --login
+  GSSAPIAuthentication yes           # remove if your cluster doesn't use Kerberos
+  GSSAPIDelegateCredentials yes      # remove if your cluster doesn't use Kerberos
+  LocalForward 8050 127.0.0.1:<YOUR_PORT>  # YOUR_PORT = 8050 + (your UID % 1000)
+```
+
+> **Finding your UID-based port**: log in once normally and run:
+> ```bash
+> python3 -c "import os; print(8050 + os.getuid() % 1000)"
+> ```
+> Use that number for `LocalForward`. It never changes.
+
+Once configured:
+```bash
+ssh ecv-ccin2p3   # connects, opens tunnel, lands in ~/ClusterViz
+./launch.sh       # start the app
+# then open http://localhost:8050 in your browser
+```
+
+---
+
+### **Already logged in without `-L`?**
+
+If you are already connected to the remote node in an existing SSH session (without port forwarding), open a **new terminal** on your local machine and run the tunnel command printed by the app — no need to disconnect.
+
+---
 
 ### **Connection Verification**
 When successfully connected, you'll see:
@@ -176,10 +221,10 @@ The EDEN-3.1 environment lacks several critical modules (`healpy`, `dash`, `plot
 - **Collapsible Sections**: Organized controls with expandable/collapsible cards
 
 ### 🌐 **Enterprise Remote Access**
-- **SSH Tunnel Monitoring**: Automatic detection and setup guidance for remote connections
+- **Per-user port assignment**: Each user gets a deterministic port (`8050 + uid % 1000`) — no collisions between users on the same node
+- **Fixed local URL**: tunnel always maps to `localhost:8050` regardless of the remote port — bookmark once
+- **SSH Tunnel Monitoring**: Automatic detection and setup guidance; prints exact tunnel command at startup
 - **Connection Validation**: Real-time feedback on tunnel status and user connectivity
-- **Multi-port Support**: Automatic fallback to available ports (8050, 8051, 8052, 8053)
-- **Production Ready**: Robust error handling and connection management
 
 ### ⚡ **Performance Optimization**
 - **Client-side Filtering**: Real-time SNR/redshift filtering without server round-trips
@@ -238,6 +283,11 @@ cluster_visualization/
 ├── config_local.ini                # 🔒 Personal config (gitignored)
 ├── requirements.txt                # 📋 Legacy dependencies (backup)
 └── README.md                       # 📖 This documentation
+
+📁 cluster_visualization/scripts/
+├── launch.sh                       # 🚀 Remote launcher wrapper
+├── run_dash_app_venv.sh            # 🔧 Venv-aware app runner
+└── run_remote_dash.sh              # 🌐 Interactive remote setup helper
 ```
 
 ### **Package Management (pyproject.toml)**
@@ -859,10 +909,11 @@ cluster_visualization/src/
 
 ### **Connection Issues**
 If you can't access the application:
-- Verify SSH port forwarding is active (see Quick Remote Access Setup above)
+- Check the port printed at startup — it is personal to your UID, not always 8050
+- Verify your SSH tunnel maps `localhost:8050 → remote:<YOUR_PORT>` (command printed at startup)
 - Keep the SSH connection alive while using the app
-- Access via `http://localhost:8050` (not the server IP)
-- If port 8050 is in use, try alternative ports: 8051, 8052, 8053
+- Already logged in without `-L`? Open a **new terminal** on your local machine and run the tunnel command — no need to disconnect
+- Use the exact `ssh -L` command printed at startup to open the tunnel from a new local terminal
 
 ### **Environment & Dependencies**
 ```bash

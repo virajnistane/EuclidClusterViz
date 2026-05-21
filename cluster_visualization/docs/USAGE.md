@@ -7,7 +7,7 @@
 source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 ```
 
-**Remote Access**: If accessing from a remote server, see [Quick Remote Access Setup](../../../README.md#-quick-remote-access-setup) for SSH port forwarding instructions.
+**Remote Access**: The app assigns each user a personal port automatically. The exact `ssh -L` tunnel command is printed at startup. See [Quick Remote Access Setup](../../../README.md#-quick-remote-access-setup).
 
 ## 🎯 Interactive Dash Application
 
