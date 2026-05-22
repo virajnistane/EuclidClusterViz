@@ -36,6 +36,7 @@ class MOSAICCallbacks:
     def setup_callbacks(self):
         """Setup all MER-Mosaic- and Mask-related callbacks"""
         self._setup_mosaic_source_selector_callback()
+        self._setup_mosaic_esa_format_visibility_callback()
         self._setup_mosaic_button_state_callback()
         self._setup_healpix_mask_button_state_callback()
         self._setup_mosaic_render_callback()
@@ -43,9 +44,11 @@ class MOSAICCallbacks:
         self._setup_mosaic_visibility_toggle_callback()
         self._setup_mosaic_delete_callback()
         self._setup_mosaic_control_buttons_state_callback()
+        self._setup_mosaic_opacity_callback()
         self._setup_mask_visibility_toggle_callback()
         self._setup_mask_delete_callback()
         self._setup_mask_control_buttons_state_callback()
+        self._setup_mask_opacity_callback()
 
     def _setup_mosaic_source_selector_callback(self):
         """Setup callback for mosaic provider/source selectors and attribution text."""
@@ -55,20 +58,16 @@ class MOSAICCallbacks:
                 Output("mosaic-source-selector", "options"),
                 Output("mosaic-source-selector", "value"),
                 Output("mosaic-source-attribution", "children"),
-                Output("mosaic-esa-format-container", "style"),
             ],
             [Input("mosaic-provider-selector", "value"), Input("mosaic-source-selector", "value")],
             prevent_initial_call=False,
         )
         def update_mosaic_source_selector(provider, current_source):
-            esa_format_style = {"display": "block"} if provider == "esa_sky" else {"display": "none"}
-
             if not self.mosaic_handler:
                 return (
                     [{"label": "DpdMerBksMosaic", "value": "local_mer"}],
                     "local_mer",
                     "Attribution: Local Euclid MER FITS",
-                    esa_format_style,
                 )
 
             sources = self.mosaic_handler.get_available_mosaic_sources(provider=provider)
@@ -77,7 +76,6 @@ class MOSAICCallbacks:
                     [{"label": "DpdMerBksMosaic", "value": "local_mer"}],
                     "local_mer",
                     "Attribution: Local Euclid MER FITS",
-                    esa_format_style,
                 )
 
             options = [{"label": src["label"], "value": src["id"]} for src in sources]
@@ -90,72 +88,92 @@ class MOSAICCallbacks:
                     attribution = f"Attribution: {src.get('attribution', 'N/A')}"
                     break
 
-            return options, selected_source, attribution, esa_format_style
+            return options, selected_source, attribution
+
+    def _setup_mosaic_esa_format_visibility_callback(self):
+        """Clientside callback: show ESA format container only when provider is esa_sky"""
+        self.app.clientside_callback(
+            """
+            function(provider) {
+                if (provider === 'esa_sky') {
+                    return {'display': 'block'};
+                }
+                return {'display': 'none'};
+            }
+            """,
+            Output("mosaic-esa-format-container", "style"),
+            Input("mosaic-provider-selector", "value"),
+            prevent_initial_call=False,
+        )
 
     def _setup_mosaic_button_state_callback(self):
-        """Setup callback to enable/disable MOSAIC render button based on zoom level"""
+        """Clientside callback: enable/disable MOSAIC render button based on zoom level"""
+        self.app.clientside_callback(
+            """
+            function(relayoutData, mosaicEnabled, nClicks) {
+                if (!nClicks || nClicks === 0) return true;
+                if (!mosaicEnabled) return true;
+                if (!relayoutData) return true;
 
-        @self.app.callback(
+                var raRange = null, decRange = null;
+
+                if ('xaxis.range[0]' in relayoutData && 'xaxis.range[1]' in relayoutData) {
+                    raRange = Math.abs(relayoutData['xaxis.range[1]'] - relayoutData['xaxis.range[0]']);
+                } else if (relayoutData['xaxis.range']) {
+                    raRange = Math.abs(relayoutData['xaxis.range'][1] - relayoutData['xaxis.range'][0]);
+                }
+
+                if ('yaxis.range[0]' in relayoutData && 'yaxis.range[1]' in relayoutData) {
+                    decRange = Math.abs(relayoutData['yaxis.range[1]'] - relayoutData['yaxis.range[0]']);
+                } else if (relayoutData['yaxis.range']) {
+                    decRange = Math.abs(relayoutData['yaxis.range'][1] - relayoutData['yaxis.range'][0]);
+                }
+
+                if (raRange !== null && decRange !== null && raRange < 2.0 && decRange < 2.0) {
+                    return false;
+                }
+                return true;
+            }
+            """,
             Output("mosaic-render-button", "disabled"),
             [Input("cluster-plot", "relayoutData"), Input("mosaic-enable-switch", "value")],
-            [State("render-button", "n_clicks")],
+            State("render-button", "n_clicks"),
             prevent_initial_call=True,
         )
-        def update_mosaic_button_state(relayout_data, mosaic_enabled, n_clicks):
-            # Only enable if main app has been rendered and conditions are met
-            if n_clicks == 0:
-                return True  # Disabled
-
-            if not mosaic_enabled:
-                return True  # Disabled - switches not turned on
-
-            if not relayout_data:
-                return True  # Disabled - no zoom data
-
-            # Check zoom level
-            ra_range, dec_range = self._extract_zoom_ranges(relayout_data)
-
-            # Enable button if zoomed in enough
-            if (
-                ra_range is not None
-                and dec_range is not None
-                and ra_range < 2.0
-                and dec_range < 2.0
-            ):
-                return False  # Enabled
-            else:
-                return True  # Disabled - not zoomed in enough
 
     def _setup_healpix_mask_button_state_callback(self):
-        """Setup callback to enable/disable HEALPix mask button based on zoom level"""
+        """Clientside callback: enable/disable HEALPix mask button based on zoom level"""
+        self.app.clientside_callback(
+            """
+            function(relayoutData, nClicks) {
+                if (!nClicks || nClicks === 0) return true;
+                if (!relayoutData) return true;
 
-        @self.app.callback(
+                var raRange = null, decRange = null;
+
+                if ('xaxis.range[0]' in relayoutData && 'xaxis.range[1]' in relayoutData) {
+                    raRange = Math.abs(relayoutData['xaxis.range[1]'] - relayoutData['xaxis.range[0]']);
+                } else if (relayoutData['xaxis.range']) {
+                    raRange = Math.abs(relayoutData['xaxis.range'][1] - relayoutData['xaxis.range'][0]);
+                }
+
+                if ('yaxis.range[0]' in relayoutData && 'yaxis.range[1]' in relayoutData) {
+                    decRange = Math.abs(relayoutData['yaxis.range[1]'] - relayoutData['yaxis.range[0]']);
+                } else if (relayoutData['yaxis.range']) {
+                    decRange = Math.abs(relayoutData['yaxis.range'][1] - relayoutData['yaxis.range'][0]);
+                }
+
+                if (raRange !== null && decRange !== null && raRange < 2.0 && decRange < 2.0) {
+                    return false;
+                }
+                return true;
+            }
+            """,
             Output("healpix-mask-button", "disabled"),
-            [Input("cluster-plot", "relayoutData")],
-            [State("render-button", "n_clicks")],
+            Input("cluster-plot", "relayoutData"),
+            State("render-button", "n_clicks"),
             prevent_initial_call=True,
         )
-        def update_healpix_mask_button_state(relayout_data, n_clicks):
-            # Only enable if main app has been rendered and conditions are met
-            if n_clicks == 0:
-                return True  # Disabled
-
-            if not relayout_data:
-                return True  # Disabled - no zoom data
-
-            # Check zoom level
-            ra_range, dec_range = self._extract_zoom_ranges(relayout_data)
-
-            # Enable button if zoomed in enough
-            if (
-                ra_range is not None
-                and dec_range is not None
-                and ra_range < 2.0
-                and dec_range < 2.0
-            ):
-                return False  # Enabled
-            else:
-                return True  # Disabled - not zoomed in enough
 
     def _setup_mosaic_render_callback(self):
         """Setup mosaic image rendering callback"""
@@ -553,30 +571,25 @@ class MOSAICCallbacks:
         )
 
     def _setup_mosaic_delete_callback(self):
-        """Setup server-side callback to delete mosaic traces from memory"""
-
-        @self.app.callback(
+        """Clientside callback: delete mosaic traces from figure"""
+        self.app.clientside_callback(
+            """
+            function(n_clicks, figure) {
+                if (!n_clicks || !figure || !figure.data) {
+                    return window.dash_clientside.no_update;
+                }
+                let newFigure = JSON.parse(JSON.stringify(figure));
+                newFigure.data = newFigure.data.filter(function(trace) {
+                    return !(trace.name && trace.name.startsWith('Mosaic'));
+                });
+                return newFigure;
+            }
+            """,
             Output("cluster-plot", "figure", allow_duplicate=True),
-            [Input("mosaic-delete-button", "n_clicks")],
-            [State("cluster-plot", "figure")],
+            Input("mosaic-delete-button", "n_clicks"),
+            State("cluster-plot", "figure"),
             prevent_initial_call=True,
         )
-        def delete_mosaic_traces(n_clicks, current_figure):
-            """Delete all mosaic traces from the figure"""
-            if not n_clicks or not current_figure or "data" not in current_figure:
-                return current_figure
-
-            # Filter out all mosaic traces
-            filtered_traces = [
-                trace
-                for trace in current_figure["data"]
-                if not (trace.get("name", "").startswith("Mosaic"))
-            ]
-
-            current_figure["data"] = filtered_traces
-            print(f"🗑️ Deleted mosaic traces from memory. Remaining traces: {len(filtered_traces)}")
-
-            return current_figure
 
     def _setup_mosaic_control_buttons_state_callback(self):
         """Setup callback to enable/disable mosaic control buttons based on presence of mosaic traces"""
@@ -605,6 +618,33 @@ class MOSAICCallbacks:
                 Output("mosaic-delete-button", "disabled"),
             ],
             [Input("cluster-plot", "figure")],
+            prevent_initial_call=True,
+        )
+
+    def _setup_mosaic_opacity_callback(self):
+        """Clientside callback: live opacity adjustment for rendered mosaic traces"""
+        self.app.clientside_callback(
+            """
+            function(opacity, figure) {
+                if (opacity === null || opacity === undefined || !figure || !figure.data) {
+                    return window.dash_clientside.no_update;
+                }
+                let hasMosaic = figure.data.some(function(t) {
+                    return t.name && t.name.startsWith('Mosaic');
+                });
+                if (!hasMosaic) return window.dash_clientside.no_update;
+                let newFigure = JSON.parse(JSON.stringify(figure));
+                for (let i = 0; i < newFigure.data.length; i++) {
+                    if (newFigure.data[i].name && newFigure.data[i].name.startsWith('Mosaic')) {
+                        newFigure.data[i].opacity = opacity;
+                    }
+                }
+                return newFigure;
+            }
+            """,
+            Output("cluster-plot", "figure", allow_duplicate=True),
+            Input("mosaic-opacity-slider", "value"),
+            State("cluster-plot", "figure"),
             prevent_initial_call=True,
         )
 
@@ -664,35 +704,28 @@ class MOSAICCallbacks:
         )
 
     def _setup_mask_delete_callback(self):
-        """Setup server-side callback to delete mask overlay traces from memory"""
-
-        @self.app.callback(
+        """Clientside callback: delete mask overlay traces and colorbar from figure"""
+        self.app.clientside_callback(
+            """
+            function(n_clicks, figure) {
+                if (!n_clicks || !figure || !figure.data) {
+                    return window.dash_clientside.no_update;
+                }
+                let newFigure = JSON.parse(JSON.stringify(figure));
+                newFigure.data = newFigure.data.filter(function(trace) {
+                    return !(
+                        (trace.name && trace.name.startsWith('Mask overlay')) ||
+                        trace.name === 'Mask Colorbar'
+                    );
+                });
+                return newFigure;
+            }
+            """,
             Output("cluster-plot", "figure", allow_duplicate=True),
-            [Input("mask-delete-button", "n_clicks")],
-            [State("cluster-plot", "figure")],
+            Input("mask-delete-button", "n_clicks"),
+            State("cluster-plot", "figure"),
             prevent_initial_call=True,
         )
-        def delete_mask_traces(n_clicks, current_figure):
-            """Delete all mask overlay traces from the figure"""
-            if not n_clicks or not current_figure or "data" not in current_figure:
-                return current_figure
-
-            # Filter out all mask overlay traces AND the colorbar
-            filtered_traces = [
-                trace
-                for trace in current_figure["data"]
-                if not (
-                    trace.get("name", "").startswith("Mask overlay")
-                    or trace.get("name", "") == "Mask Colorbar"
-                )
-            ]
-
-            current_figure["data"] = filtered_traces
-            print(
-                f"🗑️ Deleted mask overlay traces and colorbar from memory. Remaining traces: {len(filtered_traces)}"
-            )
-
-            return current_figure
 
     def _setup_mask_control_buttons_state_callback(self):
         """Setup callback to enable/disable mask control buttons based on presence of mask traces"""
@@ -724,20 +757,31 @@ class MOSAICCallbacks:
             prevent_initial_call=True,
         )
 
-    # Helper methods
-    def _extract_zoom_ranges(self, relayout_data):
-        """Extract RA and Dec ranges from relayout data"""
-        ra_range = None
-        dec_range = None
+    def _setup_mask_opacity_callback(self):
+        """Clientside callback: live opacity adjustment for rendered mask overlay traces"""
+        self.app.clientside_callback(
+            """
+            function(opacity, figure) {
+                if (opacity === null || opacity === undefined || !figure || !figure.data) {
+                    return window.dash_clientside.no_update;
+                }
+                let hasMask = figure.data.some(function(t) {
+                    return (t.name && t.name.startsWith('Mask overlay')) || t.name === 'Mask Colorbar';
+                });
+                if (!hasMask) return window.dash_clientside.no_update;
+                let newFigure = JSON.parse(JSON.stringify(figure));
+                for (let i = 0; i < newFigure.data.length; i++) {
+                    let name = newFigure.data[i].name;
+                    if ((name && name.startsWith('Mask overlay')) || name === 'Mask Colorbar') {
+                        newFigure.data[i].opacity = opacity;
+                    }
+                }
+                return newFigure;
+            }
+            """,
+            Output("cluster-plot", "figure", allow_duplicate=True),
+            Input("mask-opacity-slider", "value"),
+            State("cluster-plot", "figure"),
+            prevent_initial_call=True,
+        )
 
-        if "xaxis.range[0]" in relayout_data and "xaxis.range[1]" in relayout_data:
-            ra_range = abs(relayout_data["xaxis.range[1]"] - relayout_data["xaxis.range[0]"])
-        elif "xaxis.range" in relayout_data:
-            ra_range = abs(relayout_data["xaxis.range"][1] - relayout_data["xaxis.range"][0])
-
-        if "yaxis.range[0]" in relayout_data and "yaxis.range[1]" in relayout_data:
-            dec_range = abs(relayout_data["yaxis.range[1]"] - relayout_data["yaxis.range[0]"])
-        elif "yaxis.range" in relayout_data:
-            dec_range = abs(relayout_data["yaxis.range"][1] - relayout_data["yaxis.range"][0])
-
-        return ra_range, dec_range
