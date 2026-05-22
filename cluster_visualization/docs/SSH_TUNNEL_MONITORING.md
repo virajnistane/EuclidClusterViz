@@ -4,7 +4,7 @@
 
 The app includes automatic connection monitoring to detect SSH tunneling issues and guide users through setup.
 
-**For full setup instructions, see [README.md — Quick Remote Access Setup](../../../README.md#-quick-remote-access-setup).**
+**For full setup instructions, see [README.md — Quick Remote Access Setup](https://github.com/virajnistane/EuclidClusterViz/blob/main/README.md#quick-remote-access-setup).**
 
 ## Per-User Port Assignment
 

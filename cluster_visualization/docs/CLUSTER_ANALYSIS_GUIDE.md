@@ -287,6 +287,6 @@ Planned features for cluster analysis:
 ---
 
 For more information, see:
-- [Main README](../../../README.md) - Complete application documentation
+- [Main README](https://github.com/virajnistane/EuclidClusterViz/blob/main/README.md) - Complete application documentation
 - [USAGE.md](USAGE.md) - General usage guide
-- [PHZ Analysis](../../../README.md#phz-photometric-redshift-analysis) - PHZ feature details
+- [PHZ Analysis](https://github.com/virajnistane/EuclidClusterViz/blob/main/README.md#phz-photometric-redshift-analysis) - PHZ feature details

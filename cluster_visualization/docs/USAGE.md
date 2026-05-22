@@ -7,7 +7,7 @@
 source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 ```
 
-**Remote Access**: The app assigns each user a personal port automatically. The exact `ssh -L` tunnel command is printed at startup. See [Quick Remote Access Setup](../../../README.md#-quick-remote-access-setup).
+**Remote Access**: The app assigns each user a personal port automatically. The exact `ssh -L` tunnel command is printed at startup. See [Quick Remote Access Setup](https://github.com/virajnistane/EuclidClusterViz/blob/main/README.md#quick-remote-access-setup).
 
 ## 🎯 Interactive Dash Application
 
@@ -116,7 +116,7 @@ For in-depth information on specific features:
 - **[Configuration](CONFIGURATION_GUIDE.md)** - Setup and configuration options
 - **[Tile Caching & Controls](TILE_CACHING_AND_CONTROLS.md)** - CL-tile toggle, tile definition caching, performance
 - **[Zoom-Based Oval Rendering](ZOOM_BASED_OVAL_RENDERING.md)** - Matched cluster rendering with viewport indicator
-- **[Remote Access](../../../README.md#-quick-remote-access-setup)** - SSH port forwarding setup
+- **[Remote Access](https://github.com/virajnistane/EuclidClusterViz/blob/main/README.md#quick-remote-access-setup)** - SSH port forwarding setup
 
 ## 🎉 Problem Solved
 

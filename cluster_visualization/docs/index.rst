@@ -17,6 +17,9 @@ cluster detection data from the ESA Euclid Mission.
    :caption: User Guides
 
    guides/index
+   USAGE
+   TROUBLESHOOTING
+   TILE_CACHING_AND_CONTROLS
 
 .. toctree::
    :maxdepth: 2

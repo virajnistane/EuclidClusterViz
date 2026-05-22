@@ -129,4 +129,4 @@ Zoom in until the viewport is smaller than 2°×2° in both RA and Dec.
 
 - Check server log output for error messages
 - Log file when using background launch: `/tmp/clusterviz_<username>.log`
-- See [README](../../../README.md) for full setup instructions
+- See [README](https://github.com/virajnistane/EuclidClusterViz/blob/main/README.md) for full setup instructions

@@ -1,39 +1,39 @@
 # ESA Euclid Mission: Cluster Detection Visualization
 
-> **📌 Note:** This is the comprehensive technical documentation. For quick start and general usage instructions, see the [main README](../../README.md).
+> **📌 Note:** This is the comprehensive technical documentation. For quick start and general usage instructions, see the main README: https://github.com/virajnistane/EuclidClusterViz/blob/main/README.md
 
 An advanced interactive web-based visualization platform for astronomical cluster detection data from the ESA Euclid Mission. This sophisticated Dash application provides real-time analysis capabilities with comprehensive data integration, advanced filtering controls, interactive cluster analysis tools, and seamless remote access support.
 
 ## 📑 Table of Contents
 
-- [Quick Remote Access Setup](#-quick-remote-access-setup)
-- [Overview](#-overview)
-- [Environment Requirements](#-environment-requirements)
-- [Key Features](#-key-features)
-  - [Advanced Data Analysis](#-advanced-data-analysis)
-  - [Cluster Analysis Tools](#-cluster-analysis-tools)
-  - [Professional UI Controls](#️-professional-ui-controls)
-  - [Enterprise Remote Access](#-enterprise-remote-access)
-  - [Performance Optimization](#-performance-optimization)
-- [Project Structure](#-project-structure)
-- [Quick Start](#-quick-start)
-- [Configuration](#configuration)
-- [Command-Line Options](#️-command-line-options)
-- [Feature Usage Guide](#-feature-usage-guide)
-  - [Cluster Analysis Workflow](#cluster-analysis-workflow)
-  - [PHZ Analysis](#phz-photometric-redshift-analysis)
-  - [Cluster Matching Visualization](#cluster-matching-visualization)
-  - [HEALPix Mask Overlay](#healpy-mask-overlay)
-  - [Mosaic Image Background](#mosaic-image-background)
-  - [Layer Management](#layer-management)
-- [Architecture & Technical Specifications](#️-architecture--technical-specifications)
-- [Development Environment](#️-development-environment)
-- [Advanced Capabilities & Data Analysis](#-advanced-capabilities--data-analysis)
-- [Performance & Scalability](#-performance--scalability)
-- [Troubleshooting & Support](#-troubleshooting--support)
-- [Enterprise Benefits & Comparison](#-enterprise-benefits--comparison)
-- [Recent Development Milestones](#-recent-development-milestones)
-- [Technical Specifications & Data Insights](#-technical-specifications--data-insights)
+- Quick Remote Access Setup
+- Overview
+- Environment Requirements
+- Key Features
+- Advanced Data Analysis
+- Cluster Analysis Tools
+- Professional UI Controls
+- Enterprise Remote Access
+- Performance Optimization
+- Project Structure
+- Quick Start
+- Configuration
+- Command-Line Options
+- Feature Usage Guide
+- Cluster Analysis Workflow
+- PHZ Analysis
+- Cluster Matching Visualization
+- HEALPix Mask Overlay
+- Mosaic Image Background
+- Layer Management
+- Architecture & Technical Specifications
+- Development Environment
+- Advanced Capabilities & Data Analysis
+- Performance & Scalability
+- Troubleshooting & Support
+- Enterprise Benefits & Comparison
+- Recent Development Milestones
+- Technical Specifications & Data Insights
 
 ---
 
@@ -562,7 +562,7 @@ Bottom → Top Layer Order:
 ### **Modular System Design**
 The application follows a sophisticated modular architecture enabling clean separation of concerns:
 
-```python
+```text
 # Core Application Architecture
 ClusterVisualizationApp
 ├── DataLoader           # 📊 FITS/HDF5 data processing with caching
