@@ -1685,19 +1685,10 @@ class MainPlotCallbacks:
         """Fallback figure creation method"""
         fig = go.Figure(traces)
 
-        # Configure aspect ratio based on setting
-        if free_aspect_ratio:
-            xaxis_config = dict(visible=True, autorange="reversed")
-            yaxis_config = dict(visible=True)
-        else:
-            xaxis_config = dict(
-                scaleanchor="y",
-                scaleratio=1,
-                constrain="domain",
-                visible=True,
-                autorange="reversed",
-            )
-            yaxis_config = dict(constrain="domain", visible=True)  # type: ignore
+        xaxis_config, yaxis_config = self.figure_manager._get_axis_config(
+            free_aspect_ratio,
+            dec_center=self.figure_manager._extract_dec_center(traces),
+        )
 
         fig.update_layout(
             title=f"Cluster Detection Visualization - {algorithm}",

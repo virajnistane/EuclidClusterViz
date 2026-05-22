@@ -5,8 +5,9 @@ This module handles figure configuration, layout settings,
 and aspect ratio management for Plotly figures.
 """
 
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
+import numpy as np
 import plotly.graph_objs as go
 
 
@@ -39,7 +40,8 @@ class FigureManager:
         fig = go.Figure(traces)
 
         # Configure aspect ratio
-        xaxis_config, yaxis_config = self._get_axis_config(free_aspect_ratio)
+        dec_center = self._extract_dec_center(traces)
+        xaxis_config, yaxis_config = self._get_axis_config(free_aspect_ratio, dec_center=dec_center)
 
         # Apply layout
         fig.update_layout(
@@ -146,13 +148,26 @@ class FigureManager:
 
         return fig
 
-    def _get_axis_config(self, free_aspect_ratio: bool, visible: bool = True) -> Tuple[Dict, Dict]:
+    def _extract_dec_center(self, traces) -> float:
+        """Return median Dec (y-values) across all traces; fallback 0.0."""
+        ys: List[float] = []
+        src = traces.data if hasattr(traces, "data") else traces
+        for trace in src:
+            if hasattr(trace, "y") and trace.y is not None:
+                ys.extend(float(v) for v in trace.y if v is not None)
+        return float(np.median(ys)) if ys else 0.0
+
+    def _get_axis_config(
+        self, free_aspect_ratio: bool, visible: bool = True, dec_center: float = 0.0
+    ) -> Tuple[Dict, Dict]:
         """
         Get axis configuration based on aspect ratio setting.
 
         Args:
             free_aspect_ratio: Whether to use free or equal aspect ratio
             visible: Whether axes should be visible
+            dec_center: Median declination of the data (degrees); used to compute
+                cos(dec) scaleratio so 1° RA maps to the correct angular arc length.
 
         Returns:
             Tuple of (xaxis_config, yaxis_config)
@@ -164,10 +179,14 @@ class FigureManager:
             )  # Reverse RA axis for astronomy convention
             yaxis_config = dict(visible=visible)
         else:
-            # Equal aspect ratio - astronomical accuracy
+            # Equal aspect ratio with cos(dec) correction:
+            # 1° RA ≈ cos(dec)° of arc, so scaleratio must be cos(dec) to avoid
+            # distorting the sky geometry at non-equatorial declinations.
+            scaleratio = float(np.cos(np.deg2rad(dec_center)))
+            scaleratio = max(scaleratio, 1e-3)  # guard against pole singularity
             xaxis_config = dict(
                 scaleanchor="y",
-                scaleratio=1,
+                scaleratio=scaleratio,
                 constrain="domain",
                 visible=visible,
                 autorange="reversed",  # Reverse RA axis for astronomy convention
@@ -272,21 +291,8 @@ class FigureManager:
         """Fallback figure creation method with reversed RA axis"""
         fig = go.Figure(traces)
 
-        # Configure aspect ratio based on setting
-        if free_aspect_ratio:
-            xaxis_config = dict(
-                visible=True, autorange="reversed"  # 🆕 Reverse RA axis for astronomy convention
-            )
-            yaxis_config = dict(visible=True)
-        else:
-            xaxis_config = dict(
-                scaleanchor="y",
-                scaleratio=1,
-                constrain="domain",
-                visible=True,
-                autorange="reversed",  # 🆕 Reverse RA axis for astronomy convention
-            )
-            yaxis_config = dict(constrain="domain", visible=True)  # type: ignore
+        dec_center = self._extract_dec_center(traces)
+        xaxis_config, yaxis_config = self._get_axis_config(free_aspect_ratio, dec_center=dec_center)
 
         fig.update_layout(
             title=f"Cluster Detection Visualization - {algorithm}",
