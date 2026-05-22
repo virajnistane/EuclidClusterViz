@@ -51,6 +51,7 @@ dev = [
     "mypy>=1.0",
     "pylint>=2.15",
     "isort>=6.1.0",
+    "ipykernel>=6.31.0",
 ]
 
 # Testing dependencies

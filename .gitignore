@@ -102,3 +102,8 @@ ipython_config.py
 
 # Singularity images
 *.sif
+
+# AI model artifacts
+.claude/
+.github/
+CLAUDE.md
