@@ -107,3 +107,4 @@ ipython_config.py
 .claude/
 .github/
 CLAUDE.md
+graphify-out/
