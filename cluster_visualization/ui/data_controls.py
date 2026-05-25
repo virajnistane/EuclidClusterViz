@@ -739,5 +739,6 @@ class DataControls:
                         "border-radius": "12px",
                     },
                 ),
-            ]
+            ],
+            className="mt-3",
         )
