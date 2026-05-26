@@ -15,6 +15,8 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
+import base64
+
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.graph_objs as go
@@ -1537,10 +1539,14 @@ class MOSAICHandler:
         source_id: Optional[str] = None,
         tile_bounds: Optional[Tuple[float, float, float, float]] = None,
         tileid: Optional[str] = None,
-    ) -> Optional[go.Heatmap]:
-        """Create a Plotly heatmap trace for a mosaic image."""
+    ) -> Optional[Dict]:
+        """Create a Plotly layout image spec for a mosaic tile (PNG bitmap overlay).
+
+        Returns a dict suitable for fig.layout.images rather than a go.Heatmap trace.
+        This avoids serializing large float32 arrays (~14 MB per tile) — a PNG-encoded
+        grayscale image is ~150–400 KB, giving a 35–90× payload reduction.
+        """
         provider_norm = self._normalize_provider(provider)
-        # Load mosaic data for this tile
         mosaic_info = self.get_mosaic_fits_data_by_mertile(
             mertileid,
             provider=provider_norm,
@@ -1552,34 +1558,8 @@ class MOSAICHandler:
             return None
 
         if provider_norm == "esa_sky":
-            # Data has already been normalized and orientation-corrected in
-            # _load_esa_cutout_by_mertile (format-aware flip applied at load time).
-            # FITS path:  column-flip only  → z[0,0] = (min Dec, min RA)
-            # JPEG path:  both-axes flip    → z[0,0] = (min Dec, min RA)
             processed_image = np.asarray(mosaic_info["data"], dtype=np.float32)
-
-            # Keep ESA image at native resolution (e.g. 768x768).
-            # Up-scaling to 1920x1920 with LANCZOS wastes CPU and inflates the
-            # JSON payload to ~20 MB; Plotly/browser GPU interpolates natively.
             esa_h, esa_w = processed_image.shape
-
-            # # Resize to match the display canvas so Plotly/browser does not
-            # # apply low-quality bilinear upscaling.  Orientation is already
-            # # correct, so we resize only — no additional flip.
-            # target_w = self.img_width
-            # target_h = self.img_height
-            # if esa_w != target_w or esa_h != target_h:
-            #     processed_image = np.array(
-            #         Image.fromarray(processed_image).resize(
-            #             (target_w, target_h), Image.Resampling.LANCZOS
-            #         ),
-            #         dtype=np.float32,
-            #     )
-            #     processed_image = np.clip(processed_image, 0.0, 1.0)
-            #     print(
-            #         f"Debug: ESA cutout LANCZOS-resized {esa_w}×{esa_h} → {target_w}×{target_h}"
-            #     )
-
             print(f"Debug: ESA cutout at native {esa_w}x{esa_h} (no server-side upscale)")
 
             bounds = mosaic_info.get("bounds")
@@ -1596,23 +1576,14 @@ class MOSAICHandler:
                     "dec_size_deg": abs(tile_bounds[3] - tile_bounds[2]),
                 }
         else:
-            # Process the local FITS image
             processed_image = self._process_mosaic_image(
                 mosaic_info["data"], target_scale_factor=self.img_scale_factor
             )
-
-            # Calculate coordinate bounds from FITS/WCS
             bounds = self._calculate_image_bounds_direct(mosaic_info["wcs"], processed_image)
 
         height, width = processed_image.shape
 
-        # Scalar origin + step avoids serializing width+height coord floats to the browser
-        x0 = float(bounds["ra_min"])
-        dx = (bounds["ra_max"] - bounds["ra_min"]) / max(width - 1, 1)
-        y0 = float(bounds["dec_min"])
-        dy = (bounds["dec_max"] - bounds["dec_min"]) / max(height - 1, 1)
-
-        print(f"Debug: Creating heatmapgl trace for tile {mertileid} ({provider_norm})")
+        print(f"Debug: Creating layout image for tile {mertileid} ({provider_norm})")
         print(
             f"       - Tile size: {bounds.get('ra_size_deg', 'unknown'):.6f}° × {bounds.get('dec_size_deg', 'unknown'):.6f}°"
         )
@@ -1620,37 +1591,77 @@ class MOSAICHandler:
         print(f"       - Dec range: {bounds['dec_min']:.6f}° to {bounds['dec_max']:.6f}°")
         print(f"       - Image shape: {height} × {width} pixels")
 
+        # layout.images convention on reversed RA axis:
+        #   x = ra_max  (left screen edge = high RA on reversed axis), xanchor="left"
+        #   y = dec_max (top screen edge),                             yanchor="top"
+        #   col 0 of PNG → screen-left → ra_max
+        #   row 0 of PNG → screen-top  → dec_max
+        #
+        # _process_mosaic_image state after LANCZOS + FLIP_LEFT_RIGHT:
+        #   row 0 = dec_min  (Heatmap y0=dec_min convention, no vertical flip applied)
+        #   col 0 = ra_min   (FLIP_LEFT_RIGHT undoes FITS col0=ra_max)
+        #
+        # For layout.images we need row0=dec_max and col0=ra_max, so flip both axes.
+        img_uint8 = np.clip(processed_image[::-1, ::-1] * 255, 0, 255).astype(np.uint8)
+
+        # RA axis is reversed (autorange="reversed") — Plotly maps x=value to the
+        # *left* edge of the image in screen space.  On a reversed axis the left edge
+        # of the screen corresponds to the higher RA value.  So x = ra_max places the
+        # left screen edge correctly and the image spans leftward to ra_min.
+        pil_img = Image.fromarray(img_uint8, mode="L")
+        buf = BytesIO()
+        pil_img.save(buf, format="PNG", optimize=True, compress_level=6)
+        b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+        print(f"       - PNG size: {len(buf.getvalue()) / 1024:.1f} KB")
+
         provider_label = "ESA" if provider_norm == "esa_sky" else "MER"
-        cltile_name = f" CL{tileid}" if tileid is not None else ""
-        trace_name = f"Mosaic ({provider_label}) {mertileid}{cltile_name}"
+        cltile_suffix = f" CL{tileid}" if tileid is not None else ""
+        image_name = f"Mosaic ({provider_label}) {mertileid}{cltile_suffix}"
 
-        source_label = source_id or mosaic_info.get("source_id") or "local_mer"
-        cltile_hover_line = f"CL-Tile: {tileid}<br>" if tileid is not None else ""
+        return {
+            "source": f"data:image/png;base64,{b64}",
+            "xref": "x",
+            "yref": "y",
+            "x": float(bounds["ra_max"]),
+            "y": float(bounds["dec_max"]),
+            "sizex": float(bounds["ra_max"] - bounds["ra_min"]),
+            "sizey": float(bounds["dec_max"] - bounds["dec_min"]),
+            "sizing": "stretch",
+            "opacity": float(opacity),
+            "layer": "below",
+            "name": image_name,
+        }
 
-        trace = go.Heatmap(
-            z=processed_image,
-            x0=x0,
-            dx=dx,
-            y0=y0,
-            dy=dy,
-            opacity=opacity,
-            colorscale=colorscale,
-            showscale=False,
-            name=trace_name,
-            hovertemplate=(
-                f"MER Tile: {mertileid}<br>"
-                f"{cltile_hover_line}"
-                f"Provider: {provider_label}<br>"
-                f"Source: {source_label}<br>"
-                "RA: %{x:.6f}°<br>"
-                "Dec: %{y:.6f}°<br>"
-                "Intensity: %{z:.3f}<br>"
-                f"Tile Size: {bounds.get('ra_size_deg', 0):.4f}° x {bounds.get('dec_size_deg', 0):.4f}°<br>"
-                "<extra>Mosaic Image</extra>"
-            ),
-        )
-
-        return trace
+        # --- Legacy go.Heatmap implementation (kept for reference) ---
+        # x0 = float(bounds["ra_min"])
+        # dx = (bounds["ra_max"] - bounds["ra_min"]) / max(width - 1, 1)
+        # y0 = float(bounds["dec_min"])
+        # dy = (bounds["dec_max"] - bounds["dec_min"]) / max(height - 1, 1)
+        # source_label = source_id or mosaic_info.get("source_id") or "local_mer"
+        # cltile_hover_line = f"CL-Tile: {tileid}<br>" if tileid is not None else ""
+        # trace_name = f"Mosaic ({provider_label}) {mertileid}{cltile_suffix}"
+        # return go.Heatmap(
+        #     z=processed_image,
+        #     x0=x0,
+        #     dx=dx,
+        #     y0=y0,
+        #     dy=dy,
+        #     opacity=opacity,
+        #     colorscale=colorscale,
+        #     showscale=False,
+        #     name=trace_name,
+        #     hovertemplate=(
+        #         f"MER Tile: {mertileid}<br>"
+        #         f"{cltile_hover_line}"
+        #         f"Provider: {provider_label}<br>"
+        #         f"Source: {source_label}<br>"
+        #         "RA: %{x:.6f}°<br>"
+        #         "Dec: %{y:.6f}°<br>"
+        #         "Intensity: %{z:.3f}<br>"
+        #         f"Tile Size: {bounds.get('ra_size_deg', 0):.4f}° x {bounds.get('dec_size_deg', 0):.4f}°<br>"
+        #         "<extra>Mosaic Image</extra>"
+        #     ),
+        # )
 
     def create_mask_overlay_trace(
         self,
@@ -1966,12 +1977,10 @@ class MOSAICHandler:
         source_id: Optional[str] = None,
         esa_cutout_format: Optional[str] = None,
         progress_callback=None,
-    ) -> List[go.Heatmap]:
-        """
-        Load mosaic image traces with strict performance limits and timing
-        """
+    ) -> List[Dict]:
+        """Load mosaic layout image specs with strict performance limits and timing."""
         start_time = time.time()
-        traces: List[go.Heatmap] = []
+        traces: List[Dict] = []
         provider_norm = self._normalize_provider(provider)
 
         # Override ESA cutout format for this call if provided by the UI.

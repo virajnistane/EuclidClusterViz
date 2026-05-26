@@ -271,66 +271,56 @@ class MOSAICCallbacks:
                         )
 
                         if mosaic_traces and len(mosaic_traces) > 0:
-                            # Add mosaic traces to current figure with proper layering
-                            if current_figure and "data" in current_figure:
-                                # Remove existing mosaic traces first
-                                existing_traces = [
-                                    trace
-                                    for trace in current_figure["data"]
-                                    if not (trace.get("name", "").startswith("Mosaic"))
+                            # Inject as layout.images (PNG bitmaps) — not figure.data traces.
+                            # layout.images render as bitmap overlays on the Plotly axes without
+                            # adding float32 arrays to the JSON payload (~35–90× smaller).
+                            if current_figure is not None:
+                                layout = current_figure.setdefault("layout", {})
+                                existing_images = layout.get("images") or []
+                                # Remove previously rendered mosaic images
+                                existing_images = [
+                                    img for img in existing_images
+                                    if not img.get("name", "").startswith("Mosaic")
                                 ]
-
-                                # Separate traces by type to maintain proper layering order
-                                polygon_traces = []
-                                mask_overlay_traces = []
-                                catred_traces = []
-                                cluster_traces = []
-                                other_traces = []
-
-                                for trace in existing_traces:
-                                    trace_name = trace.get("name", "")
-                                    if "MER-Tile" in trace_name or (
-                                        "Tile" in trace_name
-                                        and (
-                                            "CORE" in trace_name
-                                            or "LEV1" in trace_name
-                                            or "MerTile" in trace_name
-                                        )
-                                    ):
-                                        polygon_traces.append(trace)
-                                    elif "Mask overlay" in trace_name:
-                                        mask_overlay_traces.append(trace)
-                                    elif "CATRED" in trace_name:
-                                        catred_traces.append(trace)
-                                    elif any(
-                                        keyword in trace_name
-                                        for keyword in ["Merged", "Tile", "clusters"]
-                                    ):
-                                        cluster_traces.append(trace)
-                                    else:
-                                        other_traces.append(trace)
-
-                                # Layer order: polygons (bottom) → mosaic → mask overlays → CATRED → other → cluster traces (top)
-                                new_data = (
-                                    polygon_traces
-                                    + mosaic_traces
-                                    + mask_overlay_traces
-                                    + catred_traces
-                                    + other_traces
-                                    + cluster_traces
-                                )
-                                current_figure["data"] = new_data
+                                existing_images.extend(mosaic_traces)
+                                layout["images"] = existing_images
 
                                 print(
-                                    f"✓ Added {len(mosaic_traces)} mosaic image traces as 2nd layer from bottom"
-                                )
-                                print(
-                                    f"   -> Layer order: {len(polygon_traces)} polygons, {len(mosaic_traces)} mosaics, "
-                                    f"{len(mask_overlay_traces)} mask overlays, {len(catred_traces)} CATRED, "
-                                    f"{len(other_traces)} other, {len(cluster_traces)} clusters (top)"
+                                    f"✓ Added {len(mosaic_traces)} mosaic layout images "
+                                    f"(layer=below, PNG bitmap)"
                                 )
                             else:
-                                print("⚠️  No current figure data to update")
+                                print("⚠️  No current figure to update")
+
+                            # --- Legacy go.Heatmap injection (kept for reference) ---
+                            # if current_figure and "data" in current_figure:
+                            #     existing_traces = [
+                            #         trace for trace in current_figure["data"]
+                            #         if not trace.get("name", "").startswith("Mosaic")
+                            #     ]
+                            #     polygon_traces, mask_overlay_traces = [], []
+                            #     catred_traces, cluster_traces, other_traces = [], [], []
+                            #     for trace in existing_traces:
+                            #         trace_name = trace.get("name", "")
+                            #         if "MER-Tile" in trace_name or (
+                            #             "Tile" in trace_name and any(
+                            #                 k in trace_name for k in ("CORE", "LEV1", "MerTile")
+                            #             )
+                            #         ):
+                            #             polygon_traces.append(trace)
+                            #         elif "Mask overlay" in trace_name:
+                            #             mask_overlay_traces.append(trace)
+                            #         elif "CATRED" in trace_name:
+                            #             catred_traces.append(trace)
+                            #         elif any(k in trace_name for k in ("Merged", "Tile", "clusters")):
+                            #             cluster_traces.append(trace)
+                            #         else:
+                            #             other_traces.append(trace)
+                            #     # Layer order: polygons → mosaic → mask → CATRED → other → clusters
+                            #     current_figure["data"] = (
+                            #         polygon_traces + mosaic_traces + mask_overlay_traces
+                            #         + catred_traces + other_traces + cluster_traces
+                            #     )
                         else:
                             print("ℹ️  No mosaic images found for current zoom window")
                     else:
@@ -516,48 +506,38 @@ class MOSAICCallbacks:
                 return current_figure
 
     def _setup_mosaic_visibility_toggle_callback(self):
-        """Setup clientside callback to toggle mosaic trace visibility without deleting from memory"""
+        """Clientside callback: toggle mosaic layout image visibility"""
         self.app.clientside_callback(
             """
             function(n_clicks, figure) {
-                if (!n_clicks || !figure || !figure.data) {
+                if (!n_clicks || !figure || !figure.layout) {
                     return [figure, window.dash_clientside.no_update];
                 }
-                
+                let images = (figure.layout.images || []).filter(function(img) {
+                    return img.name && img.name.startsWith('Mosaic');
+                });
+                if (images.length === 0) {
+                    return [figure, window.dash_clientside.no_update];
+                }
+
                 let newFigure = JSON.parse(JSON.stringify(figure));
-                let hasMosaicTraces = false;
-                let allMosaicsHidden = true;
-                
-                // First pass: check if there are mosaic traces and their visibility state
-                for (let i = 0; i < newFigure.data.length; i++) {
-                    let trace = newFigure.data[i];
-                    if (trace.name && trace.name.startsWith('Mosaic')) {
-                        hasMosaicTraces = true;
-                        if (trace.visible !== false && trace.visible !== 'legendonly') {
-                            allMosaicsHidden = false;
+                let allHidden = images.every(function(img) { return img.opacity === 0; });
+                let storedOpacity = images[0]._storedOpacity || 0.5;
+
+                (newFigure.layout.images || []).forEach(function(img) {
+                    if (img.name && img.name.startsWith('Mosaic')) {
+                        if (allHidden) {
+                            img.opacity = img._storedOpacity || storedOpacity;
+                        } else {
+                            img._storedOpacity = img.opacity;
+                            img.opacity = 0;
                         }
                     }
-                }
-                
-                if (!hasMosaicTraces) {
-                    return [figure, window.dash_clientside.no_update];
-                }
-                
-                // Toggle visibility: if all hidden, show them; otherwise hide them
-                let newVisibility = allMosaicsHidden ? true : 'legendonly';
-                
-                for (let i = 0; i < newFigure.data.length; i++) {
-                    let trace = newFigure.data[i];
-                    if (trace.name && trace.name.startsWith('Mosaic')) {
-                        newFigure.data[i].visible = newVisibility;
-                    }
-                }
-                
-                // Update button text and icon
-                let buttonContent = allMosaicsHidden ? 
-                    [{"namespace": "dash_html_components", "type": "I", "props": {"className": "fas fa-eye me-1"}}, "Hide Mosaic"] :
-                    [{"namespace": "dash_html_components", "type": "I", "props": {"className": "fas fa-eye-slash me-1"}}, "Show Mosaic"];
-                
+                });
+
+                let buttonContent = allHidden ?
+                    [{"namespace": "dash_html_components", "type": "I", "props": {"className": "fas fa-eye-slash me-1"}}, "Hide Mosaic"] :
+                    [{"namespace": "dash_html_components", "type": "I", "props": {"className": "fas fa-eye me-1"}}, "Show Mosaic"];
                 return [newFigure, buttonContent];
             }
             """,
@@ -571,16 +551,16 @@ class MOSAICCallbacks:
         )
 
     def _setup_mosaic_delete_callback(self):
-        """Clientside callback: delete mosaic traces from figure"""
+        """Clientside callback: delete mosaic layout images from figure"""
         self.app.clientside_callback(
             """
             function(n_clicks, figure) {
-                if (!n_clicks || !figure || !figure.data) {
+                if (!n_clicks || !figure || !figure.layout) {
                     return window.dash_clientside.no_update;
                 }
                 let newFigure = JSON.parse(JSON.stringify(figure));
-                newFigure.data = newFigure.data.filter(function(trace) {
-                    return !(trace.name && trace.name.startsWith('Mosaic'));
+                newFigure.layout.images = (newFigure.layout.images || []).filter(function(img) {
+                    return !(img.name && img.name.startsWith('Mosaic'));
                 });
                 return newFigure;
             }
@@ -592,25 +572,17 @@ class MOSAICCallbacks:
         )
 
     def _setup_mosaic_control_buttons_state_callback(self):
-        """Setup callback to enable/disable mosaic control buttons based on presence of mosaic traces"""
+        """Clientside callback: enable/disable mosaic buttons based on presence of layout images"""
         self.app.clientside_callback(
             """
             function(figure) {
-                if (!figure || !figure.data) {
-                    return [true, true];  // Both disabled
+                if (!figure || !figure.layout) {
+                    return [true, true];
                 }
-                
-                // Check if there are any mosaic traces
-                let hasMosaicTraces = false;
-                for (let i = 0; i < figure.data.length; i++) {
-                    if (figure.data[i].name && figure.data[i].name.startsWith('Mosaic')) {
-                        hasMosaicTraces = true;
-                        break;
-                    }
-                }
-                
-                // Enable buttons if mosaic traces exist
-                return [!hasMosaicTraces, !hasMosaicTraces];
+                let hasMosaic = (figure.layout.images || []).some(function(img) {
+                    return img.name && img.name.startsWith('Mosaic');
+                });
+                return [!hasMosaic, !hasMosaic];
             }
             """,
             [
@@ -622,23 +594,24 @@ class MOSAICCallbacks:
         )
 
     def _setup_mosaic_opacity_callback(self):
-        """Clientside callback: live opacity adjustment for rendered mosaic traces"""
+        """Clientside callback: live opacity adjustment for mosaic layout images"""
         self.app.clientside_callback(
             """
             function(opacity, figure) {
-                if (opacity === null || opacity === undefined || !figure || !figure.data) {
+                if (opacity === null || opacity === undefined || !figure || !figure.layout) {
                     return window.dash_clientside.no_update;
                 }
-                let hasMosaic = figure.data.some(function(t) {
-                    return t.name && t.name.startsWith('Mosaic');
+                let hasMosaic = (figure.layout.images || []).some(function(img) {
+                    return img.name && img.name.startsWith('Mosaic');
                 });
                 if (!hasMosaic) return window.dash_clientside.no_update;
                 let newFigure = JSON.parse(JSON.stringify(figure));
-                for (let i = 0; i < newFigure.data.length; i++) {
-                    if (newFigure.data[i].name && newFigure.data[i].name.startsWith('Mosaic')) {
-                        newFigure.data[i].opacity = opacity;
+                (newFigure.layout.images || []).forEach(function(img) {
+                    if (img.name && img.name.startsWith('Mosaic')) {
+                        img.opacity = opacity;
+                        img._storedOpacity = opacity;
                     }
-                }
+                });
                 return newFigure;
             }
             """,
