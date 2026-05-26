@@ -11,6 +11,7 @@ from .sidebar_sections import SidebarSections
 from .data_controls import DataControls
 from .modals import Modals
 from .tabs import TabContent
+from .esasky_view import create_esasky_view, create_view_mode_toggle
 
 
 class AppLayout:
@@ -30,6 +31,7 @@ class AppLayout:
                                     "ESA Euclid Mission: Cluster Detection Visualization",
                                     className="text-center mb-3",
                                 ),
+                                create_view_mode_toggle(),
                             ]
                         )
                     ],
@@ -122,33 +124,41 @@ class AppLayout:
                                 # Main plots area - side by side
                                 dbc.Row(
                                     [
-                                        # Main cluster plot
+                                        # Main cluster plot / ESA Sky viewer
                                         dbc.Col(
                                             [
-                                                dcc.Loading(
-                                                    id="loading",
-                                                    children=[
-                                                        dcc.Graph(
-                                                            id="cluster-plot",
-                                                            style={
-                                                                "height": "75vh",
-                                                                "width": "100%",
-                                                                "min-height": "500px",
-                                                            },
-                                                            config={
-                                                                "displayModeBar": True,
-                                                                "displaylogo": False,
-                                                                "modeBarButtonsToRemove": [
-                                                                    "lasso2d",
-                                                                    "select2d",
-                                                                ],
-                                                                "responsive": True,
-                                                                "doubleClickDelay": 1000,
-                                                            },
+                                                # Standard Plotly view
+                                                html.Div(
+                                                    [
+                                                        dcc.Loading(
+                                                            id="loading",
+                                                            children=[
+                                                                dcc.Graph(
+                                                                    id="cluster-plot",
+                                                                    style={
+                                                                        "height": "75vh",
+                                                                        "width": "100%",
+                                                                        "min-height": "500px",
+                                                                    },
+                                                                    config={
+                                                                        "displayModeBar": True,
+                                                                        "displaylogo": False,
+                                                                        "modeBarButtonsToRemove": [
+                                                                            "lasso2d",
+                                                                            "select2d",
+                                                                        ],
+                                                                        "responsive": True,
+                                                                        "doubleClickDelay": 1000,
+                                                                    },
+                                                                )
+                                                            ],
+                                                            type="circle",
                                                         )
                                                     ],
-                                                    type="circle",
-                                                )
+                                                    id="plotly-view-container",
+                                                ),
+                                                # ESA Sky iframe view (hidden until mode switch)
+                                                create_esasky_view(),
                                             ],
                                             width=8,
                                         ),

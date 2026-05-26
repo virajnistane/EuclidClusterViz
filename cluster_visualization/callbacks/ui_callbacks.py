@@ -48,6 +48,7 @@ class UICallbacks:
         self._setup_config_display_callback()
         self._setup_file_configuration_callback()
         self._setup_file_browser_callbacks()
+        self._setup_view_mode_callbacks()
 
     def _setup_button_text_callbacks(self):
         """Setup callbacks to update button text based on current settings"""
@@ -450,11 +451,11 @@ class UICallbacks:
         # Mosaic Section
         @self.app.callback(
             [
-                Output("image-controls-collapse", "is_open"),
+                Output("image-controls-collapse", "is_open", allow_duplicate=True),
                 Output("image-controls-toggle", "children"),
             ],
             [Input("image-controls-toggle", "n_clicks")],
-            prevent_initial_call=False,
+            prevent_initial_call="initial_duplicate",
         )
         def toggle_image_controls(n_clicks):
             """Toggle image controls section"""
@@ -961,5 +962,210 @@ class UICallbacks:
     #     if suffix == ".csv":
     #         reader = csv.reader(io.StringIO(decoded_text))
     #         return sum(1 for row in reader for value in row if str(value).strip())
+
+    def _setup_view_mode_callbacks(self):
+        """Clientside callbacks for switching between Standard (Plotly) and ESA Sky views."""
+
+        # Toggle button clicks → update view-mode-store
+        self.app.clientside_callback(
+            """
+            function(plotlyClicks, esaskyClicks, currentMode) {
+                const triggered = window.dash_clientside.callback_context.triggered;
+                if (!triggered || triggered.length === 0) {
+                    return window.dash_clientside.no_update;
+                }
+                const prop = triggered[0].prop_id;
+                if (prop.includes('view-mode-plotly-btn')) return 'plotly';
+                if (prop.includes('view-mode-esasky-btn')) return 'esasky';
+                return window.dash_clientside.no_update;
+            }
+            """,
+            Output("view-mode-store", "data"),
+            [Input("view-mode-plotly-btn", "n_clicks"),
+             Input("view-mode-esasky-btn", "n_clicks")],
+            State("view-mode-store", "data"),
+            prevent_initial_call=True,
+        )
+
+        # view-mode-store → show/hide containers, update button styles, hide mosaic section,
+        # and enable/disable the ESA Sky click-poll interval
+        self.app.clientside_callback(
+            """
+            function(mode) {
+                const isEsasky = mode === 'esasky';
+                const plotlyStyle = {display: isEsasky ? 'none' : 'block'};
+                const esaskyStyle = {display: isEsasky ? 'block' : 'none'};
+                const mosaicOpen = isEsasky ? false : window.dash_clientside.no_update;
+                const plotlyOutline = isEsasky;
+                const esaskyOutline = !isEsasky;
+                const intervalDisabled = !isEsasky;
+                return [plotlyStyle, esaskyStyle, mosaicOpen, plotlyOutline, esaskyOutline, intervalDisabled];
+            }
+            """,
+            [Output("plotly-view-container", "style"),
+             Output("esasky-view-container", "style"),
+             Output("image-controls-collapse", "is_open"),
+             Output("view-mode-plotly-btn", "outline"),
+             Output("view-mode-esasky-btn", "outline"),
+             Output("esasky-click-poll-interval", "disabled")],
+            Input("view-mode-store", "data"),
+        )
+
+        # ESA Sky iframe postMessage bridge.
+        # Official API: https://www.cosmos.esa.int/web/esdc/esasky-javascript-api
+        # Correct event names: goToRaDec, setFov, overlayCatalogue
+        # All messages: iframe.contentWindow.postMessage({event, content}, 'https://sky.esa.int')
+        self.app.clientside_callback(
+            """
+            function(overlayData) {
+                if (!overlayData) return window.dash_clientside.no_update;
+
+                var vp  = overlayData.viewport;
+                var ra  = vp ? vp.ra  : 180.0;
+                var dec = vp ? vp.dec : 0.0;
+                var fov = vp ? vp.fov : 2.0;
+                var TARGET = 'https://sky.esa.int';
+                var FRAME  = 'esasky-iframe';
+
+                function send(iframe, event, content) {
+                    iframe.contentWindow.postMessage({event: event, content: content}, TARGET);
+                }
+
+                function pushOverlays(iframe) {
+                    // Navigate to Plotly viewport
+                    send(iframe, 'goToRaDec', {ra: ra, dec: dec});
+                    send(iframe, 'setFov',    {fov: fov});
+
+                    // Remove previous overlays
+                    send(iframe, 'removeAllOverlays', {});
+
+                    if (overlayData.clusters && overlayData.clusters.length > 0) {
+                        send(iframe, 'overlayCatalogue', {
+                            overlaySet: {
+                                overlayName: 'Clusters',
+                                cooframe: 'J2000',
+                                color: '#ff6600',
+                                skyObjectList: overlayData.clusters.map(function(r) {
+                                    return {name: r.name || String(r.ra), id: r.name || '', ra: r.ra, dec: r.dec};
+                                })
+                            }
+                        });
+                    }
+
+                    if (overlayData.catred && overlayData.catred.length > 0) {
+                        send(iframe, 'overlayCatalogue', {
+                            overlaySet: {
+                                overlayName: 'CATRED',
+                                cooframe: 'J2000',
+                                color: '#00aaff',
+                                skyObjectList: overlayData.catred.map(function(r) {
+                                    return {name: 'CATRED', id: '', ra: r.ra, dec: r.dec};
+                                })
+                            }
+                        });
+                    }
+
+                    if (overlayData.mask && overlayData.mask.length > 0) {
+                        send(iframe, 'overlayCatalogue', {
+                            overlaySet: {
+                                overlayName: 'HEALPix Mask',
+                                cooframe: 'J2000',
+                                color: '#ffff00',
+                                skyObjectList: overlayData.mask.map(function(r) {
+                                    return {name: r.name || 'Mask', id: '', ra: r.ra, dec: r.dec};
+                                })
+                            }
+                        });
+                    }
+                }
+
+                // Register click + init listeners once per page load
+                if (!window._esaSkyListenerRegistered) {
+                    window._esaSkyListenerRegistered = true;
+                    window.addEventListener('message', function(evt) {
+                        if (!evt.origin || evt.origin.indexOf('sky.esa.int') === -1) return;
+                        var d = evt.data;
+                        if (!d) return;
+                        // Capture source clicks for cluster-modal
+                        if (d.event === 'sourceClicked' && d.content) {
+                            var c = d.content;
+                            window._esaskyPendingClick = {
+                                ra: c.ra, dec: c.dec,
+                                name: c.name || c.id || '',
+                                timestamp: Date.now()
+                            };
+                        }
+                    });
+                }
+
+                var iframe = document.getElementById(FRAME);
+                if (!iframe) return window.dash_clientside.no_update;
+
+                // Always reload iframe to navigate to current viewport on every mode switch
+                var newSrc = TARGET + '/esasky/';
+                if (iframe.src !== newSrc && iframe.src !== newSrc + '#') {
+                    iframe.onload = function() {
+                        // ESA Sky Angular app needs ~4s to boot before postMessage works
+                        setTimeout(function() { pushOverlays(iframe); }, 4000);
+                    };
+                    iframe.src = newSrc;
+                } else {
+                    // Already loaded — send immediately
+                    pushOverlays(iframe);
+                }
+
+                return window.dash_clientside.no_update;
+            }
+            """,
+            Output("esasky-postmessage-dummy", "children"),
+            Input("esasky-overlay-data-store", "data"),
+            prevent_initial_call=True,
+        )
+
+        # Register ESA Sky → Dash click bridge (one-time listener setup).
+        # Incoming objectClicked messages write to window._esaskyPendingClick.
+        # A dcc.Interval polls that global and pushes it into esasky-click-store.
+        self.app.clientside_callback(
+            """
+            function(n) {
+                if (!window._esaSkyListenerRegistered) {
+                    window._esaSkyListenerRegistered = true;
+                    window.addEventListener('message', function(evt) {
+                        if (evt.origin !== 'https://sky.esa.int') return;
+                        const d = evt.data;
+                        if (d && d.event === 'objectClicked') {
+                            window._esaskyPendingClick = {
+                                ra: d.ra, dec: d.dec,
+                                name: d.name || '',
+                                timestamp: Date.now()
+                            };
+                        }
+                    });
+                }
+                if (window._esaskyPendingClick) {
+                    const data = window._esaskyPendingClick;
+                    window._esaskyPendingClick = null;
+                    return data;
+                }
+                return window.dash_clientside.no_update;
+            }
+            """,
+            Output("esasky-click-store", "data"),
+            Input("esasky-click-poll-interval", "n_intervals"),
+            prevent_initial_call=True,
+        )
+
+        # Disable mosaic cutout button when in ESA Sky mode
+        self.app.clientside_callback(
+            """
+            function(mode) {
+                const disabled = mode === 'esasky';
+                return [disabled, disabled];
+            }
+            """,
+            [Output("tab-cutout-button", "disabled"),
+             Output("tab-generate-cutout", "disabled")],
+            Input("view-mode-store", "data"),
+        )
 
     #     return 0

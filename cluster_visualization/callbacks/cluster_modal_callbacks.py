@@ -56,7 +56,10 @@ class ClusterModalCallbacks:
         self._setup_trace_management_callbacks()  # 🆕 Add trace management callbacks
 
     def _setup_cluster_click_callback(self):
-        """Setup callback to detect cluster clicks and show in cluster tab"""
+        """Setup callback to detect cluster clicks and show in cluster tab.
+
+        Handles clicks from both the Plotly figure and the ESA Sky iframe overlay.
+        """
 
         @self.app.callback(
             [
@@ -66,33 +69,66 @@ class ClusterModalCallbacks:
                 Output("analysis-tabs", "active_tab"),
                 Output("selected-cluster-merged-record", "data"),
             ],
-            [Input("cluster-plot", "clickData")],
+            [Input("cluster-plot", "clickData"),
+             Input("esasky-click-store", "data")],
             [State("algorithm-dropdown", "value")],
             prevent_initial_call=True,
         )
-        def handle_cluster_click(clickData, algorithm):
-            """Handle cluster point clicks and show in cluster analysis tab"""
-            if not clickData or not clickData.get("points"):
-                return (
-                    dash.no_update,
-                    dash.no_update,
-                    dash.no_update,
-                    dash.no_update,
-                    dash.no_update,
-                )
-            point = clickData["points"][0]
+        def handle_cluster_click(clickData, esasky_click, algorithm):
+            """Handle cluster point clicks from Plotly figure or ESA Sky iframe."""
+            ctx = callback_context
+            triggered_id = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
 
-            # Get the trace index and look up the actual trace name
+            no_change = (dash.no_update,) * 5
+
+            # --- ESA Sky iframe click ---
+            if triggered_id == "esasky-click-store" and esasky_click:
+                ra = esasky_click.get("ra")
+                dec = esasky_click.get("dec")
+                name = esasky_click.get("name", "")
+                if ra is None or dec is None:
+                    return no_change
+
+                # Build a synthetic point dict so _resolve_merged_record_for_click can be reused
+                synthetic_point = {"x": ra, "y": dec, "customdata": [None, None, None, name]}
+                merged_record, resolution_note = self._resolve_merged_record_for_click(
+                    synthetic_point, algorithm
+                )
+                merged_cluster_id = (
+                    merged_record.get("ID_UNIQUE_CLUSTER") if merged_record is not None else None
+                )
+                snr = merged_record.get("SNR_CLUSTER", "N/A") if merged_record else "N/A"
+                redshift = merged_record.get("Z_CLUSTER", "N/A") if merged_record else "N/A"
+
+                self.selected_cluster = {
+                    "ra": ra, "dec": dec, "snr": snr, "redshift": redshift,
+                    "algorithm": algorithm, "trace_name": "ESA Sky",
+                    "merged_record": merged_record, "merged_cluster_id": merged_cluster_id,
+                    "resolution_note": resolution_note,
+                }
+                print(f"🌐 ESA Sky cluster clicked: RA={ra:.3f}, Dec={dec:.3f}")
+
+                snr_str = f"{snr:.2f}" if isinstance(snr, float) else str(snr)
+                z_str = f"{redshift:.2f}" if isinstance(redshift, float) else str(redshift)
+                tab_content = self._build_cluster_tab_content(
+                    ra, dec, snr_str, z_str, algorithm, merged_cluster_id, resolution_note
+                )
+                return (
+                    {"display": "none"}, {"display": "block"},
+                    tab_content, "cluster-tab", merged_record,
+                )
+
+            # --- Plotly figure click ---
+            if not clickData or not clickData.get("points"):
+                return no_change
+            point = clickData["points"][0]
             curve_number = point.get("curveNumber", 0)
 
-            # We need to check if this is from individual tile cluster data
             if "customdata" in point and point["customdata"]:
                 customdata = point.get("customdata", [])
                 customdata = [customdata] if not isinstance(customdata, list) else customdata
 
-                # Check if this looks like cluster data (has SNR and redshift)
                 if len(customdata) >= 2:
-                    # Extract cluster information from clicked point
                     ra = point.get("x", "N/A")
                     dec = point.get("y", "N/A")
                     snr = customdata[0] if len(customdata) > 0 else "N/A"
@@ -104,26 +140,15 @@ class ClusterModalCallbacks:
                         merged_record.get("ID_UNIQUE_CLUSTER") if merged_record is not None else None
                     )
 
-                    # Get trace name from hover text or use curve number
                     trace_name = f"Curve {curve_number}"
-                    if "text" in point and point["text"]:
-                        # Try to extract trace name from hover text
-                        text = point["text"]
-                        if "Tile" in str(text):
-                            trace_name = "Individual Tile Cluster"
+                    if "text" in point and point["text"] and "Tile" in str(point["text"]):
+                        trace_name = "Individual Tile Cluster"
 
-                    # Store selected cluster data for use in action callbacks
                     self.selected_cluster = {
-                        "ra": ra,
-                        "dec": dec,
-                        "snr": snr,
-                        "redshift": redshift,
-                        "algorithm": algorithm,
-                        "trace_name": trace_name,
-                        "curve_number": curve_number,
-                        "point_data": point,
-                        "merged_record": merged_record,
-                        "merged_cluster_id": merged_cluster_id,
+                        "ra": ra, "dec": dec, "snr": snr, "redshift": redshift,
+                        "algorithm": algorithm, "trace_name": trace_name,
+                        "curve_number": curve_number, "point_data": point,
+                        "merged_record": merged_record, "merged_cluster_id": merged_cluster_id,
                         "resolution_note": resolution_note,
                     }
 
@@ -131,65 +156,58 @@ class ClusterModalCallbacks:
                         f"🎯 Cluster clicked: RA={ra:.3f}, Dec={dec:.3f}, SNR={snr:.2f}, z={redshift:.2f}"
                     )
 
-                    # Create tab content with cluster information
-                    tab_content = [
-                        dbc.Row(
-                            [
-                                dbc.Col(
-                                    [
-                                        html.Strong("Coordinates", className="text-primary"),
-                                        html.Div(
-                                            [f"RA: {ra:.3f}°", html.Br(), f"Dec: {dec:.3f}°"],
-                                            className="mt-1",
-                                        ),
-                                    ],
-                                    width=6,
-                                ),
-                                dbc.Col(
-                                    [
-                                        html.Strong("Properties", className="text-primary"),
-                                        html.Div(
-                                            [f"z: {redshift:.2f}", f"SNR: {snr:.2f}", html.Br()],
-                                            className="mt-1",
-                                        ),
-                                    ],
-                                    width=6,
-                                ),
-                            ]
-                        ),
-                        html.Hr(className="my-2"),
-                        html.Div(
-                            [
-                                html.Strong("Source: ", className="text-primary"),
-                                f"{algorithm}",
-                            ]
-                        ),
-                        html.Div(
-                            [
-                                html.Strong("Merged Candidate ID: ", className="text-primary"),
-                                str(merged_cluster_id) if merged_cluster_id is not None else "Not resolved",
-                            ]
-                        ),
-                        html.Small(resolution_note, className="text-muted"),
-                    ]
-
-                    # Hide no-selection, show selected content, populate info, switch to cluster tab
+                    snr_str = f"{snr:.2f}" if isinstance(snr, float) else str(snr)
+                    z_str = f"{redshift:.2f}" if isinstance(redshift, float) else str(redshift)
+                    tab_content = self._build_cluster_tab_content(
+                        ra, dec, snr_str, z_str, algorithm, merged_cluster_id, resolution_note
+                    )
                     return (
-                        {"display": "none"},  # Hide no-selection
-                        {"display": "block"},  # Show selected content
-                        tab_content,  # Populate cluster info
-                        "cluster-tab",  # Switch to cluster tab
-                        merged_record,
+                        {"display": "none"}, {"display": "block"},
+                        tab_content, "cluster-tab", merged_record,
                     )
 
-            # If clicked point is not a valid cluster, don't change anything
-            return (
-                dash.no_update,
-                dash.no_update,
-                dash.no_update,
-                dash.no_update,
-                dash.no_update,
-            )
+            return no_change
+
+    def _build_cluster_tab_content(
+        self, ra, dec, snr_str, z_str, algorithm, merged_cluster_id, resolution_note
+    ):
+        """Build the cluster info tab content layout (shared by Plotly and ESA Sky clicks)."""
+        return [
+            dbc.Row(
+                [
+                    dbc.Col(
+                        [
+                            html.Strong("Coordinates", className="text-primary"),
+                            html.Div(
+                                [f"RA: {ra:.3f}°", html.Br(), f"Dec: {dec:.3f}°"]
+                                if isinstance(ra, float) else [f"RA: {ra}", html.Br(), f"Dec: {dec}"],
+                                className="mt-1",
+                            ),
+                        ],
+                        width=6,
+                    ),
+                    dbc.Col(
+                        [
+                            html.Strong("Properties", className="text-primary"),
+                            html.Div(
+                                [f"z: {z_str}", f"SNR: {snr_str}", html.Br()],
+                                className="mt-1",
+                            ),
+                        ],
+                        width=6,
+                    ),
+                ]
+            ),
+            html.Hr(className="my-2"),
+            html.Div([html.Strong("Source: ", className="text-primary"), f"{algorithm}"]),
+            html.Div(
+                [
+                    html.Strong("Merged Candidate ID: ", className="text-primary"),
+                    str(merged_cluster_id) if merged_cluster_id is not None else "Not resolved",
+                ]
+            ),
+            html.Small(resolution_note, className="text-muted"),
+        ]
 
     def _setup_modal_close_callbacks(self):
         """Setup callbacks to close the modal"""
