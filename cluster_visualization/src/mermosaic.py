@@ -1604,13 +1604,15 @@ class MOSAICHandler:
             # Calculate coordinate bounds from FITS/WCS
             bounds = self._calculate_image_bounds_direct(mosaic_info["wcs"], processed_image)
 
-        # Create coordinate arrays for the heatmap
         height, width = processed_image.shape
-        x_coords = np.linspace(bounds["ra_min"], bounds["ra_max"], width)
-        y_coords = np.linspace(bounds["dec_min"], bounds["dec_max"], height)
 
-        # Add debug information about the tile size and coordinates
-        print(f"Debug: Creating heatmap trace for tile {mertileid} ({provider_norm})")
+        # Scalar origin + step avoids serializing width+height coord floats to the browser
+        x0 = float(bounds["ra_min"])
+        dx = (bounds["ra_max"] - bounds["ra_min"]) / max(width - 1, 1)
+        y0 = float(bounds["dec_min"])
+        dy = (bounds["dec_max"] - bounds["dec_min"]) / max(height - 1, 1)
+
+        print(f"Debug: Creating heatmapgl trace for tile {mertileid} ({provider_norm})")
         print(
             f"       - Tile size: {bounds.get('ra_size_deg', 'unknown'):.6f}° × {bounds.get('dec_size_deg', 'unknown'):.6f}°"
         )
@@ -1618,21 +1620,23 @@ class MOSAICHandler:
         print(f"       - Dec range: {bounds['dec_min']:.6f}° to {bounds['dec_max']:.6f}°")
         print(f"       - Image shape: {height} × {width} pixels")
 
-        source_label = source_id or mosaic_info.get("source_id") or "local_mer"
         provider_label = "ESA" if provider_norm == "esa_sky" else "MER"
+        cltile_name = f" CL{tileid}" if tileid is not None else ""
+        trace_name = f"Mosaic ({provider_label}) {mertileid}{cltile_name}"
 
-        # Build CL-Tile line for hovertemplate when available
+        source_label = source_id or mosaic_info.get("source_id") or "local_mer"
         cltile_hover_line = f"CL-Tile: {tileid}<br>" if tileid is not None else ""
 
-        # Create the heatmap trace
         trace = go.Heatmap(
             z=processed_image,
-            x=x_coords,
-            y=y_coords,
+            x0=x0,
+            dx=dx,
+            y0=y0,
+            dy=dy,
             opacity=opacity,
             colorscale=colorscale,
-            showscale=False,  # Don't show colorbar
-            name=f"Mosaic ({provider_label}) {mertileid}",
+            showscale=False,
+            name=trace_name,
             hovertemplate=(
                 f"MER Tile: {mertileid}<br>"
                 f"{cltile_hover_line}"
@@ -1641,7 +1645,7 @@ class MOSAICHandler:
                 "RA: %{x:.6f}°<br>"
                 "Dec: %{y:.6f}°<br>"
                 "Intensity: %{z:.3f}<br>"
-                f"Tile Size: {bounds.get('ra_size_deg', 'unknown'):.4f}° x {bounds.get('dec_size_deg', 'unknown'):.4f}°<br>"
+                f"Tile Size: {bounds.get('ra_size_deg', 0):.4f}° x {bounds.get('dec_size_deg', 0):.4f}°<br>"
                 "<extra>Mosaic Image</extra>"
             ),
         )
