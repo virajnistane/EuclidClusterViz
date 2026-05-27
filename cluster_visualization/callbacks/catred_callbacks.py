@@ -275,14 +275,14 @@ class CATREDCallbacks:
                 set_progress((80, "Building figure..."))
                 with _profiler.timer("catred_cb:build_figure"):
                     fig = (
-                        self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio)
+                        self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio, relayout_data)
                         if self.figure_manager
                         else self._create_fallback_figure(traces, algorithm, free_aspect_ratio)
                     )
 
                 # Preserve zoom state
                 if self.figure_manager:
-                    self.figure_manager.preserve_zoom_state(fig, relayout_data)
+                    self.figure_manager.preserve_zoom_state(fig, relayout_data, current_figure)
                 else:
                     self._preserve_zoom_state_fallback(fig, relayout_data)
 
@@ -476,14 +476,14 @@ class CATREDCallbacks:
 
                 # Create figure
                 fig = (
-                    self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio)
+                    self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio, relayout_data)
                     if self.figure_manager
                     else self._create_fallback_figure(traces, algorithm, free_aspect_ratio)
                 )
 
                 # Preserve zoom state
                 if self.figure_manager:
-                    self.figure_manager.preserve_zoom_state(fig, relayout_data)
+                    self.figure_manager.preserve_zoom_state(fig, relayout_data, current_figure)
                 else:
                     self._preserve_zoom_state_fallback(fig, relayout_data)
 

@@ -67,6 +67,8 @@ class FigureManager:
         # Explicitly debug hover configuration
         print(f"Debug: Figure hovermode set to: {fig.layout.hovermode}")
 
+        fig.update_layout(uirevision="constant")
+
         # Preserve zoom state if available
         if relayout_data:
             self._apply_zoom_state(fig, relayout_data)

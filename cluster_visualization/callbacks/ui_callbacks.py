@@ -1117,22 +1117,24 @@ class UICallbacks:
                         // PZWAV clusters → x shape, AMICO → cross shape (matches Plotly x-thin/cross-thin)
                         var pzwavCat = A.catalog({name: 'PZWAV Clusters', color: '#ff6600', shape: 'x', sourceSize: 14});
                         var amicoCat = A.catalog({name: 'AMICO Clusters', color: '#ff6600', shape: 'cross', sourceSize: 14});
+                        var pzwavSrcs = [], amicoSrcs = [];
                         (data.clusters || []).forEach(function(r) {
                             var name = (r.name || '').toUpperCase();
-                            if (name.indexOf('AMICO') >= 0) {
-                                amicoCat.addSources([A.source(r.ra, r.dec, {name: r.name || ''})]);
-                            } else {
-                                pzwavCat.addSources([A.source(r.ra, r.dec, {name: r.name || ''})]);
-                            }
+                            var src = A.source(r.ra, r.dec, {name: r.name || ''});
+                            if (name.indexOf('AMICO') >= 0) { amicoSrcs.push(src); }
+                            else { pzwavSrcs.push(src); }
                         });
+                        if (pzwavSrcs.length) pzwavCat.addSources(pzwavSrcs);
+                        if (amicoSrcs.length) amicoCat.addSources(amicoSrcs);
                         aladin.addCatalog(pzwavCat);
                         aladin.addCatalog(amicoCat);
 
                         // CATRED → circle, dark outline (matches Plotly circle marker)
                         var catredCat = A.catalog({name: 'CATRED', color: '#222222', shape: 'circle', sourceSize: 8});
-                        (data.catred || []).forEach(function(r) {
-                            catredCat.addSources([A.source(r.ra, r.dec, {name: r.name || 'CATRED'})]);
+                        var catredSrcs = (data.catred || []).map(function(r) {
+                            return A.source(r.ra, r.dec, {name: r.name || 'CATRED'});
                         });
+                        if (catredSrcs.length) catredCat.addSources(catredSrcs);
                         aladin.addCatalog(catredCat);
                     }
 
@@ -1151,7 +1153,7 @@ class UICallbacks:
                             function tryInit() {
                                 var divEl = document.getElementById('aladin-div');
                                 if (!divEl || divEl.offsetWidth === 0 || divEl.offsetHeight === 0) {
-                                    if (attempts++ < 20) { setTimeout(tryInit, 100); }
+                                    if (attempts++ < 40) { setTimeout(tryInit, 50); }
                                     return;
                                 }
                                 var inst = A.aladin('#aladin-div', {
@@ -1266,10 +1268,35 @@ class UICallbacks:
             prevent_initial_call=True,
         )
 
-        # Pre-fetch Aladin CDN assets ~3s after page load so first switch is instant
+        # Pre-fetch Aladin CDN assets ~3s after page load, then pre-init hidden instance
         self.app.clientside_callback(
             """
             function(n) {
+                function maybePreInit() {
+                    if (window._aladinInstance) return;
+                    var divEl = document.getElementById('aladin-div');
+                    if (!divEl || divEl.offsetWidth === 0 || divEl.offsetHeight === 0) return;
+                    try {
+                        var doPreInit = function() {
+                            if (window._aladinInstance) return;
+                            var inst = A.aladin('#aladin-div', {
+                                target: '180 0', fov: 1.0,
+                                survey: 'P/DSS2/color',
+                                cooFrame: 'J2000',
+                                showReticle: false, showZoomControl: false,
+                                showLayersControl: true, showFrame: false,
+                                showGotoControl: false, showShareControl: false,
+                                showProjectionControl: false
+                            });
+                            window._aladinInstance = inst;
+                        };
+                        if (typeof A !== 'undefined' && A.init && typeof A.init.then === 'function') {
+                            A.init.then(doPreInit).catch(function() {});
+                        } else if (typeof A !== 'undefined') {
+                            doPreInit();
+                        }
+                    } catch(e) {}
+                }
                 if (!document.getElementById('aladin-css')) {
                     var link = document.createElement('link');
                     link.id = 'aladin-css'; link.rel = 'stylesheet';
@@ -1280,7 +1307,10 @@ class UICallbacks:
                     var script = document.createElement('script');
                     script.id = 'aladin-js'; script.charset = 'utf-8';
                     script.src = 'https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js';
+                    script.onload = function() { setTimeout(maybePreInit, 200); };
                     document.head.appendChild(script);
+                } else {
+                    maybePreInit();
                 }
                 return window.dash_clientside.no_update;
             }
