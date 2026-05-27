@@ -508,7 +508,7 @@ class DataControls:
                                         {"label": "Local MER FITS", "value": "local_fits"},
                                         {"label": "ESA Sky (Public HiPS)", "value": "esa_sky"},
                                     ],
-                                    value="esa_sky",
+                                    value="local_fits",
                                     clearable=False,
                                     className="mb-2",
                                 ),
