@@ -57,10 +57,14 @@ class AladinCallbacks:
                 State("algorithm-dropdown", "value"),
                 State("cluster-plot", "figure"),
                 State("aladin-survey-dropdown", "value"),
+                State("snr-range-slider-pzwav", "value"),
+                State("snr-range-slider-amico", "value"),
+                State("redshift-range-slider", "value"),
             ],
             prevent_initial_call=True,
         )
-        def push_overlay_data(mode, vp_store, catred_ready, algorithm, figure, survey):
+        def push_overlay_data(mode, vp_store, catred_ready, algorithm, figure, survey,
+                              snr_range_pzwav, snr_range_amico, redshift_range):
             # Determine current mode: view-mode-store is authoritative;
             # viewport-cluster-count-store fires only re-trigger when already in aladin mode
             triggered_ids = [t["prop_id"] for t in callback_context.triggered]
@@ -161,6 +165,23 @@ class AladinCallbacks:
                         sub = merged_raw[mask] if isinstance(merged_raw, np.ndarray) else merged_raw.iloc[mask.nonzero()[0]]
                     else:
                         sub = merged_raw
+                    # SNR filter — use PZWAV or AMICO range depending on algorithm
+                    snr_range = snr_range_pzwav if (algorithm or "PZWAV") == "PZWAV" else snr_range_amico
+                    if _has_col(sub, "SNR_CLUSTER") and snr_range and len(snr_range) == 2:
+                        snr_sub = _col_f64(sub, "SNR_CLUSTER")
+                        snr_mask = (snr_sub >= float(snr_range[0])) & (snr_sub <= float(snr_range[1]))
+                        ra_arr = ra_arr[snr_mask]
+                        dec_arr = dec_arr[snr_mask]
+                        sub = sub[snr_mask] if isinstance(sub, np.ndarray) else sub.iloc[snr_mask.nonzero()[0]]
+
+                    # Redshift filter
+                    if _has_col(sub, "Z_CLUSTER") and redshift_range and len(redshift_range) == 2:
+                        z_sub = _col_f64(sub, "Z_CLUSTER")
+                        z_mask = (z_sub >= float(redshift_range[0])) & (z_sub <= float(redshift_range[1]))
+                        ra_arr = ra_arr[z_mask]
+                        dec_arr = dec_arr[z_mask]
+                        sub = sub[z_mask] if isinstance(sub, np.ndarray) else sub.iloc[z_mask.nonzero()[0]]
+
                     has_name = _has_col(sub, "ID_UNIQUE_CLUSTER")
                     has_snr = _has_col(sub, "SNR_CLUSTER")
                     has_z = _has_col(sub, "Z_CLUSTER")
