@@ -434,21 +434,20 @@ class UICallbacks:
             return is_open, [html.I(className=f"{icon} me-2"), "🎨 Display Options"]
 
         # Mask Section
-        self.app.clientside_callback(
-            """
-            function(nClicks) {
-                if (nClicks === undefined || nClicks === null) {
-                    return [false, [{type: 'i', props: {className: 'fas fa-chevron-right me-2'}}, '🎭 Mask']];
-                }
-                var isOpen = (nClicks % 2) === 1;
-                var icon = isOpen ? 'fas fa-chevron-up me-2' : 'fas fa-chevron-down me-2';
-                return [isOpen, [{type: 'i', props: {className: icon}}, '🎭 Mask']];
-            }
-            """,
-            [Output("mask-controls-collapse", "is_open"), Output("mask-controls-toggle", "children")],
-            Input("mask-controls-toggle", "n_clicks"),
+        @self.app.callback(
+            [
+                Output("mask-controls-collapse", "is_open"),
+                Output("mask-controls-toggle", "children"),
+            ],
+            [Input("mask-controls-toggle", "n_clicks")],
             prevent_initial_call=False,
         )
+        def toggle_mask_controls(n_clicks):
+            if n_clicks is None:
+                return False, [html.I(className="fas fa-chevron-right me-2"), "🎭 Mask"]
+            is_open = (n_clicks % 2) == 1
+            icon = "fas fa-chevron-up" if is_open else "fas fa-chevron-down"
+            return is_open, [html.I(className=f"{icon} me-2"), "🎭 Mask"]
 
         # Mosaic Section
         @self.app.callback(
