@@ -105,6 +105,7 @@ class CATREDCallbacks:
                 Output("cluster-plot", "figure", allow_duplicate=True),
                 Output("phz-pdf-plot", "figure", allow_duplicate=True),
                 Output("status-info", "children", allow_duplicate=True),
+                Output("catred-ready-store", "data", allow_duplicate=True),
             ],
             [Input("catred-render-button", "n_clicks")],
             [
@@ -159,7 +160,7 @@ class CATREDCallbacks:
             current_figure,
         ):
             if catred_n_clicks == 0:
-                return dash.no_update, dash.no_update, dash.no_update
+                return dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
             print(
                 f"Debug: Manual CATRED render button clicked (click #{catred_n_clicks}) with threshold={threshold}, maglim={maglim}"
@@ -329,203 +330,104 @@ class CATREDCallbacks:
                 _profiler.record("catred_cb:total", time.perf_counter() - _t_total)
                 _profiler.print_stats(header="CATRED render")
 
-                return fig, empty_phz_fig, status
+                return fig, empty_phz_fig, status, time.time()
 
             except Exception as e:
                 error_status = dbc.Alert(f"Error rendering CATRED data: {str(e)}", color="danger")
-                return dash.no_update, dash.no_update, error_status
+                return dash.no_update, dash.no_update, error_status, dash.no_update
 
     def _setup_clear_catred_callback(self):
-        """Setup callback for clearing all CATRED data"""
+        """Setup callbacks for clearing CATRED data.
 
-        @self.app.callback(
+        Clientside callback handles instant figure manipulation (no round-trip).
+        Server callback clears handler/trace-creator state in the background.
+        """
+        # --- Clientside: instant figure + PHZ + status update ---
+        self.app.clientside_callback(
+            """
+            function(n_clicks, render_n_clicks, figure) {
+                if (!n_clicks || !render_n_clicks) return [window.dash_clientside.no_update, window.dash_clientside.no_update, window.dash_clientside.no_update];
+
+                if (!figure || !figure.data) return [window.dash_clientside.no_update, window.dash_clientside.no_update, window.dash_clientside.no_update];
+
+                // Drop: CATRED scatter traces and glow halos only.
+                // Near-CATRED cluster traces ("PZWAV (Merged, near CATRED)") hold real cluster
+                // data — keep them but rename to standard names so they merge with away traces.
+                var filtered = figure.data.filter(function(trace) {
+                    var name = trace.name || '';
+                    if (name.indexOf('CATRED') === 0) return false;               // "CATRED Masked - MER Tile" etc
+                    if (name.indexOf('Merged PZWAV (in CATRED') >= 0) return false;  // glow halo only
+                    if (name.indexOf('Merged AMICO (in CATRED') >= 0) return false;  // glow halo only
+                    return true;
+                }).map(function(trace) {
+                    var name = trace.name || '';
+                    // Rename near-CATRED cluster traces back to standard names
+                    // so they appear as normal clusters in legend and are counted by viewport store
+                    if (name.indexOf('PZWAV') >= 0 && name.indexOf('near CATRED') >= 0) {
+                        return Object.assign({}, trace, {name: 'PZWAV (Merged)', showlegend: true});
+                    }
+                    if (name.indexOf('AMICO') >= 0 && name.indexOf('near CATRED') >= 0) {
+                        return Object.assign({}, trace, {name: 'AMICO (Merged)', showlegend: true});
+                    }
+                    return trace;
+                });
+
+                var newFigure = Object.assign({}, figure, {data: filtered});
+
+                var emptyPhz = {
+                    data: [],
+                    layout: {
+                        title: {text: 'CATRED data cleared', font: {size: 14}},
+                        xaxis: {visible: false},
+                        yaxis: {visible: false},
+                        annotations: [{
+                            text: 'Click on a CATRED point to view PHZ_PDF',
+                            xref: 'paper', yref: 'paper',
+                            x: 0.5, y: 0.5,
+                            showarrow: false,
+                            font: {size: 13, color: 'gray'}
+                        }]
+                    }
+                };
+
+                var now = new Date();
+                var ts = now.getHours().toString().padStart(2,'0') + ':' +
+                         now.getMinutes().toString().padStart(2,'0') + ':' +
+                         now.getSeconds().toString().padStart(2,'0');
+                var statusHtml = 'CATRED cleared at ' + ts;
+
+                return [newFigure, emptyPhz, statusHtml];
+            }
+            """,
             [
                 Output("cluster-plot", "figure", allow_duplicate=True),
                 Output("phz-pdf-plot", "figure", allow_duplicate=True),
                 Output("status-info", "children", allow_duplicate=True),
             ],
-            [Input("catred-clear-button", "n_clicks")],
+            Input("catred-clear-button", "n_clicks"),
             [
-                State("algorithm-dropdown", "value"),
-                State("matching-clusters-switch", "value"),
-                State("snr-range-slider-pzwav", "value"),
-                State("snr-range-slider-amico", "value"),
-                State("redshift-range-slider", "value"),
-                State("idcluster-upload", "contents"),
-                State("idcluster-upload", "filename"),
-                State("polygon-switch", "value"),
-                State("mer-switch", "value"),
-                State("aspect-ratio-switch", "value"),
-                State("unmerged-clusters-switch", "value"),
-                State("cltile-info-switch", "value"),
-                State("catred-mode-switch", "value"),
-                State("cluster-plot", "relayoutData"),
-                State("cluster-plot", "figure"),
                 State("render-button", "n_clicks"),
+                State("cluster-plot", "figure"),
             ],
             prevent_initial_call=True,
         )
-        def clear_catred_data(
-            clear_n_clicks,
-            algorithm,
-            matching_clusters,
-            snr_range_pzwav,
-            snr_range_amico,
-            redshift_range,
-            idcluster_upload_contents,
-            idcluster_upload_filename,
-            show_polygons,
-            show_mer_tiles,
-            free_aspect_ratio,
-            show_unmerged_clusters,
-            show_cltile_info,
-            catred_masked,
-            relayout_data,
-            current_figure,
-            render_n_clicks,
-        ):
-            if clear_n_clicks == 0 or render_n_clicks == 0:
-                return dash.no_update, dash.no_update, dash.no_update
 
-            print(f"Debug: Clear CATRED data button clicked (click #{clear_n_clicks})")
-
-            try:
-                # Extract SNR values from range sliders (separate for PZWAV and AMICO)
-                snr_pzwav_lower = (
-                    snr_range_pzwav[0] if snr_range_pzwav and len(snr_range_pzwav) == 2 else None
-                )
-                snr_pzwav_upper = (
-                    snr_range_pzwav[1] if snr_range_pzwav and len(snr_range_pzwav) == 2 else None
-                )
-
-                snr_amico_lower = (
-                    snr_range_amico[0] if snr_range_amico and len(snr_range_amico) == 2 else None
-                )
-                snr_amico_upper = (
-                    snr_range_amico[1] if snr_range_amico and len(snr_range_amico) == 2 else None
-                )
-
-                # Determine which SNR range to use based on algorithm
-                if algorithm == "PZWAV":
-                    snr_lower = snr_pzwav_lower
-                    snr_upper = snr_pzwav_upper
-                elif algorithm == "AMICO":
-                    snr_lower = snr_amico_lower
-                    snr_upper = snr_amico_upper
-                else:  # BOTH
-                    snr_lower = (snr_pzwav_lower, snr_amico_lower)
-                    snr_upper = (snr_pzwav_upper, snr_amico_upper)
-
-                # Extract redshift values from range slider
-                z_lower = redshift_range[0] if redshift_range and len(redshift_range) == 2 else None
-                z_upper = redshift_range[1] if redshift_range and len(redshift_range) == 2 else None
-
-                idcluster_list = None
-                if idcluster_upload_contents and idcluster_upload_filename:
-                    idcluster_list = get_idclusters_array(idcluster_upload_contents, idcluster_upload_filename)
-
-                # Clear CATRED traces cache
-                if self.catred_handler:
-                    self.catred_handler.clear_traces_cache()
-                else:
-                    self.catred_traces_cache = []
-
-                # 🆕 CLEAR CATRED DATA IN TRACE CREATOR TO REVERT MARKER ENHANCEMENTS
-                if self.trace_creator:
-                    self.trace_creator.clear_catred_data()
-                    print(
-                        "Debug: Cleared CATRED data in TraceCreator to revert marker enhancements"
-                    )
-
-                # 🆕 EXTRACT EXISTING MOSAIC TRACES TO PRESERVE THEM
-                existing_mosaic_traces = self._extract_existing_mosaic_traces(current_figure)
-                print(
-                    f"Debug: Clear CATRED - preserving {len(existing_mosaic_traces)} existing mosaic traces"
-                )
-
-                existing_mask_overlay_traces = self._extract_existing_mask_overlay_traces(
-                    current_figure
-                )
-                print(
-                    f"Debug: Clear CATRED - preserving {len(existing_mask_overlay_traces)} existing mask overlay traces"
-                )
-
-                # Load data for selected algorithm
-                data = self.load_data(algorithm)
-
-                # Create traces without any CATRED data, but preserve mosaic traces
-                traces = self.create_traces(
-                    data,
-                    show_polygons,
-                    show_mer_tiles,
-                    relayout_data,
-                    catred_masked="none",
-                    existing_mosaic_traces=existing_mosaic_traces,  # 🆕 PRESERVE MOSAIC TRACES
-                    existing_mask_overlay_traces=existing_mask_overlay_traces,  # 🆕 PRESERVE MASK OVERLAY TRACES
-                    snr_threshold_lower_pzwav=snr_pzwav_lower,
-                    snr_threshold_upper_pzwav=snr_pzwav_upper,
-                    snr_threshold_lower_amico=snr_amico_lower,
-                    snr_threshold_upper_amico=snr_amico_upper,
-                    z_threshold_lower=z_lower,
-                    z_threshold_upper=z_upper,
-                    idcluster_list=idcluster_list, 
-                    show_unmerged_clusters=show_unmerged_clusters,
-                    show_cltile_info=show_cltile_info,
-                    matching_clusters=matching_clusters,
-                )
-
-                # Create figure
-                fig = (
-                    self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio, relayout_data)
-                    if self.figure_manager
-                    else self._create_fallback_figure(traces, algorithm, free_aspect_ratio)
-                )
-
-                # Preserve zoom state
-                if self.figure_manager:
-                    self.figure_manager.preserve_zoom_state(fig, relayout_data, current_figure)
-                else:
-                    self._preserve_zoom_state_fallback(fig, relayout_data)
-
-                # Status info
-                catred_status = " | CATRED high-res data: cleared"
-                aspect_mode = "Free aspect ratio" if free_aspect_ratio else "Equal aspect ratio"
-
-                status = dbc.Alert(
-                    [
-                        html.H6(f"Algorithm: {algorithm}", className="mb-1"),
-                        html.P(
-                            f"Merged clusters: {len(data['data_detcluster_mergedcat'])}",
-                            className="mb-1",
-                        ),
-                        html.P(
-                            f"Individual tiles: {len(data['data_detcluster_by_cltile'])}",
-                            className="mb-1",
-                        ),
-                        html.P(
-                            f"Polygon mode: {'Filled' if show_polygons else 'Outline'}{catred_status}",
-                            className="mb-1",
-                        ),
-                        html.P(f"Aspect ratio: {aspect_mode}", className="mb-1"),
-                        html.Small(
-                            f"CATRED data cleared at: {pd.Timestamp.now().strftime('%H:%M:%S')}",
-                            className="text-muted",
-                        ),
-                    ],
-                    color="warning",
-                    className="mt-2",
-                )
-
-                # Create empty PHZ_PDF plot for clear action
-                empty_phz_fig = self._create_empty_phz_plot(
-                    "CATRED data cleared - Click on a CATRED data point to view its PHZ_PDF"
-                )
-
-                return fig, empty_phz_fig, status
-
-            except Exception as e:
-                error_status = dbc.Alert(f"Error clearing CATRED data: {str(e)}", color="danger")
-                return dash.no_update, dash.no_update, error_status
+        # --- Server: clear handler/trace-creator state (fire-and-forget, no figure rebuild) ---
+        @self.app.callback(
+            Output("catred-clear-button", "title"),
+            Input("catred-clear-button", "n_clicks"),
+            prevent_initial_call=True,
+        )
+        def _clear_catred_server_state(n_clicks):
+            if not n_clicks:
+                return dash.no_update
+            if self.catred_handler:
+                self.catred_handler.clear_traces_cache()
+                self.catred_handler.current_catred_data = None
+            if self.trace_creator:
+                self.trace_creator.clear_catred_data()
+            print(f"Debug: CATRED server state cleared (click #{n_clicks})")
+            return dash.no_update
 
     def load_data(self, algorithm):
         """Load data using modular or fallback method"""

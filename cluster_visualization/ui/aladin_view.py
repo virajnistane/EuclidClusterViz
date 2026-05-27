@@ -43,6 +43,7 @@ def create_aladin_view() -> html.Div:
             dcc.Store(id="aladin-overlay-data-store"),
             dcc.Store(id="aladin-click-store"),
             dcc.Store(id="viewport-cluster-count-store"),
+            dcc.Store(id="catred-ready-store"),
             html.Span(id="aladin-init-dummy", style={"display": "none"}),
             dcc.Interval(id="aladin-click-poll-interval", interval=500, disabled=True),
             dcc.Interval(id="aladin-preload-interval", interval=3000, max_intervals=1, disabled=True),

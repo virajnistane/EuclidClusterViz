@@ -397,6 +397,33 @@ class CATREDHandler:
     # Covers the max expected half-extent of a MER tile (~0.5°) with room to spare.
     _TILE_MARGIN_DEG: float = 1.0
 
+    def _clip_to_viewport(
+        self, scatter_data: Dict[str, List], zoom_data: Dict[str, Any]
+    ) -> Dict[str, List]:
+        """Return scatter_data with only points inside the viewport bbox."""
+        if not zoom_data or not scatter_data.get("ra"):
+            return scatter_data
+        ra_min = zoom_data.get("ra_min")
+        ra_max = zoom_data.get("ra_max")
+        dec_min = zoom_data.get("dec_min")
+        dec_max = zoom_data.get("dec_max")
+        if None in (ra_min, ra_max, dec_min, dec_max):
+            return scatter_data
+        # RA axis is reversed on sky (decreasing left→right) — normalize to true min/max
+        ra_lo, ra_hi = min(ra_min, ra_max), max(ra_min, ra_max)
+        dec_lo, dec_hi = min(dec_min, dec_max), max(dec_min, dec_max)
+        ra_arr = np.asarray(scatter_data["ra"])
+        dec_arr = np.asarray(scatter_data["dec"])
+        mask = (ra_arr >= ra_lo) & (ra_arr <= ra_hi) & (dec_arr >= dec_lo) & (dec_arr <= dec_hi)
+        clipped: Dict[str, List] = {}
+        for key, val in scatter_data.items():
+            if isinstance(val, list) and len(val) == len(ra_arr):
+                arr = np.asarray(val)
+                clipped[key] = arr[mask].tolist()
+            else:
+                clipped[key] = val
+        return clipped
+
     def _find_intersecting_tiles(
         self, data: Dict[str, Any], ra_min: float, ra_max: float, dec_min: float, dec_max: float
     ) -> List[int]:
@@ -778,12 +805,12 @@ class CATREDHandler:
                 mertiles_to_load, data, catred_scatter_data, maglim, threshold
             )
 
-        # Store current data for click callbacks
-        self.current_catred_data = catred_scatter_data
+        # Clip to viewport for both plot rendering and Aladin push
+        self.current_catred_data = self._clip_to_viewport(catred_scatter_data, zoom_data)
 
         self._profiler.record("catred:update_coverage", time.perf_counter() - _t_total)
-        print(f"Debug: Total CATRED points with coverage loaded: {len(catred_scatter_data['ra'])}")
-        return catred_scatter_data
+        print(f"Debug: Total CATRED points with coverage loaded: {len(catred_scatter_data['ra'])} ({len(self.current_catred_data['ra'])} in viewport)")
+        return self.current_catred_data
 
     def _load_tile_data_with_coverage(
         self,
@@ -1017,11 +1044,11 @@ class CATREDHandler:
         # Load data for each intersecting tile using unmasked method
         self._load_tile_data_unmasked(mertiles_to_load, data, catred_scatter_data, maglim)
 
-        # Store current data for click callbacks
-        self.current_catred_data = catred_scatter_data
+        # Clip to viewport for both plot rendering and Aladin push
+        self.current_catred_data = self._clip_to_viewport(catred_scatter_data, zoom_data)
 
-        print(f"Debug: Total unmasked CATRED points loaded: {len(catred_scatter_data['ra'])}")
-        return catred_scatter_data
+        print(f"Debug: Total unmasked CATRED points loaded: {len(catred_scatter_data['ra'])} ({len(self.current_catred_data['ra'])} in viewport)")
+        return self.current_catred_data
 
     def _load_tile_data_unmasked(
         self,

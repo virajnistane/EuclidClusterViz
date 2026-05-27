@@ -507,15 +507,9 @@ class TraceCreator:
             self.current_catred_data = {}
         self.current_catred_data[trace_name] = manual_catred_data
 
-        # Also store in CATRED handler if available
-        if self.catred_handler:
-            if (
-                not hasattr(self.catred_handler, "current_catred_data")
-                or self.catred_handler.current_catred_data is None
-            ):
-                self.catred_handler.current_catred_data = {}
-            self.catred_handler.current_catred_data[trace_name] = manual_catred_data
-            print(f"Debug: Also stored CATRED data in catred_handler")
+        # catred_handler.current_catred_data is intentionally NOT overwritten here.
+        # It holds the viewport-clipped flat dict set by _clip_to_viewport() in the
+        # load path, which is the format expected by aladin_callbacks for Aladin push.
 
         # NOTE: diskcache persistence moved to create_traces() so both tile
         # and box traces are captured in a single write after both methods run.

@@ -52,7 +52,7 @@ class AladinCallbacks:
             Output("aladin-overlay-data-store", "data"),
             [Input("view-mode-store", "data"),
              Input("viewport-cluster-count-store", "data"),
-             Input("catred-render-button", "n_clicks")],
+             Input("catred-ready-store", "data")],
             [
                 State("algorithm-dropdown", "value"),
                 State("cluster-plot", "figure"),
@@ -60,12 +60,13 @@ class AladinCallbacks:
             ],
             prevent_initial_call=True,
         )
-        def push_overlay_data(mode, vp_store, catred_n_clicks, algorithm, figure, survey):
+        def push_overlay_data(mode, vp_store, catred_ready, algorithm, figure, survey):
             # Determine current mode: view-mode-store is authoritative;
             # viewport-cluster-count-store fires only re-trigger when already in aladin mode
             triggered_ids = [t["prop_id"] for t in callback_context.triggered]
             vp_triggered = any("viewport-cluster-count-store" in t for t in triggered_ids)
-            catred_triggered = any("catred-render-button" in t for t in triggered_ids)
+            # catred-ready-store fires only after background render completes — data is guaranteed ready
+            catred_triggered = any("catred-ready-store" in t for t in triggered_ids)
 
             if vp_triggered:
                 # Pre-load whenever viewport hits exactly 1 cluster (any mode)
@@ -73,7 +74,9 @@ class AladinCallbacks:
                 if not vp_store or vp_store.get("count") != 1:
                     return no_update
             elif catred_triggered:
-                # Re-push after CATRED render only when already in aladin mode or <=1 cluster
+                if not catred_ready:
+                    return no_update
+                # Re-push after CATRED render only when in aladin mode or <=1 cluster
                 in_aladin = mode == "aladin"
                 at_single_cluster = vp_store and vp_store.get("count") == 1
                 if not (in_aladin or at_single_cluster):
@@ -182,12 +185,24 @@ class AladinCallbacks:
                 traceback.print_exc()
 
             # --- CATRED ---
-            # CATREDHandler.current_catred_data is flat: {"ra": [], "dec": [], ...}
+            # current_catred_data is either:
+            #   flat:   {"ra": [...], "dec": [...], ...}           (from catred_handler._clip_to_viewport)
+            #   nested: {trace_name: {"ra": [...], "dec": [...]}}  (from traces.py _add_manual_catred_traces)
+            # Handle both formats.
             try:
                 catred_data = getattr(self.catred_handler, "current_catred_data", None)
                 if isinstance(catred_data, dict):
-                    ra_list = catred_data.get("ra", [])
-                    dec_list = catred_data.get("dec", [])
+                    if "ra" in catred_data:
+                        # flat format
+                        ra_list = catred_data.get("ra", [])
+                        dec_list = catred_data.get("dec", [])
+                    else:
+                        # nested format — merge all trace entries
+                        ra_list, dec_list = [], []
+                        for entry in catred_data.values():
+                            if isinstance(entry, dict):
+                                ra_list.extend(entry.get("ra", []))
+                                dec_list.extend(entry.get("dec", []))
                     if len(ra_list) > 0:
                         ra_arr = np.asarray(ra_list).astype(np.float64)
                         dec_arr = np.asarray(dec_list).astype(np.float64)

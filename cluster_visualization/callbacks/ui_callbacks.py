@@ -1070,7 +1070,11 @@ class UICallbacks:
                 (figure.data || []).forEach(function(trace) {
                     var name = (trace.name || '');
                     if (name.indexOf('Merged') < 0 && name.indexOf('PZWAV') < 0 && name.indexOf('AMICO') < 0) return;
-                    if (name.indexOf('CATRED') === 0) return;  // skip pure CATRED traces (start with "CATRED")
+                    if (name.indexOf('CATRED') === 0) return;            // pure CATRED scatter traces
+                    if (name.indexOf('in CATRED region') >= 0) return;  // glow halos BOTH-algo: "Merged PZWAV (in CATRED region)"
+                    // single-algo glow: "PZWAV (Merged, near CATRED)" — no cluster-count suffix
+                    // single-algo data: "PZWAV (Merged, near CATRED) - N clusters" — has suffix, must be counted
+                    if (name.indexOf('near CATRED') >= 0 && name.indexOf(' clusters') < 0) return;
                     var xs = trace.x || [];
                     var ys = trace.y || [];
                     for (var i = 0; i < xs.length; i++) {
@@ -1091,8 +1095,8 @@ class UICallbacks:
             [Output("view-mode-aladin-btn", "disabled"),
              Output("viewport-cluster-count-store", "data"),
              Output("image-source-radio", "options")],
-            Input("cluster-plot", "relayoutData"),
-            State("cluster-plot", "figure"),
+            [Input("cluster-plot", "relayoutData"),
+             Input("cluster-plot", "figure")],
             prevent_initial_call=False,
         )
 
@@ -1114,7 +1118,11 @@ class UICallbacks:
                         // Remove old catalog layers (keep image layers)
                         try { aladin.removeLayers(); } catch(e) {}
 
-                        // PZWAV clusters → x shape, AMICO → cross shape (matches Plotly x-thin/cross-thin)
+                        // Hide skeleton as soon as Aladin is positioned — catalogs added async below
+                        var sk = document.getElementById('aladin-skeleton');
+                        if (sk) sk.style.display = 'none';
+
+                        // Build source arrays (cheap — just JS objects, no render yet)
                         var pzwavCat = A.catalog({name: 'PZWAV Clusters', color: '#ff6600', shape: 'x', sourceSize: 14});
                         var amicoCat = A.catalog({name: 'AMICO Clusters', color: '#ff6600', shape: 'cross', sourceSize: 14});
                         var pzwavSrcs = [], amicoSrcs = [];
@@ -1124,18 +1132,22 @@ class UICallbacks:
                             if (name.indexOf('AMICO') >= 0) { amicoSrcs.push(src); }
                             else { pzwavSrcs.push(src); }
                         });
-                        if (pzwavSrcs.length) pzwavCat.addSources(pzwavSrcs);
-                        if (amicoSrcs.length) amicoCat.addSources(amicoSrcs);
-                        aladin.addCatalog(pzwavCat);
-                        aladin.addCatalog(amicoCat);
-
-                        // CATRED → circle, dark outline (matches Plotly circle marker)
                         var catredCat = A.catalog({name: 'CATRED', color: '#222222', shape: 'circle', sourceSize: 8});
                         var catredSrcs = (data.catred || []).map(function(r) {
                             return A.source(r.ra, r.dec, {name: r.name || 'CATRED'});
                         });
-                        if (catredSrcs.length) catredCat.addSources(catredSrcs);
-                        aladin.addCatalog(catredCat);
+
+                        // Add catalogs on next animation frame so Aladin sky tiles can start loading first
+                        requestAnimationFrame(function() {
+                            if (pzwavSrcs.length) pzwavCat.addSources(pzwavSrcs);
+                            if (amicoSrcs.length) amicoCat.addSources(amicoSrcs);
+                            aladin.addCatalog(pzwavCat);
+                            aladin.addCatalog(amicoCat);
+                            requestAnimationFrame(function() {
+                                if (catredSrcs.length) catredCat.addSources(catredSrcs);
+                                aladin.addCatalog(catredCat);
+                            });
+                        });
                     }
 
                     var doInit = function() {
@@ -1144,8 +1156,6 @@ class UICallbacks:
                             window._aladinInstance.setFov(fov);
                             window._aladinInstance.setImageSurvey(survey);
                             setupCatalogs(window._aladinInstance);
-                            var sk = document.getElementById('aladin-skeleton');
-                            if (sk) sk.style.display = 'none';
                         } else {
                             // Wait for #aladin-div to be visible and sized before init
                             // (Aladin v3 reads canvas size at creation; div hidden = blank)
@@ -1197,8 +1207,6 @@ class UICallbacks:
                                 } catch(e) {}
 
                                 setupCatalogs(inst);
-                                var sk = document.getElementById('aladin-skeleton');
-                                if (sk) sk.style.display = 'none';
                             }
                             tryInit();
                         }
