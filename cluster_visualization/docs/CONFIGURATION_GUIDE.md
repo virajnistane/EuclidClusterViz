@@ -327,3 +327,56 @@ detfiles = config.get_detfiles_list('PZWAV')
 ✅ **Fallback**: Graceful degradation if configuration fails  
 ✅ **Documentation**: Clear understanding of required paths  
 ✅ **Flexibility**: Support for environment variables and custom setups
+
+## Image Display Configuration
+
+### Default Mosaic Source: `local_fits`
+
+The default mosaic provider is now `local_fits` (previously `esa_sky`). When a cluster mosaic is requested, the app reads locally-stored Euclid MER FITS tiles from the path configured under `paths.mosaic_dir` in your INI file, rather than fetching data from the ESA HiPS service over the network.
+
+This means:
+- No external network access is required for mosaic images when using the default provider.
+- The `paths.mosaic_dir` key must point to a directory containing `EUC_MER_BGSUB-MOSAIC-VIS_TILE{id}*.fits.gz` files.
+- If local files are missing for a given tile, `MOSAICHandler` logs a warning and returns no image for that tile.
+
+To revert to the ESA Sky (public HiPS) provider, select **ESA Sky (Public HiPS)** from the **Mosaic Source** dropdown in the sidebar, or configure the default in your `config_local.ini`:
+
+```ini
+[mosaic]
+provider_default = esa_sky
+```
+
+The `MOSAICHandler` accepts the aliases `local`, `local_fits`, `fits`, `mer` (all map to `local_fits`) and `esa`, `esa_sky`, `esasky` (all map to `esa_sky`).
+
+### Image Source Radio Selector
+
+Location: **Mosaic / Image Source** card in the sidebar.
+
+The `image-source-radio` control has two options:
+
+| Value | Label | Effect |
+|-------|-------|--------|
+| `mosaic` | MER Mosaic | Shows the Plotly scatter plot with optional local-FITS or ESA-Sky mosaic overlays. All MER mosaic controls (`mer-mosaic-controls`) are visible. |
+| `aladin` | Aladin Sky | Switches to the embedded Aladin Lite sky viewer centered on the selected cluster. The MER mosaic controls are hidden and the survey dropdown becomes visible. |
+
+The **Aladin Sky** option is only enabled when exactly one cluster point is visible in the current zoom viewport. When zero or more than one cluster is in view the option is disabled automatically.
+
+Selecting either option also syncs the top-level **Plotly / Aladin** toggle buttons in the main view area.
+
+### Aladin Survey Dropdown
+
+Location: **Mosaic / Image Source** card, visible only when **Aladin Sky** mode is active (`aladin-survey-dropdown`).
+
+The dropdown is hidden in Mosaic mode (`style: {display: 'none'}`) and shown in Aladin mode (`style: {display: 'block'}`).
+
+Available surveys:
+
+| Label | HiPS identifier |
+|-------|----------------|
+| DSS2 Color | `P/DSS2/color` |
+| Euclid VIS Q1 | `CDS/P/Euclid/Q1/VIS` |
+| Euclid NIR Q1 (color) | `CDS/P/Euclid/Q1/NIR` |
+| 2MASS H | `P/2MASS/H` |
+| WISE W1 | `P/allWISE/color` |
+
+The default survey is **DSS2 Color** (`P/DSS2/color`). Changing the dropdown value immediately reloads the Aladin viewer with the new HiPS layer for the currently selected cluster.

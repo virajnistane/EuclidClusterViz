@@ -125,6 +125,114 @@ Zoom in until the viewport is smaller than 2°×2° in both RA and Dec.
 
 ---
 
+## Aladin Lite Viewer
+
+### Skeleton shimmer stays visible — Aladin viewer never appears
+
+**Symptom**: After switching to "Aladin" view mode the animated skeleton overlay
+(`aladin-skeleton`) keeps spinning and the sky map never loads.
+
+**Cause**: Aladin Lite v3 is loaded on-demand from a CDN.  On a compute node with
+no outbound internet access the CDN request times out or is blocked by a firewall,
+so the JS bundle never executes and the viewer is never initialised.
+
+**Fix**:
+1. Check outbound network connectivity from the node:
+   ```bash
+   curl -I --max-time 10 https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js
+   ```
+2. If the node is air-gapped, host the Aladin Lite bundle locally and update the
+   CDN `<script>` tag in `cluster_visualization/ui/aladin_view.py` to point to
+   the local path.
+3. Confirm the browser console shows no JavaScript errors (open DevTools → Console
+   and reload the page after switching to Aladin mode).
+
+---
+
+### Server log shows `[Aladin] Warning: Could not load cluster data` or CATRED entries are missing
+
+**Cause**: The `push_overlay_data` callback in `aladin_callbacks.py` caught an
+exception while building the overlay JSON.
+
+**Fix**: Check the server log for the full traceback printed after the warning.
+Common sub-causes: missing `SNR_CLUSTER` / `Z_CLUSTER` columns in the merged
+catalog, or the diskcache directory (`~/.cache/clusterviz_state`) not writable.
+
+---
+
+## ESA Sky Iframe
+
+### Blank iframe — no map loads in ESA Sky mode
+
+**Symptom**: After switching to "ESA Sky" view mode the iframe remains blank or
+shows a loading spinner indefinitely.
+
+**Cause**: The clientside JS bridge communicates with the ESA Sky iframe via
+`postMessage`.  If the iframe cannot load `esasky.esac.esa.int` (e.g. a firewall
+blocks the domain or the iframe `src` URL times out), or if the `postMessage`
+handshake times out before the iframe is ready, the overlay is never applied and
+the sky view stays blank.
+
+**Fix**:
+1. Open your browser's Developer Tools (F12) → Console tab.  Look for
+   `postMessage` timeout errors or `Content Security Policy` / CORS errors.
+2. Verify the node can reach ESA Sky:
+   ```bash
+   curl -I --max-time 15 https://esasky.esac.esa.int
+   ```
+3. If the domain is blocked, contact your site administrator to allow outbound
+   HTTPS to `esasky.esac.esa.int`.
+
+---
+
+### ESA Sky overlay data (clusters / CATRED) not shown
+
+**Cause**: The `push_overlay_data` callback in `esasky_callbacks.py` caught an
+exception while serialising catalog or CATRED data.
+
+**Fix**: Check the server log for `[ESASky] Warning:` messages.  Re-render CATRED
+(zoom in below 2°×2° and click the CATRED button) before switching to ESA Sky mode
+to ensure `current_catred_data` is populated.
+
+---
+
+## Mosaic (MER / ESA) Source
+
+### Mosaic not loading after upgrade — `local_fits` default fails silently
+
+**Symptom**: After upgrading ClusterViz the mosaic panel stays empty or the server
+log shows `[ERROR] paths.mosaic_dir is not configured` / `Warning: No mosaic FITS
+file found for MER tile <id>`.
+
+**Cause**: The default mosaic provider was changed to `local_fits` (previously the
+default may have been different).  The `local_fits` path requires:
+- `paths.mosaic_dir` configured in your `config.ini` / `config_local.ini`
+- FITS tiles matching the pattern
+  `EUC_MER_BGSUB-MOSAIC-VIS_TILE<id>*.fits.gz` present in that directory
+
+If the directory is missing or empty, `_load_local_mosaic_fits_data` in
+`mermosaic.py` returns `None` and no image trace is created.
+
+**Fix**:
+1. Verify the configured mosaic directory:
+   ```bash
+   python3 -c "from cluster_visualization.src.config import get_config; c = get_config(); print(c.mosaic_dir)"
+   ```
+2. Check that FITS tiles are present:
+   ```bash
+   ls <mosaic_dir>/EUC_MER_BGSUB-MOSAIC-VIS_TILE*.fits.gz | head
+   ```
+3. If local FITS tiles are unavailable, switch the provider to `esa_sky` using the
+   radio selector in the mosaic panel — ESA sky cutouts will be fetched from the
+   configured `esa_cutout_base_url` endpoint instead.
+4. To set `esa_sky` as the persistent default, add to your `config_local.ini`:
+   ```ini
+   [mosaic]
+   mosaic_provider_default = esa_sky
+   ```
+
+---
+
 ## Getting Help
 
 - Check server log output for error messages
