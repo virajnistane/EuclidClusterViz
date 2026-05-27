@@ -191,7 +191,7 @@ class ClusterModalCallbacks:
                         [
                             html.Strong("Properties", className="text-primary"),
                             html.Div(
-                                [f"z: {z_str}", f"SNR: {snr_str}", html.Br()],
+                                [f"z: {z_str}", html.Br(), f"SNR: {snr_str}", html.Br()],
                                 className="mt-1",
                             ),
                         ],
