@@ -54,6 +54,7 @@ class ClusterModalCallbacks:
         self._setup_cluster_tagging_callbacks()
         self._setup_parameter_sync_callbacks()
         self._setup_trace_management_callbacks()  # 🆕 Add trace management callbacks
+        self._setup_selection_box_callback()
 
     def _setup_cluster_click_callback(self):
         """Setup callback to detect cluster clicks and show in cluster tab."""
@@ -65,6 +66,7 @@ class ClusterModalCallbacks:
                 Output("cluster-info-display-tab", "children"),
                 Output("analysis-tabs", "active_tab"),
                 Output("selected-cluster-merged-record", "data"),
+                Output("selected-cluster-box-coords", "data"),
             ],
             [Input("cluster-plot", "clickData"),
              Input("aladin-click-store", "data")],
@@ -76,7 +78,7 @@ class ClusterModalCallbacks:
             ctx = callback_context
             triggered_id = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
 
-            no_change = (dash.no_update,) * 5
+            no_change = (dash.no_update,) * 6
 
             # --- Aladin Lite click ---
             if triggered_id == "aladin-click-store" and aladin_click:
@@ -112,6 +114,7 @@ class ClusterModalCallbacks:
                 return (
                     {"display": "none"}, {"display": "block"},
                     tab_content, "cluster-tab", merged_record,
+                    {"ra": ra, "dec": dec},
                 )
 
             # --- Plotly figure click ---
@@ -160,6 +163,7 @@ class ClusterModalCallbacks:
                     return (
                         {"display": "none"}, {"display": "block"},
                         tab_content, "cluster-tab", merged_record,
+                        {"ra": ra, "dec": dec},
                     )
 
             return no_change
@@ -209,7 +213,10 @@ class ClusterModalCallbacks:
         """Setup callbacks to close the modal"""
 
         @self.app.callback(
-            Output("cluster-action-modal", "is_open", allow_duplicate=True),
+            [
+                Output("cluster-action-modal", "is_open", allow_duplicate=True),
+                Output("selected-cluster-box-coords", "data", allow_duplicate=True),
+            ],
             [
                 Input("cluster-modal-close", "n_clicks"),
                 Input("cluster-modal-close-footer", "n_clicks"),
@@ -220,8 +227,47 @@ class ClusterModalCallbacks:
         def close_modal(close_clicks, footer_clicks, is_open):
             """Close the modal when close buttons are clicked"""
             if close_clicks or footer_clicks:
-                return False
-            return dash.no_update
+                return False, None
+            return dash.no_update, dash.no_update
+
+    def _setup_selection_box_callback(self):
+        """Setup callback to draw/clear a selection rectangle around the clicked cluster."""
+        from dash import Patch
+
+        @self.app.callback(
+            Output("cluster-plot", "figure", allow_duplicate=True),
+            Input("selected-cluster-box-coords", "data"),
+            State("cluster-plot", "relayoutData"),
+            prevent_initial_call=True,
+        )
+        def draw_selection_box(box_coords, relayout_data):
+            patched = Patch()
+            if box_coords is None:
+                patched["layout"]["shapes"] = []
+                return patched
+
+            ra, dec = box_coords["ra"], box_coords["dec"]
+            half_w, half_h = 0.3, 0.3
+
+            if relayout_data:
+                x0 = relayout_data.get("xaxis.range[0]")
+                x1 = relayout_data.get("xaxis.range[1]")
+                y0 = relayout_data.get("yaxis.range[0]")
+                y1 = relayout_data.get("yaxis.range[1]")
+                if x0 is not None and x1 is not None:
+                    half_w = abs(x1 - x0) * 0.015
+                if y0 is not None and y1 is not None:
+                    half_h = abs(y1 - y0) * 0.015
+
+            patched["layout"]["shapes"] = [dict(
+                type="rect", xref="x", yref="y",
+                x0=ra - half_w, x1=ra + half_w,
+                y0=dec - half_h, y1=dec + half_h,
+                line=dict(color="yellow", width=2),
+                fillcolor="rgba(0,0,0,0)",
+                layer="above",
+            )]
+            return patched
 
     def _setup_cutout_toggle_callback(self):
         """Setup callback to toggle cutout options"""

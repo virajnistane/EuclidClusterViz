@@ -1001,6 +1001,7 @@ class TabContent:
                         dcc.Store(id="selected-cluster-merged-record", data=None),
                         dcc.Store(id="tagged-clusters-store", data=[]),
                         dcc.Store(id="tagged-clusters-pending-save", data=None),
+                        dcc.Store(id="selected-cluster-box-coords", data=None),
                     ],
                     id="cluster-selected-content",
                     style={"display": "none"},
