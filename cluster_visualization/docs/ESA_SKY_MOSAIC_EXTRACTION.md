@@ -213,3 +213,103 @@ All tunable parameters live in `config.ini` under the `[esa]` section:
 
 Additional surveys are discovered at runtime via the MOC server if
 `esa.mocserver_url` is configured; the list above is used as the fallback.
+
+---
+
+## ESA Sky Interactive View Mode
+
+This section describes the **ESA Sky view mode**, which is distinct from the
+mosaic extraction pipeline above.  The mosaic pipeline fetches HiPS cutout
+images and renders them as Plotly `go.Heatmap` traces inside the standard
+scatter plot.  The ESA Sky view mode replaces the entire plot area with a
+live-updated iframe embedding the public ESA Sky web application at
+`https://sky.esa.int`.
+
+### What it is
+
+ESA Sky is an interactive sky atlas provided by the European Space Agency.
+When the app switches to ESA Sky mode the `cluster-plot` Plotly graph is hidden
+and the iframe is shown in its place, occupying the same 75 vh canvas.  The
+viewer gives the analyst full access to ESA's multi-wavelength survey archive
+without leaving the ClusterViz interface.
+
+### How it differs from mosaic extraction
+
+| Aspect | Mosaic extraction | ESA Sky view mode |
+|--------|-------------------|--------------------|
+| Renderer | Plotly `go.Heatmap` inside Dash | ESA Sky iframe (external JS app) |
+| Data path | `MOSAICHandler` → hips2fits HTTP → pixel array | Dash pushes viewport + catalog JSON → `postMessage` → iframe |
+| Interactivity | Zoom / pan via Plotly; Python callbacks | Native ESA Sky UI inside iframe |
+| Catalog overlays | Plotly scatter traces | ESA Sky's own overlay API |
+| Offline use | Works if hips2fits endpoint is reachable | Requires network access to `sky.esa.int` |
+
+### Activating ESA Sky view mode
+
+The active view is controlled by `view-mode-store` (a `dcc.Store` with string
+value).  Setting this store to `"esasky"` hides the Plotly container and shows
+the iframe.  The header toggle created by `create_view_mode_toggle` in
+`ui/esasky_view.py` manages switching between `"plotly"`, `"aladin"`, and
+`"esasky"` modes.
+
+> **Note**: the current production toggle only exposes `"plotly"` and `"aladin"`
+> buttons.  ESA Sky mode can be enabled programmatically by writing `"esasky"`
+> to `view-mode-store`, or by extending `create_view_mode_toggle`.
+
+### postMessage API
+
+All communication from the Dash app to the ESA Sky iframe goes through the
+browser's `window.postMessage` API, using ESA Sky's official scripting
+interface.  Two commands are used:
+
+| Command | Purpose |
+|---------|---------|
+| `goToRaDec` | Pan the ESA Sky view to a given RA/Dec centre |
+| `setFov` | Set the field of view (degrees) |
+
+A clientside JS bridge in `callbacks/ui_callbacks.py` watches
+`esasky-overlay-data-store` and fires these commands as soon as the store is
+populated.  The bridge also calls ESA Sky's catalog overlay API to draw
+cluster, CATRED, and HEALPix mask tile centroid markers on top of the sky
+imagery.
+
+### Catalog overlay support
+
+When `view-mode-store` changes to `"esasky"` the server-side callback
+`ESASkyCallbacks.push_overlay_data` (defined in
+`callbacks/esasky_callbacks.py`) builds an overlay payload and writes it to
+`esasky-overlay-data-store`.  The payload contains:
+
+- **`clusters`** — all merged-catalog entries for the selected algorithm, each
+  with `ra`, `dec`, `name` (cluster ID), `SNR`, and `Z` fields.
+- **`catred`** — CATRED source positions (`ra`, `dec`) currently loaded in the
+  sidebar.
+- **`mask`** — centroid RA/Dec for each HEALPix mask tile cached in
+  `mosaic_handler.traces_cache`.
+- **`viewport`** — RA/Dec centre and FOV derived from the current Plotly figure
+  axes, used to position the ESA Sky camera on first load.
+
+The payload format is plain JSON so that the clientside JS bridge can pass it
+to ESA Sky without a server round-trip for subsequent interactions.
+
+### Interaction model
+
+ESA Sky runs entirely inside its iframe.  All pan, zoom, and source inspection
+are handled by the ESA Sky application's own UI.  The Dash app does **not**
+receive click or selection events back from the iframe — there is no
+`postMessage` return channel.  If you need to act on a source selected in ESA
+Sky you must note its coordinates and re-enter them in the Dash sidebar.
+
+### When to use each view mode
+
+| Situation | Recommended mode |
+|-----------|-----------------|
+| Exploring the full cluster catalogue across the survey area | Standard Plotly (default) |
+| Inspecting a single cluster's immediate neighbourhood with interactive sky tiles | Aladin Lite (requires exactly 1 cluster in viewport) |
+| Cross-referencing cluster positions against the broader ESA multi-wavelength archive | ESA Sky |
+| Overlaying a locally-stored MER FITS mosaic or HEALPix mask | Standard Plotly + mosaic controls |
+
+### Cross-reference
+
+For a full description of view mode switching, how `view-mode-store` controls
+panel visibility, and the Aladin Lite integration, see
+[USAGE.md](USAGE.md#using-esa-sky-view).
