@@ -1015,8 +1015,13 @@ class UICallbacks:
                 const merControlsStyle = {display: isAladin ? 'none' : 'block'};
                 const surveyDropdownStyle = {display: isAladin ? 'block' : 'none'};
                 const radioVal = isAladin ? 'aladin' : 'mosaic';
+                // Show skeleton immediately when switching to Aladin; JS bridge hides it on init
+                const skeletonStyle = isAladin
+                    ? {display: 'flex', position: 'absolute', inset: '0', zIndex: '10', borderRadius: '8px'}
+                    : {display: 'none'};
                 return [plotlyStyle, aladinStyle, plotlyOutline, aladinOutline,
-                        aladinIntervalDisabled, merControlsStyle, surveyDropdownStyle, radioVal];
+                        aladinIntervalDisabled, merControlsStyle, surveyDropdownStyle, radioVal,
+                        skeletonStyle];
             }
             """,
             [Output("plotly-view-container", "style"),
@@ -1026,7 +1031,8 @@ class UICallbacks:
              Output("aladin-click-poll-interval", "disabled"),
              Output("mer-mosaic-controls", "style"),
              Output("aladin-survey-dropdown", "style"),
-             Output("image-source-radio", "value")],
+             Output("image-source-radio", "value"),
+             Output("aladin-skeleton", "style")],
             Input("view-mode-store", "data"),
         )
 
@@ -1064,7 +1070,7 @@ class UICallbacks:
                 (figure.data || []).forEach(function(trace) {
                     var name = (trace.name || '');
                     if (name.indexOf('Merged') < 0 && name.indexOf('PZWAV') < 0 && name.indexOf('AMICO') < 0) return;
-                    if (name.indexOf('CATRED') >= 0) return;
+                    if (name.indexOf('CATRED') === 0) return;  // skip pure CATRED traces (start with "CATRED")
                     var xs = trace.x || [];
                     var ys = trace.y || [];
                     for (var i = 0; i < xs.length; i++) {
@@ -1136,48 +1142,63 @@ class UICallbacks:
                             window._aladinInstance.setFov(fov);
                             window._aladinInstance.setImageSurvey(survey);
                             setupCatalogs(window._aladinInstance);
+                            var sk = document.getElementById('aladin-skeleton');
+                            if (sk) sk.style.display = 'none';
                         } else {
-                            var inst = A.aladin('#aladin-div', {
-                                target: ra + ' ' + dec,
-                                fov: fov,
-                                survey: survey,
-                                cooFrame: 'J2000',
-                                showReticle: false,
-                                showZoomControl: false,
-                                showLayersControl: true,
-                                showFrame: false,
-                                showGotoControl: false,
-                                showShareControl: false,
-                                showProjectionControl: false
-                            });
-                            window._aladinInstance = inst;
-
-                            // HEALPix detection mask as HiPS overlay layer
-                            try {
-                                var maskHips = inst.createImageSurvey(
-                                    'mask_detcl', 'Detection Mask',
-                                    'https://erass-cluster-inspector.com/euclid/hips/mask_detcl/',
-                                    'equatorial', 5, {imgFormat: 'png'}
-                                );
-                                window._aladinMaskLayer = inst.setOverlayImageLayer(maskHips, 'mask_detcl');
-                                window._aladinMaskLayer.setOpacity(0.3);
-                            } catch(e) { console.warn('[Aladin] mask HiPS failed:', e); }
-
-                            // Click bridge
-                            try {
-                                inst.on('objectsSelected', function(objs) {
-                                    if (objs && objs.length > 0) {
-                                        var o = objs[0];
-                                        window._aladinPendingClick = {
-                                            ra: o.ra, dec: o.dec,
-                                            name: (o.data && o.data.name) ? o.data.name : '',
-                                            timestamp: Date.now()
-                                        };
-                                    }
+                            // Wait for #aladin-div to be visible and sized before init
+                            // (Aladin v3 reads canvas size at creation; div hidden = blank)
+                            var attempts = 0;
+                            function tryInit() {
+                                var divEl = document.getElementById('aladin-div');
+                                if (!divEl || divEl.offsetWidth === 0 || divEl.offsetHeight === 0) {
+                                    if (attempts++ < 20) { setTimeout(tryInit, 100); }
+                                    return;
+                                }
+                                var inst = A.aladin('#aladin-div', {
+                                    target: ra + ' ' + dec,
+                                    fov: fov,
+                                    survey: survey,
+                                    cooFrame: 'J2000',
+                                    showReticle: false,
+                                    showZoomControl: false,
+                                    showLayersControl: true,
+                                    showFrame: false,
+                                    showGotoControl: false,
+                                    showShareControl: false,
+                                    showProjectionControl: false
                                 });
-                            } catch(e) {}
+                                window._aladinInstance = inst;
 
-                            setupCatalogs(inst);
+                                // HEALPix detection mask as HiPS overlay layer
+                                try {
+                                    var maskHips = inst.createImageSurvey(
+                                        'mask_detcl', 'Detection Mask',
+                                        'https://erass-cluster-inspector.com/euclid/hips/mask_detcl/',
+                                        'equatorial', 5, {imgFormat: 'png'}
+                                    );
+                                    window._aladinMaskLayer = inst.setOverlayImageLayer(maskHips, 'mask_detcl');
+                                    window._aladinMaskLayer.setOpacity(0.3);
+                                } catch(e) { console.warn('[Aladin] mask HiPS failed:', e); }
+
+                                // Click bridge
+                                try {
+                                    inst.on('objectsSelected', function(objs) {
+                                        if (objs && objs.length > 0) {
+                                            var o = objs[0];
+                                            window._aladinPendingClick = {
+                                                ra: o.ra, dec: o.dec,
+                                                name: (o.data && o.data.name) ? o.data.name : '',
+                                                timestamp: Date.now()
+                                            };
+                                        }
+                                    });
+                                } catch(e) {}
+
+                                setupCatalogs(inst);
+                                var sk = document.getElementById('aladin-skeleton');
+                                if (sk) sk.style.display = 'none';
+                            }
+                            tryInit();
                         }
                     };
 

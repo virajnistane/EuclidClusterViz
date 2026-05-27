@@ -156,6 +156,33 @@
     100% { background-position: -200% 0; }
 }
 
+/* Aladin skeleton loading overlay */
+.aladin-skeleton-overlay {
+    background: #0a0a1a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+.skeleton-star {
+    border-radius: 50%;
+    background: linear-gradient(90deg, #1a1a3a 25%, #2a2a5a 50%, #1a1a3a 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+}
+.skeleton-star:nth-child(1) { width: 80px; height: 80px; }
+.skeleton-star:nth-child(2) { width: 50px; height: 50px; opacity: 0.6; }
+.skeleton-star:nth-child(3) { width: 30px; height: 30px; opacity: 0.4; }
+
+.skeleton-label {
+    color: #556677;
+    font-size: 12px;
+    letter-spacing: 1px;
+    margin-top: 8px;
+}
+
 /* Tooltip styling */
 .tooltip-inner {
     background: linear-gradient(45deg, #667eea, #764ba2) !important;

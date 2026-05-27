@@ -16,6 +16,20 @@ def create_aladin_view() -> html.Div:
     return html.Div(
         [
             html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Div(className="skeleton-star"),
+                            html.Div(className="skeleton-star"),
+                            html.Div(className="skeleton-star"),
+                            html.Span("Loading sky view...", className="skeleton-label"),
+                        ],
+                        id="aladin-skeleton",
+                        className="aladin-skeleton-overlay",
+                        style={"display": "none", "position": "absolute", "inset": "0",
+                               "zIndex": "10", "borderRadius": "8px"},
+                    ),
+                ],
                 id="aladin-div",
                 style={
                     "width": "100%",
@@ -23,6 +37,7 @@ def create_aladin_view() -> html.Div:
                     "min-height": "500px",
                     "border-radius": "8px",
                     "overflow": "hidden",
+                    "position": "relative",
                 },
             ),
             dcc.Store(id="aladin-overlay-data-store"),
@@ -30,8 +45,7 @@ def create_aladin_view() -> html.Div:
             dcc.Store(id="viewport-cluster-count-store"),
             html.Span(id="aladin-init-dummy", style={"display": "none"}),
             dcc.Interval(id="aladin-click-poll-interval", interval=500, disabled=True),
-            # Fires once ~3s after page load to pre-fetch Aladin CDN assets
-            dcc.Interval(id="aladin-preload-interval", interval=3000, max_intervals=1),
+            dcc.Interval(id="aladin-preload-interval", interval=3000, max_intervals=1, disabled=True),
         ],
         id="aladin-view-container",
         style={"display": "none"},

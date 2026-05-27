@@ -8,10 +8,18 @@ renders the data.  The HEALPix detection mask is added as a HiPS overlay
 image layer directly in JS (no server-side data needed).
 """
 
-from typing import Any, Dict
+import math
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 from dash import Input, Output, State, callback_context, no_update
+
+
+def _within_2fov(ra: float, dec: float, ra_c: float, dec_c: float, fov: float) -> bool:
+    """True if (ra, dec) is within 2× FOV radius of (ra_c, dec_c) using great-circle distance."""
+    d_ra = (ra - ra_c) * math.cos(math.radians(dec_c))
+    d_dec = dec - dec_c
+    return math.sqrt(d_ra ** 2 + d_dec ** 2) <= fov
 
 
 class AladinCallbacks:
@@ -47,9 +55,8 @@ class AladinCallbacks:
             vp_triggered = any("viewport-cluster-count-store" in t for t in triggered_ids)
 
             if vp_triggered:
-                # Only re-push if currently in aladin mode and viewport has exactly 1 cluster
-                if mode != "aladin":
-                    return no_update
+                # Pre-load whenever viewport hits exactly 1 cluster (any mode)
+                # Data sits in store ready; JS bridge only runs when div is visible
                 if not vp_store or vp_store.get("count") != 1:
                     return no_update
             else:
@@ -107,12 +114,15 @@ class AladinCallbacks:
                     ra_col = "RIGHT_ASCENSION_CLUSTER"
                     dec_col = "DECLINATION_CLUSTER"
                     if ra_col in merged_df.columns and dec_col in merged_df.columns:
+                        vp = overlay.get("viewport")
                         rows = []
                         for _, row in merged_df.iterrows():
-                            entry: Dict[str, Any] = {
-                                "ra": float(row[ra_col]),
-                                "dec": float(row[dec_col]),
-                            }
+                            ra_val = float(row[ra_col])
+                            dec_val = float(row[dec_col])
+                            if vp:
+                                if not _within_2fov(ra_val, dec_val, vp["ra"], vp["dec"], vp["fov"]):
+                                    continue
+                            entry: Dict[str, Any] = {"ra": ra_val, "dec": dec_val}
                             if "ID_UNIQUE_CLUSTER" in row:
                                 entry["name"] = str(row["ID_UNIQUE_CLUSTER"])
                             if "SNR_CLUSTER" in row:
@@ -121,23 +131,26 @@ class AladinCallbacks:
                                 entry["Z"] = float(row["Z_CLUSTER"])
                             rows.append(entry)
                         overlay["clusters"] = rows
-                        print(f"[Aladin] Pushed {len(rows)} cluster entries")
+                        print(f"[Aladin] Pushed {len(rows)} cluster entries (2×FOV filter)")
             except Exception as exc:
                 print(f"[Aladin] Warning: Could not load cluster data: {exc}")
 
             # --- CATRED ---
-            # current_catred_data is a dict: {trace_name -> {"ra": [], "dec": [], ...}}
+            # CATREDHandler.current_catred_data is flat: {"ra": [], "dec": [], ...}
             try:
                 catred_data = getattr(self.catred_handler, "current_catred_data", None)
                 if isinstance(catred_data, dict):
+                    ra_list = catred_data.get("ra", [])
+                    dec_list = catred_data.get("dec", [])
+                    vp = overlay.get("viewport")
                     rows = []
-                    for trace_name, trace_data in catred_data.items():
-                        ra_list = trace_data.get("ra", []) if isinstance(trace_data, dict) else []
-                        dec_list = trace_data.get("dec", []) if isinstance(trace_data, dict) else []
-                        for ra, dec in zip(ra_list, dec_list):
-                            rows.append({"ra": float(ra), "dec": float(dec), "name": str(trace_name)})
+                    for ra, dec in zip(ra_list, dec_list):
+                        ra_f, dec_f = float(ra), float(dec)
+                        if vp and not _within_2fov(ra_f, dec_f, vp["ra"], vp["dec"], vp["fov"]):
+                            continue
+                        rows.append({"ra": ra_f, "dec": dec_f, "name": "CATRED"})
                     overlay["catred"] = rows
-                    print(f"[Aladin] Pushed {len(rows)} CATRED entries")
+                    print(f"[Aladin] Pushed {len(rows)} CATRED entries (2×FOV filter)")
             except Exception as exc:
                 print(f"[Aladin] Warning: Could not load CATRED data: {exc}")
 
