@@ -162,9 +162,9 @@ print("✓ Visualization modules loaded successfully")
 
 # Import callback modules
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from callbacks.aladin_callbacks import AladinCallbacks
 from callbacks.catred_callbacks import CATREDCallbacks
 from callbacks.cluster_modal_callbacks import ClusterModalCallbacks
-from callbacks.esasky_callbacks import ESASkyCallbacks
 from callbacks.main_plot import MainPlotCallbacks
 from callbacks.mosaic_callback import MOSAICCallbacks
 from callbacks.phz_callbacks import PHZCallbacks
@@ -338,12 +338,11 @@ class ClusterVisualizationApp:
                 figure_manager=self.figure_manager,
             )
 
-            # ESA Sky overlay callbacks
-            self.esasky_callbacks = ESASkyCallbacks(
+            # Aladin Lite overlay callbacks
+            self.aladin_callbacks = AladinCallbacks(
                 app=self.app,
                 data_loader=self.data_loader,
                 catred_handler=self.catred_handler,
-                mosaic_handler=self.mosaic_handler,
             )
 
             print("✓ All modular callbacks initialized")

@@ -334,6 +334,54 @@ class DataControls:
         """Create mosaic image controls section with enhanced styling"""
         return html.Div(
             [
+                # Image source toggle: MER Mosaic vs Aladin Sky
+                dbc.Card(
+                    [
+                        dbc.CardBody(
+                            [
+                                html.Label(
+                                    [html.I(className="fas fa-layer-group me-1"), " Image Source"],
+                                    className="fw-bold small text-muted mb-1",
+                                ),
+                                dcc.RadioItems(
+                                    id="image-source-radio",
+                                    options=[
+                                        {"label": " MER Mosaic", "value": "mosaic"},
+                                        {"label": " Aladin Sky", "value": "aladin", "disabled": True},
+                                    ],
+                                    value="mosaic",
+                                    className="mb-2",
+                                    inputStyle={"marginRight": "5px"},
+                                    labelStyle={"display": "block", "marginBottom": "4px"},
+                                ),
+                                # Survey selector — shown only in Aladin mode
+                                dcc.Dropdown(
+                                    id="aladin-survey-dropdown",
+                                    options=[
+                                        {"label": "DSS2 Color", "value": "P/DSS2/color"},
+                                        {"label": "Euclid VIS Q1", "value": "CDS/P/Euclid/Q1/VIS"},
+                                        {"label": "Euclid NIR Q1 (color)", "value": "CDS/P/Euclid/Q1/NIR"},
+                                        {"label": "2MASS H", "value": "P/2MASS/H"},
+                                        {"label": "WISE W1", "value": "P/allWISE/color"},
+                                    ],
+                                    value="P/DSS2/color",
+                                    clearable=False,
+                                    style={"display": "none"},
+                                    placeholder="Select sky survey...",
+                                ),
+                            ]
+                        )
+                    ],
+                    className="mb-3 border-0 shadow-sm",
+                    style={
+                        "background": "linear-gradient(45deg, #f0f8ff, #ffffff)",
+                        "border-radius": "10px",
+                    },
+                ),
+                # MER mosaic controls wrapper — hidden when Aladin mode is active
+                html.Div(
+                    id="mer-mosaic-controls",
+                    children=[
                 # Main mosaic toggle
                 dbc.Card(
                     [
@@ -573,6 +621,8 @@ class DataControls:
                         "border-radius": "12px",
                     },
                 ),
+                ],  # end mer-mosaic-controls children
+                ),  # end html.Div id="mer-mosaic-controls"
             ]
         )
 

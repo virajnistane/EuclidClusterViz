@@ -56,10 +56,7 @@ class ClusterModalCallbacks:
         self._setup_trace_management_callbacks()  # 🆕 Add trace management callbacks
 
     def _setup_cluster_click_callback(self):
-        """Setup callback to detect cluster clicks and show in cluster tab.
-
-        Handles clicks from both the Plotly figure and the ESA Sky iframe overlay.
-        """
+        """Setup callback to detect cluster clicks and show in cluster tab."""
 
         @self.app.callback(
             [
@@ -70,26 +67,25 @@ class ClusterModalCallbacks:
                 Output("selected-cluster-merged-record", "data"),
             ],
             [Input("cluster-plot", "clickData"),
-             Input("esasky-click-store", "data")],
+             Input("aladin-click-store", "data")],
             [State("algorithm-dropdown", "value")],
             prevent_initial_call=True,
         )
-        def handle_cluster_click(clickData, esasky_click, algorithm):
-            """Handle cluster point clicks from Plotly figure or ESA Sky iframe."""
+        def handle_cluster_click(clickData, aladin_click, algorithm):
+            """Handle cluster point clicks from Plotly figure or Aladin Lite."""
             ctx = callback_context
             triggered_id = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
 
             no_change = (dash.no_update,) * 5
 
-            # --- ESA Sky iframe click ---
-            if triggered_id == "esasky-click-store" and esasky_click:
-                ra = esasky_click.get("ra")
-                dec = esasky_click.get("dec")
-                name = esasky_click.get("name", "")
+            # --- Aladin Lite click ---
+            if triggered_id == "aladin-click-store" and aladin_click:
+                ra = aladin_click.get("ra")
+                dec = aladin_click.get("dec")
+                name = aladin_click.get("name", "")
                 if ra is None or dec is None:
                     return no_change
 
-                # Build a synthetic point dict so _resolve_merged_record_for_click can be reused
                 synthetic_point = {"x": ra, "y": dec, "customdata": [None, None, None, name]}
                 merged_record, resolution_note = self._resolve_merged_record_for_click(
                     synthetic_point, algorithm
@@ -102,11 +98,11 @@ class ClusterModalCallbacks:
 
                 self.selected_cluster = {
                     "ra": ra, "dec": dec, "snr": snr, "redshift": redshift,
-                    "algorithm": algorithm, "trace_name": "ESA Sky",
+                    "algorithm": algorithm, "trace_name": "Aladin",
                     "merged_record": merged_record, "merged_cluster_id": merged_cluster_id,
                     "resolution_note": resolution_note,
                 }
-                print(f"🌐 ESA Sky cluster clicked: RA={ra:.3f}, Dec={dec:.3f}")
+                print(f"🔭 Aladin cluster clicked: RA={ra:.3f}, Dec={dec:.3f}")
 
                 snr_str = f"{snr:.2f}" if isinstance(snr, float) else str(snr)
                 z_str = f"{redshift:.2f}" if isinstance(redshift, float) else str(redshift)

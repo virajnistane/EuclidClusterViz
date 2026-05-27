@@ -964,202 +964,316 @@ class UICallbacks:
     #         return sum(1 for row in reader for value in row if str(value).strip())
 
     def _setup_view_mode_callbacks(self):
-        """Clientside callbacks for switching between Standard (Plotly) and ESA Sky views."""
+        """Clientside callbacks for switching between Standard (Plotly) and Aladin views."""
 
         # Toggle button clicks → update view-mode-store
         self.app.clientside_callback(
             """
-            function(plotlyClicks, esaskyClicks, currentMode) {
+            function(plotlyClicks, aladinClicks, currentMode) {
                 const triggered = window.dash_clientside.callback_context.triggered;
                 if (!triggered || triggered.length === 0) {
                     return window.dash_clientside.no_update;
                 }
                 const prop = triggered[0].prop_id;
                 if (prop.includes('view-mode-plotly-btn')) return 'plotly';
-                if (prop.includes('view-mode-esasky-btn')) return 'esasky';
+                if (prop.includes('view-mode-aladin-btn')) return 'aladin';
                 return window.dash_clientside.no_update;
             }
             """,
             Output("view-mode-store", "data"),
             [Input("view-mode-plotly-btn", "n_clicks"),
-             Input("view-mode-esasky-btn", "n_clicks")],
+             Input("view-mode-aladin-btn", "n_clicks")],
             State("view-mode-store", "data"),
             prevent_initial_call=True,
         )
 
-        # view-mode-store → show/hide containers, update button styles, hide mosaic section,
-        # and enable/disable the ESA Sky click-poll interval
+        # image-source-radio (in Mosaic sidebar) → view-mode-store
+        self.app.clientside_callback(
+            """
+            function(radioVal) {
+                if (radioVal === 'aladin') return 'aladin';
+                if (radioVal === 'mosaic') return 'plotly';
+                return window.dash_clientside.no_update;
+            }
+            """,
+            Output("view-mode-store", "data", allow_duplicate=True),
+            Input("image-source-radio", "value"),
+            prevent_initial_call=True,
+        )
+
+        # view-mode-store → show/hide containers, button styles, mosaic controls, interval
         self.app.clientside_callback(
             """
             function(mode) {
-                const isEsasky = mode === 'esasky';
-                const plotlyStyle = {display: isEsasky ? 'none' : 'block'};
-                const esaskyStyle = {display: isEsasky ? 'block' : 'none'};
-                const mosaicOpen = isEsasky ? false : window.dash_clientside.no_update;
-                const plotlyOutline = isEsasky;
-                const esaskyOutline = !isEsasky;
-                const intervalDisabled = !isEsasky;
-                return [plotlyStyle, esaskyStyle, mosaicOpen, plotlyOutline, esaskyOutline, intervalDisabled];
+                const isPlotly = mode === 'plotly';
+                const isAladin = mode === 'aladin';
+                const plotlyStyle = {display: isPlotly ? 'block' : 'none'};
+                const aladinStyle = {display: isAladin ? 'block' : 'none'};
+                const plotlyOutline = !isPlotly;
+                const aladinOutline = !isAladin;
+                const aladinIntervalDisabled = !isAladin;
+                const merControlsStyle = {display: isAladin ? 'none' : 'block'};
+                const surveyDropdownStyle = {display: isAladin ? 'block' : 'none'};
+                const radioVal = isAladin ? 'aladin' : 'mosaic';
+                return [plotlyStyle, aladinStyle, plotlyOutline, aladinOutline,
+                        aladinIntervalDisabled, merControlsStyle, surveyDropdownStyle, radioVal];
             }
             """,
             [Output("plotly-view-container", "style"),
-             Output("esasky-view-container", "style"),
-             Output("image-controls-collapse", "is_open"),
+             Output("aladin-view-container", "style"),
              Output("view-mode-plotly-btn", "outline"),
-             Output("view-mode-esasky-btn", "outline"),
-             Output("esasky-click-poll-interval", "disabled")],
+             Output("view-mode-aladin-btn", "outline"),
+             Output("aladin-click-poll-interval", "disabled"),
+             Output("mer-mosaic-controls", "style"),
+             Output("aladin-survey-dropdown", "style"),
+             Output("image-source-radio", "value")],
             Input("view-mode-store", "data"),
         )
 
-        # ESA Sky iframe postMessage bridge.
-        # Official API: https://www.cosmos.esa.int/web/esdc/esasky-javascript-api
-        # Correct event names: goToRaDec, setFov, overlayCatalogue
-        # All messages: iframe.contentWindow.postMessage({event, content}, 'https://sky.esa.int')
+        # Count cluster points in viewport → enable/disable Aladin button + store count
+        # Uses relayoutData (fires on zoom/pan) + figure State (has trace data + stable ranges)
+        self.app.clientside_callback(
+            """
+            function(relayoutData, figure) {
+                var NO_UPDATE = window.dash_clientside.no_update;
+                if (!figure || !figure.layout) return [true, NO_UPDATE];
+
+                // Resolve viewport: prefer relayoutData values, fall back to figure layout
+                var raMin, raMax, decMin, decMax;
+                if (relayoutData) {
+                    if ('xaxis.range[0]' in relayoutData) {
+                        raMin = relayoutData['xaxis.range[0]']; raMax = relayoutData['xaxis.range[1]'];
+                        decMin = relayoutData['yaxis.range[0]']; decMax = relayoutData['yaxis.range[1]'];
+                    } else if (relayoutData['xaxis.range']) {
+                        raMin = relayoutData['xaxis.range'][0]; raMax = relayoutData['xaxis.range'][1];
+                        decMin = relayoutData['yaxis.range'][0]; decMax = relayoutData['yaxis.range'][1];
+                    }
+                }
+                if (raMin == null) {
+                    var layout = figure.layout;
+                    var xr = (layout.xaxis || {}).range;
+                    var yr = (layout.yaxis || {}).range;
+                    if (!xr || !yr) return [true, NO_UPDATE];
+                    raMin = xr[0]; raMax = xr[1]; decMin = yr[0]; decMax = yr[1];
+                }
+                var tmp;
+                if (raMin > raMax) { tmp = raMin; raMin = raMax; raMax = tmp; }
+                if (decMin > decMax) { tmp = decMin; decMin = decMax; decMax = tmp; }
+
+                var count = 0;
+                (figure.data || []).forEach(function(trace) {
+                    var name = (trace.name || '');
+                    if (name.indexOf('Merged') < 0 && name.indexOf('PZWAV') < 0 && name.indexOf('AMICO') < 0) return;
+                    if (name.indexOf('CATRED') >= 0) return;
+                    var xs = trace.x || [];
+                    var ys = trace.y || [];
+                    for (var i = 0; i < xs.length; i++) {
+                        if (xs[i] >= raMin && xs[i] <= raMax && ys[i] >= decMin && ys[i] <= decMax) {
+                            count++;
+                        }
+                    }
+                });
+                var disabled = count !== 1;
+                var storeVal = {count: count, ra: [raMin, raMax], dec: [decMin, decMax], ts: Date.now()};
+                var radioOptions = [
+                    {label: ' MER Mosaic', value: 'mosaic'},
+                    {label: ' Aladin Sky', value: 'aladin', disabled: disabled}
+                ];
+                return [disabled, storeVal, radioOptions];
+            }
+            """,
+            [Output("view-mode-aladin-btn", "disabled"),
+             Output("viewport-cluster-count-store", "data"),
+             Output("image-source-radio", "options")],
+            Input("cluster-plot", "relayoutData"),
+            State("cluster-plot", "figure"),
+            prevent_initial_call=False,
+        )
+
+        # Aladin Lite JS bridge: lazy-load CDN, init viewer, push catalog overlays.
+        # Mask is added as a HiPS overlay image layer (no server data needed).
         self.app.clientside_callback(
             """
             function(overlayData) {
                 if (!overlayData) return window.dash_clientside.no_update;
 
-                var vp  = overlayData.viewport;
-                var ra  = vp ? vp.ra  : 180.0;
-                var dec = vp ? vp.dec : 0.0;
-                var fov = vp ? vp.fov : 2.0;
-                var TARGET = 'https://sky.esa.int';
-                var FRAME  = 'esasky-iframe';
+                function doAladinInit(data) {
+                    var vp  = data.viewport || {};
+                    var ra  = vp.ra  != null ? vp.ra  : 180.0;
+                    var dec = vp.dec != null ? vp.dec : 0.0;
+                    var fov = vp.fov != null ? vp.fov : 1.0;
+                    var survey = data.survey || 'P/DSS2/color';
 
-                function send(iframe, event, content) {
-                    iframe.contentWindow.postMessage({event: event, content: content}, TARGET);
-                }
+                    function setupCatalogs(aladin) {
+                        // Remove old catalog layers (keep image layers)
+                        try { aladin.removeLayers(); } catch(e) {}
 
-                function pushOverlays(iframe) {
-                    // Navigate to Plotly viewport
-                    send(iframe, 'goToRaDec', {ra: ra, dec: dec});
-                    send(iframe, 'setFov',    {fov: fov});
-
-                    // Remove previous overlays
-                    send(iframe, 'removeAllOverlays', {});
-
-                    if (overlayData.clusters && overlayData.clusters.length > 0) {
-                        send(iframe, 'overlayCatalogue', {
-                            overlaySet: {
-                                overlayName: 'Clusters',
-                                cooframe: 'J2000',
-                                color: '#ff6600',
-                                skyObjectList: overlayData.clusters.map(function(r) {
-                                    return {name: r.name || String(r.ra), id: r.name || '', ra: r.ra, dec: r.dec};
-                                })
+                        // PZWAV clusters → x shape, AMICO → cross shape (matches Plotly x-thin/cross-thin)
+                        var pzwavCat = A.catalog({name: 'PZWAV Clusters', color: '#ff6600', shape: 'x', sourceSize: 14});
+                        var amicoCat = A.catalog({name: 'AMICO Clusters', color: '#ff6600', shape: 'cross', sourceSize: 14});
+                        (data.clusters || []).forEach(function(r) {
+                            var name = (r.name || '').toUpperCase();
+                            if (name.indexOf('AMICO') >= 0) {
+                                amicoCat.addSources([A.source(r.ra, r.dec, {name: r.name || ''})]);
+                            } else {
+                                pzwavCat.addSources([A.source(r.ra, r.dec, {name: r.name || ''})]);
                             }
                         });
-                    }
+                        aladin.addCatalog(pzwavCat);
+                        aladin.addCatalog(amicoCat);
 
-                    if (overlayData.catred && overlayData.catred.length > 0) {
-                        send(iframe, 'overlayCatalogue', {
-                            overlaySet: {
-                                overlayName: 'CATRED',
-                                cooframe: 'J2000',
-                                color: '#00aaff',
-                                skyObjectList: overlayData.catred.map(function(r) {
-                                    return {name: 'CATRED', id: '', ra: r.ra, dec: r.dec};
-                                })
-                            }
+                        // CATRED → circle, dark outline (matches Plotly circle marker)
+                        var catredCat = A.catalog({name: 'CATRED', color: '#222222', shape: 'circle', sourceSize: 8});
+                        (data.catred || []).forEach(function(r) {
+                            catredCat.addSources([A.source(r.ra, r.dec, {name: r.name || 'CATRED'})]);
                         });
+                        aladin.addCatalog(catredCat);
                     }
 
-                    if (overlayData.mask && overlayData.mask.length > 0) {
-                        send(iframe, 'overlayCatalogue', {
-                            overlaySet: {
-                                overlayName: 'HEALPix Mask',
-                                cooframe: 'J2000',
-                                color: '#ffff00',
-                                skyObjectList: overlayData.mask.map(function(r) {
-                                    return {name: r.name || 'Mask', id: '', ra: r.ra, dec: r.dec};
-                                })
-                            }
-                        });
-                    }
-                }
+                    var doInit = function() {
+                        if (window._aladinInstance) {
+                            window._aladinInstance.gotoRaDec(ra, dec);
+                            window._aladinInstance.setFov(fov);
+                            window._aladinInstance.setImageSurvey(survey);
+                            setupCatalogs(window._aladinInstance);
+                        } else {
+                            var inst = A.aladin('#aladin-div', {
+                                target: ra + ' ' + dec,
+                                fov: fov,
+                                survey: survey,
+                                cooFrame: 'J2000',
+                                showReticle: false,
+                                showZoomControl: false,
+                                showLayersControl: true,
+                                showFrame: false,
+                                showGotoControl: false,
+                                showShareControl: false,
+                                showProjectionControl: false
+                            });
+                            window._aladinInstance = inst;
 
-                // Register click + init listeners once per page load
-                if (!window._esaSkyListenerRegistered) {
-                    window._esaSkyListenerRegistered = true;
-                    window.addEventListener('message', function(evt) {
-                        if (!evt.origin || evt.origin.indexOf('sky.esa.int') === -1) return;
-                        var d = evt.data;
-                        if (!d) return;
-                        // Capture source clicks for cluster-modal
-                        if (d.event === 'sourceClicked' && d.content) {
-                            var c = d.content;
-                            window._esaskyPendingClick = {
-                                ra: c.ra, dec: c.dec,
-                                name: c.name || c.id || '',
-                                timestamp: Date.now()
-                            };
+                            // HEALPix detection mask as HiPS overlay layer
+                            try {
+                                var maskHips = inst.createImageSurvey(
+                                    'mask_detcl', 'Detection Mask',
+                                    'https://erass-cluster-inspector.com/euclid/hips/mask_detcl/',
+                                    'equatorial', 5, {imgFormat: 'png'}
+                                );
+                                window._aladinMaskLayer = inst.setOverlayImageLayer(maskHips, 'mask_detcl');
+                                window._aladinMaskLayer.setOpacity(0.3);
+                            } catch(e) { console.warn('[Aladin] mask HiPS failed:', e); }
+
+                            // Click bridge
+                            try {
+                                inst.on('objectsSelected', function(objs) {
+                                    if (objs && objs.length > 0) {
+                                        var o = objs[0];
+                                        window._aladinPendingClick = {
+                                            ra: o.ra, dec: o.dec,
+                                            name: (o.data && o.data.name) ? o.data.name : '',
+                                            timestamp: Date.now()
+                                        };
+                                    }
+                                });
+                            } catch(e) {}
+
+                            setupCatalogs(inst);
                         }
-                    });
-                }
-
-                var iframe = document.getElementById(FRAME);
-                if (!iframe) return window.dash_clientside.no_update;
-
-                // Always reload iframe to navigate to current viewport on every mode switch
-                var newSrc = TARGET + '/esasky/';
-                if (iframe.src !== newSrc && iframe.src !== newSrc + '#') {
-                    iframe.onload = function() {
-                        // ESA Sky Angular app needs ~4s to boot before postMessage works
-                        setTimeout(function() { pushOverlays(iframe); }, 4000);
                     };
-                    iframe.src = newSrc;
-                } else {
-                    // Already loaded — send immediately
-                    pushOverlays(iframe);
+
+                    if (typeof A !== 'undefined' && A.init && typeof A.init.then === 'function') {
+                        A.init.then(doInit).catch(function(e) { console.error('[Aladin] A.init failed:', e); });
+                    } else if (typeof A !== 'undefined') {
+                        doInit();
+                    }
                 }
 
+                // Lazy-load Aladin Lite CSS + JS from CDN on first call
+                if (!document.getElementById('aladin-css')) {
+                    var link = document.createElement('link');
+                    link.id = 'aladin-css'; link.rel = 'stylesheet';
+                    link.href = 'https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.min.css';
+                    document.head.appendChild(link);
+                }
+                if (!document.getElementById('aladin-js')) {
+                    var script = document.createElement('script');
+                    script.id = 'aladin-js'; script.charset = 'utf-8';
+                    script.src = 'https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js';
+                    script.onload = function() { doAladinInit(overlayData); };
+                    document.head.appendChild(script);
+                    return window.dash_clientside.no_update;
+                }
+
+                doAladinInit(overlayData);
                 return window.dash_clientside.no_update;
             }
             """,
-            Output("esasky-postmessage-dummy", "children"),
-            Input("esasky-overlay-data-store", "data"),
+            Output("aladin-init-dummy", "children"),
+            Input("aladin-overlay-data-store", "data"),
             prevent_initial_call=True,
         )
 
-        # Register ESA Sky → Dash click bridge (one-time listener setup).
-        # Incoming objectClicked messages write to window._esaskyPendingClick.
-        # A dcc.Interval polls that global and pushes it into esasky-click-store.
+        # When Aladin survey dropdown changes, update the live instance survey
+        self.app.clientside_callback(
+            """
+            function(survey) {
+                if (survey && window._aladinInstance) {
+                    window._aladinInstance.setImageSurvey(survey);
+                }
+                return window.dash_clientside.no_update;
+            }
+            """,
+            Output("aladin-init-dummy", "children", allow_duplicate=True),
+            Input("aladin-survey-dropdown", "value"),
+            prevent_initial_call=True,
+        )
+
+        # Aladin click poll: dcc.Interval → aladin-click-store
         self.app.clientside_callback(
             """
             function(n) {
-                if (!window._esaSkyListenerRegistered) {
-                    window._esaSkyListenerRegistered = true;
-                    window.addEventListener('message', function(evt) {
-                        if (evt.origin !== 'https://sky.esa.int') return;
-                        const d = evt.data;
-                        if (d && d.event === 'objectClicked') {
-                            window._esaskyPendingClick = {
-                                ra: d.ra, dec: d.dec,
-                                name: d.name || '',
-                                timestamp: Date.now()
-                            };
-                        }
-                    });
-                }
-                if (window._esaskyPendingClick) {
-                    const data = window._esaskyPendingClick;
-                    window._esaskyPendingClick = null;
+                if (window._aladinPendingClick) {
+                    var data = window._aladinPendingClick;
+                    window._aladinPendingClick = null;
                     return data;
                 }
                 return window.dash_clientside.no_update;
             }
             """,
-            Output("esasky-click-store", "data"),
-            Input("esasky-click-poll-interval", "n_intervals"),
+            Output("aladin-click-store", "data"),
+            Input("aladin-click-poll-interval", "n_intervals"),
             prevent_initial_call=True,
         )
 
-        # Disable mosaic cutout button when in ESA Sky mode
+        # Pre-fetch Aladin CDN assets ~3s after page load so first switch is instant
+        self.app.clientside_callback(
+            """
+            function(n) {
+                if (!document.getElementById('aladin-css')) {
+                    var link = document.createElement('link');
+                    link.id = 'aladin-css'; link.rel = 'stylesheet';
+                    link.href = 'https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.min.css';
+                    document.head.appendChild(link);
+                }
+                if (!document.getElementById('aladin-js')) {
+                    var script = document.createElement('script');
+                    script.id = 'aladin-js'; script.charset = 'utf-8';
+                    script.src = 'https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js';
+                    document.head.appendChild(script);
+                }
+                return window.dash_clientside.no_update;
+            }
+            """,
+            Output("aladin-init-dummy", "children", allow_duplicate=True),
+            Input("aladin-preload-interval", "n_intervals"),
+            prevent_initial_call=True,
+        )
+
+        # Disable mosaic cutout button when in ESA Sky or Aladin mode
         self.app.clientside_callback(
             """
             function(mode) {
-                const disabled = mode === 'esasky';
+                const disabled = mode === 'aladin';
                 return [disabled, disabled];
             }
             """,

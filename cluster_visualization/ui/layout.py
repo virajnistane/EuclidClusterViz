@@ -11,7 +11,8 @@ from .sidebar_sections import SidebarSections
 from .data_controls import DataControls
 from .modals import Modals
 from .tabs import TabContent
-from .esasky_view import create_esasky_view, create_view_mode_toggle
+from .esasky_view import create_view_mode_toggle
+from .aladin_view import create_aladin_view
 
 
 class AppLayout:
@@ -157,8 +158,8 @@ class AppLayout:
                                                     ],
                                                     id="plotly-view-container",
                                                 ),
-                                                # ESA Sky iframe view (hidden until mode switch)
-                                                create_esasky_view(),
+                                                # Aladin Lite view (hidden until mode switch)
+                                                create_aladin_view(),
                                             ],
                                             width=8,
                                         ),
