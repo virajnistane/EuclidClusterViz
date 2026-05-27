@@ -15,6 +15,7 @@ An advanced interactive web-based visualization platform for astronomical cluste
 - Professional UI Controls
 - Enterprise Remote Access
 - Performance Optimization
+- View Modes
 - Project Structure
 - Quick Start
 - Configuration
@@ -34,6 +35,7 @@ An advanced interactive web-based visualization platform for astronomical cluste
 - Enterprise Benefits & Comparison
 - Recent Development Milestones
 - Technical Specifications & Data Insights
+- Additional Guides
 
 ---
 
@@ -109,6 +111,8 @@ This tool provides a professional-grade visualization solution for Euclid cluste
 - **Advanced UI controls** with dynamic visibility and responsive design
 - **Professional remote access** with SSH tunnel monitoring and automation
 - **Trace management** with hide/show and clear controls for all overlay types
+- **Aladin Lite v3** embedded sky viewer with cluster catalog overlays and click bridge
+- **ESA Sky** integration via view mode toggle for external sky survey cross-referencing
 
 ## 🔧 Environment Requirements
 
@@ -160,6 +164,7 @@ source venv/bin/activate
 - **Intuitive Workflow**: Guided user experience with helpful tooltips and status indicators
 - **Mosaic & Mask Management**: Separate controls for background images and HEALPix footprint overlays
 - **Collapsible Sections**: Organized controls with expandable/collapsible cards
+- **View Mode Toggle**: Switch between Standard (Plotly), Aladin Lite v3, and ESA Sky view modes directly from the header
 
 ### 🌐 **Enterprise Remote Access**
 - **SSH Tunnel Monitoring**: Automatic detection and setup guidance for remote connections
@@ -177,6 +182,31 @@ source venv/bin/activate
 - **Aspect ratio controls** for optimal viewing
 - **Plot size adjustment** for different screen sizes
 - **Responsive web interface** that works reliably across different browsers
+
+## 🔭 View Modes
+
+The application supports three distinct view modes, selectable via the toggle buttons in the header.
+
+| Mode | Trigger | Description |
+|------|---------|-------------|
+| **Standard** | Default | Plotly-based interactive scatter plot with full filter/overlay controls |
+| **Aladin Lite v3** | "Aladin View" button (enabled when exactly one cluster is in the viewport) | Embedded Aladin Lite v3 sky viewer (loaded from CDN) with cluster catalog overlays and a clientside JS click-bridge back to the Dash app |
+| **ESA Sky** | Accessible via view mode toggle | External ESA Sky viewer embedded for cross-referencing with ESA survey data |
+
+### Standard View
+The default Plotly-based view. All sidebar controls (filtering, overlays, CATRED, mosaics) are fully active. This is the recommended mode for bulk exploration and cluster analysis.
+
+### Aladin Lite v3 View
+Aladin Lite v3 is lazy-loaded from CDN on first switch. The `#aladin-div` container is defined in `ui/aladin_view.py`; all clientside JavaScript for initialization, catalog overlays, and the click bridge is registered in `callbacks/ui_callbacks.py`. Cluster catalog data is passed via `aladin-overlay-data-store` and rendered as an overlay. Click events inside Aladin are bridged back to Dash through `aladin-click-store` polled at 500 ms intervals.
+
+**Activation condition**: the "Aladin View" button is only enabled when the main plot viewport contains exactly one cluster. Zoom in until a single cluster is visible, then click the button.
+
+> See [`ALADIN_LITE_VIEW_GUIDE.md`](ALADIN_LITE_VIEW_GUIDE.md) for a full walkthrough.
+
+### ESA Sky View
+Provides access to ESA Sky survey imagery for cross-referencing cluster positions against ESA survey data. The header view mode toggle (`create_view_mode_toggle` in `ui/esasky_view.py`) manages switching between all view modes including the ESA Sky integration.
+
+> See [`VIEW_MODE_SWITCHING_GUIDE.md`](VIEW_MODE_SWITCHING_GUIDE.md) for switching details.
 
 ## 📁 Project Structure
 
@@ -201,7 +231,9 @@ cluster_visualization/
 │   ├── phz_callbacks.py            # 📊 PHZ analysis callbacks
 │   └── cluster_modal_callbacks.py  # 🔍 Cluster analysis tab callbacks
 ├── ui/
-│   └── layout.py                   # 🖥️ Dash layout components
+│   ├── layout.py                   # 🖥️ Dash layout components
+│   ├── aladin_view.py              # 🔭 Aladin Lite v3 viewer container
+│   └── esasky_view.py              # 🌌 View mode toggle component (Standard / Aladin)
 ├── core/
 │   └── app.py                      # 🏗️ Core application management
 └── utils/
@@ -528,6 +560,10 @@ To add astronomical background images:
 4. **Adjust Opacity**: Use the mosaic opacity slider (0.0-1.0)
 5. **Multiple Layers**: Mosaics and masks can be displayed simultaneously
 
+**Default mosaic source**: `local_fits` (changed from `esa_sky` in a previous release). The `MOSAICHandler` in `src/mermosaic.py` sets `self.default_mosaic_provider = "local_fits"`, loading MER FITS tiles directly from the configured local path. ESA Sky cutouts are still available as a fallback source (see `FALLBACK_ESA_SOURCES` in `MOSAICHandler`).
+
+> See [`MOSAIC_RENDERING_UPGRADE.md`](MOSAIC_RENDERING_UPGRADE.md) for details on the rendering pipeline improvements.
+
 ### **Layer Management**
 The application maintains proper layering automatically:
 
@@ -851,6 +887,11 @@ The application now supports independent control of multiple overlay layers:
 - ✅ **Optimized Polygon Rendering**: Conditional MER tile polygon rendering via `show_mer_tiles and show_cltile_info` logic
 - ✅ **Smart Fallback Colors**: Algorithm-specific cluster colors (royalblue/tomato) when tile coloring is disabled
 - ✅ **Conditional Hovertemplates**: Dynamic hover text with optional tile ID suffix based on toggle state
+- ✅ **Aladin Lite v3 View Mode**: Embedded Aladin Lite v3 sky viewer with lazy CDN loading, cluster overlay, and clientside click bridge
+- ✅ **ESA Sky View Mode**: ESA Sky viewer integration via header toggle button
+- ✅ **View Mode Toggle**: Header-level Standard / Aladin / ESA Sky switcher with automatic enable/disable logic
+- ✅ **Default Mosaic Source Changed**: `MOSAICHandler.default_mosaic_provider` switched from `esa_sky` to `local_fits` for offline-friendly operation
+- ✅ **SNR and Z Filtering in Aladin Mode**: Filter controls propagate through to Aladin view via overlay data store
 
 ## 📊 Technical Specifications & Data Insights
 
@@ -875,3 +916,19 @@ UI Framework: Bootstrap 5 with custom responsive styling
 Performance: Client-side callbacks, lazy loading, smart caching
 Monitoring: Flask middleware for SSH tunnel validation and user tracking
 ```
+
+## 📚 Additional Guides
+
+Detailed guides for specific features are available in the `docs/` directory:
+
+| Guide | Topic |
+|-------|-------|
+| [`ALADIN_LITE_VIEW_GUIDE.md`](ALADIN_LITE_VIEW_GUIDE.md) | Aladin Lite v3 setup, cluster overlays, and click-bridge walkthrough |
+| [`VIEW_MODE_SWITCHING_GUIDE.md`](VIEW_MODE_SWITCHING_GUIDE.md) | How to switch between Standard, Aladin, and ESA Sky view modes |
+| [`MOSAIC_RENDERING_UPGRADE.md`](MOSAIC_RENDERING_UPGRADE.md) | Mosaic rendering pipeline and `local_fits` default source details |
+| [`VIEWPORT_OPTIMIZATION.md`](VIEWPORT_OPTIMIZATION.md) | Viewport-based rendering optimizations and zoom-level guidance |
+| [`CLUSTER_ANALYSIS_GUIDE.md`](CLUSTER_ANALYSIS_GUIDE.md) | Cluster analysis tab, cutouts, CATRED boxes, and mask cutouts |
+| [`CONFIGURATION_GUIDE.md`](CONFIGURATION_GUIDE.md) | INI-based configuration system and data path setup |
+| [`TILE_CACHING_AND_CONTROLS.md`](TILE_CACHING_AND_CONTROLS.md) | CL-tile toggle, tile caching, and polygon rendering controls |
+| [`ZOOM_BASED_OVAL_RENDERING.md`](ZOOM_BASED_OVAL_RENDERING.md) | Viewport zoom indicator and matched-cluster oval rendering |
+| [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) | Common issues and solutions |
