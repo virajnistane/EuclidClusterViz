@@ -145,22 +145,32 @@ class MOSAICCallbacks:
         """Clientside callback: enable/disable HEALPix mask button based on zoom level"""
         self.app.clientside_callback(
             """
-            function(relayoutData, nClicks) {
+            function(relayoutData, viewMode, nClicks, figure) {
                 if (!nClicks || nClicks === 0) return true;
-                if (!relayoutData) return true;
 
                 var raRange = null, decRange = null;
 
-                if ('xaxis.range[0]' in relayoutData && 'xaxis.range[1]' in relayoutData) {
-                    raRange = Math.abs(relayoutData['xaxis.range[1]'] - relayoutData['xaxis.range[0]']);
-                } else if (relayoutData['xaxis.range']) {
-                    raRange = Math.abs(relayoutData['xaxis.range'][1] - relayoutData['xaxis.range'][0]);
+                if (relayoutData) {
+                    if ('xaxis.range[0]' in relayoutData && 'xaxis.range[1]' in relayoutData) {
+                        raRange = Math.abs(relayoutData['xaxis.range[1]'] - relayoutData['xaxis.range[0]']);
+                    } else if (relayoutData['xaxis.range']) {
+                        raRange = Math.abs(relayoutData['xaxis.range'][1] - relayoutData['xaxis.range'][0]);
+                    }
+                    if ('yaxis.range[0]' in relayoutData && 'yaxis.range[1]' in relayoutData) {
+                        decRange = Math.abs(relayoutData['yaxis.range[1]'] - relayoutData['yaxis.range[0]']);
+                    } else if (relayoutData['yaxis.range']) {
+                        decRange = Math.abs(relayoutData['yaxis.range'][1] - relayoutData['yaxis.range'][0]);
+                    }
                 }
 
-                if ('yaxis.range[0]' in relayoutData && 'yaxis.range[1]' in relayoutData) {
-                    decRange = Math.abs(relayoutData['yaxis.range[1]'] - relayoutData['yaxis.range[0]']);
-                } else if (relayoutData['yaxis.range']) {
-                    decRange = Math.abs(relayoutData['yaxis.range'][1] - relayoutData['yaxis.range'][0]);
+                if ((raRange === null || decRange === null) && figure && figure.layout) {
+                    var layout = figure.layout;
+                    if (layout.xaxis && layout.xaxis.range && layout.xaxis.range.length === 2) {
+                        raRange = Math.abs(layout.xaxis.range[1] - layout.xaxis.range[0]);
+                    }
+                    if (layout.yaxis && layout.yaxis.range && layout.yaxis.range.length === 2) {
+                        decRange = Math.abs(layout.yaxis.range[1] - layout.yaxis.range[0]);
+                    }
                 }
 
                 if (raRange !== null && decRange !== null && raRange < 2.0 && decRange < 2.0) {
@@ -170,8 +180,8 @@ class MOSAICCallbacks:
             }
             """,
             Output("healpix-mask-button", "disabled"),
-            Input("cluster-plot", "relayoutData"),
-            State("render-button", "n_clicks"),
+            [Input("cluster-plot", "relayoutData"), Input("view-mode-store", "data")],
+            [State("render-button", "n_clicks"), State("cluster-plot", "figure")],
             prevent_initial_call=True,
         )
 

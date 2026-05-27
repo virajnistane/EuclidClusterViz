@@ -190,10 +190,24 @@ class AladinCallbacks:
             #   nested: {trace_name: {"ra": [...], "dec": [...]}}  (from traces.py _add_manual_catred_traces)
             # Handle both formats.
             try:
-                catred_data = getattr(self.catred_handler, "current_catred_data", None)
+                # Background render runs in a separate worker process — in-process attribute is None.
+                # Read from shared diskcache written by _persist_aladin_catred().
+                catred_data = None
+                try:
+                    import diskcache as _dc
+                    import os as _os
+                    _state_dir = _os.path.join(_os.path.expanduser("~"), ".cache", "clusterviz_state")
+                    with _dc.Cache(_state_dir) as _sc:
+                        catred_data = _sc.get("catred_aladin_data")
+                except Exception as _ce:
+                    print(f"[Aladin] diskcache read failed: {_ce}")
+                # Fallback to in-process attribute (single-process dev mode)
+                if catred_data is None:
+                    catred_data = getattr(self.catred_handler, "current_catred_data", None)
+                print(f"[Aladin] CATRED data source: {'diskcache' if catred_data else 'none'}, type={type(catred_data).__name__}, ra_len={len(catred_data.get('ra',[])) if isinstance(catred_data,dict) and 'ra' in catred_data else 'N/A'}")
                 if isinstance(catred_data, dict):
                     if "ra" in catred_data:
-                        # flat format
+                        # flat format (from _clip_to_viewport / _persist_aladin_catred)
                         ra_list = catred_data.get("ra", [])
                         dec_list = catred_data.get("dec", [])
                     else:

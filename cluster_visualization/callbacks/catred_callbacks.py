@@ -50,52 +50,48 @@ class CATREDCallbacks:
         self._setup_catred_control_buttons_state_callback()
 
     def _setup_catred_button_state_callback(self):
-        """Setup callback to enable/disable CATRED render button based on zoom level"""
+        """Clientside callback: enable/disable CATRED render button based on zoom level"""
+        self.app.clientside_callback(
+            """
+            function(relayoutData, nClicks, figure) {
+                if (!nClicks || nClicks === 0) return true;
 
-        @self.app.callback(
+                var raRange = null, decRange = null;
+
+                if (relayoutData) {
+                    if ('xaxis.range[0]' in relayoutData && 'xaxis.range[1]' in relayoutData) {
+                        raRange = Math.abs(relayoutData['xaxis.range[1]'] - relayoutData['xaxis.range[0]']);
+                    } else if (relayoutData['xaxis.range']) {
+                        raRange = Math.abs(relayoutData['xaxis.range'][1] - relayoutData['xaxis.range'][0]);
+                    }
+                    if ('yaxis.range[0]' in relayoutData && 'yaxis.range[1]' in relayoutData) {
+                        decRange = Math.abs(relayoutData['yaxis.range[1]'] - relayoutData['yaxis.range[0]']);
+                    } else if (relayoutData['yaxis.range']) {
+                        decRange = Math.abs(relayoutData['yaxis.range'][1] - relayoutData['yaxis.range'][0]);
+                    }
+                }
+
+                if ((raRange === null || decRange === null) && figure && figure.layout) {
+                    var layout = figure.layout;
+                    if (layout.xaxis && layout.xaxis.range && layout.xaxis.range.length === 2) {
+                        raRange = Math.abs(layout.xaxis.range[1] - layout.xaxis.range[0]);
+                    }
+                    if (layout.yaxis && layout.yaxis.range && layout.yaxis.range.length === 2) {
+                        decRange = Math.abs(layout.yaxis.range[1] - layout.yaxis.range[0]);
+                    }
+                }
+
+                if (raRange !== null && decRange !== null && raRange < 2.0 && decRange < 2.0) {
+                    return false;
+                }
+                return true;
+            }
+            """,
             Output("catred-render-button", "disabled"),
-            [Input("cluster-plot", "relayoutData")],
+            Input("cluster-plot", "relayoutData"),
             [State("render-button", "n_clicks"), State("cluster-plot", "figure")],
             prevent_initial_call=True,
         )
-        def update_mer_button_state(relayout_data, n_clicks, current_figure):
-            # Only enable if main app has been rendered and zoomed in enough
-            if n_clicks in (None, 0):
-                return True  # Disabled
-
-            # Prefer relayoutData, but fall back to figure layout ranges when relayoutData
-            # is partial/missing (e.g. dragmode changes or after rerenders).
-            ra_range = dec_range = None
-            if relayout_data:
-                ra_range, dec_range = self._extract_zoom_ranges(relayout_data)
-
-            if (ra_range is None or dec_range is None) and current_figure:
-                try:
-                    layout = current_figure.get("layout", {})
-                    xaxis = layout.get("xaxis", {})
-                    yaxis = layout.get("yaxis", {})
-                    x_range = xaxis.get("range")
-                    y_range = yaxis.get("range")
-                    if x_range and len(x_range) == 2:
-                        ra_range = abs(x_range[1] - x_range[0])
-                    if y_range and len(y_range) == 2:
-                        dec_range = abs(y_range[1] - y_range[0])
-                except Exception:
-                    pass
-
-            if ra_range is None or dec_range is None:
-                return True  # Disabled - no reliable zoom data
-
-            # Enable button if zoomed in enough
-            if (
-                ra_range is not None
-                and dec_range is not None
-                and ra_range < 2.0
-                and dec_range < 2.0
-            ):
-                return False  # Enabled
-            else:
-                return True  # Disabled - not zoomed in enough
 
     def _setup_manual_catred_render_callback(self):
         """Setup callback for manual CATRED data rendering"""

@@ -434,19 +434,21 @@ class UICallbacks:
             return is_open, [html.I(className=f"{icon} me-2"), "🎨 Display Options"]
 
         # Mask Section
-        @self.app.callback(
+        self.app.clientside_callback(
+            """
+            function(nClicks) {
+                if (nClicks === undefined || nClicks === null) {
+                    return [false, [{type: 'i', props: {className: 'fas fa-chevron-right me-2'}}, '🎭 Mask']];
+                }
+                var isOpen = (nClicks % 2) === 1;
+                var icon = isOpen ? 'fas fa-chevron-up me-2' : 'fas fa-chevron-down me-2';
+                return [isOpen, [{type: 'i', props: {className: icon}}, '🎭 Mask']];
+            }
+            """,
             [Output("mask-controls-collapse", "is_open"), Output("mask-controls-toggle", "children")],
-            [Input("mask-controls-toggle", "n_clicks")],
+            Input("mask-controls-toggle", "n_clicks"),
             prevent_initial_call=False,
         )
-        def toggle_mask_controls(n_clicks):
-            """Toggle Mask section"""
-            if n_clicks is None:
-                return False, [html.I(className="fas fa-chevron-right me-2"), "🎭 Mask"]
-
-            is_open = (n_clicks % 2) == 1
-            icon = "fas fa-chevron-up" if is_open else "fas fa-chevron-down"
-            return is_open, [html.I(className=f"{icon} me-2"), "🎭 Mask"]
 
         # Mosaic Section
         @self.app.callback(
@@ -1132,7 +1134,7 @@ class UICallbacks:
                             if (name.indexOf('AMICO') >= 0) { amicoSrcs.push(src); }
                             else { pzwavSrcs.push(src); }
                         });
-                        var catredCat = A.catalog({name: 'CATRED', color: '#222222', shape: 'circle', sourceSize: 8});
+                        var catredCat = A.catalog({name: 'CATRED', color: '#00ffff', shape: 'circle', sourceSize: 8});
                         var catredSrcs = (data.catred || []).map(function(r) {
                             return A.source(r.ra, r.dec, {name: r.name || 'CATRED'});
                         });

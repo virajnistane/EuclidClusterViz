@@ -424,6 +424,17 @@ class CATREDHandler:
                 clipped[key] = val
         return clipped
 
+    def _persist_aladin_catred(self, clipped: Dict[str, List]) -> None:
+        """Write viewport-clipped CATRED data to shared diskcache for cross-process Aladin push."""
+        try:
+            import diskcache as _dc
+            _state_dir = os.path.join(os.path.expanduser("~"), ".cache", "clusterviz_state")
+            with _dc.Cache(_state_dir) as _sc:
+                _sc.set("catred_aladin_data", clipped)
+            print(f"Debug: Persisted {len(clipped.get('ra', []))} clipped CATRED points to aladin diskcache")
+        except Exception as _exc:
+            print(f"Warning: Could not persist CATRED aladin data: {_exc}")
+
     def _find_intersecting_tiles(
         self, data: Dict[str, Any], ra_min: float, ra_max: float, dec_min: float, dec_max: float
     ) -> List[int]:
@@ -807,6 +818,7 @@ class CATREDHandler:
 
         # Clip to viewport for both plot rendering and Aladin push
         self.current_catred_data = self._clip_to_viewport(catred_scatter_data, zoom_data)
+        self._persist_aladin_catred(self.current_catred_data)
 
         self._profiler.record("catred:update_coverage", time.perf_counter() - _t_total)
         print(f"Debug: Total CATRED points with coverage loaded: {len(catred_scatter_data['ra'])} ({len(self.current_catred_data['ra'])} in viewport)")
@@ -1046,6 +1058,7 @@ class CATREDHandler:
 
         # Clip to viewport for both plot rendering and Aladin push
         self.current_catred_data = self._clip_to_viewport(catred_scatter_data, zoom_data)
+        self._persist_aladin_catred(self.current_catred_data)
 
         print(f"Debug: Total unmasked CATRED points loaded: {len(catred_scatter_data['ra'])} ({len(self.current_catred_data['ra'])} in viewport)")
         return self.current_catred_data
