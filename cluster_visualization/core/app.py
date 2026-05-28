@@ -146,6 +146,13 @@ class ClusterVisualizationCore:
         # Get the actual hostname for SSH instructions
         try:
             hostname = socket.gethostbyaddr(socket.gethostname())[0]
+            try:
+                # Specific for cca
+                nodename = [part for part in hostname.split(".") if 'cc' in part][0]
+                nodename_generic = ''.join([c for c in nodename if not c.isdigit()])
+                hostname = hostname.replace(nodename, nodename_generic)
+            except:
+                pass
         except:
             hostname = "remotehost"
 
