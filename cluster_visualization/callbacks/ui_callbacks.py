@@ -1037,13 +1037,13 @@ class UICallbacks:
             Input("view-mode-store", "data"),
         )
 
-        # Count cluster points in viewport → enable/disable Aladin button + store count
-        # Uses relayoutData (fires on zoom/pan) + figure State (has trace data + stable ranges)
+        # Count cluster points in viewport → enable/disable Aladin button + build overlay data
+        # Clientside: zero server round-trip. Reads cluster/CATRED directly from figure.data traces.
         self.app.clientside_callback(
             """
-            function(relayoutData, figure) {
+            function(relayoutData, viewMode, figure, survey) {
                 var NO_UPDATE = window.dash_clientside.no_update;
-                if (!figure || !figure.layout) return [true, NO_UPDATE];
+                if (!figure || !figure.layout) return [true, NO_UPDATE, NO_UPDATE];
 
                 // Resolve viewport: prefer relayoutData values, fall back to figure layout
                 var raMin, raMax, decMin, decMax;
@@ -1060,44 +1060,89 @@ class UICallbacks:
                     var layout = figure.layout;
                     var xr = (layout.xaxis || {}).range;
                     var yr = (layout.yaxis || {}).range;
-                    if (!xr || !yr) return [true, NO_UPDATE];
+                    if (!xr || !yr) return [true, NO_UPDATE, NO_UPDATE];
                     raMin = xr[0]; raMax = xr[1]; decMin = yr[0]; decMax = yr[1];
                 }
                 var tmp;
                 if (raMin > raMax) { tmp = raMin; raMin = raMax; raMax = tmp; }
                 if (decMin > decMax) { tmp = decMin; decMin = decMax; decMax = tmp; }
 
+                var raCtr = (raMin + raMax) / 2.0;
+                var decCtr = (decMin + decMax) / 2.0;
+                var fov = Math.max(Math.abs(raMax - raMin), Math.abs(decMax - decMin));
+                var fov2 = fov * 2.0;
+                var cosD = Math.cos(decCtr * Math.PI / 180.0);
+
+                // Count clusters in viewport and collect all within 2×FOV for Aladin
                 var count = 0;
+                var clusterPts = [];  // {ra, dec, name}
+                var catredPts = [];
+
                 (figure.data || []).forEach(function(trace) {
                     var name = (trace.name || '');
-                    if (name.indexOf('Merged') < 0 && name.indexOf('PZWAV') < 0 && name.indexOf('AMICO') < 0) return;
-                    if (name.indexOf('CATRED') === 0) return;            // pure CATRED scatter traces
-                    if (name.indexOf('in CATRED region') >= 0) return;  // glow halos BOTH-algo: "Merged PZWAV (in CATRED region)"
-                    // single-algo glow: "PZWAV (Merged, near CATRED)" — no cluster-count suffix
-                    // single-algo data: "PZWAV (Merged, near CATRED) - N clusters" — has suffix, must be counted
-                    if (name.indexOf('near CATRED') >= 0 && name.indexOf(' clusters') < 0) return;
+                    var isCatred = name.indexOf('CATRED') === 0;
+                    var isCluster = !isCatred && (
+                        name.indexOf('Merged') >= 0 || name.indexOf('PZWAV') >= 0 || name.indexOf('AMICO') >= 0
+                    );
+                    // Exclude glow halos (no cluster-count suffix and contain 'near CATRED')
+                    if (isCluster && name.indexOf('in CATRED region') >= 0) isCluster = false;
+                    if (isCluster && name.indexOf('near CATRED') >= 0 && name.indexOf(' clusters') < 0) isCluster = false;
+
                     var xs = trace.x || [];
                     var ys = trace.y || [];
-                    for (var i = 0; i < xs.length; i++) {
-                        if (xs[i] >= raMin && xs[i] <= raMax && ys[i] >= decMin && ys[i] <= decMax) {
-                            count++;
+                    var texts = trace.text || [];
+
+                    if (isCluster) {
+                        for (var i = 0; i < xs.length; i++) {
+                            var ra = xs[i], dec = ys[i];
+                            if (ra == null || dec == null) continue;
+                            // Count clusters strictly in viewport
+                            if (ra >= raMin && ra <= raMax && dec >= decMin && dec <= decMax) count++;
+                            // Collect all within 2×FOV for Aladin overlay
+                            var dra = (ra - raCtr) * cosD;
+                            var ddec = dec - decCtr;
+                            if (Math.sqrt(dra*dra + ddec*ddec) <= fov2) {
+                                var lbl = (typeof texts[i] === 'string') ? texts[i] : '';
+                                clusterPts.push({ra: ra, dec: dec, name: lbl});
+                            }
+                        }
+                    } else if (isCatred) {
+                        for (var i = 0; i < xs.length; i++) {
+                            var ra = xs[i], dec = ys[i];
+                            if (ra == null || dec == null) continue;
+                            var dra = (ra - raCtr) * cosD;
+                            var ddec = dec - decCtr;
+                            if (Math.sqrt(dra*dra + ddec*ddec) <= fov2) {
+                                catredPts.push({ra: ra, dec: dec, name: 'CATRED'});
+                            }
                         }
                     }
                 });
+
                 var disabled = count !== 1;
-                var storeVal = {count: count, ra: [raMin, raMax], dec: [decMin, decMax], ts: Date.now()};
                 var radioOptions = [
                     {label: ' MER Mosaic', value: 'mosaic'},
                     {label: ' Aladin Sky', value: 'aladin', disabled: disabled}
                 ];
-                return [disabled, storeVal, radioOptions];
+
+                // Build overlay for Aladin (pre-computed, no server needed)
+                var overlayData = {
+                    clusters: clusterPts,
+                    catred: catredPts,
+                    viewport: {ra: raCtr, dec: decCtr, fov: fov},
+                    survey: survey || 'P/DSS2/color'
+                };
+
+                return [disabled, radioOptions, overlayData];
             }
             """,
             [Output("view-mode-aladin-btn", "disabled"),
-             Output("viewport-cluster-count-store", "data"),
-             Output("image-source-radio", "options")],
+             Output("image-source-radio", "options"),
+             Output("aladin-overlay-data-store", "data")],
             [Input("cluster-plot", "relayoutData"),
-             Input("cluster-plot", "figure")],
+             Input("view-mode-store", "data")],
+            [State("cluster-plot", "figure"),
+             State("aladin-survey-dropdown", "value")],
             prevent_initial_call=False,
         )
 
@@ -1107,6 +1152,15 @@ class UICallbacks:
             """
             function(overlayData) {
                 if (!overlayData) return window.dash_clientside.no_update;
+
+                // Skip rendering when Aladin container is hidden.
+                // relayoutData panning updates the store (good — data pre-computed), but we
+                // must NOT render into a hidden canvas or set _aladinLastFp from those updates.
+                // When user actually switches to Aladin the container is visible and fp is fresh.
+                var aladinContainer = document.getElementById('aladin-view-container');
+                if (!aladinContainer || aladinContainer.style.display === 'none') {
+                    return window.dash_clientside.no_update;
+                }
 
                 function doAladinInit(data) {
                     var vp  = data.viewport || {};
@@ -1152,6 +1206,13 @@ class UICallbacks:
                     }
 
                     var doInit = function() {
+                        // Dedup: skip re-render if viewport+survey unchanged (double-fire guard)
+                        var fp = ra.toFixed(4) + ',' + dec.toFixed(4) + ',' + fov.toFixed(4) + ',' + survey;
+                        if (window._aladinInstance && fp === window._aladinLastFp) {
+                            return;
+                        }
+                        window._aladinLastFp = fp;
+
                         if (window._aladinInstance) {
                             window._aladinInstance.gotoRaDec(ra, dec);
                             window._aladinInstance.setFov(fov);
