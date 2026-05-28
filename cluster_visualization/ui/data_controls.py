@@ -758,7 +758,7 @@ class DataControls:
                                         dbc.Switch(
                                             id="mask-binary-inverted-toggle",
                                             label="Show inverted (uncovered) mask",
-                                            value=False,
+                                            value=True,
                                             className="small",
                                         ),
                                     ],
