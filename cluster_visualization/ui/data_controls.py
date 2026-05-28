@@ -752,6 +752,18 @@ class DataControls:
                                     ],
                                     className="mb-2",
                                 ),
+                                # Binary inverted mask toggle
+                                html.Div(
+                                    [
+                                        dbc.Switch(
+                                            id="mask-binary-inverted-toggle",
+                                            label="Show inverted (uncovered) mask",
+                                            value=False,
+                                            className="small",
+                                        ),
+                                    ],
+                                    className="mb-2",
+                                ),
                                 # Healpix mask visibility and delete controls
                                 html.Div(
                                     [

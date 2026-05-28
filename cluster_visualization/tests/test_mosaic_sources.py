@@ -25,6 +25,8 @@ class TestMosaicSourceProviders(unittest.TestCase):
         self.handler._cached_esa_sources = None
         self.handler._cached_esa_sources_ts = None
         self.handler.traces_cache = {}
+        self.handler._corrected_mask_data = None
+        self.handler._corrected_mask_path = None
         self.handler.FALLBACK_ESA_SOURCES = [
             {
                 "id": "CDS/P/DSS2/color",
@@ -104,6 +106,7 @@ class TestMosaicSourceProviders(unittest.TestCase):
                 relayout_data=relayout_data,
                 provider="esa_sky",
                 source_id="CDS/P/DSS2/color",
+                mask_type="effcov",
             )
 
         _, kwargs = mask_trace_creator.call_args

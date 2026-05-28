@@ -373,6 +373,7 @@ class MOSAICCallbacks:
                 State("mosaic-provider-selector", "value"),
                 State("mosaic-source-selector", "value"),
                 State("mask-type-selector", "value"),
+                State("mask-binary-inverted-toggle", "value"),
             ],
             prevent_initial_call=True,
         )
@@ -385,10 +386,12 @@ class MOSAICCallbacks:
             mosaic_provider,
             mosaic_source,
             mask_type,
+            mask_binary_inverted,
         ):
             """Render mosaic images when button is clicked"""
             try:
                 mask_type = mask_type or "corrected"
+                binary_inverted = bool(mask_binary_inverted)
                 print(f"🔍 Mask overlay callback triggered! n_clicks={n_clicks}")
                 print(
                     f"   -> relayout_data keys: {list(relayout_data.keys()) if relayout_data else None}"
@@ -421,6 +424,7 @@ class MOSAICCallbacks:
                                 provider=mosaic_provider,
                                 source_id=mosaic_source,
                                 mask_type=mask_type,
+                                binary_inverted=binary_inverted,
                             )
                         )
                         print(
@@ -430,11 +434,14 @@ class MOSAICCallbacks:
                         if mask_footprint_traces and len(mask_footprint_traces) > 0:
                             # Add mosaic traces to current figure with proper layering
                             if current_figure and "data" in current_figure:
-                                # Remove only existing mask overlay traces (keep mosaic traces)
+                                # Remove existing mask overlay traces (weighted and inverted)
                                 existing_traces = [
                                     trace
                                     for trace in current_figure["data"]
-                                    if not (trace.get("name", "").startswith("Mask overlay"))
+                                    if not (
+                                        trace.get("name", "").startswith("Mask overlay")
+                                        or trace.get("name", "").startswith("Inverted mask overlay")
+                                    )
                                 ]
 
                                 # Separate traces by type to maintain proper layering order
@@ -647,24 +654,24 @@ class MOSAICCallbacks:
                 // First pass: check if there are mask overlay traces and their visibility state
                 for (let i = 0; i < newFigure.data.length; i++) {
                     let trace = newFigure.data[i];
-                    if (trace.name && trace.name.startsWith('Mask overlay')) {
+                    if (trace.name && (trace.name.startsWith('Mask overlay') || trace.name.startsWith('Inverted mask overlay'))) {
                         hasMaskTraces = true;
                         if (trace.visible !== false && trace.visible !== 'legendonly') {
                             allMasksHidden = false;
                         }
                     }
                 }
-                
+
                 if (!hasMaskTraces) {
                     return [figure, window.dash_clientside.no_update];
                 }
-                
+
                 // Toggle visibility: if all hidden, show them; otherwise hide them
                 let newVisibility = allMasksHidden ? true : 'legendonly';
-                
+
                 for (let i = 0; i < newFigure.data.length; i++) {
                     let trace = newFigure.data[i];
-                    if (trace.name && trace.name.startsWith('Mask overlay')) {
+                    if (trace.name && (trace.name.startsWith('Mask overlay') || trace.name.startsWith('Inverted mask overlay'))) {
                         newFigure.data[i].visible = newVisibility;
                     }
                 }
@@ -697,7 +704,7 @@ class MOSAICCallbacks:
                 let newFigure = JSON.parse(JSON.stringify(figure));
                 newFigure.data = newFigure.data.filter(function(trace) {
                     return !(
-                        (trace.name && trace.name.startsWith('Mask overlay')) ||
+                        (trace.name && (trace.name.startsWith('Mask overlay') || trace.name.startsWith('Inverted mask overlay'))) ||
                         trace.name === 'Mask Colorbar'
                     );
                 });
@@ -722,7 +729,8 @@ class MOSAICCallbacks:
                 // Check if there are any mask overlay traces
                 let hasMaskTraces = false;
                 for (let i = 0; i < figure.data.length; i++) {
-                    if (figure.data[i].name && figure.data[i].name.startsWith('Mask overlay')) {
+                    let n = figure.data[i].name;
+                    if (n && (n.startsWith('Mask overlay') || n.startsWith('Inverted mask overlay'))) {
                         hasMaskTraces = true;
                         break;
                     }
@@ -749,13 +757,13 @@ class MOSAICCallbacks:
                     return window.dash_clientside.no_update;
                 }
                 let hasMask = figure.data.some(function(t) {
-                    return (t.name && t.name.startsWith('Mask overlay')) || t.name === 'Mask Colorbar';
+                    return (t.name && (t.name.startsWith('Mask overlay') || t.name.startsWith('Inverted mask overlay'))) || t.name === 'Mask Colorbar';
                 });
                 if (!hasMask) return window.dash_clientside.no_update;
                 let newFigure = JSON.parse(JSON.stringify(figure));
                 for (let i = 0; i < newFigure.data.length; i++) {
                     let name = newFigure.data[i].name;
-                    if ((name && name.startsWith('Mask overlay')) || name === 'Mask Colorbar') {
+                    if ((name && (name.startsWith('Mask overlay') || name.startsWith('Inverted mask overlay'))) || name === 'Mask Colorbar') {
                         newFigure.data[i].opacity = opacity;
                     }
                 }

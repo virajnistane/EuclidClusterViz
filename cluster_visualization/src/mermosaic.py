@@ -860,6 +860,7 @@ class MOSAICHandler:
         dec_max: float,
         mask_type: str = "corrected",
         mertileid: Optional[int] = None,
+        binary_inverted: bool = False,
     ) -> tuple:
         """Return (pixels, weights) arrays filtered to the given viewport.
 
@@ -868,6 +869,8 @@ class MOSAICHandler:
             mask_type: ``'corrected'`` uses the global corrected mask; ``'effcov'``
                 uses the per-tile effective coverage mask (requires *mertileid*).
             mertileid: MER tile ID required when mask_type == 'effcov'.
+            binary_inverted: When True, return zero-weight pixels (uncovered sky)
+                instead of non-zero-weight pixels (covered sky).
 
         Returns:
             Tuple (pixels_arr, weights_arr) as numpy arrays.  Both are empty
@@ -886,8 +889,9 @@ class MOSAICHandler:
             data = self._load_corrected_mask()
             if data is not None:
                 pixels, weights, ra, dec, _ = data
+                weight_filter = (weights == 0) if binary_inverted else (weights > 0)
                 mask = (
-                    (weights > 0)
+                    weight_filter
                     & (ra >= ra_lo - padding)
                     & (ra <= ra_hi + padding)
                     & (dec >= dec_lo - padding)
@@ -897,7 +901,7 @@ class MOSAICHandler:
                 if len(result_pix) > 0:
                     return result_pix, result_wt
             # Corrected mask returned no data — fall back to per-tile effcov if available
-            if mertileid is not None:
+            if mertileid is not None and not binary_inverted:
                 print(
                     f"[MASK] Corrected mask empty for viewport; falling back to effcov for tile {mertileid}"
                 )
@@ -924,8 +928,9 @@ class MOSAICHandler:
                 fp_ra, fp_dec = hp.pix2ang(
                     nside=16384, ipix=footprint["PIXEL"], nest=True, lonlat=True
                 )
+                weight_filter = (footprint["WEIGHT"] == 0) if binary_inverted else (footprint["WEIGHT"] > 0)
                 mask = (
-                    (footprint["WEIGHT"] > 0)
+                    weight_filter
                     & (fp_ra >= ra_lo - padding)
                     & (fp_ra <= ra_hi + padding)
                     & (fp_dec >= dec_lo - padding)
@@ -1530,6 +1535,43 @@ class MOSAICHandler:
 
         return traces
 
+    def _create_binary_mask_traces(
+        self,
+        pixels: np.ndarray,
+        opacity: float,
+        fill_color: str = "rgba(200,50,50,{opacity})",
+        name_prefix: str = "Inverted mask overlay",
+    ) -> List[go.Scatter]:
+        """Create a single polygon trace for binary (zero-weight) mask pixels."""
+        all_x: List[Optional[float]] = []
+        all_y: List[Optional[float]] = []
+
+        import healpy as hp
+        for pix in pixels:
+            ra, dec = hp.vec2ang(hp.boundaries(16384, int(pix), step=2, nest=True).T, lonlat=True)
+            ra = np.append(ra, ra[0]).tolist()
+            dec = np.append(dec, dec[0]).tolist()
+            all_x.extend(ra + [None])
+            all_y.extend(dec + [None])
+
+        if not all_x:
+            return []
+
+        color = fill_color.format(opacity=opacity)
+        return [
+            go.Scatter(
+                x=all_x,
+                y=all_y,
+                mode="lines",
+                fill="toself",
+                fillcolor=color,
+                line=dict(width=0.5, color="rgba(200,50,50,0.8)"),
+                name=name_prefix,
+                showlegend=False,
+                hoverinfo="skip",
+            )
+        ]
+
     def create_mosaic_image_trace(
         self,
         mertileid: int,
@@ -1673,6 +1715,7 @@ class MOSAICHandler:
         source_id: Optional[str] = None,
         tile_bounds: Optional[Tuple[float, float, float, float]] = None,
         mask_type: str = "corrected",
+        binary_inverted: bool = False,
     ) -> Optional[List]:
         """Create Plotly scatter traces for a mask overlay.
 
@@ -1713,11 +1756,12 @@ class MOSAICHandler:
             ra_min_mosaic, ra_max_mosaic, dec_min_mosaic, dec_max_mosaic,
             mask_type=mask_type,
             mertileid=mertileid,
+            binary_inverted=binary_inverted,
         )
         io_time = time.time() - io_start
         n_pix = len(pix_arr)
-        print(f"Footprint pixels in viewport ({mask_type}): {n_pix}")
-        if n_pix > 0:
+        print(f"Footprint pixels in viewport ({mask_type}, inverted={binary_inverted}): {n_pix}")
+        if n_pix > 0 and not binary_inverted:
             print(f"Weight range: {wt_arr.min():.3f} to {wt_arr.max():.3f}")
 
         # Create grouped traces for HEALPix footprint polygons.
@@ -1725,24 +1769,30 @@ class MOSAICHandler:
         weight_min, weight_max = 0.8, 1.0
 
         if n_pix > 0:
-            print(f"Creating grouped traces for {n_pix} HEALPix polygons...")
+            print(f"Creating {'binary inverted' if binary_inverted else 'grouped'} traces for {n_pix} HEALPix polygons...")
             polygon_start = time.time()
-            footprint_traces = self._create_grouped_mask_traces(
-                pixels=pix_arr,
-                weights=wt_arr,
-                opacity=opacity,
-                colorscale=colorscale,
-                name_prefix="Mask overlay",
-                n_bins=12,
-                weight_min=weight_min,
-                weight_max=weight_max,
-            )
+            if binary_inverted:
+                footprint_traces = self._create_binary_mask_traces(
+                    pixels=pix_arr,
+                    opacity=opacity,
+                )
+            else:
+                footprint_traces = self._create_grouped_mask_traces(
+                    pixels=pix_arr,
+                    weights=wt_arr,
+                    opacity=opacity,
+                    colorscale=colorscale,
+                    name_prefix="Mask overlay",
+                    n_bins=12,
+                    weight_min=weight_min,
+                    weight_max=weight_max,
+                )
             polygon_time = time.time() - polygon_start
         else:
             polygon_time = 0.0
 
         # Add a colorbar trace (invisible heatmap that only shows the colorbar).
-        if footprint_traces and add_colorbar:
+        if footprint_traces and add_colorbar and not binary_inverted:
             colorbar_trace = self._create_mask_colorbar_trace(
                 weight_min, weight_max, colorscale, title="Coverage<br>Weight"
             )
@@ -2077,6 +2127,7 @@ class MOSAICHandler:
         provider: Optional[str] = None,
         source_id: Optional[str] = None,
         mask_type: str = "corrected",
+        binary_inverted: bool = False,
     ) -> List[go.Scatter]:
         """Load mask overlay traces for the current zoom viewport.
 
@@ -2084,6 +2135,8 @@ class MOSAICHandler:
             mask_type: ``'corrected'`` (default) loads the combined corrected
                 mask in a single pass. ``'effcov'`` loops over intersecting
                 MER tiles and loads per-tile effective coverage masks.
+            binary_inverted: When True, render zero-weight (uncovered) pixels
+                instead of covered pixels.
         """
         start_time = time.time()
         mask_traces: List[go.Scatter] = []
@@ -2117,24 +2170,32 @@ class MOSAICHandler:
             # Corrected mask: single global pass — no per-tile loop needed.
             # ----------------------------------------------------------------
             pix_arr, wt_arr = self._get_mask_footprint_in_viewport(
-                ra_min, ra_max, dec_min, dec_max, mask_type="corrected"
+                ra_min, ra_max, dec_min, dec_max, mask_type="corrected",
+                binary_inverted=binary_inverted,
             )
             n_pix = len(pix_arr)
-            print(f"[CORRECTED MASK] Viewport pixels: {n_pix}")
+            label = "INVERTED CORRECTED MASK" if binary_inverted else "CORRECTED MASK"
+            print(f"[{label}] Viewport pixels: {n_pix}")
 
             if n_pix > 0:
-                mask_traces = self._create_grouped_mask_traces(
-                    pixels=pix_arr,
-                    weights=wt_arr,
-                    opacity=opacity,
-                    colorscale=colorscale,
-                    name_prefix="Mask overlay",
-                    n_bins=12,
-                    weight_min=weight_min,
-                    weight_max=weight_max,
-                )
+                if binary_inverted:
+                    mask_traces = self._create_binary_mask_traces(
+                        pixels=pix_arr,
+                        opacity=opacity,
+                    )
+                else:
+                    mask_traces = self._create_grouped_mask_traces(
+                        pixels=pix_arr,
+                        weights=wt_arr,
+                        opacity=opacity,
+                        colorscale=colorscale,
+                        name_prefix="Mask overlay",
+                        n_bins=12,
+                        weight_min=weight_min,
+                        weight_max=weight_max,
+                    )
             else:
-                print("[CORRECTED MASK] No pixels found in viewport")
+                print(f"[{label}] No pixels found in viewport")
 
         else:
             # ----------------------------------------------------------------
@@ -2175,6 +2236,7 @@ class MOSAICHandler:
                         source_id=source_id,
                         tile_bounds=tile_bounds,
                         mask_type="effcov",
+                        binary_inverted=binary_inverted,
                     )
                     trace_time = time.time() - trace_start
                     tile_processing_time_total += trace_time
@@ -2193,8 +2255,8 @@ class MOSAICHandler:
                         f"[ERROR] Failed to create mask overlay traces for tile {mertileid}: {e}"
                     )
 
-        # Add a single colorbar for all mask overlays
-        if mask_traces:
+        # Add a single colorbar for weighted mask overlays (not for binary inverted)
+        if mask_traces and not binary_inverted:
             colorbar_trace = self._create_mask_colorbar_trace(
                 weight_min, weight_max, colorscale, title="Coverage<br>Weight"
             )
