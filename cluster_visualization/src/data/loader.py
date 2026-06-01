@@ -832,9 +832,7 @@ class DataLoader:
             print("Loaded catred file info")
         else:
             print(f"catred_fileinfo.csv does not exist in {os.path.dirname(catred_fileinfo_csv)}")
-            catred_fileinfo_df = self._generate_catred_fileinfo(
-                paths, add_mertile_radec_center=False
-            )
+            catred_fileinfo_df = self._generate_catred_fileinfo(paths)
 
         # Load polygon data or generate it if it doesn't exist
         if os.path.exists(catred_polygon_pkl) and not catred_fileinfo_df.empty:
@@ -863,7 +861,7 @@ class DataLoader:
         self,
         paths: Dict[str, str],
         catredxmlfiles: Optional[List[str]] = None,
-        add_mertile_radec_center: Optional[bool] = False,
+        add_mertile_radec_center: Optional[bool] = True,
     ) -> pd.DataFrame:
         """
         Generate catred_fileinfo.csv from XML files.
@@ -907,10 +905,14 @@ class DataLoader:
             return pd.DataFrame()
 
         if add_mertile_radec_center:
-            mertile_dir = os.path.join(self.config._data_base_dir, "DpdMerTile")
-            print(
-                "add_mertile_radec_center is True - will attempt to extract RA/Dec center from XML files and add to DataFrame"
-            )
+            try:
+                mertile_dir = os.path.join(self.config._data_base_dir, "DpdMerTile")
+            except Exception as e:
+                print(f"Error determining mertile_dir for RA/Dec extraction: {e}")
+                add_mertile_radec_center = False
+            # print(
+            #     "add_mertile_radec_center is True - will attempt to extract RA/Dec center from XML files and add to DataFrame"
+            # )
             # xmlfiles_mertiledef = [i for i in os.listdir(mertile_dir) if i.endswith(".xml")]
 
         print(f"Found {len(catredxmlfiles)} CATRED XML files")
@@ -929,6 +931,9 @@ class DataLoader:
                 ).text
                 catred_fileinfo[uid]["mertileid"] = int(mertileid)
 
+                catred_fileinfo[uid]["ra_center"] = None
+                catred_fileinfo[uid]["dec_center"] = None
+
                 if add_mertile_radec_center:
                     try:
                         xmlfile_mertiledef = glob.glob(os.path.join(mertile_dir, f"*{mertileid}*.xml"))[
@@ -941,10 +946,8 @@ class DataLoader:
                             catred_fileinfo[uid]["dec_center"] = float(dec_center)
                     except Exception as e:
                         print(
-                            f"Warning: Error occurred while extracting RA/Dec center for mertileid {mertileid}: {e}. RA/Dec center will be set to None."
+                            f"Warning: Failed to extract RA/Dec center for mertileid {mertileid} from mertile definition XML: {e}"
                         )
-                        catred_fileinfo[uid]["ra_center"] = None
-                        catred_fileinfo[uid]["dec_center"] = None
                         self.missing_mertile_definitions.append(mertileid)
 
 
