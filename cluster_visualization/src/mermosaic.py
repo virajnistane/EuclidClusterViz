@@ -44,35 +44,15 @@ class MOSAICHandler:
 
     FALLBACK_ESA_SOURCES = [
         {
-            "id": "CDS/P/DSS2/color",
-            "label": "DSS2 Color",
-            "attribution": "DSS2 / CDS",
+            "id": "CDS/P/DESI-Legacy-Surveys/DR10/color",
+            "label": "DESI Legacy DR10",
+            "attribution": "DESI Legacy DR10 / CDS",
         },
         {
-            "id": "CDS/P/Euclid/ERO/VIS",
-            "label": "Euclid ERO VIS",
-            "attribution": "Euclid ERO VIS / CDS",
-        },
-        {
-            "id": "CDS/P/Euclid/Q1/VIS",
-            "label": "Euclid Q1 VIS",
-            "attribution": "Euclid Q1 VIS / CDS",
-        },
-        {
-            "id": "CDS/P/Euclid/Q1/color",
-            "label": "Euclid Q1 Color",
-            "attribution": "Euclid Q1 Color / CDS",
-        },
-        {
-            "id": "CDS/P/2MASS/color",
-            "label": "2MASS Color",
-            "attribution": "2MASS / CDS",
-        },
-        {
-            "id": "CDS/P/allWISE/color",
-            "label": "AllWISE Color",
-            "attribution": "AllWISE / CDS",
-        },
+            "id": "CDS/P/PanSTARRS/DR1/color-z-zg-g",
+            "label": "PanSTARRS DR1 (Color)",
+            "attribution": "PanSTARRS DR1 (Color) / CDS",
+        }
     ]
 
     def __init__(self, config=None):

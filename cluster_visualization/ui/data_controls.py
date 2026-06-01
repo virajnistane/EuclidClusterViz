@@ -358,13 +358,12 @@ class DataControls:
                                 dcc.Dropdown(
                                     id="aladin-survey-dropdown",
                                     options=[
-                                        {"label": "DSS2 Color", "value": "P/DSS2/color"},
+                                        {"label": "DESI Legacy DR10", "value": "CDS/P/DESI-Legacy-Surveys/DR10/color"},
                                         {"label": "Euclid VIS Q1", "value": "CDS/P/Euclid/Q1/VIS"},
-                                        {"label": "Euclid NIR Q1 (color)", "value": "CDS/P/Euclid/Q1/NIR"},
-                                        {"label": "2MASS H", "value": "P/2MASS/H"},
-                                        {"label": "WISE W1", "value": "P/allWISE/color"},
+                                        {"label": "Euclid Q1 (color)", "value": "CDS/P/Euclid/Q1/color"},
+                                        {"label": "PanSTARRS DR1 (Color)", "value": "CDS/P/PanSTARRS/DR1/color-z-zg-g"},
                                     ],
-                                    value="P/DSS2/color",
+                                    value="CDS/P/DESI-Legacy-Surveys/DR10/color",
                                     clearable=False,
                                     style={"display": "none"},
                                     placeholder="Select sky survey...",

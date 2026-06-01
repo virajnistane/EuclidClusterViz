@@ -1134,7 +1134,7 @@ class UICallbacks:
                     clusters: clusterPts,
                     catred: catredPts,
                     viewport: {ra: raCtr, dec: decCtr, fov: fov},
-                    survey: survey || 'P/DSS2/color'
+                    survey: survey || 'P/DESI-Legacy-Surveys/DR10/color'
                 };
 
                 return [disabled, radioOptions, overlayData];
@@ -1180,7 +1180,7 @@ class UICallbacks:
                     var ra  = vp.ra  != null ? vp.ra  : 180.0;
                     var dec = vp.dec != null ? vp.dec : 0.0;
                     var fov = vp.fov != null ? vp.fov : 1.0;
-                    var survey = data.survey || 'P/DSS2/color';
+                    var survey = data.survey || 'P/DESI-Legacy-Surveys/DR10/color';
 
                     function setupCatalogs(aladin) {
                         // Remove old catalog layers (keep image layers)
@@ -1249,7 +1249,7 @@ class UICallbacks:
                                     target: ra + ' ' + dec,
                                     fov: fov,
                                     survey: survey,
-                                    cooFrame: 'J2000',
+                                    cooFrame: 'ICRSd',
                                     showReticle: false,
                                     showZoomControl: false,
                                     showLayersControl: true,
@@ -1369,8 +1369,8 @@ class UICallbacks:
                             if (window._aladinInstance) return;
                             var inst = A.aladin('#aladin-div', {
                                 target: '180 0', fov: 1.0,
-                                survey: 'P/DSS2/color',
-                                cooFrame: 'J2000',
+                                survey: 'P/DESI-Legacy-Surveys/DR10/color',
+                                cooFrame: 'ICRSd',
                                 showReticle: false, showZoomControl: false,
                                 showLayersControl: true, showFrame: false,
                                 showGotoControl: false, showShareControl: false,
