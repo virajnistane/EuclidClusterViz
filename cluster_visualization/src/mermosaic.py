@@ -951,7 +951,12 @@ class MOSAICHandler:
     ) -> List[int]:
         """Find MER tiles whose polygons intersect with the zoom box."""
         from shapely.geometry import box
-        zoom_box = box(ra_min, dec_min, ra_max, dec_max)
+        # Normalise — callers may pass reversed RA from Plotly reversed axis
+        ra_lo = min(ra_min, ra_max)
+        ra_hi = max(ra_min, ra_max)
+        dec_lo = min(dec_min, dec_max)
+        dec_hi = max(dec_min, dec_max)
+        zoom_box = box(ra_lo, dec_lo, ra_hi, dec_hi)
         mertiles_to_load: List[int] = []
 
         # Check if catred_info exists in data (contains tile polygons)
@@ -1633,23 +1638,18 @@ class MOSAICHandler:
         print(f"       - Dec range: {bounds['dec_min']:.6f}° to {bounds['dec_max']:.6f}°")
         print(f"       - Image shape: {height} × {width} pixels")
 
-        # layout.images convention on reversed RA axis:
-        #   x = ra_max  (left screen edge = high RA on reversed axis), xanchor="left"
-        #   y = dec_max (top screen edge),                             yanchor="top"
-        #   col 0 of PNG → screen-left → ra_max
-        #   row 0 of PNG → screen-top  → dec_max
+        # layout.images placement (data coordinates):
+        #   xanchor="right": right data edge of image = x
+        #   x=ra_max, sizex=ra_max-ra_min → data span [ra_min, ra_max] ✓
+        #   yanchor="top": top data edge = y
+        #   y=dec_max, sizey=dec_max-dec_min → data span [dec_min, dec_max] ✓
         #
-        # _process_mosaic_image state after LANCZOS + FLIP_LEFT_RIGHT:
-        #   row 0 = dec_min  (Heatmap y0=dec_min convention, no vertical flip applied)
-        #   col 0 = ra_min   (FLIP_LEFT_RIGHT undoes FITS col0=ra_max)
+        # On reversed RA axis, ra_max=screen-left, ra_min=screen-right.
+        # xanchor="right" pins right edge at ra_max (screen-left); image extends screen-right.
+        # After FLIP_LEFT_RIGHT, col-last = ra_max pixels → right edge correct ✓
         #
-        # For layout.images we need row0=dec_max and col0=ra_max, so flip both axes.
+        # row-0 of PNG maps to top data edge (dec_max). After [::-1] row-0 = dec_max pixels ✓
         img_uint8 = np.clip(processed_image[::-1, ::-1] * 255, 0, 255).astype(np.uint8)
-
-        # RA axis is reversed (autorange="reversed") — Plotly maps x=value to the
-        # *left* edge of the image in screen space.  On a reversed axis the left edge
-        # of the screen corresponds to the higher RA value.  So x = ra_max places the
-        # left screen edge correctly and the image spans leftward to ra_min.
         pil_img = Image.fromarray(img_uint8, mode="L")
         buf = BytesIO()
         pil_img.save(buf, format="PNG", optimize=True, compress_level=6)
@@ -1668,6 +1668,8 @@ class MOSAICHandler:
             "y": float(bounds["dec_max"]),
             "sizex": float(bounds["ra_max"] - bounds["ra_min"]),
             "sizey": float(bounds["dec_max"] - bounds["dec_min"]),
+            # "xanchor": "right",
+            # "yanchor": "top",
             "sizing": "stretch",
             "opacity": float(opacity),
             "layer": "below",
@@ -2051,21 +2053,26 @@ class MOSAICHandler:
             return traces
 
         ra_min, ra_max, dec_min, dec_max = zoom_ranges
+        # Normalise — Plotly reversed RA axis yields range[0] > range[1]
+        vp_ra_lo = min(ra_min, ra_max)
+        vp_ra_hi = max(ra_min, ra_max)
+        vp_dec_lo = min(dec_min, dec_max)
+        vp_dec_hi = max(dec_min, dec_max)
         print(
-            f"Debug: Loading mosaics for zoom area: RA({ra_min:.3f}, {ra_max:.3f}), "
-            f"Dec({dec_min:.3f}, {dec_max:.3f}), provider={provider_norm}, source={source_id}"
+            f"Debug: Loading mosaics for zoom area: RA({vp_ra_lo:.3f}, {vp_ra_hi:.3f}), "
+            f"Dec({vp_dec_lo:.3f}, {vp_dec_hi:.3f}), provider={provider_norm}, source={source_id}"
         )
 
         # Find intersecting tiles
-        mertiles_to_load = self._find_intersecting_tiles(data, ra_min, ra_max, dec_min, dec_max)
+        mertiles_to_load = self._find_intersecting_tiles(data, vp_ra_lo, vp_ra_hi, vp_dec_lo, vp_dec_hi)
 
         if not mertiles_to_load:
             print("Debug: No MER tiles with mosaics found in zoom area")
             return traces
 
         # PERFORMANCE LIMITS: Strict limits for interactive experience
-        max_mosaics = 5  # Maximum 5 mosaics per zoom
-        max_processing_time = 30  # Maximum 30 seconds total processing time
+        max_mosaics = 4  # Maximum 4 mosaics per zoom
+        max_processing_time = 120  # Maximum 120 seconds total processing time
 
         if len(mertiles_to_load) > max_mosaics:
             print(f"Debug: Limiting to first {max_mosaics} mosaics for performance")
@@ -2100,10 +2107,25 @@ class MOSAICHandler:
                 trace_time = time.time() - trace_start
 
                 if trace:
-                    traces.append(trace)
-                    print(
-                        f"[SUCCESS] Created mosaic trace for MER tile {mertileid} in {trace_time:.2f}s"
-                    )
+                    # Validate actual FITS bounds overlap viewport — catred polygons are
+                    # large survey footprints; the FITS tile may be elsewhere in the footprint.
+                    # x=ra_max, xanchor="right" → ra_min = x - sizex
+                    tile_ra_max = trace["x"]
+                    tile_ra_min = trace["x"] - trace["sizex"]
+                    tile_dec_max = trace["y"]
+                    tile_dec_min = trace["y"] - trace["sizey"]
+                    ra_overlap = tile_ra_min <= vp_ra_hi and tile_ra_max >= vp_ra_lo
+                    dec_overlap = tile_dec_min <= vp_dec_hi and tile_dec_max >= vp_dec_lo
+                    if not (ra_overlap and dec_overlap):
+                        print(
+                            f"[SKIP] Tile {mertileid} FITS bounds RA({tile_ra_min:.3f},{tile_ra_max:.3f}) "
+                            f"Dec({tile_dec_min:.3f},{tile_dec_max:.3f}) outside viewport — skipping"
+                        )
+                    else:
+                        traces.append(trace)
+                        print(
+                            f"[SUCCESS] Created mosaic trace for MER tile {mertileid} in {trace_time:.2f}s"
+                        )
                 else:
                     print(f"[WARNING] No trace created for MER tile {mertileid}")
 
