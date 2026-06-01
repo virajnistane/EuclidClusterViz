@@ -1081,11 +1081,13 @@ class UICallbacks:
                 var count = 0;
                 var clusterPts = [];  // {ra, dec, name}
                 var catredPts = [];
+                var maskPolygons = [];  // [[ra,dec], ...] per polygon segment
 
                 (figure.data || []).forEach(function(trace) {
                     var name = (trace.name || '');
                     var isCatred = name.indexOf('CATRED') === 0;
-                    var isCluster = !isCatred && (
+                    var isMask = name.indexOf('Mask overlay') === 0 || name.indexOf('Inverted mask overlay') === 0;
+                    var isCluster = !isCatred && !isMask && (
                         name.indexOf('Merged') >= 0 || name.indexOf('PZWAV') >= 0 || name.indexOf('AMICO') >= 0
                     );
                     // Exclude glow halos (no cluster-count suffix and contain 'near CATRED')
@@ -1120,6 +1122,18 @@ class UICallbacks:
                                 catredPts.push({ra: ra, dec: dec, name: 'CATRED'});
                             }
                         }
+                    } else if (isMask) {
+                        // Split null-separated polygon segments
+                        var poly = [];
+                        for (var i = 0; i < xs.length; i++) {
+                            if (xs[i] == null) {
+                                if (poly.length > 1) maskPolygons.push(poly);
+                                poly = [];
+                            } else {
+                                poly.push([xs[i], ys[i]]);
+                            }
+                        }
+                        if (poly.length > 1) maskPolygons.push(poly);
                     }
                 });
 
@@ -1133,6 +1147,7 @@ class UICallbacks:
                 var overlayData = {
                     clusters: clusterPts,
                     catred: catredPts,
+                    mask_polygons: maskPolygons,
                     viewport: {ra: raCtr, dec: decCtr, fov: fov},
                     survey: survey || 'P/DESI-Legacy-Surveys/DR10/color'
                 };
@@ -1189,6 +1204,18 @@ class UICallbacks:
                         // Hide skeleton as soon as Aladin is positioned — catalogs added async below
                         var sk = document.getElementById('aladin-skeleton');
                         if (sk) sk.style.display = 'none';
+
+                        // Mask polygons from figure.data (same data as Plotly view, already viewport-filtered)
+                        if (data.mask_polygons && data.mask_polygons.length > 0) {
+                            try {
+                                var maskOverlay = A.graphicOverlay({color: '#ffff00', lineWidth: 1, opacity: 0.5});
+                                aladin.addOverlay(maskOverlay);
+                                var footprints = data.mask_polygons.map(function(poly) {
+                                    return A.polygon(poly);
+                                });
+                                maskOverlay.addFootprints(footprints);
+                            } catch(e) { console.warn('[Aladin] mask overlay failed:', e); }
+                        }
 
                         // Build source arrays (cheap — just JS objects, no render yet)
                         var pzwavCat = A.catalog({name: 'PZWAV Clusters', color: '#ff6600', shape: 'x', sourceSize: 14});
@@ -1260,16 +1287,7 @@ class UICallbacks:
                                 });
                                 window._aladinInstance = inst;
 
-                                // HEALPix detection mask as HiPS overlay layer
-                                try {
-                                    var maskHips = inst.createImageSurvey(
-                                        'mask_detcl', 'Detection Mask',
-                                        'https://erass-cluster-inspector.com/euclid/hips/mask_detcl/',
-                                        'equatorial', 5, {imgFormat: 'png'}
-                                    );
-                                    window._aladinMaskLayer = inst.setOverlayImageLayer(maskHips, 'mask_detcl');
-                                    window._aladinMaskLayer.setOpacity(0.3);
-                                } catch(e) { console.warn('[Aladin] mask HiPS failed:', e); }
+                                // Mask polygons are rendered via setupCatalogs from figure.data (no CDN needed)
 
                                 // Click bridge
                                 try {
