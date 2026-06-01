@@ -102,6 +102,28 @@ class ClusterVisualizationCore:
         self.app = app
         self.connection_monitor = ConnectionMonitor()
 
+        # Debug log endpoint — browser JS can POST messages to /log
+        if not hasattr(app.server, "_debug_log_setup"):
+            import os as _os, datetime as _dt
+
+            _log_path = _os.path.join(
+                _os.path.dirname(_os.path.dirname(_os.path.dirname(__file__))),
+                "tmp", "browser_debug.log"
+            )
+            _os.makedirs(_os.path.dirname(_log_path), exist_ok=True)
+
+            @app.server.route("/log", methods=["POST"])
+            def browser_log():
+                from flask import request as _req, jsonify
+                msg = (_req.get_data(as_text=True) or "").strip()
+                ts = _dt.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                with open(_log_path, "a") as _f:
+                    _f.write(f"[{ts}] {msg}\n")
+                return jsonify(ok=True)
+
+            app.server._debug_log_setup = True
+            print(f"📝 Debug log → {_log_path}")
+
         # Set up Flask middleware to track connections if not already set up
         if not hasattr(app.server, "_connection_tracking_setup"):
 

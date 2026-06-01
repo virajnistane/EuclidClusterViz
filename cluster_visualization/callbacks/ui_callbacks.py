@@ -976,9 +976,13 @@ class UICallbacks:
                     return window.dash_clientside.no_update;
                 }
                 const prop = triggered[0].prop_id;
-                if (prop.includes('view-mode-plotly-btn')) return 'plotly';
-                if (prop.includes('view-mode-aladin-btn')) return 'aladin';
-                return window.dash_clientside.no_update;
+                var next = window.dash_clientside.no_update;
+                if (prop.includes('view-mode-plotly-btn')) next = 'plotly';
+                if (prop.includes('view-mode-aladin-btn')) next = 'aladin';
+                if (next !== window.dash_clientside.no_update) {
+                    try { fetch('/log', {method:'POST', body:'[view-toggle] ' + currentMode + ' → ' + next}); } catch(e) {}
+                }
+                return next;
             }
             """,
             Output("view-mode-store", "data"),
@@ -1150,16 +1154,25 @@ class UICallbacks:
         # Mask is added as a HiPS overlay image layer (no server data needed).
         self.app.clientside_callback(
             """
-            function(overlayData) {
-                if (!overlayData) return window.dash_clientside.no_update;
+            function(overlayData, viewMode) {
+                function dbg(msg) {
+                    try { fetch('/log', {method:'POST', body: '[aladin-bridge] ' + msg}); } catch(e) {}
+                }
+                if (!overlayData) { dbg('skip: no overlayData, viewMode=' + viewMode); return window.dash_clientside.no_update; }
+                // Only render when Aladin mode is active.
+                if (viewMode !== 'aladin') { dbg('skip: viewMode=' + viewMode); return window.dash_clientside.no_update; }
 
-                // Skip rendering when Aladin container is hidden.
-                // relayoutData panning updates the store (good — data pre-computed), but we
-                // must NOT render into a hidden canvas or set _aladinLastFp from those updates.
-                // When user actually switches to Aladin the container is visible and fp is fresh.
-                var aladinContainer = document.getElementById('aladin-view-container');
-                if (!aladinContainer || aladinContainer.style.display === 'none') {
-                    return window.dash_clientside.no_update;
+                // If the view-mode-store triggered this callback (user switched to Aladin),
+                // clear the dedup fingerprint so re-entry always forces a full re-init even
+                // when the viewport/survey hasn't changed since the last Aladin visit.
+                var triggered = window.dash_clientside.callback_context.triggered || [];
+                var modeTriggered = triggered.some(function(t) {
+                    return t.prop_id.indexOf('view-mode-store') >= 0;
+                });
+                dbg('FIRED viewMode=' + viewMode + ' modeTriggered=' + modeTriggered + ' lastFp=' + (window._aladinLastFp||'null') + ' hasInstance=' + !!window._aladinInstance);
+                if (modeTriggered) {
+                    dbg('clearing _aladinLastFp (mode switch)');
+                    window._aladinLastFp = null;
                 }
 
                 function doAladinInit(data) {
@@ -1208,17 +1221,21 @@ class UICallbacks:
                     var doInit = function() {
                         // Dedup: skip re-render if viewport+survey unchanged (double-fire guard)
                         var fp = ra.toFixed(4) + ',' + dec.toFixed(4) + ',' + fov.toFixed(4) + ',' + survey;
+                        dbg('doInit fp=' + fp + ' lastFp=' + (window._aladinLastFp||'null') + ' hasInstance=' + !!window._aladinInstance);
                         if (window._aladinInstance && fp === window._aladinLastFp) {
+                            dbg('DEDUP SKIP: fp unchanged');
                             return;
                         }
                         window._aladinLastFp = fp;
 
                         if (window._aladinInstance) {
+                            dbg('re-using existing instance: gotoRaDec+setupCatalogs');
                             window._aladinInstance.gotoRaDec(ra, dec);
                             window._aladinInstance.setFov(fov);
                             window._aladinInstance.setImageSurvey(survey);
                             setupCatalogs(window._aladinInstance);
                         } else {
+                            dbg('first init: waiting for #aladin-div to be sized');
                             // Wait for #aladin-div to be visible and sized before init
                             // (Aladin v3 reads canvas size at creation; div hidden = blank)
                             var attempts = 0;
@@ -1302,7 +1319,8 @@ class UICallbacks:
             }
             """,
             Output("aladin-init-dummy", "children"),
-            Input("aladin-overlay-data-store", "data"),
+            [Input("aladin-overlay-data-store", "data"),
+             Input("view-mode-store", "data")],
             prevent_initial_call=True,
         )
 
