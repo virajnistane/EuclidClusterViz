@@ -352,8 +352,9 @@ class CATREDCallbacks:
                 var filtered = figure.data.filter(function(trace) {
                     var name = trace.name || '';
                     if (name.indexOf('CATRED') === 0) return false;               // "CATRED Masked - MER Tile" etc
-                    if (name.indexOf('Merged PZWAV (in CATRED') >= 0) return false;  // glow halo only
-                    if (name.indexOf('Merged AMICO (in CATRED') >= 0) return false;  // glow halo only
+                    if (name.indexOf('Merged PZWAV (in CATRED') >= 0) return false;  // BOTH-algo glow halo
+                    if (name.indexOf('Merged AMICO (in CATRED') >= 0) return false;  // BOTH-algo glow halo
+                    if (name.indexOf('near CATRED') >= 0 && name.indexOf(' clusters') < 0) return false;  // single-algo glow halo
                     return true;
                 }).map(function(trace) {
                     var name = trace.name || '';
@@ -554,8 +555,14 @@ class CATREDCallbacks:
                         marker=trace.get("marker", {}),
                         name=trace.get("name", "CATRED Data"),
                         text=trace.get("text", []),
+                        customdata=trace.get("customdata", None),
+                        hovertemplate=trace.get("hovertemplate", None),
+                        hoverlabel=trace.get("hoverlabel", None),
                         hoverinfo=trace.get("hoverinfo", "text"),
+                        legendgroup=trace.get("legendgroup", None),
+                        opacity=trace.get("opacity", None),
                         showlegend=trace.get("showlegend", True),
+                        visible=trace.get("visible", True),
                     )
                     existing_catred_traces.append(existing_trace)
                     print(f"Debug: Preserved existing CATRED trace: {trace['name']}")

@@ -1336,7 +1336,7 @@ class MainPlotCallbacks:
                     isinstance(trace, dict)
                     and "name" in trace
                     and trace["name"]
-                    and "CATRED" in trace["name"]
+                    and trace["name"].startswith("CATRED")
                 ):
                     # Convert dict to Scattergl object for consistency
                     existing_trace = go.Scattergl(
@@ -1346,8 +1346,14 @@ class MainPlotCallbacks:
                         marker=trace.get("marker", {}),
                         name=trace.get("name", "CATRED Data"),
                         text=trace.get("text", []),
+                        customdata=trace.get("customdata", None),
+                        hovertemplate=trace.get("hovertemplate", None),
+                        hoverlabel=trace.get("hoverlabel", None),
                         hoverinfo=trace.get("hoverinfo", "text"),
+                        legendgroup=trace.get("legendgroup", None),
+                        opacity=trace.get("opacity", None),
                         showlegend=trace.get("showlegend", True),
+                        visible=trace.get("visible", True),
                     )
                     existing_catred_traces.append(existing_trace)
         return existing_catred_traces

@@ -211,7 +211,7 @@ class CATREDHandler:
             maglim: Magnitude limit for filtering (default 24.0)
 
         Returns:
-            Dictionary with keys 'RIGHT_ASCENSION', 'DECLINATION', 'PHZ_MODE_1',
+            Dictionary with keys 'RIGHT_ASCENSION', 'DECLINATION', 'PHZ_MEDIAN', 'PHZ_MODE_1',
             'PHZ_70_INT', 'PHZ_PDF' or empty dict {} if unable to load
         """
         try:
@@ -297,8 +297,8 @@ class CATREDHandler:
             return {
                 "RIGHT_ASCENSION": list(x_coords),
                 "DECLINATION": list(y_coords),
-                "PHZ_MODE_1": [0.0] * num_points,  # Dummy scalar values
                 "PHZ_MEDIAN": [0.5] * num_points,  # Dummy median values
+                "PHZ_MODE_1": [0.0] * num_points,  # Dummy scalar values
                 "PHZ_70_INT": [[0.0, 0.0]] * num_points,  # Dummy interval pairs
                 "PHZ_PDF": [[0.0] * 10] * num_points,  # Dummy PDF vectors
                 "KRON_RADIUS": [0.0] * num_points,  # Dummy Kron radius values
@@ -341,7 +341,7 @@ class CATREDHandler:
             }
 
             # Add photometric redshift columns if they exist
-            for col in ["PHZ_MODE_1", "PHZ_70_INT", "PHZ_PDF", "PHZ_MEDIAN", "KRON_RADIUS"]:
+            for col in ["PHZ_MEDIAN", "PHZ_MODE_1", "PHZ_70_INT", "PHZ_PDF", "KRON_RADIUS"]:
                 if col in fits_data.columns.names:
                     col_data = fits_data[col]
                     result[col] = self._process_column_data(col, col_data)
@@ -410,8 +410,8 @@ class CATREDHandler:
         if None in (ra_min, ra_max, dec_min, dec_max):
             return scatter_data
         # RA axis is reversed on sky (decreasing left→right) — normalize to true min/max
-        ra_lo, ra_hi = min(ra_min, ra_max), max(ra_min, ra_max)
-        dec_lo, dec_hi = min(dec_min, dec_max), max(dec_min, dec_max)
+        ra_lo, ra_hi = min(ra_min, ra_max), max(ra_min, ra_max) # type: ignore
+        dec_lo, dec_hi = min(dec_min, dec_max), max(dec_min, dec_max) # type: ignore
         ra_arr = np.asarray(scatter_data["ra"])
         dec_arr = np.asarray(scatter_data["dec"])
         mask = (ra_arr >= ra_lo) & (ra_arr <= ra_hi) & (dec_arr >= dec_lo) & (dec_arr <= dec_hi)
@@ -598,14 +598,14 @@ class CATREDHandler:
             result = {
                 "RIGHT_ASCENSION": full_src_with_coverage["RA"].tolist(),
                 "DECLINATION": full_src_with_coverage["DEC"].tolist(),
-                "PHZ_MODE_1": (
-                    full_src_with_coverage["PHZ_MODE_1"].tolist()
-                    if "PHZ_MODE_1" in full_src_with_coverage.colnames
-                    else [0.5] * len(full_src_with_coverage)
-                ),
                 "PHZ_MEDIAN": (
                     full_src_with_coverage["PHZ_MEDIAN"].tolist()
                     if "PHZ_MEDIAN" in full_src_with_coverage.colnames
+                    else [0.5] * len(full_src_with_coverage)
+                ),
+                "PHZ_MODE_1": (
+                    full_src_with_coverage["PHZ_MODE_1"].tolist()
+                    if "PHZ_MODE_1" in full_src_with_coverage.colnames
                     else [0.5] * len(full_src_with_coverage)
                 ),
                 "PHZ_70_INT": (
@@ -658,7 +658,7 @@ class CATREDHandler:
             maglim: Magnitude limit for filtering (default: None for no magnitude filtering)
 
         Returns:
-            Dictionary with keys 'RIGHT_ASCENSION', 'DECLINATION', 'PHZ_MODE_1',
+            Dictionary with keys 'RIGHT_ASCENSION', 'DECLINATION', 'PHZ_MEDIAN', 'PHZ_MODE_1',
             'PHZ_70_INT', 'PHZ_PDF' for sources above threshold or empty dict {} if unable to load
         """
         try:
@@ -719,14 +719,14 @@ class CATREDHandler:
             result = {
                 "RIGHT_ASCENSION": filtered_src["RA"].tolist(),
                 "DECLINATION": filtered_src["DEC"].tolist(),
-                "PHZ_MODE_1": (
-                    filtered_src["PHZ_MODE_1"].tolist()
-                    if "PHZ_MODE_1" in filtered_src.colnames
-                    else [0.5] * len(filtered_src)
-                ),
                 "PHZ_MEDIAN": (
                     filtered_src["PHZ_MEDIAN"].tolist()
                     if "PHZ_MEDIAN" in filtered_src.colnames
+                    else [0.5] * len(filtered_src)
+                ),
+                "PHZ_MODE_1": (
+                    filtered_src["PHZ_MODE_1"].tolist()
+                    if "PHZ_MODE_1" in filtered_src.colnames
                     else [0.5] * len(filtered_src)
                 ),
                 "PHZ_70_INT": (
@@ -781,8 +781,8 @@ class CATREDHandler:
         catred_scatter_data: Dict[str, List] = {
             "ra": [],
             "dec": [],
-            "phz_mode_1": [],
             "phz_median": [],
+            "phz_mode_1": [],
             "phz_70_int": [],
             "phz_pdf": [],
             "kron_radius": [],
@@ -839,8 +839,8 @@ class CATREDHandler:
             if tile_data and "RIGHT_ASCENSION" in tile_data:
                 catred_scatter_data["ra"].extend(tile_data["RIGHT_ASCENSION"])
                 catred_scatter_data["dec"].extend(tile_data["DECLINATION"])
-                catred_scatter_data["phz_mode_1"].extend(tile_data["PHZ_MODE_1"])
                 catred_scatter_data["phz_median"].extend(tile_data["PHZ_MEDIAN"])
+                catred_scatter_data["phz_mode_1"].extend(tile_data["PHZ_MODE_1"])
                 catred_scatter_data["phz_70_int"].extend(tile_data["PHZ_70_INT"])
                 catred_scatter_data["phz_pdf"].extend(tile_data["PHZ_PDF"])
                 catred_scatter_data["kron_radius"].extend(tile_data["KRON_RADIUS"])
@@ -886,8 +886,8 @@ class CATREDHandler:
             return {
                 "ra": [],
                 "dec": [],
-                "phz_mode_1": [],
                 "phz_median": [],
+                "phz_mode_1": [],
                 "phz_70_int": [],
                 "phz_pdf": [],
                 "kron_radius": [],
@@ -906,8 +906,8 @@ class CATREDHandler:
             return {
                 "ra": [],
                 "dec": [],
-                "phz_mode_1": [],
                 "phz_median": [],
+                "phz_mode_1": [],
                 "phz_70_int": [],
                 "phz_pdf": [],
                 "kron_radius": [],
@@ -922,8 +922,8 @@ class CATREDHandler:
         catred_scatter_data: Dict[str, List] = {
             "ra": [],
             "dec": [],
-            "phz_mode_1": [],
             "phz_median": [],
+            "phz_mode_1": [],
             "phz_70_int": [],
             "phz_pdf": [],
             "kron_radius": [],
@@ -957,8 +957,8 @@ class CATREDHandler:
             if tile_data and "RIGHT_ASCENSION" in tile_data:
                 catred_scatter_data["ra"].extend(tile_data["RIGHT_ASCENSION"])
                 catred_scatter_data["dec"].extend(tile_data["DECLINATION"])
-                catred_scatter_data["phz_mode_1"].extend(tile_data["PHZ_MODE_1"])
                 catred_scatter_data["phz_median"].extend(tile_data["PHZ_MEDIAN"])
+                catred_scatter_data["phz_mode_1"].extend(tile_data["PHZ_MODE_1"])
                 catred_scatter_data["phz_70_int"].extend(tile_data["PHZ_70_INT"])
                 catred_scatter_data["phz_pdf"].extend(tile_data["PHZ_PDF"])
                 catred_scatter_data["kron_radius"].extend(tile_data["KRON_RADIUS"])
@@ -1010,8 +1010,8 @@ class CATREDHandler:
             return {
                 "ra": [],
                 "dec": [],
-                "phz_mode_1": [],
                 "phz_median": [],
+                "phz_mode_1": [],
                 "phz_70_int": [],
                 "phz_pdf": [],
                 "kron_radius": [],
@@ -1031,8 +1031,8 @@ class CATREDHandler:
             return {
                 "ra": [],
                 "dec": [],
-                "phz_mode_1": [],
                 "phz_median": [],
+                "phz_mode_1": [],
                 "phz_70_int": [],
                 "phz_pdf": [],
                 "kron_radius": [],
@@ -1045,8 +1045,8 @@ class CATREDHandler:
         catred_scatter_data: Dict[str, List] = {
             "ra": [],
             "dec": [],
-            "phz_mode_1": [],
             "phz_median": [],
+            "phz_mode_1": [],
             "phz_70_int": [],
             "phz_pdf": [],
             "kron_radius": [],
@@ -1076,8 +1076,8 @@ class CATREDHandler:
             if tile_data and "RIGHT_ASCENSION" in tile_data:
                 catred_scatter_data["ra"].extend(tile_data["RIGHT_ASCENSION"])
                 catred_scatter_data["dec"].extend(tile_data["DECLINATION"])
-                catred_scatter_data["phz_mode_1"].extend(tile_data["PHZ_MODE_1"])
                 catred_scatter_data["phz_median"].extend(tile_data["PHZ_MEDIAN"])
+                catred_scatter_data["phz_mode_1"].extend(tile_data["PHZ_MODE_1"])
                 catred_scatter_data["phz_70_int"].extend(tile_data["PHZ_70_INT"])
                 catred_scatter_data["phz_pdf"].extend(tile_data["PHZ_PDF"])
                 catred_scatter_data["kron_radius"].extend(tile_data["KRON_RADIUS"])
@@ -1130,8 +1130,8 @@ class CATREDHandler:
             return {
                 "ra": [],
                 "dec": [],
-                "phz_mode_1": [],
                 "phz_median": [],
+                "phz_mode_1": [],
                 "phz_70_int": [],
                 "phz_pdf": [],
                 "kron_radius": [],
@@ -1170,15 +1170,31 @@ class CATREDHandler:
         z_min = box["z_min"]
         z_max = box["z_max"]
 
-        # self.catred_z_param_select_for_filter = 'PHZ_MODE_1'
+        z_column = self.catred_z_param_select_for_filter
+        if z_column not in src.colnames:
+            print(
+                f"Debug: Preferred redshift column '{z_column}' not found in CATRED source table, falling back to available redshift column"
+            )
+            if "PHZ_MEDIAN" in src.colnames:
+                z_column = "PHZ_MEDIAN"
+            elif "PHZ_MODE_1" in src.colnames:
+                z_column = "PHZ_MODE_1"
+            else:
+                raise KeyError(
+                    "CATRED source table is missing both PHZ_MODE_1 and PHZ_MEDIAN columns"
+                )
+
+        print(
+            f"Debug: CATRED box selection using redshift column '{z_column}' with window [{z_min:.4f}, {z_max:.4f}]"
+        )
 
         selection_mask = (
             (src["RIGHT_ASCENSION"] >= ra_min)
             & (src["RIGHT_ASCENSION"] <= ra_max)
             & (src["DECLINATION"] >= dec_min)
             & (src["DECLINATION"] <= dec_max)
-            & (src[self.catred_z_param_select_for_filter] >= z_min)
-            & (src[self.catred_z_param_select_for_filter] <= z_max)
+            & (src[z_column] >= z_min)
+            & (src[z_column] <= z_max)
         )
 
         filtered_src = src[selection_mask]
@@ -1202,22 +1218,24 @@ class CATREDHandler:
         dec_min = click_data["dec"] - click_data["catred_box_size"] / 2
         dec_max = click_data["dec"] + click_data["catred_box_size"] / 2
 
-        bin_width = click_data.get("catred_redshift_bin_width") or 0.0
+        _DEFAULT_BIN_WIDTH = 0.5  # matches UI default in tabs.py
+        bin_width_raw = click_data.get("catred_redshift_bin_width")
+        bin_width = float(bin_width_raw) if bin_width_raw is not None else _DEFAULT_BIN_WIDTH
         z_center = float(click_data["redshift"])
+        lim_lower = click_data.get("redshift_lim_lower")
+        lim_upper = click_data.get("redshift_lim_upper")
+
         if bin_width == 0.0:
-            # No bin width specified — disable z filtering
-            z_min = float("-inf")
-            z_max = float("inf")
+            # Explicit zero — use full redshift slider range if available, else no z filter
+            z_min = float(lim_lower) if lim_lower is not None else float("-inf")
+            z_max = float(lim_upper) if lim_upper is not None else float("inf")
         else:
             z_min = z_center - bin_width / 2
             z_max = z_center + bin_width / 2
-
-        lim_lower = click_data.get("redshift_lim_lower")
-        lim_upper = click_data.get("redshift_lim_upper")
-        if lim_lower is not None:
-            z_min = max(z_min, float(lim_lower))
-        if lim_upper is not None:
-            z_max = min(z_max, float(lim_upper))
+            if lim_lower is not None:
+                z_min = max(z_min, float(lim_lower))
+            if lim_upper is not None:
+                z_max = min(z_max, float(lim_upper))
 
         if z_min > z_max:
             print(

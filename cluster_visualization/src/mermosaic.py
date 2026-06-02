@@ -932,10 +932,10 @@ class MOSAICHandler:
         """Find MER tiles whose polygons intersect with the zoom box."""
         from shapely.geometry import box
         # Normalise — callers may pass reversed RA from Plotly reversed axis
-        ra_lo = min(ra_min, ra_max)
-        ra_hi = max(ra_min, ra_max)
-        dec_lo = min(dec_min, dec_max)
-        dec_hi = max(dec_min, dec_max)
+        ra_lo = min(ra_min, ra_max) # type: ignore
+        ra_hi = max(ra_min, ra_max) # type: ignore
+        dec_lo = min(dec_min, dec_max) # type: ignore
+        dec_hi = max(dec_min, dec_max) # type: ignore
         zoom_box = box(ra_lo, dec_lo, ra_hi, dec_hi)
         mertiles_to_load: List[int] = []
 
@@ -2034,10 +2034,10 @@ class MOSAICHandler:
 
         ra_min, ra_max, dec_min, dec_max = zoom_ranges
         # Normalise — Plotly reversed RA axis yields range[0] > range[1]
-        vp_ra_lo = min(ra_min, ra_max)
-        vp_ra_hi = max(ra_min, ra_max)
-        vp_dec_lo = min(dec_min, dec_max)
-        vp_dec_hi = max(dec_min, dec_max)
+        vp_ra_lo = min(ra_min, ra_max) # type: ignore
+        vp_ra_hi = max(ra_min, ra_max) # type: ignore
+        vp_dec_lo = min(dec_min, dec_max) # type: ignore
+        vp_dec_hi = max(dec_min, dec_max) # type: ignore
         print(
             f"Debug: Loading mosaics for zoom area: RA({vp_ra_lo:.3f}, {vp_ra_hi:.3f}), "
             f"Dec({vp_dec_lo:.3f}, {vp_dec_hi:.3f}), provider={provider_norm}, source={source_id}"

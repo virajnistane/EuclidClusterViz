@@ -274,6 +274,34 @@ class TraceCreator:
                         print(
                             f"Debug: Added {len(catred_data['ra'])} points from existing trace '{trace_name}'"
                         )
+            else:
+                # In background callbacks, in-memory current_catred_data can be empty even
+                # when traces are present in the figure. Recover proximity points directly
+                # from preserved CATRED traces to keep near-CATRED highlighting/clickability.
+                recovered_points = 0
+                for trace in existing_catred_traces:
+                    xs = None
+                    ys = None
+                    if isinstance(trace, dict):
+                        xs = trace.get("x", [])
+                        ys = trace.get("y", [])
+                    else:
+                        xs = getattr(trace, "x", [])
+                        ys = getattr(trace, "y", [])
+
+                    if xs is None or ys is None:
+                        continue
+
+                    for ra, dec in zip(xs, ys):
+                        if ra is None or dec is None:
+                            continue
+                        all_points.append((float(ra), float(dec)))
+                        recovered_points += 1
+
+                if recovered_points > 0:
+                    print(
+                        f"Debug: Recovered {recovered_points} CATRED points from existing traces"
+                    )
         else:
             # No existing CATRED traces - clear stored CATRED data to revert markers
             if hasattr(self, "current_catred_data"):
@@ -1195,6 +1223,25 @@ class TraceCreator:
                             if (show_cltile_info and data_detcluster_by_cltile)
                             else (["royalblue"] * len(pzwav_near), ["?"] * len(pzwav_near))
                         )
+                        _pzwav_near_customdata = [
+                            [snr, z, det_code, cluster_id, tid]
+                            for snr, z, det_code, cluster_id, tid in zip(
+                                pzwav_near["SNR_CLUSTER"],
+                                pzwav_near["Z_CLUSTER"],
+                                pzwav_near["DET_CODE_NB"],
+                                pzwav_near["ID_UNIQUE_CLUSTER"],
+                                pzwav_near_tile_ids,
+                            )
+                        ]
+                        _pzwav_near_hovertemplate = (
+                            ("<b>Cluster (PZWAV - Tile %{customdata[4]})</b><br>" if show_cltile_info else "<b>Cluster (PZWAV)</b><br>")
+                            + "ID: %{customdata[3]}<br>"
+                            + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
+                            + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
+                            + "Z: %{customdata[1]:.2f}<br>"
+                            + "SNR: %{customdata[0]:.2f}<br>"
+                            + "<extra></extra>"
+                        )
                         glow_trace_pzwav = create_glow_trace(
                             pzwav_near["RIGHT_ASCENSION_CLUSTER"],
                             pzwav_near["DECLINATION_CLUSTER"],
@@ -1204,6 +1251,12 @@ class TraceCreator:
                             name="Merged PZWAV (in CATRED region)",
                         )
                         glow_trace_pzwav["legendgroup"] = "merged_pzwav"
+                        glow_trace_pzwav.update(
+                            customdata=_pzwav_near_customdata,
+                            hovertemplate=_pzwav_near_hovertemplate,
+                            hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
+                            hoverinfo="all",
+                        )
                         data_traces.append(glow_trace_pzwav)
 
                         enhanced_trace_pzwav = go.Scattergl(
@@ -1219,25 +1272,8 @@ class TraceCreator:
                             name=f"PZWAV (Merged, near CATRED) - {len(pzwav_near)} clusters",
                             legendgroup="merged_pzwav",
                             showlegend=False,
-                            customdata=[
-                                [snr, z, det_code, cluster_id, tid]
-                                for snr, z, det_code, cluster_id, tid in zip(
-                                    pzwav_near["SNR_CLUSTER"],
-                                    pzwav_near["Z_CLUSTER"],
-                                    pzwav_near["DET_CODE_NB"],
-                                    pzwav_near["ID_UNIQUE_CLUSTER"],
-                                    pzwav_near_tile_ids,
-                                )
-                            ],
-                            hovertemplate=(
-                                ("<b>Cluster (PZWAV - Tile %{customdata[4]})</b><br>" if show_cltile_info else "<b>Cluster (PZWAV)</b><br>")
-                                + "ID: %{customdata[3]}<br>"
-                                + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
-                                + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
-                                + "Z: %{customdata[1]:.2f}<br>"
-                                + "SNR: %{customdata[0]:.2f}<br>"
-                                + "<extra></extra>"
-                            ),
+                            customdata=_pzwav_near_customdata,
+                            hovertemplate=_pzwav_near_hovertemplate,
                             hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
                         )
                         data_traces.append(enhanced_trace_pzwav)
@@ -1251,6 +1287,25 @@ class TraceCreator:
                             if (show_cltile_info and data_detcluster_by_cltile)
                             else (["tomato"] * len(amico_near), ["?"] * len(amico_near))
                         )
+                        _amico_near_customdata = [
+                            [snr, z, det_code, cluster_id, tid]
+                            for snr, z, det_code, cluster_id, tid in zip(
+                                amico_near["SNR_CLUSTER"],
+                                amico_near["Z_CLUSTER"],
+                                amico_near["DET_CODE_NB"],
+                                amico_near["ID_UNIQUE_CLUSTER"],
+                                amico_near_tile_ids,
+                            )
+                        ]
+                        _amico_near_hovertemplate = (
+                            ("<b>Cluster (AMICO - Tile %{customdata[4]})</b><br>" if show_cltile_info else "<b>Cluster (AMICO)</b><br>")
+                            + "ID: %{customdata[3]}<br>"
+                            + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
+                            + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
+                            + "Z: %{customdata[1]:.2f}<br>"
+                            + "SNR: %{customdata[0]:.2f}<br>"
+                            + "<extra></extra>"
+                        )
                         glow_trace_amico = create_glow_trace(
                             amico_near["RIGHT_ASCENSION_CLUSTER"],
                             amico_near["DECLINATION_CLUSTER"],
@@ -1260,6 +1315,12 @@ class TraceCreator:
                             name="Merged AMICO (in CATRED region)",
                         )
                         glow_trace_amico["legendgroup"] = "merged_amico"
+                        glow_trace_amico.update(
+                            customdata=_amico_near_customdata,
+                            hovertemplate=_amico_near_hovertemplate,
+                            hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
+                            hoverinfo="all",
+                        )
                         data_traces.append(glow_trace_amico)
 
                         enhanced_trace_amico = go.Scattergl(
@@ -1275,25 +1336,8 @@ class TraceCreator:
                             name=f"AMICO (Merged, near CATRED) - {len(amico_near)} clusters",
                             legendgroup="merged_amico",
                             showlegend=False,
-                            customdata=[
-                                [snr, z, det_code, cluster_id, tid]
-                                for snr, z, det_code, cluster_id, tid in zip(
-                                    amico_near["SNR_CLUSTER"],
-                                    amico_near["Z_CLUSTER"],
-                                    amico_near["DET_CODE_NB"],
-                                    amico_near["ID_UNIQUE_CLUSTER"],
-                                    amico_near_tile_ids,
-                                )
-                            ],
-                            hovertemplate=(
-                                ("<b>Cluster (AMICO - Tile %{customdata[4]})</b><br>" if show_cltile_info else "<b>Cluster (AMICO)</b><br>")
-                                + "ID: %{customdata[3]}<br>"
-                                + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
-                                + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
-                                + "Z: %{customdata[1]:.2f}<br>"
-                                + "SNR: %{customdata[0]:.2f}<br>"
-                                + "<extra></extra>"
-                            ),
+                            customdata=_amico_near_customdata,
+                            hovertemplate=_amico_near_hovertemplate,
                             hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
                         )
                         data_traces.append(enhanced_trace_amico)
@@ -1321,6 +1365,31 @@ class TraceCreator:
                         if (show_cltile_info and data_detcluster_by_cltile)
                         else (["royalblue" if algorithm.lower() == "pzwav" else "tomato"] * len(near_catred_data), ["?"] * len(near_catred_data))
                     )
+                    _near_customdata = [
+                        [snr, z, det_code, cluster_id, tid]
+                        for snr, z, det_code, cluster_id, tid in zip(
+                            near_catred_data["SNR_CLUSTER"],
+                            near_catred_data["Z_CLUSTER"],
+                            (
+                                near_catred_data["DET_CODE_NB"]
+                                if has_det_code
+                                else [2 if algorithm.lower() == "pzwav" else 1]
+                                * len(near_catred_data)
+                            ),
+                            near_catred_data["ID_UNIQUE_CLUSTER"],
+                            near_tile_ids,
+                        )
+                    ]
+                    _near_hovertemplate = (
+                        (f"<b>Cluster ({algorithm} - Tile %{{customdata[4]}})</b><br>" if show_cltile_info else f"<b>Cluster ({algorithm})</b><br>")
+                        + "ID: %{customdata[3]}<br>"
+                        + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
+                        + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
+                        + "Z: %{customdata[1]:.2f}<br>"
+                        + "SNR: %{customdata[0]:.2f}<br>"
+                        + "<extra></extra>"
+                    )
+
                     # Add glow effect trace first (background)
                     glow_trace = create_glow_trace(
                         near_catred_data["RIGHT_ASCENSION_CLUSTER"],
@@ -1331,6 +1400,12 @@ class TraceCreator:
                         name=f"{algorithm.upper()} (Merged, near CATRED)",
                     )
                     glow_trace["legendgroup"] = f"merged_{algorithm.lower()}"
+                    glow_trace.update(
+                        customdata=_near_customdata,
+                        hovertemplate=_near_hovertemplate,
+                        hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
+                        hoverinfo="all",
+                    )
                     data_traces.append(glow_trace)
 
                     # Add main enhanced trace (foreground)
@@ -1347,30 +1422,8 @@ class TraceCreator:
                         name=f"{algorithm.upper()} (Merged, near CATRED) - {len(near_catred_data)} clusters",
                         legendgroup=f"merged_{algorithm.lower()}",
                         showlegend=False,
-                        customdata=[
-                            [snr, z, det_code, cluster_id, tid]
-                            for snr, z, det_code, cluster_id, tid in zip(
-                                near_catred_data["SNR_CLUSTER"],
-                                near_catred_data["Z_CLUSTER"],
-                                (
-                                    near_catred_data["DET_CODE_NB"]
-                                    if has_det_code
-                                    else [2 if algorithm.lower() == "pzwav" else 1]
-                                    * len(near_catred_data)
-                                ),
-                                near_catred_data["ID_UNIQUE_CLUSTER"],
-                                near_tile_ids,
-                            )
-                        ],
-                        hovertemplate=(
-                            (f"<b>Cluster ({algorithm} - Tile %{{customdata[4]}})</b><br>" if show_cltile_info else f"<b>Cluster ({algorithm})</b><br>")
-                            + "ID: %{customdata[3]}<br>"
-                            + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
-                            + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
-                            + "Z: %{customdata[1]:.2f}<br>"
-                            + "SNR: %{customdata[0]:.2f}<br>"
-                            + "<extra></extra>"
-                        ),
+                        customdata=_near_customdata,
+                        hovertemplate=_near_hovertemplate,
                         hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
                     )
                     data_traces.append(enhanced_trace)

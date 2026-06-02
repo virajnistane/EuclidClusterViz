@@ -497,7 +497,7 @@ class TabContent:
                                                                     value=0.5,
                                                                     min=0,
                                                                     max=3.0,
-                                                                    step=0.1,
+                                                                    step=0.01,
                                                                     className="mb-2",
                                                                 ),
                                                             ],

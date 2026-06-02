@@ -948,6 +948,8 @@ class ClusterModalCallbacks:
                     redshift_range[1] if redshift_range and len(redshift_range) == 2 else None
                 )
 
+                print(f"Debug catred_redshift_bin_width received: {catred_redshift_bin_width!r}")
+                
                 # Extract existing CATRED traces from current figure to preserve them
                 existing_catred_traces = self._extract_existing_catred_traces(current_figure)
                 existing_mosaic_traces = self._extract_existing_mosaic_traces(current_figure)
@@ -988,7 +990,7 @@ class ClusterModalCallbacks:
                         relayout_data,
                         catred_masked,
                         catred_box_data=catred_box_data,
-                        existing_catred_traces=existing_catred_traces,
+                        existing_catred_traces=[],
                         existing_mosaic_traces=existing_mosaic_traces,
                         existing_mask_overlay_traces=existing_mask_overlay_traces,
                         snr_threshold_lower_pzwav=snr_pzwav_lower,
@@ -1010,6 +1012,25 @@ class ClusterModalCallbacks:
                     self.figure_manager.preserve_zoom_state(fig, relayout_data)
                 else:
                     self._preserve_zoom_state_fallback(fig, relayout_data)
+
+                # Re-inject mosaic layout.images from the previous figure.
+                # Mosaics are stored in fig.layout.images (not fig.data), so
+                # _extract_existing_mosaic_traces cannot see them.  Copy them
+                # directly from the current figure's layout before returning.
+                if current_figure and isinstance(current_figure, dict):
+                    prev_images = (
+                        current_figure.get("layout", {}).get("images") or []
+                    )
+                    mosaic_images = [
+                        img for img in prev_images
+                        if isinstance(img, dict) and img.get("name", "").startswith("Mosaic")
+                    ]
+                    if mosaic_images:
+                        existing_layout_images = list(fig.layout.images or [])
+                        fig.update_layout(images=existing_layout_images + mosaic_images)
+                        print(
+                            f"Debug: Re-injected {len(mosaic_images)} mosaic layout images after CATRED box rebuild"
+                        )
 
                 empty_phz_fig = self._create_empty_phz_plot()
 
@@ -1066,6 +1087,7 @@ class ClusterModalCallbacks:
 
                 set_progress((65, "Creating mask overlay..."))
                 if self.mosaic_handler:
+                    mask_cutout_traces = []
                     if current_figure and "data" in current_figure:
                         mask_overlay_traces = [
                             trace
@@ -1678,25 +1700,35 @@ class ClusterModalCallbacks:
         existing_catred_traces = []
         if current_figure and "data" in current_figure:
             for trace in current_figure["data"]:
-                if (
-                    isinstance(trace, dict)
-                    and "name" in trace
-                    and trace["name"]
-                    and "CATRED" in trace["name"]
-                ):
-                    # Convert dict to Scattergl object for consistency
-                    existing_trace = go.Scattergl(
-                        x=trace.get("x", []),
-                        y=trace.get("y", []),
-                        mode=trace.get("mode", "markers"),
-                        marker=trace.get("marker", {}),
-                        name=trace.get("name", "CATRED Data"),
-                        text=trace.get("text", []),
-                        hoverinfo=trace.get("hoverinfo", "text"),
-                        showlegend=trace.get("showlegend", True),
-                    )
-                    existing_catred_traces.append(existing_trace)
-                    print(f"Debug: Preserved existing CATRED trace: {trace['name']}")
+                trace_name = ""
+                if isinstance(trace, dict):
+                    trace_name = trace.get("name", "")
+                elif hasattr(trace, "name"):
+                    trace_name = trace.name or ""
+
+                if trace_name and trace_name.startswith("CATRED"):
+                    if isinstance(trace, dict):
+                        # Convert dict to Scattergl object for consistency
+                        existing_trace = go.Scattergl(
+                            x=trace.get("x", []),
+                            y=trace.get("y", []),
+                            mode=trace.get("mode", "markers"),
+                            marker=trace.get("marker", {}),
+                            name=trace.get("name", "CATRED Data"),
+                            text=trace.get("text", []),
+                            customdata=trace.get("customdata", None),
+                            hovertemplate=trace.get("hovertemplate", None),
+                            hoverlabel=trace.get("hoverlabel", None),
+                            hoverinfo=trace.get("hoverinfo", "text"),
+                            legendgroup=trace.get("legendgroup", None),
+                            opacity=trace.get("opacity", None),
+                            showlegend=trace.get("showlegend", True),
+                            visible=trace.get("visible", True),
+                        )
+                        existing_catred_traces.append(existing_trace)
+                    else:
+                        existing_catred_traces.append(trace)
+                    print(f"Debug: Preserved existing CATRED trace: {trace_name}")
         return existing_catred_traces
 
     def _extract_existing_mosaic_traces(self, current_figure):
@@ -1753,12 +1785,41 @@ class ClusterModalCallbacks:
                     isinstance(trace, dict)
                     and "name" in trace
                     and trace["name"]
-                    and "Mask overlay" in trace["name"]
+                    and (
+                        "Mask overlay" in trace["name"]
+                        or "Inverted mask overlay" in trace["name"]
+                        or trace["name"] == "Mask Colorbar"
+                    )
                 ):
                     # Preserve the original trace type (Image, Heatmap, etc.)
-                    trace_type = trace.get("type", "image")
+                    trace_type = trace.get("type", "scatter")
 
-                    if trace_type == "image":
+                    if trace_type == "scatter":
+                        if trace.get("name") == "Mask Colorbar":
+                            # Preserve marker config for colorbar-only scatter traces.
+                            existing_trace = go.Scatter(
+                                x=trace.get("x"),
+                                y=trace.get("y"),
+                                mode=trace.get("mode", "markers"),
+                                marker=trace.get("marker", {}),
+                                showlegend=trace.get("showlegend", False),
+                                hoverinfo=trace.get("hoverinfo", "skip"),
+                                name=trace.get("name", "Mask Colorbar"),
+                            )
+                        else:
+                            existing_trace = go.Scatter(
+                                x=trace.get("x"),
+                                y=trace.get("y"),
+                                mode=trace.get("mode", "lines"),
+                                fill=trace.get("fill", "toself"),
+                                fillcolor=trace.get("fillcolor", "rgba(0,0,0,0)"),
+                                line=trace.get("line", {}),
+                                name=trace.get("name", "Mask overlay"),
+                                showlegend=trace.get("showlegend", False),
+                                hoverinfo=trace.get("hoverinfo", "skip"),
+                                opacity=trace.get("opacity", 1.0),
+                            )
+                    elif trace_type == "image":
                         existing_trace = go.Image(
                             source=trace.get("source"),
                             x0=trace.get("x0"),
@@ -1775,11 +1836,6 @@ class ClusterModalCallbacks:
                             x=trace.get("x"),
                             y=trace.get("y"),
                             name=trace.get("name", "Mask overlay"),
-                            fillcolor=trace.get("fillcolor", "rgba(0,0,0,0)"),
-                            line=trace.get("line", {}),
-                            fillpattern=trace.get("fillpattern", {}),
-                            customdata=trace.get("customdata", []),
-                            hoverinfo=trace.get("hoverinfo", "text"),
                             opacity=trace.get("opacity", 1.0),
                             colorscale=trace.get("colorscale", "gray"),
                             showscale=trace.get("showscale", False),
@@ -1969,33 +2025,35 @@ class ClusterModalCallbacks:
 
             return current_figure, button_text, False
 
-        # Mosaic Cutout clear
-        @self.app.callback(
+        # Mosaic Cutout clear (clientside)
+        self.app.clientside_callback(
+            """
+            function(n_clicks, figure) {
+                if (!n_clicks) {
+                    return [window.dash_clientside.no_update, window.dash_clientside.no_update, window.dash_clientside.no_update];
+                }
+                if (!figure || !figure.data) {
+                    return [window.dash_clientside.no_update, window.dash_clientside.no_update, window.dash_clientside.no_update];
+                }
+
+                const filtered = (figure.data || []).filter(function(trace) {
+                    const name = (trace && trace.name) ? trace.name : '';
+                    return name.indexOf('MER-Mosaic cutout') < 0;
+                });
+
+                const newFigure = Object.assign({}, figure, {data: filtered});
+                return [newFigure, true, true];
+            }
+            """,
             [
                 Output("cluster-plot", "figure", allow_duplicate=True),
                 Output("tab-cutout-toggle-visibility", "disabled", allow_duplicate=True),
                 Output("tab-cutout-clear", "disabled"),
             ],
-            [Input("tab-cutout-clear", "n_clicks")],
-            [State("cluster-plot", "figure")],
+            Input("tab-cutout-clear", "n_clicks"),
+            State("cluster-plot", "figure"),
             prevent_initial_call=True,
         )
-        def clear_cutout_traces(n_clicks, current_figure):
-            """Clear all mosaic cutout traces"""
-            if not current_figure or "data" not in current_figure:
-                return dash.no_update, dash.no_update, dash.no_update
-
-            # Filter out cutout traces
-            filtered_traces = [
-                trace
-                for trace in current_figure["data"]
-                if "MER-Mosaic cutout" not in trace.get("name", "")
-            ]
-
-            current_figure["data"] = filtered_traces
-
-            # Disable both buttons since no cutouts exist
-            return current_figure, True, True
 
         # CATRED Box visibility toggle
         @self.app.callback(
@@ -2043,33 +2101,58 @@ class ClusterModalCallbacks:
 
             return current_figure, button_text, False
 
-        # CATRED Box clear
-        @self.app.callback(
+        # CATRED Box clear (clientside)
+        self.app.clientside_callback(
+            """
+            function(n_clicks, figure) {
+                if (!n_clicks) {
+                    return [window.dash_clientside.no_update, window.dash_clientside.no_update, window.dash_clientside.no_update];
+                }
+                if (!figure || !figure.data) {
+                    return [window.dash_clientside.no_update, window.dash_clientside.no_update, window.dash_clientside.no_update];
+                }
+
+                const filtered = (figure.data || []).filter(function(trace) {
+                    const name = (trace && trace.name) ? trace.name : '';
+                    if (name.indexOf('CATRED') >= 0 && name.indexOf('Boxed') >= 0) return false;
+                    if (name.indexOf('in CATRED region') >= 0) return false;
+                    if (name.indexOf('near CATRED') >= 0 && name.indexOf('clusters') < 0) return false;
+                    return true;
+                });
+
+                const newFigure = Object.assign({}, figure, {data: filtered});
+                return [newFigure, true, true];
+            }
+            """,
             [
                 Output("cluster-plot", "figure", allow_duplicate=True),
                 Output("tab-catred-box-toggle-visibility", "disabled", allow_duplicate=True),
                 Output("tab-catred-box-clear", "disabled"),
             ],
-            [Input("tab-catred-box-clear", "n_clicks")],
-            [State("cluster-plot", "figure")],
+            Input("tab-catred-box-clear", "n_clicks"),
+            State("cluster-plot", "figure"),
             prevent_initial_call=True,
         )
-        def clear_catred_box_traces(n_clicks, current_figure):
-            """Clear all CATRED box traces"""
-            if not current_figure or "data" not in current_figure:
-                return dash.no_update, dash.no_update, dash.no_update
 
-            # Filter out CATRED box traces
-            filtered_traces = [
-                trace
-                for trace in current_figure["data"]
-                if not ("CATRED" in trace.get("name", "") and "Boxed" in trace.get("name", ""))
-            ]
+        @self.app.callback(
+            Output("tab-catred-box-clear", "title"),
+            Input("tab-catred-box-clear", "n_clicks"),
+            prevent_initial_call=True,
+        )
+        def clear_catred_box_server_state(n_clicks):
+            """Clear cached CATRED state when the box overlay is removed."""
+            if not n_clicks:
+                return dash.no_update
 
-            current_figure["data"] = filtered_traces
+            if self.catred_handler:
+                self.catred_handler.clear_traces_cache()
+                self.catred_handler.current_catred_data = None
 
-            # Disable both buttons since no CATRED boxes exist
-            return current_figure, True, True
+            if self.trace_creator:
+                self.trace_creator.clear_catred_data()
+
+            print(f"Debug: CATRED box server state cleared (click #{n_clicks})")
+            return dash.no_update
 
         # Mask Cutout visibility toggle
         @self.app.callback(
@@ -2117,36 +2200,35 @@ class ClusterModalCallbacks:
 
             return current_figure, button_text, False
 
-        # Mask Cutout clear
-        @self.app.callback(
+        # Mask Cutout clear (clientside)
+        self.app.clientside_callback(
+            """
+            function(n_clicks, figure) {
+                if (!n_clicks) {
+                    return [window.dash_clientside.no_update, window.dash_clientside.no_update, window.dash_clientside.no_update];
+                }
+                if (!figure || !figure.data) {
+                    return [window.dash_clientside.no_update, window.dash_clientside.no_update, window.dash_clientside.no_update];
+                }
+
+                const filtered = (figure.data || []).filter(function(trace) {
+                    const name = (trace && trace.name) ? trace.name : '';
+                    return !(name.indexOf('Mask overlay (cutout)') >= 0 || name.indexOf('Mask Colorbar') >= 0);
+                });
+
+                const newFigure = Object.assign({}, figure, {data: filtered});
+                return [newFigure, true, true];
+            }
+            """,
             [
                 Output("cluster-plot", "figure", allow_duplicate=True),
                 Output("tab-mask-cutout-toggle-visibility", "disabled", allow_duplicate=True),
                 Output("tab-mask-cutout-clear", "disabled"),
             ],
-            [Input("tab-mask-cutout-clear", "n_clicks")],
-            [State("cluster-plot", "figure")],
+            Input("tab-mask-cutout-clear", "n_clicks"),
+            State("cluster-plot", "figure"),
             prevent_initial_call=True,
         )
-        def clear_mask_cutout_traces(n_clicks, current_figure):
-            """Clear all mask cutout traces"""
-            if not current_figure or "data" not in current_figure:
-                return dash.no_update, dash.no_update, dash.no_update
-
-            # Filter out mask cutout traces (including colorbar)
-            filtered_traces = [
-                trace
-                for trace in current_figure["data"]
-                if not (
-                    "Mask overlay (cutout)" in trace.get("name", "")
-                    or "Mask Colorbar" in trace.get("name", "")
-                )
-            ]
-
-            current_figure["data"] = filtered_traces
-
-            # Disable both buttons since no mask cutouts exist
-            return current_figure, True, True
 
         # Enable buttons when traces are generated
         @self.app.callback(
