@@ -678,6 +678,7 @@ class AppLayout:
                         SidebarSections.create_cluster_matching_section(),
                         SidebarSections.create_redshift_section(),
                         SidebarSections.create_snr_section(),
+                        SidebarSections.create_richness_section(),
                         SidebarSections.create_idcluster_section(),
                     ],
                     is_open=False,

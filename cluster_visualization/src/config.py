@@ -161,10 +161,22 @@ class Config:
         else:
             return None
 
-    def has_gluematchcat(self):
-        """Check if gluematchcat file is available"""
-        gluematchcat_xml = self.get_gluematchcat_clusters_xml()
-        return gluematchcat_xml is not None and os.path.exists(gluematchcat_xml)
+    def get_gluematchcat_members_xml(self):
+        """Get path to GlueMatchCat members XML file"""
+        if self.config_parser.has_option("files", "gluematchcat_members"):
+            xmlname = self.config_parser.get("files", "gluematchcat_members")
+            if not xmlname:
+                return None
+            expanded_path = self._expand_path(xmlname)
+            if os.path.isabs(expanded_path):
+                return expanded_path
+            else:
+                if self.gluematchcat_dir:
+                    return os.path.join(self.gluematchcat_dir, xmlname)
+                else:
+                    return None
+        else:
+            return None
 
     def _parse_list_value(self, value: str) -> List[str]:
         """
@@ -283,8 +295,38 @@ class Config:
 
         return files
 
-    def get_characterization_xml_files(self, char_type, det_algorithm):
-        pass
+    def get_characterization_xml_files(self, det_algorithm, char_type = "members"):
+        char_key_map = {
+            "richness": {
+                "pzwav": "characterization_richness_pzwav",
+                "amico": "characterization_richness_amico",
+                "both": ["characterization_richness_pzwav", "characterization_richness_amico"],
+            },
+            "members": {
+                "pzwav": "characterization_members_pzwav",
+                "amico": "characterization_members_amico",
+                "both": ["characterization_members_pzwav", "characterization_members_amico"],
+            },
+        }
+        algorithm_lower = det_algorithm.lower()
+        if algorithm_lower not in char_key_map.get(char_type, {}):
+            raise ValueError(f"Unknown algorithm: {det_algorithm}. Supported: PZWAV, AMICO, BOTH")
+
+        filename_keys = char_key_map[char_type][algorithm_lower]
+        # if not isinstance(filename_keys, list):
+        #     filename_keys = [filename_keys]
+
+        files = {}
+        for key in filename_keys:
+            if self.config_parser.has_option("files", key):
+                filename = self.config_parser.get("files", key)
+                expanded_path = self._expand_path(filename)
+                if os.path.isabs(expanded_path):
+                    files[key] = expanded_path
+                else:
+                    files[key] = os.path.join(self.characterization_dir, filename)
+
+        return files
 
     def get_catred_fileinfo_csv(self):
         """Get path to catred file info CSV (hardcoded filename in catred_dir)"""
