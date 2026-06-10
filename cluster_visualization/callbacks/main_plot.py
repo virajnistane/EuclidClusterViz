@@ -78,6 +78,8 @@ class MainPlotCallbacks:
         self._setup_snr_slider_pzwav_callback()
         self._setup_snr_slider_amico_callback()
         self._setup_redshift_slider_callback()
+        self._setup_richness_slider_zp_callback()
+        self._setup_richness_slider_rs_callback()
         self._setup_main_render_callback()
         self._setup_options_update_callback()
         self._setup_threshold_clientside_callback()
@@ -230,6 +232,72 @@ class MainPlotCallbacks:
                     html.Small("Redshift data not available", className="text-muted"),
                 )
 
+    def _setup_richness_slider_zp_callback(self):
+        @self.app.callback(
+            [
+                Output("richness-range-slider-zp", "min"),
+                Output("richness-range-slider-zp", "max"),
+                Output("richness-range-slider-zp", "value"),
+                Output("richness-range-slider-zp", "marks"),
+                Output("richness-range-display-zp", "children"),
+            ],
+            [Input("algorithm-dropdown", "value")],
+            prevent_initial_call=False,
+        )
+        def update_richness_slider_zp(algorithm):
+            try:
+                data = self.load_data(algorithm)
+                r_min = data["richness_zp_min"]
+                r_max = data["richness_zp_max"]
+                if r_min is None or r_max is None:
+                    raise ValueError("richness_zp not available")
+                marks = {r_min: f"{r_min:.1f}", r_max: f"{r_max:.1f}"}
+                display_text = html.Div(
+                    [
+                        html.Small(f"ZP Range: {r_min:.2f} to {r_max:.2f}", className="text-muted"),
+                        html.Small(" | Move sliders to set filter range", className="text-muted"),
+                    ]
+                )
+                return r_min, r_max, [r_min, r_max], marks, display_text
+            except Exception:
+                return (
+                    0, 100, [0, 100], {0: "0", 100: "100"},
+                    html.Small("Richness ZP data not available", className="text-muted"),
+                )
+
+    def _setup_richness_slider_rs_callback(self):
+        @self.app.callback(
+            [
+                Output("richness-range-slider-rs", "min"),
+                Output("richness-range-slider-rs", "max"),
+                Output("richness-range-slider-rs", "value"),
+                Output("richness-range-slider-rs", "marks"),
+                Output("richness-range-display-rs", "children"),
+            ],
+            [Input("algorithm-dropdown", "value")],
+            prevent_initial_call=False,
+        )
+        def update_richness_slider_rs(algorithm):
+            try:
+                data = self.load_data(algorithm)
+                r_min = data["richness_rs_min"]
+                r_max = data["richness_rs_max"]
+                if r_min is None or r_max is None:
+                    raise ValueError("richness_rs not available")
+                marks = {r_min: f"{r_min:.1f}", r_max: f"{r_max:.1f}"}
+                display_text = html.Div(
+                    [
+                        html.Small(f"RS Range: {r_min:.2f} to {r_max:.2f}", className="text-muted"),
+                        html.Small(" | Move sliders to set filter range", className="text-muted"),
+                    ]
+                )
+                return r_min, r_max, [r_min, r_max], marks, display_text
+            except Exception:
+                return (
+                    0, 100, [0, 100], {0: "0", 100: "100"},
+                    html.Small("Richness RS data not available", className="text-muted"),
+                )
+
     def _setup_main_render_callback(self):
         """Setup main rendering callback for initial plot and SNR/redshift filtering"""
 
@@ -244,6 +312,8 @@ class MainPlotCallbacks:
                 Input("snr-render-button-pzwav", "n_clicks"),
                 Input("snr-render-button-amico", "n_clicks"),
                 Input("redshift-render-button", "n_clicks"),
+                Input("richness-render-button-zp", "n_clicks"),
+                Input("richness-render-button-rs", "n_clicks"),
                 Input("idcluster-render-button", "n_clicks"),
                 Input("rerender-ovals-button", "n_clicks"),
             ],
@@ -253,6 +323,9 @@ class MainPlotCallbacks:
                 State("snr-range-slider-pzwav", "value"),
                 State("snr-range-slider-amico", "value"),
                 State("redshift-range-slider", "value"),
+                State("richness-range-slider-zp", "value"),
+                State("richness-range-slider-rs", "value"),
+                State("richness-mode-radio", "value"),
                 State("idcluster-upload", "contents"),
                 State("idcluster-upload", "filename"),
                 State("polygon-switch", "value"),
@@ -273,6 +346,8 @@ class MainPlotCallbacks:
                 (Output("snr-render-button-pzwav", "disabled"), True, False),
                 (Output("snr-render-button-amico", "disabled"), True, False),
                 (Output("redshift-render-button", "disabled"), True, False),
+                (Output("richness-render-button-zp", "disabled"), True, False),
+                (Output("richness-render-button-rs", "disabled"), True, False),
                 (Output("idcluster-render-button", "disabled"), True, False),
             ],
             progress=[
@@ -286,6 +361,8 @@ class MainPlotCallbacks:
             snr_pzwav_n_clicks,
             snr_amico_n_clicks,
             redshift_n_clicks,
+            richness_zp_n_clicks,
+            richness_rs_n_clicks,
             idcluster_n_clicks,
             rerender_ovals_n_clicks,
             algorithm,
@@ -293,6 +370,9 @@ class MainPlotCallbacks:
             snr_range_pzwav,
             snr_range_amico,
             redshift_range,
+            richness_range_zp,
+            richness_range_rs,
+            richness_mode,
             idcluster_upload_contents,
             idcluster_upload_filename,
             show_polygons,
@@ -314,6 +394,8 @@ class MainPlotCallbacks:
                     snr_pzwav_n_clicks,
                     snr_amico_n_clicks,
                     redshift_n_clicks,
+                    richness_zp_n_clicks,
+                    richness_rs_n_clicks,
                     idcluster_n_clicks,
                     rerender_ovals_n_clicks,
                 ]
@@ -342,6 +424,17 @@ class MainPlotCallbacks:
                 z_lower = redshift_range[0] if redshift_range and len(redshift_range) == 2 else None
                 z_upper = redshift_range[1] if redshift_range and len(redshift_range) == 2 else None
 
+                # Extract richness values based on selected mode
+                if richness_mode == "zp" and richness_range_zp and len(richness_range_zp) == 2:
+                    richness_lower = richness_range_zp[0]
+                    richness_upper = richness_range_zp[1]
+                elif richness_mode == "rs" and richness_range_rs and len(richness_range_rs) == 2:
+                    richness_lower = richness_range_rs[0]
+                    richness_upper = richness_range_rs[1]
+                else:
+                    richness_lower = None
+                    richness_upper = None
+
                 idcluster_list = None
                 if idcluster_upload_contents and idcluster_upload_filename:
                     set_progress((10, f"Processing uploaded cluster IDs from {idcluster_upload_filename}..."))
@@ -369,6 +462,9 @@ class MainPlotCallbacks:
                     snr_threshold_upper_amico=snr_amico_upper,
                     z_threshold_lower=z_lower,
                     z_threshold_upper=z_upper,
+                    richness_threshold_lower=richness_lower,
+                    richness_threshold_upper=richness_upper,
+                    richness_mode=richness_mode,
                     idcluster_list=idcluster_list,
                     threshold=threshold,
                     maglim=maglim,
@@ -488,6 +584,9 @@ class MainPlotCallbacks:
                 State("snr-range-slider-pzwav", "value"),
                 State("snr-range-slider-amico", "value"),
                 State("redshift-range-slider", "value"),
+                State("richness-range-slider-zp", "value"),
+                State("richness-range-slider-rs", "value"),
+                State("richness-mode-radio", "value"),
                 State("idcluster-upload", "contents"),
                 State("idcluster-upload", "filename"),
                 State("catred-threshold-slider", "value"),
@@ -511,6 +610,9 @@ class MainPlotCallbacks:
             snr_range_pzwav,
             snr_range_amico,
             redshift_range,
+            richness_range_zp,
+            richness_range_rs,
+            richness_mode,
             idcluster_upload_contents,
             idcluster_upload_filename,
             threshold,
@@ -554,6 +656,17 @@ class MainPlotCallbacks:
                 z_lower = redshift_range[0] if redshift_range and len(redshift_range) == 2 else None
                 z_upper = redshift_range[1] if redshift_range and len(redshift_range) == 2 else None
 
+                # Extract richness values based on selected mode
+                if richness_mode == "zp" and richness_range_zp and len(richness_range_zp) == 2:
+                    richness_lower = richness_range_zp[0]
+                    richness_upper = richness_range_zp[1]
+                elif richness_mode == "rs" and richness_range_rs and len(richness_range_rs) == 2:
+                    richness_lower = richness_range_rs[0]
+                    richness_upper = richness_range_rs[1]
+                else:
+                    richness_lower = None
+                    richness_upper = None
+
                 # Process uploaded ID cluster list if provided
                 if idcluster_upload_contents:
                     idcluster_list = get_idclusters_array(idcluster_upload_contents, idcluster_upload_filename)
@@ -595,6 +708,9 @@ class MainPlotCallbacks:
                     snr_threshold_upper_amico=snr_amico_upper,
                     z_threshold_lower=z_lower,
                     z_threshold_upper=z_upper,
+                    richness_threshold_lower=richness_lower,
+                    richness_threshold_upper=richness_upper,
+                    richness_mode=richness_mode,
                     idcluster_list=idcluster_list,
                     threshold=threshold,
                     maglim=maglim,
@@ -1161,6 +1277,9 @@ class MainPlotCallbacks:
         snr_threshold_upper_amico=None,
         z_threshold_lower=None,
         z_threshold_upper=None,
+        richness_threshold_lower=None,
+        richness_threshold_upper=None,
+        richness_mode=None,
         idcluster_list=None,
         threshold=0.8,
         maglim=None,
@@ -1186,6 +1305,9 @@ class MainPlotCallbacks:
                 snr_threshold_upper_amico=snr_threshold_upper_amico,
                 z_threshold_lower=z_threshold_lower,
                 z_threshold_upper=z_threshold_upper,
+                richness_threshold_lower=richness_threshold_lower,
+                richness_threshold_upper=richness_threshold_upper,
+                richness_mode=richness_mode,
                 idcluster_list=idcluster_list,
                 threshold=threshold,
                 maglim=maglim,

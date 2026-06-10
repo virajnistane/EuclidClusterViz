@@ -179,16 +179,17 @@ class UICallbacks:
                 Output("snr-render-button-pzwav", "disabled"),
                 Output("snr-render-button-amico", "disabled"),
                 Output("redshift-render-button", "disabled"),
+                Output("richness-render-button-zp", "disabled"),
+                Output("richness-render-button-rs", "disabled"),
             ],
             [Input("render-button", "n_clicks")],
             prevent_initial_call=False,
         )
         def enable_snr_and_redshift_buttons(n_clicks):
-            """Enable SNR and redshift filter buttons after initial render"""
-            # Disable both buttons until initial render is clicked
+            """Enable SNR, redshift, and richness filter buttons after initial render"""
             n_clicks = n_clicks or 0
             disabled = n_clicks == 0
-            return disabled, disabled, disabled
+            return disabled, disabled, disabled, disabled, disabled
 
         @self.app.callback(
             [

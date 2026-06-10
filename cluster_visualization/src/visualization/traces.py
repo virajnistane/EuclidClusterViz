@@ -73,6 +73,9 @@ class TraceCreator:
         snr_threshold_upper_amico: Optional[float] = None,
         z_threshold_lower: Optional[float] = None,
         z_threshold_upper: Optional[float] = None,
+        richness_threshold_lower: Optional[float] = None,
+        richness_threshold_upper: Optional[float] = None,
+        richness_mode: Optional[str] = None,
         idcluster_list: Optional[List[int]] = None,
         angular_tolerance: float = 2.0,
         z_tolerance: float = 0.02,
@@ -114,6 +117,10 @@ class TraceCreator:
 
         datamod_detcluster_mergedcat = self._apply_redshift_filtering(
             data["data_detcluster_mergedcat"], z_threshold_lower, z_threshold_upper
+        )
+
+        datamod_detcluster_mergedcat = self._apply_richness_filtering(
+            datamod_detcluster_mergedcat, richness_threshold_lower, richness_threshold_upper, richness_mode
         )
 
         try:
@@ -374,6 +381,31 @@ class TraceCreator:
             return result
         else:
             return cluster_data
+
+    def _apply_richness_filtering(
+        self,
+        cluster_data: np.ndarray,
+        richness_lower: Optional[float],
+        richness_upper: Optional[float],
+        richness_mode: Optional[str],
+    ) -> np.ndarray:
+        """Apply richness filtering to cluster data using RICHNESS_ZP or RICHNESS_RS column."""
+        if richness_mode is None or richness_mode == "none":
+            return cluster_data
+        col = "RICHNESS_ZP" if richness_mode == "zp" else "RICHNESS_RS"
+        if col not in cluster_data.dtype.names:
+            print(f"Debug: {col} column not found, skipping richness filtering")
+            return cluster_data
+        if richness_lower is None and richness_upper is None:
+            return cluster_data
+        elif richness_lower is not None and richness_upper is not None:
+            return cluster_data[
+                (cluster_data[col] >= richness_lower) & (cluster_data[col] <= richness_upper)
+            ]
+        elif richness_upper is not None:
+            return cluster_data[cluster_data[col] <= richness_upper]
+        else:
+            return cluster_data[cluster_data[col] >= richness_lower]
 
     def _filter_detfits_by_unique_ids(
         self,
