@@ -1439,4 +1439,28 @@ class UICallbacks:
             Input("view-mode-store", "data"),
         )
 
+        # Handle richness filter mode switch (ZP vs RS) - show/hide appropriate filter
+        self.app.clientside_callback(
+            """
+            function(selectedValue) {
+                // Return appropriate styles to show/hide components based on selection
+                if (selectedValue === 'zp') {
+                    return [{display: 'block'}, {display: 'none'}, {display: 'none'}];
+                } else if (selectedValue === 'rs') {
+                    return [{display: 'none'}, {display: 'block'}, {display: 'none'}];
+                } else {
+                    // None selection
+                    return [{display: 'none'}, {display: 'none'}, {display: 'block'}];
+                }
+            }
+            """,
+            [
+                Output("richness-zp-container", "style"),
+                Output("richness-rs-container", "style"),
+                Output("richness-none-container", "style")
+            ],
+            Input("richness-mode-radio", "value"),
+            prevent_initial_call=True,
+        )
+
     #     return 0

@@ -409,6 +409,210 @@ class SidebarSections:
         )
     
     @staticmethod
+    def create_richness_section():
+        """Create richness filtering section with enhanced styling"""
+
+        # Richness filter mode radio buttons with None option
+        richness_mode_radio_buttons = html.Div(
+            [
+                html.Div(
+                    [
+                        html.I(className="fas fa-exchange-alt me-2 text-success"),
+                        dbc.RadioItems(
+                            id="richness-mode-radio",
+                            options=[
+                                {"label": "ZP (PZWAV)", "value": "zp"},
+                                {"label": "RS (AMICO)", "value": "rs"}, 
+                                {"label": "None", "value": "none"}
+                            ],
+                            value="zp",  # Default to ZP
+                            inline=True,
+                            className="mb-0",
+                        ),
+                    ],
+                    className="d-flex align-items-center justify-content-between mb-2",
+                ),
+                html.Small(
+                    [
+                        html.I(className="fas fa-info-circle me-1"),
+                        "Select richness mode: ZP (PZWAV), RS (AMICO), or None (default 0-100)",
+                    ],
+                    className="text-muted ms-0",
+                ),
+            ],
+            className="mb-3",
+        )
+
+        richness_zp_card = dbc.Card(
+            [
+                dbc.CardBody(
+                    [
+                        # Richness range display badge
+                        dbc.Badge(
+                            id="richness-range-display-zp",
+                            color="light",
+                            className="w-100 mb-3 p-2 fs-6 badge-enhanced status-indicator",
+                            style={
+                                "background": "linear-gradient(45deg, #e8f5e8, #f0f8f0)",
+                                "color": "#2d5a2d",
+                                "border-radius": "8px",
+                                "border": "1px solid rgba(46, 204, 113, 0.3)",
+                            },
+                        ),
+                        # Richness range slider
+                        html.Div(
+                            [
+                                dcc.RangeSlider(
+                                    id="richness-range-slider-zp",
+                                    min=0,
+                                    max=100,
+                                    step=0.1,
+                                    marks={},
+                                    value=[0, 100],
+                                    tooltip={
+                                        "placement": "bottom",
+                                        "always_visible": False,
+                                        "style": {"fontSize": "12px"},
+                                    },
+                                    allowCross=False,
+                                    className="custom-range-slider",
+                                )
+                            ],
+                            className="mb-1",
+                            style={"padding": "10px 15px", "margin": "5px 0", "minHeight": "60px"},
+                        ),
+                        # Apply button
+                        dbc.Button(
+                            [html.I(className="fas fa-filter me-2"), "Apply Richness Filter (ZP)"],
+                            id="richness-render-button-zp",
+                            color="success",
+                            size="sm",
+                            className="w-100 shadow-sm btn-enhanced",
+                            n_clicks=0,
+                            disabled=True,
+                            style={"border-radius": "8px", "font-weight": "600"},
+                        ),
+                    ],
+                    className="p-3",
+                )
+            ],
+            className="border-0 shadow-sm mb-3",
+            style={
+                "background": "linear-gradient(135deg, #f0fff0, #ffffff)",
+                "border-radius": "12px",
+            },
+        )
+
+        richness_rs_card = dbc.Card(
+            [
+                dbc.CardBody(
+                    [
+                        # Richness range display badge
+                        dbc.Badge(
+                            id="richness-range-display-rs",
+                            color="light",
+                            className="w-100 mb-3 p-2 fs-6 badge-enhanced status-indicator",
+                            style={
+                                "background": "linear-gradient(45deg, #e8f5e8, #f0f8f0)",
+                                "color": "#2d5a2d",
+                                "border-radius": "8px",
+                                "border": "1px solid rgba(46, 204, 113, 0.3)",
+                            },
+                        ),
+                        # Richness range slider
+                        html.Div(
+                            [
+                                dcc.RangeSlider(
+                                    id="richness-range-slider-rs",
+                                    min=0,
+                                    max=100,
+                                    step=0.1,
+                                    marks={},
+                                    value=[0, 100],
+                                    tooltip={
+                                        "placement": "bottom",
+                                        "always_visible": False,
+                                        "style": {"fontSize": "12px"},
+                                    },
+                                    allowCross=False,
+                                    className="custom-range-slider",
+                                )
+                            ],
+                            className="mb-1",
+                            style={"padding": "10px 15px", "margin": "5px 0", "minHeight": "60px"},
+                        ),
+                        # Apply button
+                        dbc.Button(
+                            [html.I(className="fas fa-filter me-2"), "Apply Richness Filter (RS)"],
+                            id="richness-render-button-rs",
+                            color="success",
+                            size="sm",
+                            className="w-100 shadow-sm btn-enhanced",
+                            n_clicks=0,
+                            disabled=True,
+                            style={"border-radius": "8px", "font-weight": "600"},
+                        ),
+                    ],
+                    className="p-3",
+                )
+            ],
+            className="border-0 shadow-sm mb-3",
+            style={
+                "background": "linear-gradient(135deg, #f0fff0, #ffffff)",
+                "border-radius": "12px",
+            },
+        )
+
+        return html.Div(
+            [
+                html.Div(
+                    [
+                        html.I(className="fas fa-signal me-1 text-success"),
+                        html.Label("Richness Filtering:", className="fw-bold mb-1"),
+                    ],
+                    className="d-flex align-items-left mb-0",
+                ),
+                richness_mode_radio_buttons,
+                # Container for ZP richness filter
+                html.Div(
+                    id="richness-zp-container",
+                    children=[richness_zp_card],
+                    style={"display": "block"}  # Initially visible
+                ),
+                # Container for RS richness filter
+                html.Div(
+                    id="richness-rs-container",
+                    children=[richness_rs_card],
+                    style={"display": "none"}  # Initially hidden
+                ),
+                # Container for None state (no richness filter)
+                html.Div(
+                    id="richness-none-container",
+                    children=[
+                        dbc.Card(
+                            dbc.CardBody(
+                                html.Small(
+                                    [
+                                        html.I(className="fas fa-info-circle me-2 text-muted"),
+                                        "No richness filter applied. Select ZP or RS to enable.",
+                                    ],
+                                    className="text-muted",
+                                ),
+                                className="p-3",
+                            ),
+                            className="border-0 shadow-sm mb-3",
+                            style={
+                                "background": "linear-gradient(135deg, #f8f9fa, #ffffff)",
+                                "border-radius": "12px",
+                            },
+                        )
+                    ],
+                    style={"display": "none"},
+                ),
+            ]
+        )
+
+    @staticmethod
     def create_idcluster_section():
         """Create cluster-ID based filtering section with enhanced styling"""
         return html.Div(
@@ -504,148 +708,6 @@ class SidebarSections:
                         "background": "linear-gradient(135deg, #fff0f0, #ffffff)",
                         "border-radius": "12px",
                     },
-                ),
-            ]
-        )
-
-    @staticmethod
-    def create_richness_section():
-        """Create richness filtering section with enhanced styling"""
-
-        richness_zp_tab = dbc.Card(
-            [
-                dbc.CardBody(
-                    [
-                        # Richness range display badge
-                        dbc.Badge(
-                            id="richness-range-display-zp",
-                            color="light",
-                            className="w-100 mb-3 p-2 fs-6 badge-enhanced status-indicator",
-                            style={
-                                "background": "linear-gradient(45deg, #e8f5e8, #f0f8f0)",
-                                "color": "#2d5a2d",
-                                "border-radius": "8px",
-                                "border": "1px solid rgba(46, 204, 113, 0.3)",
-                            },
-                        ),
-                        # Richness range slider
-                        html.Div(
-                            [
-                                dcc.RangeSlider(
-                                    id="richness-range-slider-zp",
-                                    min=0,
-                                    max=100,
-                                    step=0.1,
-                                    marks={},
-                                    value=[0, 100],
-                                    tooltip={
-                                        "placement": "bottom",
-                                        "always_visible": False,
-                                        "style": {"fontSize": "12px"},
-                                    },
-                                    allowCross=False,
-                                    className="custom-range-slider",
-                                )
-                            ],
-                            className="mb-1",
-                            style={"padding": "10px 15px", "margin": "5px 0", "minHeight": "60px"},
-                        ),
-                        # Apply button
-                        dbc.Button(
-                            [html.I(className="fas fa-filter me-2"), "Apply Richness Filter (ZP)"],
-                            id="richness-render-button-zp",
-                            color="success",
-                            size="sm",
-                            className="w-100 shadow-sm btn-enhanced",
-                            n_clicks=0,
-                            disabled=True,
-                            style={"border-radius": "8px", "font-weight": "600"},
-                        ),
-                    ],
-                    className="p-3",
-                )
-            ],
-            className="border-0 shadow-sm mb-3",
-            style={
-                "background": "linear-gradient(135deg, #f0fff0, #ffffff)",
-                "border-radius": "12px",
-            },
-        )
-
-        richness_rs_tab = dbc.Card(
-            [
-                dbc.CardBody(
-                    [
-                        # Richness range display badge
-                        dbc.Badge(
-                            id="richness-range-display_rs",
-                            color="light",
-                            className="w-100 mb-3 p-2 fs-6 badge-enhanced status-indicator",
-                            style={
-                                "background": "linear-gradient(45deg, #e8f5e8, #f0f8f0)",
-                                "color": "#2d5a2d",
-                                "border-radius": "8px",
-                                "border": "1px solid rgba(46, 204, 113, 0.3)",
-                            },
-                        ),
-                        # Richness range slider
-                        html.Div(
-                            [
-                                dcc.RangeSlider(
-                                    id="richness-range-slider-rs",
-                                    min=0,
-                                    max=100,
-                                    step=0.1,
-                                    marks={},
-                                    value=[0, 100],
-                                    tooltip={
-                                        "placement": "bottom",
-                                        "always_visible": False,
-                                        "style": {"fontSize": "12px"},
-                                    },
-                                    allowCross=False,
-                                    className="custom-range-slider",
-                                )
-                            ],
-                            className="mb-1",
-                            style={"padding": "10px 15px", "margin": "5px 0", "minHeight": "60px"},
-                        ),
-                        # Apply button
-                        dbc.Button(
-                            [html.I(className="fas fa-filter me-2"), "Apply Richness Filter (RS)"],
-                            id="richness-render-button-rs",
-                            color="success",
-                            size="sm",
-                            className="w-100 shadow-sm btn-enhanced",
-                            n_clicks=0,
-                            disabled=True,
-                            style={"border-radius": "8px", "font-weight": "600"},
-                        ),
-                    ],
-                    className="p-3",
-                )
-            ],
-            className="border-0 shadow-sm mb-3",
-            style={
-                "background": "linear-gradient(135deg, #f0fff0, #ffffff)",
-                "border-radius": "12px",
-            },
-        )
-
-        return html.Div(
-            [
-                html.Div(
-                    [
-                        html.I(className="fas fa-signal me-1 text-success"),
-                        html.Label("Richness Filtering:", className="fw-bold mb-1"),
-                    ],
-                    className="d-flex align-items-left mb-0",
-                ),
-                dbc.Tabs(
-                    [
-                        dbc.Tab(label="PZWAV", children=[richness_zp_tab]),
-                        dbc.Tab(label="AMICO", children=[richness_rs_tab]),
-                    ]
                 ),
             ]
         )

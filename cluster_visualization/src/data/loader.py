@@ -164,13 +164,20 @@ class DataLoader:
         z_max = float(data_detcluster_mergedcat["Z_CLUSTER"].max())
         print(f"Redshift range: {z_min:.3f} to {z_max:.3f}")
 
-        # Calculate the richness range for UI slider
-        richness_zp_min = float(data_detcluster_mergedcat["RICHNESS_ZP"].min())
-        richness_zp_max = float(data_detcluster_mergedcat["RICHNESS_ZP"].max())
-        print(f"Richness-ZP range: {richness_zp_min:.3f} to {richness_zp_max:.3f}")
-        richness_rs_min = float(data_detcluster_mergedcat["RICHNESS_RS"].min())
-        richness_rs_max = float(data_detcluster_mergedcat["RICHNESS_RS"].max())
-        print(f"Richness-RS range: {richness_rs_min:.3f} to {richness_rs_max:.3f}")
+        if "RICHNESS_ZP" not in data_detcluster_mergedcat.dtype.names or "RICHNESS_RS" not in data_detcluster_mergedcat.dtype.names:
+            print("Warning: RICHNESS_ZP or RICHNESS_RS columns not found in merged catalog. Skipping richness range calculation.")
+            richness_zp_min = None
+            richness_zp_max = None
+            richness_rs_min = None
+            richness_rs_max = None
+        else:
+            # Calculate the richness range for UI slider
+            richness_zp_min = float(data_detcluster_mergedcat["RICHNESS_ZP"].min())
+            richness_zp_max = float(data_detcluster_mergedcat["RICHNESS_ZP"].max())
+            print(f"Richness-ZP range: {richness_zp_min:.3f} to {richness_zp_max:.3f}")
+            richness_rs_min = float(data_detcluster_mergedcat["RICHNESS_RS"].min())
+            richness_rs_max = float(data_detcluster_mergedcat["RICHNESS_RS"].max())
+            print(f"Richness-RS range: {richness_rs_min:.3f} to {richness_rs_max:.3f}")
 
         # Assemble final data structure
         data = {
