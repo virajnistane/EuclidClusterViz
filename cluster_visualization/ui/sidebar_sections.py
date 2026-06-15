@@ -505,7 +505,7 @@ class SidebarSections:
                                 )
                             ],
                             className="mb-1",
-                            style={"padding": "10px 15px", "margin": "5px 0", "minHeight": "60px", "overflow": "visible"},
+                            style={"padding": "10px 15px", "margin": "5px 0", "minHeight": "60px"},
                         ),
                         # Apply button
                         dbc.Button(
@@ -591,7 +591,7 @@ class SidebarSections:
                                 )
                             ],
                             className="mb-1",
-                            style={"padding": "10px 15px", "margin": "5px 0", "minHeight": "60px", "overflow": "visible"},
+                            style={"padding": "10px 15px", "margin": "5px 0", "minHeight": "60px"},
                         ),
                         # Apply button
                         dbc.Button(
