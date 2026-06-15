@@ -172,12 +172,16 @@ class DataLoader:
             richness_rs_max = None
         else:
             # Calculate the richness range for UI slider
-            richness_zp_min = float(data_detcluster_mergedcat["RICHNESS_ZP"].min())
-            richness_zp_max = float(data_detcluster_mergedcat["RICHNESS_ZP"].max())
-            print(f"Richness-ZP range: {richness_zp_min:.3f} to {richness_zp_max:.3f}")
-            richness_rs_min = float(data_detcluster_mergedcat["RICHNESS_RS"].min())
-            richness_rs_max = float(data_detcluster_mergedcat["RICHNESS_RS"].max())
-            print(f"Richness-RS range: {richness_rs_min:.3f} to {richness_rs_max:.3f}")
+            zp_vals = data_detcluster_mergedcat["RICHNESS_ZP"]
+            rs_vals = data_detcluster_mergedcat["RICHNESS_RS"]
+            richness_zp_min = float(np.nanmin(zp_vals)) if np.any(np.isfinite(zp_vals)) else None
+            richness_zp_max = float(np.nanmax(zp_vals)) if np.any(np.isfinite(zp_vals)) else None
+            richness_rs_min = float(np.nanmin(rs_vals)) if np.any(np.isfinite(rs_vals)) else None
+            richness_rs_max = float(np.nanmax(rs_vals)) if np.any(np.isfinite(rs_vals)) else None
+            if richness_zp_min is not None:
+                print(f"Richness-ZP range: {richness_zp_min:.3f} to {richness_zp_max:.3f}")
+            if richness_rs_min is not None:
+                print(f"Richness-RS range: {richness_rs_min:.3f} to {richness_rs_max:.3f}")
 
         # Assemble final data structure
         data = {

@@ -421,8 +421,8 @@ class SidebarSections:
                         dbc.RadioItems(
                             id="richness-mode-radio",
                             options=[
-                                {"label": "ZP (PZWAV)", "value": "zp"},
-                                {"label": "RS (AMICO)", "value": "rs"}, 
+                                {"label": "ZP", "value": "zp"},
+                                {"label": "RS", "value": "rs"},
                                 {"label": "None", "value": "none"}
                             ],
                             value="zp",  # Default to ZP
@@ -435,7 +435,7 @@ class SidebarSections:
                 html.Small(
                     [
                         html.I(className="fas fa-info-circle me-1"),
-                        "Select richness mode: ZP (PZWAV), RS (AMICO), or None (default 0-100)",
+                        "Select richness mode: ZP, RS, or None (default 0-100)",
                     ],
                     className="text-muted ms-0",
                 ),
@@ -458,6 +458,32 @@ class SidebarSections:
                                 "border-radius": "8px",
                                 "border": "1px solid rgba(46, 204, 113, 0.3)",
                             },
+                        ),
+                        # FLAG_QUALITY_ZP filter checklist
+                        html.Div(
+                            [
+                                html.Small(
+                                    [
+                                        html.I(className="fas fa-flag me-1"),
+                                        "Quality Flag (ZP):",
+                                    ],
+                                    className="text-muted fw-bold mb-1 d-block",
+                                ),
+                                dcc.Checklist(
+                                    id="flag-quality-zp-checklist",
+                                    options=[
+                                        {"label": " 0 — with richness", "value": 0},
+                                        {"label": " 1 — dubious richness", "value": 1},
+                                        {"label": " 2 — no richness", "value": 2},
+                                    ],
+                                    value=[0, 1, 2],
+                                    inline=True,
+                                    className="mb-2",
+                                    inputStyle={"marginRight": "4px"},
+                                    labelStyle={"marginRight": "12px", "fontSize": "12px"},
+                                ),
+                            ],
+                            className="mb-2",
                         ),
                         # Richness range slider
                         html.Div(
@@ -518,6 +544,32 @@ class SidebarSections:
                                 "border-radius": "8px",
                                 "border": "1px solid rgba(46, 204, 113, 0.3)",
                             },
+                        ),
+                        # FLAG_QUALITY_RS filter checklist
+                        html.Div(
+                            [
+                                html.Small(
+                                    [
+                                        html.I(className="fas fa-flag me-1"),
+                                        "Quality Flag (RS):",
+                                    ],
+                                    className="text-muted fw-bold mb-1 d-block",
+                                ),
+                                dcc.Checklist(
+                                    id="flag-quality-rs-checklist",
+                                    options=[
+                                        {"label": " 0 — with richness", "value": 0},
+                                        {"label": " 1 — dubious richness", "value": 1},
+                                        {"label": " 2 — no richness", "value": 2},
+                                    ],
+                                    value=[0, 1, 2],
+                                    inline=True,
+                                    className="mb-2",
+                                    inputStyle={"marginRight": "4px"},
+                                    labelStyle={"marginRight": "12px", "fontSize": "12px"},
+                                ),
+                            ],
+                            className="mb-2",
                         ),
                         # Richness range slider
                         html.Div(
