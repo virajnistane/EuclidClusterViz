@@ -251,7 +251,9 @@ class MainPlotCallbacks:
                 r_max = data["richness_zp_max"]
                 if r_min is None or r_max is None:
                     raise ValueError("richness_zp not available")
-                marks = {r_min: f"{r_min:.1f}", r_max: f"{r_max:.1f}"}
+                mark_min_zp = r_min if r_min != 0.0 else 0.001
+                mark_max_zp = r_max
+                marks = {mark_min_zp: f"{r_min:.1f}", mark_max_zp: f"{r_max:.1f}"}
                 display_text = html.Div(
                     [
                         html.Small(f"ZP Range: {r_min:.2f} to {r_max:.2f}", className="text-muted"),
@@ -261,7 +263,7 @@ class MainPlotCallbacks:
                 return r_min, r_max, [r_min, r_max], marks, display_text
             except Exception:
                 return (
-                    0, 100, [0, 100], {0: "0", 100: "100"},
+                    0, 100, [0, 100], {0.001: "0", 100: "100"}, 
                     html.Small("Richness ZP data not available", className="text-muted"),
                 )
 
@@ -284,7 +286,9 @@ class MainPlotCallbacks:
                 r_max = data["richness_rs_max"]
                 if r_min is None or r_max is None:
                     raise ValueError("richness_rs not available")
-                marks = {r_min: f"{r_min:.1f}", r_max: f"{r_max:.1f}"}
+                mark_min_rs = r_min if r_min != 0.0 else 0.001
+                mark_max_rs = r_max
+                marks = {mark_min_rs: f"{r_min:.1f}", mark_max_rs: f"{r_max:.1f}"}
                 display_text = html.Div(
                     [
                         html.Small(f"RS Range: {r_min:.2f} to {r_max:.2f}", className="text-muted"),
@@ -294,7 +298,7 @@ class MainPlotCallbacks:
                 return r_min, r_max, [r_min, r_max], marks, display_text
             except Exception:
                 return (
-                    0, 100, [0, 100], {0: "0", 100: "100"},
+                    0, 100, [0, 100], {0.001: "0", 100: "100"},
                     html.Small("Richness RS data not available", className="text-muted"),
                 )
 
