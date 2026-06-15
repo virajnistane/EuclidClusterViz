@@ -339,6 +339,7 @@ class MainPlotCallbacks:
                 State("catred-threshold-slider", "value"),
                 State("magnitude-limit-slider", "value"),
                 State("cluster-plot", "relayoutData"),
+                State("cluster-plot", "figure"),
                 State("selected-cluster-box-coords", "data"),
             ],
             background=True,
@@ -388,6 +389,7 @@ class MainPlotCallbacks:
             threshold,
             maglim,
             relayout_data,
+            current_figure,
             box_coords,
         ):
             # Only render if button has been clicked at least once
@@ -487,11 +489,17 @@ class MainPlotCallbacks:
                     else self._create_fallback_figure(traces, algorithm, free_aspect_ratio)
                 )
 
-                # Preserve zoom state if available
-                if self.figure_manager:
-                    self.figure_manager.preserve_zoom_state(fig, relayout_data)
-                else:
-                    self._preserve_zoom_state_fallback(fig, relayout_data)
+                # Preserve zoom state only when current figure has actual data (skip on initial render)
+                has_existing_data = (
+                    current_figure is not None
+                    and isinstance(current_figure, dict)
+                    and len(current_figure.get("data", [])) > 0
+                )
+                if has_existing_data:
+                    if self.figure_manager:
+                        self.figure_manager.preserve_zoom_state(fig, relayout_data, current_figure)
+                    else:
+                        self._preserve_zoom_state_fallback(fig, relayout_data, current_figure)
 
                 # Calculate filtered cluster counts for status (use appropriate SNR values for display)
                 if algorithm == "BOTH":
