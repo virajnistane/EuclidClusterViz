@@ -1250,23 +1250,15 @@ class DataLoader:
             return pd.DataFrame()
 
         if effcovxmlfiles is None:
-            # Get list of XML files (based on notebook: files with 'DpdHealpixEffectiveCoverageVMPZ' in name)
-            effcovxmlfiles = [
-                i
-                for i in os.listdir(effcovmask_dir)
-                if i.endswith(".xml") and "DpdHealpixEffectiveCoverageVMPZ" in i
-            ]
+            # Get list of XML files
+            effcovxmlfiles = [i for i in os.listdir(effcovmask_dir) if i.endswith(".xml") and "DpdHealpixEffectiveCoverageVMPZ" in i]
 
             # Get xml files from each subdirectory (named for DSR) too
             for subdir in os.listdir(effcovmask_dir):
                 subdir_path = os.path.join(effcovmask_dir, subdir)
                 if os.path.isdir(subdir_path):
-                    subdir_files = [
-                        os.path.join(subdir, f)
-                        for f in os.listdir(subdir_path)
-                        if f.endswith(".xml") and "DpdHealpixEffectiveCoverageVMPZ" in f
-                    ]
-                    effcovxmlfiles.extend(subdir_files)
+                    subdir_files = [f for f in os.listdir(subdir_path) if f.endswith(".xml") and "DpdHealpixEffectiveCoverageVMPZ" in f]
+                    effcovxmlfiles.extend([os.path.join(subdir, i) for i in subdir_files])
 
         if not effcovxmlfiles:
             print(f"Warning: No effective coverage XML files found in {effcovmask_dir}")
