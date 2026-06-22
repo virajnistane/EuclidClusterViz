@@ -693,7 +693,9 @@ class DataLoader:
             with open(detfiles_list_path, "r") as f:
                 detfiles_list = json.load(f)
 
-            for file in detfiles_list:
+            _tile_id_list: list = [] # For debugging - track tile IDs we see in the lists
+
+            for id_det_file, file in enumerate(detfiles_list):
                 # Extract tile information from XML files
                 xml_path = self._resolve_detintile_xml_path(file)
                 if not xml_path:
@@ -727,6 +729,15 @@ class DataLoader:
                 with open(tile_file_path, "r") as tf:
                     tile_info = json.load(tf)
                 tile_id = tile_info["TILE_ID"]
+
+                if tile_id in _tile_id_list:
+                    print(f"Warning: Duplicate tile ID found in detintile lists: {tile_id}")
+                    tile_id = id_det_file  # Fallback to using index as tile ID to avoid overwriting
+                    _tile_id_list.append(tile_id)
+                else:
+                    _tile_id_list.append(tile_id)
+
+                print(f"DEBUG: tile_id_list: {_tile_id_list}")
 
                 # When loading BOTH algorithms, use composite key to avoid overwriting
                 # Format: "tileid" for single algorithm, "tileid_ALGORITHM" for BOTH
