@@ -424,6 +424,32 @@ class TraceCreator:
 
         return cluster_data
 
+    @staticmethod
+    def _richness_arrays(arr: np.ndarray):
+        """Return (richness_zp_str, flag_zp_str, richness_rs_str, flag_rs_str) pre-formatted string arrays.
+
+        Uses "N/A" when column absent so Plotly renders cleanly without format specifiers.
+        """
+        n = len(arr)
+        names = arr.dtype.names or []
+
+        def _fmt_float(a, col):
+            if col not in names:
+                return ["N/A"] * n
+            return [f"{v:.2f}" if not (v != v) else "N/A" for v in a[col]]  # v != v → isnan
+
+        def _fmt_int(a, col):
+            if col not in names:
+                return ["N/A"] * n
+            return [str(int(v)) for v in a[col]]
+
+        return (
+            _fmt_float(arr, "RICHNESS_ZP"),
+            _fmt_int(arr, "FLAG_QUALITY_ZP"),
+            _fmt_float(arr, "RICHNESS_RS"),
+            _fmt_int(arr, "FLAG_QUALITY_RS"),
+        )
+
     def _filter_detfits_by_unique_ids(
         self,
         cluster_data: np.ndarray,
@@ -953,13 +979,14 @@ class TraceCreator:
                         legendgroup="merged_pzwav",
                         showlegend=True,
                         customdata=[
-                            [snr, z, det_code, cluster_id, tid]
-                            for snr, z, det_code, cluster_id, tid in zip(
+                            [snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs]
+                            for snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs in zip(
                                 pzwav_data["SNR_CLUSTER"],
                                 pzwav_data["Z_CLUSTER"],
                                 pzwav_data["DET_CODE_NB"],
                                 pzwav_data["ID_UNIQUE_CLUSTER"],
                                 pzwav_tile_ids,
+                                *self._richness_arrays(pzwav_data),
                             )
                         ],
                         hovertemplate=(
@@ -969,6 +996,10 @@ class TraceCreator:
                             + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
                             + "Z: %{customdata[1]:.2f}<br>"
                             + "SNR: %{customdata[0]:.2f}<br>"
+                            + "Richness ZP: %{customdata[5]}<br>"
+                            + "Flag ZP: %{customdata[6]}<br>"
+                            + "Richness RS: %{customdata[7]}<br>"
+                            + "Flag RS: %{customdata[8]}<br>"
                             + "<extra></extra>"
                         ),
                         hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
@@ -993,13 +1024,14 @@ class TraceCreator:
                         legendgroup="merged_amico",
                         showlegend=True,
                         customdata=[
-                            [snr, z, det_code, cluster_id, tid]
-                            for snr, z, det_code, cluster_id, tid in zip(
+                            [snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs]
+                            for snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs in zip(
                                 amico_data["SNR_CLUSTER"],
                                 amico_data["Z_CLUSTER"],
                                 amico_data["DET_CODE_NB"],
                                 amico_data["ID_UNIQUE_CLUSTER"],
                                 amico_tile_ids,
+                                *self._richness_arrays(amico_data),
                             )
                         ],
                         hovertemplate=(
@@ -1009,6 +1041,10 @@ class TraceCreator:
                             + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
                             + "Z: %{customdata[1]:.2f}<br>"
                             + "SNR: %{customdata[0]:.2f}<br>"
+                            + "Richness ZP: %{customdata[5]}<br>"
+                            + "Flag ZP: %{customdata[6]}<br>"
+                            + "Richness RS: %{customdata[7]}<br>"
+                            + "Flag RS: %{customdata[8]}<br>"
                             + "<extra></extra>"
                         ),
                         hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
@@ -1052,13 +1088,14 @@ class TraceCreator:
                     marker=dict(size=10, symbol=symbol, line=dict(width=2, color=merged_colors)),
                     name=f"Merged {algorithm}",
                     customdata=[
-                        [snr, z, det_code, cluster_id, tid]
-                        for snr, z, det_code, cluster_id, tid in zip(
+                        [snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs]
+                        for snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs in zip(
                             datamod_detcluster_mergedcat["SNR_CLUSTER"],
                             datamod_detcluster_mergedcat["Z_CLUSTER"],
                             det_code_values_customdata,
                             datamod_detcluster_mergedcat["ID_UNIQUE_CLUSTER"],
                             merged_tile_ids,
+                            *self._richness_arrays(datamod_detcluster_mergedcat),
                         )
                     ],
                     hovertemplate=(
@@ -1068,6 +1105,10 @@ class TraceCreator:
                         + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
                         + "Z: %{customdata[1]:.2f}<br>"
                         + "SNR: %{customdata[0]:.2f}<br>"
+                            + "Richness ZP: %{customdata[5]}<br>"
+                            + "Flag ZP: %{customdata[6]}<br>"
+                            + "Richness RS: %{customdata[7]}<br>"
+                            + "Flag RS: %{customdata[8]}<br>"
                         + "<extra></extra>"
                     ),
                     hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
@@ -1121,13 +1162,14 @@ class TraceCreator:
                             legendgroup="merged_pzwav",
                             showlegend=True,
                             customdata=[
-                                [snr, z, det_code, cluster_id, tid]
-                                for snr, z, det_code, cluster_id, tid in zip(
+                                [snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs]
+                                for snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs in zip(
                                     pzwav_away["SNR_CLUSTER"],
                                     pzwav_away["Z_CLUSTER"],
                                     pzwav_away["DET_CODE_NB"],
                                     pzwav_away["ID_UNIQUE_CLUSTER"],
                                     pzwav_away_tile_ids,
+                                    *self._richness_arrays(pzwav_away),
                                 )
                             ],
                             hovertemplate=(
@@ -1137,6 +1179,10 @@ class TraceCreator:
                                 + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
                                 + "Z: %{customdata[1]:.2f}<br>"
                                 + "SNR: %{customdata[0]:.2f}<br>"
+                            + "Richness ZP: %{customdata[5]}<br>"
+                            + "Flag ZP: %{customdata[6]}<br>"
+                            + "Richness RS: %{customdata[7]}<br>"
+                            + "Flag RS: %{customdata[8]}<br>"
                                 + "<extra></extra>"
                             ),
                             hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
@@ -1163,13 +1209,14 @@ class TraceCreator:
                             legendgroup="merged_amico",
                             showlegend=True,
                             customdata=[
-                                [snr, z, det_code, cluster_id, tid]
-                                for snr, z, det_code, cluster_id, tid in zip(
+                                [snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs]
+                                for snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs in zip(
                                     amico_away["SNR_CLUSTER"],
                                     amico_away["Z_CLUSTER"],
                                     amico_away["DET_CODE_NB"],
                                     amico_away["ID_UNIQUE_CLUSTER"],
                                     amico_away_tile_ids,
+                                    *self._richness_arrays(amico_away),
                                 )
                             ],
                             hovertemplate=(
@@ -1179,6 +1226,10 @@ class TraceCreator:
                                 + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
                                 + "Z: %{customdata[1]:.2f}<br>"
                                 + "SNR: %{customdata[0]:.2f}<br>"
+                            + "Richness ZP: %{customdata[5]}<br>"
+                            + "Flag ZP: %{customdata[6]}<br>"
+                            + "Richness RS: %{customdata[7]}<br>"
+                            + "Flag RS: %{customdata[8]}<br>"
                                 + "<extra></extra>"
                             ),
                             hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
@@ -1224,13 +1275,14 @@ class TraceCreator:
                         legendgroup=f"merged_{algorithm.lower()}",
                         showlegend=True,
                         customdata=[
-                            [snr, z, det_code, cluster_id, tid]
-                            for snr, z, det_code, cluster_id, tid in zip(
+                            [snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs]
+                            for snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs in zip(
                                 away_from_catred_data["SNR_CLUSTER"],
                                 away_from_catred_data["Z_CLUSTER"],
                                 det_code_values_customdata,
                                 away_from_catred_data["ID_UNIQUE_CLUSTER"],
                                 away_tile_ids,
+                                *self._richness_arrays(away_from_catred_data),
                             )
                         ],
                         hovertemplate=(
@@ -1240,6 +1292,10 @@ class TraceCreator:
                             + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
                             + "Z: %{customdata[1]:.2f}<br>"
                             + "SNR: %{customdata[0]:.2f}<br>"
+                            + "Richness ZP: %{customdata[5]}<br>"
+                            + "Flag ZP: %{customdata[6]}<br>"
+                            + "Richness RS: %{customdata[7]}<br>"
+                            + "Flag RS: %{customdata[8]}<br>"
                             + "<extra></extra>"
                         ),
                         hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
@@ -1273,13 +1329,14 @@ class TraceCreator:
                             else (["royalblue"] * len(pzwav_near), ["?"] * len(pzwav_near))
                         )
                         _pzwav_near_customdata = [
-                            [snr, z, det_code, cluster_id, tid]
-                            for snr, z, det_code, cluster_id, tid in zip(
+                            [snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs]
+                            for snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs in zip(
                                 pzwav_near["SNR_CLUSTER"],
                                 pzwav_near["Z_CLUSTER"],
                                 pzwav_near["DET_CODE_NB"],
                                 pzwav_near["ID_UNIQUE_CLUSTER"],
                                 pzwav_near_tile_ids,
+                                *self._richness_arrays(pzwav_near),
                             )
                         ]
                         _pzwav_near_hovertemplate = (
@@ -1289,6 +1346,10 @@ class TraceCreator:
                             + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
                             + "Z: %{customdata[1]:.2f}<br>"
                             + "SNR: %{customdata[0]:.2f}<br>"
+                            + "Richness ZP: %{customdata[5]}<br>"
+                            + "Flag ZP: %{customdata[6]}<br>"
+                            + "Richness RS: %{customdata[7]}<br>"
+                            + "Flag RS: %{customdata[8]}<br>"
                             + "<extra></extra>"
                         )
                         glow_trace_pzwav = create_glow_trace(
@@ -1337,13 +1398,14 @@ class TraceCreator:
                             else (["tomato"] * len(amico_near), ["?"] * len(amico_near))
                         )
                         _amico_near_customdata = [
-                            [snr, z, det_code, cluster_id, tid]
-                            for snr, z, det_code, cluster_id, tid in zip(
+                            [snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs]
+                            for snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs in zip(
                                 amico_near["SNR_CLUSTER"],
                                 amico_near["Z_CLUSTER"],
                                 amico_near["DET_CODE_NB"],
                                 amico_near["ID_UNIQUE_CLUSTER"],
                                 amico_near_tile_ids,
+                                *self._richness_arrays(amico_near),
                             )
                         ]
                         _amico_near_hovertemplate = (
@@ -1353,6 +1415,10 @@ class TraceCreator:
                             + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
                             + "Z: %{customdata[1]:.2f}<br>"
                             + "SNR: %{customdata[0]:.2f}<br>"
+                            + "Richness ZP: %{customdata[5]}<br>"
+                            + "Flag ZP: %{customdata[6]}<br>"
+                            + "Richness RS: %{customdata[7]}<br>"
+                            + "Flag RS: %{customdata[8]}<br>"
                             + "<extra></extra>"
                         )
                         glow_trace_amico = create_glow_trace(
@@ -1415,8 +1481,8 @@ class TraceCreator:
                         else (["royalblue" if algorithm.lower() == "pzwav" else "tomato"] * len(near_catred_data), ["?"] * len(near_catred_data))
                     )
                     _near_customdata = [
-                        [snr, z, det_code, cluster_id, tid]
-                        for snr, z, det_code, cluster_id, tid in zip(
+                        [snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs]
+                        for snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs in zip(
                             near_catred_data["SNR_CLUSTER"],
                             near_catred_data["Z_CLUSTER"],
                             (
@@ -1424,6 +1490,7 @@ class TraceCreator:
                                 if has_det_code
                                 else [2 if algorithm.lower() == "pzwav" else 1]
                                 * len(near_catred_data)
+                                *self._richness_arrays(near_catred_data),
                             ),
                             near_catred_data["ID_UNIQUE_CLUSTER"],
                             near_tile_ids,
@@ -1436,6 +1503,10 @@ class TraceCreator:
                         + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
                         + "Z: %{customdata[1]:.2f}<br>"
                         + "SNR: %{customdata[0]:.2f}<br>"
+                            + "Richness ZP: %{customdata[5]}<br>"
+                            + "Flag ZP: %{customdata[6]}<br>"
+                            + "Richness RS: %{customdata[7]}<br>"
+                            + "Flag RS: %{customdata[8]}<br>"
                         + "<extra></extra>"
                     )
 

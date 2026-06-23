@@ -1048,6 +1048,7 @@ class ClusterModalCallbacks:
                             mode=t.get("mode", "markers"),
                             marker=t.get("marker", {}),
                             name=t.get("name", ""),
+                            customdata=t.get("customdata", None),
                             hovertemplate=t.get("hovertemplate", None),
                         ))
                     else:
@@ -2392,15 +2393,15 @@ class ClusterModalCallbacks:
                 not has_mask_cutouts,  # mask cutout buttons
             )
 
-    def _fetch_member_radec(self, member_object_ids, data):
-        """Look up RA/DEC and PHZ columns for member galaxy OBJECT_IDs from nearby CATRED FITS tiles.
+    def _fetch_member_radec(self, member_object_ids, data, matched=None):
+        """Look up RA/DEC, PHZ and PMEM columns for member galaxy OBJECT_IDs from nearby CATRED FITS tiles.
 
-        Returns (ra, dec, phz_pdf, phz_mode_1, phz_median, phz_70_int) — all parallel lists/arrays.
+        Returns (ra, dec, phz_pdf, phz_mode_1, phz_median, phz_70_int, pmem_zp, pmem_rs).
         May be shorter than input if some IDs are not found in the searched tiles.
         """
         from astropy.io import fits as _fits
 
-        _empty = (np.array([]), np.array([]), [], [], [], [])
+        _empty = (np.array([]), np.array([]), [], [], [], [], [], [])
 
         if not self.selected_cluster:
             return _empty
@@ -2422,10 +2423,24 @@ class ClusterModalCallbacks:
         if not tile_ids:
             return _empty
 
+        # Build OBJECT_ID → (PMEM_ZP, PMEM_RS) lookup from members catalog row
+        pmem_lookup = {}
+        if matched is not None and len(matched) > 0:
+            names = matched.dtype.names or []
+            has_zp = "PMEM_ZP" in names
+            has_rs = "PMEM_RS" in names
+            for row in matched:
+                oid = int(row["OBJECT_ID"])
+                pmem_lookup[oid] = (
+                    float(row["PMEM_ZP"]) if has_zp else float("nan"),
+                    float(row["PMEM_RS"]) if has_rs else float("nan"),
+                )
+
         member_ids_arr = np.asarray(member_object_ids)
         remaining = set(member_ids_arr.tolist())
         ra_all, dec_all = [], []
         phz_pdf_all, phz_mode1_all, phz_median_all, phz_70int_all = [], [], [], []
+        pmem_zp_all, pmem_rs_all = [], []
 
         for tile_id in tile_ids:
             if not remaining:
@@ -2465,8 +2480,12 @@ class ClusterModalCallbacks:
                         tdata["PHZ_70_INT"][mask].tolist() if "PHZ_70_INT" in tdata.names
                         else [None] * n_match
                     )
-                    found_ids = set(obj_ids[mask].tolist())
-                    remaining -= found_ids
+                    found_ids = obj_ids[mask].tolist()
+                    for oid in found_ids:
+                        zp, rs = pmem_lookup.get(int(oid), (float("nan"), float("nan")))
+                        pmem_zp_all.append(zp)
+                        pmem_rs_all.append(rs)
+                    remaining -= set(found_ids)
             except Exception as exc:
                 print(f"Warning: could not read CATRED tile {tile_id} for member lookup: {exc}")
 
@@ -2479,17 +2498,38 @@ class ClusterModalCallbacks:
             phz_mode1_all,
             phz_median_all,
             phz_70int_all,
+            pmem_zp_all,
+            pmem_rs_all,
         )
 
-    def _build_members_trace(self, ra, dec, cluster_id, color="#FFD700", size=10):
+    def _build_members_trace(self, ra, dec, cluster_id, color="#FFD700", size=10,
+                             pmem_zp=None, pmem_rs=None):
         """Build a Scattergl trace for member galaxies."""
+        n = len(ra)
+        zp = pmem_zp if pmem_zp is not None and len(pmem_zp) == n else [float("nan")] * n
+        rs = pmem_rs if pmem_rs is not None and len(pmem_rs) == n else [float("nan")] * n
+
+        def _fmt(v):
+            try:
+                return "N/A" if v != v else f"{v:.3f}"  # v != v → isnan
+            except Exception:
+                return "N/A"
+
+        customdata = [[_fmt(z), _fmt(r)] for z, r in zip(zp, rs)]
         return go.Scattergl(
             x=ra.tolist(),
             y=dec.tolist(),
             mode="markers",
             marker=dict(symbol="diamond-wide", size=size, color=color, line=dict(width=1.5, color=color)),
             name=f"Members (ID {int(cluster_id)})",
-            hovertemplate="RA: %{x:.4f}<br>Dec: %{y:.4f}<extra></extra>",
+            customdata=customdata,
+            hovertemplate=(
+                "RA: %{x:.4f}<br>"
+                "Dec: %{y:.4f}<br>"
+                "PMEM ZP: %{customdata[0]}<br>"
+                "PMEM RS: %{customdata[1]}<br>"
+                "<extra></extra>"
+            ),
         )
 
     def _setup_cluster_members_callback(self):
@@ -2560,7 +2600,7 @@ class ClusterModalCallbacks:
             n_table = len(matched)
             if n_table == 0 or "OBJECT_ID" not in matched.dtype.names:
                 return _members_alert(n_table, 0, cluster_id), True, dash.no_update, dash.no_update, dash.no_update
-            ra, dec, phz_pdf, phz_mode1, phz_median, phz_70int = self._fetch_member_radec(matched["OBJECT_ID"], data)
+            ra, dec, phz_pdf, phz_mode1, phz_median, phz_70int, pmem_zp, pmem_rs = self._fetch_member_radec(matched["OBJECT_ID"], data, matched=matched)
             n_plotted = len(ra)
             alert = _members_alert(n_table, n_plotted, cluster_id)
             if n_plotted == 0:
@@ -2575,7 +2615,7 @@ class ClusterModalCallbacks:
                     "phz_median": phz_median, "phz_70_int": phz_70int,
                 }
             fig = go.Figure(current_figure)
-            fig.add_trace(self._build_members_trace(ra, dec, cluster_id))
+            fig.add_trace(self._build_members_trace(ra, dec, cluster_id, pmem_zp=pmem_zp, pmem_rs=pmem_rs))
             return alert, True, fig.to_dict(), False, False
 
         @self.app.callback(
@@ -2604,7 +2644,7 @@ class ClusterModalCallbacks:
             n_table = len(matched)
             if n_table == 0 or "OBJECT_ID" not in matched.dtype.names:
                 return _members_alert(n_table, 0, cluster_id), dash.no_update, dash.no_update, dash.no_update
-            ra, dec, phz_pdf, phz_mode1, phz_median, phz_70int = self._fetch_member_radec(matched["OBJECT_ID"], data)
+            ra, dec, phz_pdf, phz_mode1, phz_median, phz_70int, pmem_zp, pmem_rs = self._fetch_member_radec(matched["OBJECT_ID"], data, matched=matched)
             n_plotted = len(ra)
             alert = _members_alert(n_table, n_plotted, cluster_id)
             if n_plotted == 0:
@@ -2621,5 +2661,5 @@ class ClusterModalCallbacks:
             color = marker_color or "#FFD700"
             size = float(marker_size) if marker_size else 10.0
             fig = go.Figure(current_figure)
-            fig.add_trace(self._build_members_trace(ra, dec, cluster_id, color=color, size=size))
+            fig.add_trace(self._build_members_trace(ra, dec, cluster_id, color=color, size=size, pmem_zp=pmem_zp, pmem_rs=pmem_rs))
             return alert, fig.to_dict(), False, False
