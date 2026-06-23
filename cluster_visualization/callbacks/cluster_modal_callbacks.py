@@ -2281,7 +2281,12 @@ class ClusterModalCallbacks:
                     return name.indexOf('Members (ID') < 0;
                 });
 
-                const newFigure = Object.assign({}, figure, {data: filtered});
+                const radiusColors = new Set(['#FF8C00', '#00BFFF']);
+                const filteredShapes = ((figure.layout || {}).shapes || []).filter(function(s) {
+                    return !(s.type === 'circle' && s.line && radiusColors.has(s.line.color));
+                });
+                const newLayout = Object.assign({}, figure.layout, {shapes: filteredShapes});
+                const newFigure = Object.assign({}, figure, {data: filtered, layout: newLayout});
                 return [newFigure, true, true];
             }
             """,
@@ -2502,7 +2507,7 @@ class ClusterModalCallbacks:
             pmem_rs_all,
         )
 
-    def _build_members_trace(self, ra, dec, cluster_id, color="#FFD700", size=10,
+    def _build_members_trace(self, ra, dec, cluster_id, color="#000000", size=10,
                              pmem_zp=None, pmem_rs=None):
         """Build a Scattergl trace for member galaxies."""
         n = len(ra)
@@ -2520,7 +2525,7 @@ class ClusterModalCallbacks:
             x=ra.tolist(),
             y=dec.tolist(),
             mode="markers",
-            marker=dict(symbol="diamond-wide", size=size, color=color, line=dict(width=1.5, color=color)),
+            marker=dict(symbol="diamond-wide-open", size=size, color=color, line=dict(width=1.5, color=color)),
             name=f"Members (ID {int(cluster_id)})",
             customdata=customdata,
             hovertemplate=(
@@ -2531,6 +2536,43 @@ class ClusterModalCallbacks:
                 "<extra></extra>"
             ),
         )
+
+    def _build_radius_shapes(self, existing_shapes):
+        """Return updated shapes list: preserve non-radius shapes, add RADIUS_ZP/RS circles."""
+        import math
+        rec = (self.selected_cluster or {}).get("merged_record") if self.selected_cluster else None
+        ra = (self.selected_cluster or {}).get("ra") if self.selected_cluster else None
+        dec = (self.selected_cluster or {}).get("dec") if self.selected_cluster else None
+
+        # Strip old radius circles (identified by their colors)
+        radius_colors = {"#FF8C00", "#00BFFF"}
+        base = [s for s in (existing_shapes or [])
+                if not (s.get("type") == "circle" and s.get("line", {}).get("color") in radius_colors)]
+
+        if rec is None or ra is None or dec is None:
+            return base
+
+        cos_dec = math.cos(math.radians(float(dec))) or 1.0
+        for key, color in [("RADIUS_ZP", "#FF8C00"), ("RADIUS_RS", "#00BFFF")]:
+            v = rec.get(key)
+            if v is None:
+                continue
+            try:
+                fv = float(v)
+            except (TypeError, ValueError):
+                continue
+            if fv != fv or fv <= 0:  # isnan or non-positive
+                continue
+            r_deg = fv / 60.0
+            base.append(dict(
+                type="circle", xref="x", yref="y",
+                x0=ra - r_deg / cos_dec, x1=ra + r_deg / cos_dec,
+                y0=dec - r_deg, y1=dec + r_deg,
+                line=dict(color=color, width=1.5, dash="dash"),
+                fillcolor="rgba(0,0,0,0)",
+                layer="above",
+            ))
+        return base
 
     def _setup_cluster_members_callback(self):
         """Setup callbacks for Cluster Members buttons in modal and tab."""
@@ -2616,6 +2658,8 @@ class ClusterModalCallbacks:
                 }
             fig = go.Figure(current_figure)
             fig.add_trace(self._build_members_trace(ra, dec, cluster_id, pmem_zp=pmem_zp, pmem_rs=pmem_rs))
+            existing_shapes = (current_figure or {}).get("layout", {}).get("shapes") or []
+            fig.update_layout(shapes=self._build_radius_shapes(existing_shapes))
             return alert, True, fig.to_dict(), False, False
 
         @self.app.callback(
@@ -2658,8 +2702,10 @@ class ClusterModalCallbacks:
                     "phz_pdf": phz_pdf, "phz_mode_1": phz_mode1,
                     "phz_median": phz_median, "phz_70_int": phz_70int,
                 }
-            color = marker_color or "#FFD700"
+            color = marker_color or "#000000"
             size = float(marker_size) if marker_size else 10.0
             fig = go.Figure(current_figure)
             fig.add_trace(self._build_members_trace(ra, dec, cluster_id, color=color, size=size, pmem_zp=pmem_zp, pmem_rs=pmem_rs))
+            existing_shapes = (current_figure or {}).get("layout", {}).get("shapes") or []
+            fig.update_layout(shapes=self._build_radius_shapes(existing_shapes))
             return alert, fig.to_dict(), False, False

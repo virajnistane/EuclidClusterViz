@@ -333,7 +333,7 @@ class TabContent:
                                                                 dbc.Input(
                                                                     id="tab-members-marker-color-picker",
                                                                     type="color",
-                                                                    value="#FFD700",
+                                                                    value="#000000",
                                                                     className="w-100",
                                                                     style={
                                                                         "height": "38px",
