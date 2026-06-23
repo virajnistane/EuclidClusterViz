@@ -76,7 +76,7 @@ class Magnitude:
 
     @staticmethod
     def apply_magnitude_cut(
-        catred_data, maglim=24.0, flux_column="FLUX_H_2FWHM_APER", band="H", unit="muJy"
+        catred_data, maglim=24.0, flux_column="FLUX_H_UNIF", band="H", unit="muJy"
     ):
         """
         Apply magnitude limit cut to CATRED data.
@@ -84,7 +84,7 @@ class Magnitude:
         Args:
             catred_data: CATRED data dictionary or astropy Table
             maglim: Magnitude limit (default: 24.0)
-            flux_column: Name of flux column to use (default: 'FLUX_H_2FWHM_APER')
+            flux_column: Name of flux column to use (default: 'FLUX_H_UNIF')
             band: Photometric band (default: 'H')
             unit: Flux unit (default: 'muJy')
 
@@ -163,7 +163,7 @@ class Magnitude:
 
     @staticmethod
     def estimate_magnitude_range(
-        catred_data, flux_column="FLUX_H_2FWHM_APER", band="H", unit="muJy"
+        catred_data, flux_column="FLUX_H_UNIF", band="H", unit="muJy"
     ):
         """
         Estimate magnitude range in the CATRED data for slider configuration.
