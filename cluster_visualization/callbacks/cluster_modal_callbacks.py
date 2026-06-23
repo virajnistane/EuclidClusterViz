@@ -2627,6 +2627,7 @@ class ClusterModalCallbacks:
                 Output("cluster-plot", "figure", allow_duplicate=True),
                 Output("tab-members-toggle-visibility", "disabled", allow_duplicate=True),
                 Output("tab-members-clear", "disabled", allow_duplicate=True),
+                Output("tab-members-apply-filter", "disabled", allow_duplicate=True),
             ],
             [Input("cluster-members-button", "n_clicks")],
             [State("algorithm-dropdown", "value"), State("cluster-plot", "figure")],
@@ -2634,19 +2635,19 @@ class ClusterModalCallbacks:
         )
         def show_cluster_members(n_clicks, algorithm, current_figure):
             if not n_clicks:
-                return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+                return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
             matched, data, err = _query_members(algorithm)
             if err:
-                return dbc.Alert(err, color="warning"), True, dash.no_update, dash.no_update, dash.no_update
+                return dbc.Alert(err, color="warning"), True, dash.no_update, dash.no_update, dash.no_update, dash.no_update
             cluster_id = self.selected_cluster["merged_cluster_id"]
             n_table = len(matched)
             if n_table == 0 or "OBJECT_ID" not in matched.dtype.names:
-                return _members_alert(n_table, 0, cluster_id), True, dash.no_update, dash.no_update, dash.no_update
+                return _members_alert(n_table, 0, cluster_id), True, dash.no_update, dash.no_update, dash.no_update, dash.no_update
             ra, dec, phz_pdf, phz_mode1, phz_median, phz_70int, pmem_zp, pmem_rs = self._fetch_member_radec(matched["OBJECT_ID"], data, matched=matched)
             n_plotted = len(ra)
             alert = _members_alert(n_table, n_plotted, cluster_id)
             if n_plotted == 0:
-                return alert, True, dash.no_update, dash.no_update, dash.no_update
+                return alert, True, dash.no_update, dash.no_update, dash.no_update, dash.no_update
             trace_name = f"Members (ID {int(cluster_id)})"
             if self.catred_handler:
                 if self.catred_handler.current_catred_data is None:
@@ -2655,12 +2656,14 @@ class ClusterModalCallbacks:
                     "ra": ra.tolist(), "dec": dec.tolist(),
                     "phz_pdf": phz_pdf, "phz_mode_1": phz_mode1,
                     "phz_median": phz_median, "phz_70_int": phz_70int,
+                    "pmem_zp": list(pmem_zp),
+                    "pmem_rs": list(pmem_rs),
                 }
             fig = go.Figure(current_figure)
             fig.add_trace(self._build_members_trace(ra, dec, cluster_id, pmem_zp=pmem_zp, pmem_rs=pmem_rs))
             existing_shapes = (current_figure or {}).get("layout", {}).get("shapes") or []
             fig.update_layout(shapes=self._build_radius_shapes(existing_shapes))
-            return alert, True, fig.to_dict(), False, False
+            return alert, True, fig.to_dict(), False, False, False
 
         @self.app.callback(
             [
@@ -2668,6 +2671,7 @@ class ClusterModalCallbacks:
                 Output("cluster-plot", "figure", allow_duplicate=True),
                 Output("tab-members-toggle-visibility", "disabled", allow_duplicate=True),
                 Output("tab-members-clear", "disabled", allow_duplicate=True),
+                Output("tab-members-apply-filter", "disabled", allow_duplicate=True),
             ],
             [Input("tab-view-cluster-members", "n_clicks")],
             [
@@ -2675,24 +2679,23 @@ class ClusterModalCallbacks:
                 State("cluster-plot", "figure"),
                 State("tab-members-marker-color-picker", "value"),
                 State("tab-members-marker-size", "value"),
+                State("tab-members-filter-mode", "value"),
+                State("tab-members-pmem-slider", "value"),
             ],
             prevent_initial_call=True,
         )
-        def show_tab_cluster_members(n_clicks, algorithm, current_figure, marker_color, marker_size):
+        def show_tab_cluster_members(n_clicks, algorithm, current_figure, marker_color, marker_size,
+                                     filter_mode, pmem_threshold):
             if not n_clicks:
-                return dash.no_update, dash.no_update, dash.no_update, dash.no_update
+                return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
             matched, data, err = _query_members(algorithm)
             if err:
-                return dbc.Alert(err, color="warning"), dash.no_update, dash.no_update, dash.no_update
+                return dbc.Alert(err, color="warning"), dash.no_update, dash.no_update, dash.no_update, dash.no_update
             cluster_id = self.selected_cluster["merged_cluster_id"]
             n_table = len(matched)
             if n_table == 0 or "OBJECT_ID" not in matched.dtype.names:
-                return _members_alert(n_table, 0, cluster_id), dash.no_update, dash.no_update, dash.no_update
+                return _members_alert(n_table, 0, cluster_id), dash.no_update, dash.no_update, dash.no_update, dash.no_update
             ra, dec, phz_pdf, phz_mode1, phz_median, phz_70int, pmem_zp, pmem_rs = self._fetch_member_radec(matched["OBJECT_ID"], data, matched=matched)
-            n_plotted = len(ra)
-            alert = _members_alert(n_table, n_plotted, cluster_id)
-            if n_plotted == 0:
-                return alert, dash.no_update, dash.no_update, dash.no_update
             trace_name = f"Members (ID {int(cluster_id)})"
             if self.catred_handler:
                 if self.catred_handler.current_catred_data is None:
@@ -2701,11 +2704,95 @@ class ClusterModalCallbacks:
                     "ra": ra.tolist(), "dec": dec.tolist(),
                     "phz_pdf": phz_pdf, "phz_mode_1": phz_mode1,
                     "phz_median": phz_median, "phz_70_int": phz_70int,
+                    "pmem_zp": list(pmem_zp),
+                    "pmem_rs": list(pmem_rs),
                 }
+            # Apply PMEM filter
+            if filter_mode in ("zp", "rs") and pmem_threshold is not None:
+                pmem_vals = pmem_zp if filter_mode == "zp" else pmem_rs
+                keep = np.array([
+                    i for i, v in enumerate(pmem_vals)
+                    if not (v != v) and v > pmem_threshold
+                ], dtype=int)
+                if len(keep) > 0:
+                    ra = ra[keep]
+                    dec = dec[keep]
+                    pmem_zp = [pmem_zp[i] for i in keep]
+                    pmem_rs = [pmem_rs[i] for i in keep]
+                    phz_pdf = [phz_pdf[i] for i in keep]
+                    phz_mode1 = [phz_mode1[i] for i in keep]
+                    phz_median = [phz_median[i] for i in keep]
+                    phz_70int = [phz_70int[i] for i in keep]
+                else:
+                    ra = np.array([])
+            n_plotted = len(ra)
+            alert = _members_alert(n_table, n_plotted, cluster_id)
+            if n_plotted == 0:
+                return alert, dash.no_update, dash.no_update, dash.no_update, dash.no_update
             color = marker_color or "#000000"
             size = float(marker_size) if marker_size else 10.0
             fig = go.Figure(current_figure)
             fig.add_trace(self._build_members_trace(ra, dec, cluster_id, color=color, size=size, pmem_zp=pmem_zp, pmem_rs=pmem_rs))
             existing_shapes = (current_figure or {}).get("layout", {}).get("shapes") or []
             fig.update_layout(shapes=self._build_radius_shapes(existing_shapes))
-            return alert, fig.to_dict(), False, False
+            return alert, fig.to_dict(), False, False, False
+
+        self.app.clientside_callback(
+            """
+            function(mode) {
+                return mode !== 'none';
+            }
+            """,
+            Output("tab-members-pmem-slider-collapse", "is_open"),
+            Input("tab-members-filter-mode", "value"),
+        )
+
+        @self.app.callback(
+            [
+                Output("cluster-plot", "figure", allow_duplicate=True),
+                Output("tab-cluster-members-output", "children", allow_duplicate=True),
+            ],
+            Input("tab-members-apply-filter", "n_clicks"),
+            [
+                State("cluster-plot", "figure"),
+                State("tab-members-filter-mode", "value"),
+                State("tab-members-pmem-slider", "value"),
+            ],
+            prevent_initial_call=True,
+        )
+        def apply_members_filter(n_clicks, current_figure, filter_mode, pmem_threshold):
+            if not n_clicks or not self.selected_cluster:
+                return dash.no_update, dash.no_update
+            cluster_id = self.selected_cluster.get("merged_cluster_id")
+            if cluster_id is None:
+                return dash.no_update, dash.no_update
+            trace_name = f"Members (ID {int(cluster_id)})"
+            cache = (self.catred_handler.current_catred_data or {}) if self.catred_handler else {}
+            entry = cache.get(trace_name)
+            if not entry:
+                return dash.no_update, dash.no_update
+            ra = np.array(entry["ra"])
+            dec = np.array(entry["dec"])
+            pmem_zp = list(entry.get("pmem_zp", [float("nan")] * len(ra)))
+            pmem_rs = list(entry.get("pmem_rs", [float("nan")] * len(ra)))
+            if filter_mode in ("zp", "rs") and pmem_threshold is not None:
+                pmem_vals = pmem_zp if filter_mode == "zp" else pmem_rs
+                keep = np.array([
+                    i for i, v in enumerate(pmem_vals)
+                    if not (v != v) and v > pmem_threshold
+                ], dtype=int)
+                if len(keep) > 0:
+                    ra = ra[keep]
+                    dec = dec[keep]
+                    pmem_zp = [pmem_zp[i] for i in keep]
+                    pmem_rs = [pmem_rs[i] for i in keep]
+                else:
+                    ra = np.array([])
+            fig = go.Figure(current_figure)
+            fig.data = tuple(t for t in fig.data if not (getattr(t, "name", "") or "").startswith(trace_name))
+            if len(ra) > 0:
+                fig.add_trace(self._build_members_trace(ra, dec, cluster_id, pmem_zp=pmem_zp, pmem_rs=pmem_rs))
+            n_total = len(entry["ra"])
+            alert = _members_alert(n_total, len(ra), cluster_id)
+            return fig.to_dict(), alert
+

@@ -379,6 +379,71 @@ class TabContent:
                                                     ],
                                                     className="d-flex justify-content-center",
                                                 ),
+                                                html.Hr(className="my-2"),
+                                                html.Label(
+                                                    "Filter Members:",
+                                                    className="fw-bold small mb-1",
+                                                ),
+                                                dbc.RadioItems(
+                                                    id="tab-members-filter-mode",
+                                                    options=[
+                                                        {"label": " None", "value": "none"},
+                                                        {"label": " ZP", "value": "zp"},
+                                                        {"label": " RS", "value": "rs"},
+                                                    ],
+                                                    value="none",
+                                                    inline=True,
+                                                    className="mb-2",
+                                                ),
+                                                dbc.Collapse(
+                                                    dbc.Card(
+                                                        dbc.CardBody(
+                                                            [
+                                                                html.Label(
+                                                                    "PMEM threshold (keep > value):",
+                                                                    className="small mb-1",
+                                                                ),
+                                                                html.Div(
+                                                                    dcc.Slider(
+                                                                        id="tab-members-pmem-slider",
+                                                                        min=0.0,
+                                                                        max=1.0,
+                                                                        step=0.05,
+                                                                        value=0.5,
+                                                                        marks=None,
+                                                                        tooltip={
+                                                                            "placement": "bottom",
+                                                                            "always_visible": False,
+                                                                            "style": {"fontSize": "12px"},
+                                                                        },
+                                                                        className="custom-slider",
+                                                                    ),
+                                                                    style={
+                                                                        "padding": "10px 15px",
+                                                                        "margin": "5px 0",
+                                                                        "minHeight": "60px",
+                                                                    },
+                                                                ),
+                                                                dbc.Button(
+                                                                    [
+                                                                        html.I(className="fas fa-filter me-2"),
+                                                                        "Apply Filter",
+                                                                    ],
+                                                                    id="tab-members-apply-filter",
+                                                                    color="primary",
+                                                                    size="sm",
+                                                                    className="w-100 mt-1",
+                                                                    n_clicks=0,
+                                                                    disabled=True,
+                                                                ),
+                                                            ],
+                                                            className="py-2",
+                                                        ),
+                                                        className="mb-2",
+                                                    ),
+                                                    id="tab-members-pmem-slider-collapse",
+                                                    is_open=False,
+                                                ),
                                             ]
                                         ),
                                     ]
