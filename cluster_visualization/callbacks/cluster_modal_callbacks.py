@@ -2278,20 +2278,22 @@ class ClusterModalCallbacks:
             )
 
     def _fetch_member_radec(self, member_object_ids, data):
-        """Look up RA/DEC for member galaxy OBJECT_IDs from nearby CATRED FITS tiles.
+        """Look up RA/DEC and PHZ columns for member galaxy OBJECT_IDs from nearby CATRED FITS tiles.
 
-        Returns (ra_array, dec_array) as np.ndarray. May be shorter than input if
-        some IDs are not found in the searched tiles.
+        Returns (ra, dec, phz_pdf, phz_mode_1, phz_median, phz_70_int) — all parallel lists/arrays.
+        May be shorter than input if some IDs are not found in the searched tiles.
         """
         from astropy.io import fits as _fits
 
+        _empty = (np.array([]), np.array([]), [], [], [], [])
+
         if not self.selected_cluster:
-            return np.array([]), np.array([])
+            return _empty
 
         catred_info = data.get("catred_info")
         catred_dsr = data.get("catred_dsr")
         if catred_info is None or catred_info.empty or not self.catred_handler:
-            return np.array([]), np.array([])
+            return _empty
 
         ra_center = self.selected_cluster["ra"]
         dec_center = self.selected_cluster["dec"]
@@ -2303,11 +2305,12 @@ class ClusterModalCallbacks:
 
         tile_ids = self.catred_handler._find_intersecting_tiles(data, ra_min, ra_max, dec_min, dec_max)
         if not tile_ids:
-            return np.array([]), np.array([])
+            return _empty
 
         member_ids_arr = np.asarray(member_object_ids)
         remaining = set(member_ids_arr.tolist())
         ra_all, dec_all = [], []
+        phz_pdf_all, phz_mode1_all, phz_median_all, phz_70int_all = [], [], [], []
 
         for tile_id in tile_ids:
             if not remaining:
@@ -2328,16 +2331,40 @@ class ClusterModalCallbacks:
                     mask = np.isin(obj_ids, member_ids_arr)
                     if not np.any(mask):
                         continue
+                    n_match = int(np.sum(mask))
                     ra_all.append(tdata["RIGHT_ASCENSION"][mask])
                     dec_all.append(tdata["DECLINATION"][mask])
+                    phz_pdf_all.extend(
+                        tdata["PHZ_PDF"][mask].tolist() if "PHZ_PDF" in tdata.names
+                        else [None] * n_match
+                    )
+                    phz_mode1_all.extend(
+                        tdata["PHZ_MODE_1"][mask].tolist() if "PHZ_MODE_1" in tdata.names
+                        else [float("nan")] * n_match
+                    )
+                    phz_median_all.extend(
+                        tdata["PHZ_MEDIAN"][mask].tolist() if "PHZ_MEDIAN" in tdata.names
+                        else [float("nan")] * n_match
+                    )
+                    phz_70int_all.extend(
+                        tdata["PHZ_70_INT"][mask].tolist() if "PHZ_70_INT" in tdata.names
+                        else [None] * n_match
+                    )
                     found_ids = set(obj_ids[mask].tolist())
                     remaining -= found_ids
             except Exception as exc:
                 print(f"Warning: could not read CATRED tile {tile_id} for member lookup: {exc}")
 
         if not ra_all:
-            return np.array([]), np.array([])
-        return np.concatenate(ra_all), np.concatenate(dec_all)
+            return _empty
+        return (
+            np.concatenate(ra_all),
+            np.concatenate(dec_all),
+            phz_pdf_all,
+            phz_mode1_all,
+            phz_median_all,
+            phz_70int_all,
+        )
 
     def _build_members_trace(self, ra, dec, cluster_id, color="#FFD700", size=10):
         """Build a Scattergl trace for member galaxies."""
@@ -2416,11 +2443,20 @@ class ClusterModalCallbacks:
             n_table = len(matched)
             if n_table == 0 or "OBJECT_ID" not in matched.dtype.names:
                 return _members_alert(n_table, 0, cluster_id), True, dash.no_update
-            ra, dec = self._fetch_member_radec(matched["OBJECT_ID"], data)
+            ra, dec, phz_pdf, phz_mode1, phz_median, phz_70int = self._fetch_member_radec(matched["OBJECT_ID"], data)
             n_plotted = len(ra)
             alert = _members_alert(n_table, n_plotted, cluster_id)
             if n_plotted == 0:
                 return alert, True, dash.no_update
+            trace_name = f"Members (ID {int(cluster_id)})"
+            if self.catred_handler:
+                if self.catred_handler.current_catred_data is None:
+                    self.catred_handler.current_catred_data = {}
+                self.catred_handler.current_catred_data[trace_name] = {
+                    "ra": ra.tolist(), "dec": dec.tolist(),
+                    "phz_pdf": phz_pdf, "phz_mode_1": phz_mode1,
+                    "phz_median": phz_median, "phz_70_int": phz_70int,
+                }
             fig = go.Figure(current_figure)
             fig.add_trace(self._build_members_trace(ra, dec, cluster_id))
             return alert, True, fig.to_dict()
@@ -2449,11 +2485,20 @@ class ClusterModalCallbacks:
             n_table = len(matched)
             if n_table == 0 or "OBJECT_ID" not in matched.dtype.names:
                 return _members_alert(n_table, 0, cluster_id), dash.no_update
-            ra, dec = self._fetch_member_radec(matched["OBJECT_ID"], data)
+            ra, dec, phz_pdf, phz_mode1, phz_median, phz_70int = self._fetch_member_radec(matched["OBJECT_ID"], data)
             n_plotted = len(ra)
             alert = _members_alert(n_table, n_plotted, cluster_id)
             if n_plotted == 0:
                 return alert, dash.no_update
+            trace_name = f"Members (ID {int(cluster_id)})"
+            if self.catred_handler:
+                if self.catred_handler.current_catred_data is None:
+                    self.catred_handler.current_catred_data = {}
+                self.catred_handler.current_catred_data[trace_name] = {
+                    "ra": ra.tolist(), "dec": dec.tolist(),
+                    "phz_pdf": phz_pdf, "phz_mode_1": phz_mode1,
+                    "phz_median": phz_median, "phz_70_int": phz_70int,
+                }
             color = marker_color or "#FFD700"
             size = float(marker_size) if marker_size else 10.0
             fig = go.Figure(current_figure)

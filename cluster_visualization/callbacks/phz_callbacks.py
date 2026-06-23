@@ -170,10 +170,10 @@ class PHZCallbacks:
                 print(f"Debug: Available CATRED data traces: {list(current_catred_data.keys())}")
                 print(f"Debug: Looking for traces containing 'CATRED'")
 
-                # First, try to match the exact clicked trace name if it's a CATRED trace
+                # First, try to match the exact clicked trace name if it's a CATRED/Members trace
                 if (
                     clicked_trace_name != "Unknown"
-                    and "CATRED" in clicked_trace_name
+                    and ("CATRED" in clicked_trace_name or "Members" in clicked_trace_name)
                     and clicked_trace_name in current_catred_data
                 ):
                     catred_data = current_catred_data[clicked_trace_name]
@@ -208,10 +208,8 @@ class PHZCallbacks:
                     for trace_name, catred_data in current_catred_data.items():
                         print(f"Debug: Checking trace: '{trace_name}'")
 
-                        # Check if this is a CATRED trace (updated for new naming scheme)
-                        if (
-                            "CATRED" in trace_name
-                        ):  # and ('Data' in trace_name or 'High-Res' in trace_name):
+                        # Check if this is a CATRED or Members trace
+                        if "CATRED" in trace_name or "Members" in trace_name:
                             print(
                                 f"Debug: Found CATRED trace '{trace_name}' with {len(catred_data['ra'])} points"
                             )
