@@ -2277,63 +2277,185 @@ class ClusterModalCallbacks:
                 not has_mask_cutouts,  # mask cutout buttons
             )
 
+    def _fetch_member_radec(self, member_object_ids, data):
+        """Look up RA/DEC for member galaxy OBJECT_IDs from nearby CATRED FITS tiles.
+
+        Returns (ra_array, dec_array) as np.ndarray. May be shorter than input if
+        some IDs are not found in the searched tiles.
+        """
+        from astropy.io import fits as _fits
+
+        if not self.selected_cluster:
+            return np.array([]), np.array([])
+
+        catred_info = data.get("catred_info")
+        catred_dsr = data.get("catred_dsr")
+        if catred_info is None or catred_info.empty or not self.catred_handler:
+            return np.array([]), np.array([])
+
+        ra_center = self.selected_cluster["ra"]
+        dec_center = self.selected_cluster["dec"]
+        half_deg = 0.5
+        ra_min = ra_center - half_deg
+        ra_max = ra_center + half_deg
+        dec_min = dec_center - half_deg
+        dec_max = dec_center + half_deg
+
+        tile_ids = self.catred_handler._find_intersecting_tiles(data, ra_min, ra_max, dec_min, dec_max)
+        if not tile_ids:
+            return np.array([]), np.array([])
+
+        member_ids_arr = np.asarray(member_object_ids)
+        remaining = set(member_ids_arr.tolist())
+        ra_all, dec_all = [], []
+
+        for tile_id in tile_ids:
+            if not remaining:
+                break
+            rows = catred_info.loc[
+                (catred_info["mertileid"] == tile_id)
+                & (catred_info["dataset_release"] == catred_dsr)
+            ]
+            if rows.empty:
+                continue
+            fits_file = rows.iloc[0]["fits_file"]
+            try:
+                with _fits.open(fits_file, mode="readonly", memmap=True) as hdul:
+                    tdata = hdul[1].data
+                    if "OBJECT_ID" not in tdata.names:
+                        continue
+                    obj_ids = tdata["OBJECT_ID"]
+                    mask = np.isin(obj_ids, member_ids_arr)
+                    if not np.any(mask):
+                        continue
+                    ra_all.append(tdata["RIGHT_ASCENSION"][mask])
+                    dec_all.append(tdata["DECLINATION"][mask])
+                    found_ids = set(obj_ids[mask].tolist())
+                    remaining -= found_ids
+            except Exception as exc:
+                print(f"Warning: could not read CATRED tile {tile_id} for member lookup: {exc}")
+
+        if not ra_all:
+            return np.array([]), np.array([])
+        return np.concatenate(ra_all), np.concatenate(dec_all)
+
+    def _build_members_trace(self, ra, dec, cluster_id, color="#FFD700", size=10):
+        """Build a Scattergl trace for member galaxies."""
+        return go.Scattergl(
+            x=ra.tolist(),
+            y=dec.tolist(),
+            mode="markers",
+            marker=dict(symbol="diamond-wide", size=size, color=color, line=dict(width=1.5, color=color)),
+            name=f"Members (ID {int(cluster_id)})",
+            hovertemplate="RA: %{x:.4f}<br>Dec: %{y:.4f}<extra></extra>",
+        )
+
     def _setup_cluster_members_callback(self):
         """Setup callbacks for Cluster Members buttons in modal and tab."""
 
         def _query_members(algorithm):
-            """Return (members_array_or_None, error_msg_or_None)."""
+            """Return (matched_array, data_dict, error_msg_or_None)."""
             if not self.selected_cluster:
-                return None, "No cluster selected."
+                return None, None, "No cluster selected."
             cluster_id = self.selected_cluster.get("merged_cluster_id")
             if cluster_id is None:
-                return None, "Cluster ID not resolved for selected point."
+                return None, None, "Cluster ID not resolved for selected point."
             try:
                 data = self.data_loader.load_data(select_algorithm=algorithm)
             except Exception as exc:
-                return None, f"Failed to load data: {exc}"
+                return None, None, f"Failed to load data: {exc}"
             members = data.get("data_gluematchcat_members")
             if members is None:
-                return None, "Members catalog not available. Set gluematchcat_members in config.ini."
+                return None, None, "Members catalog not available. Set gluematchcat_members in config.ini."
             if "ID_UNIQUE_CLUSTER" not in members.dtype.names:
-                return None, "Members catalog missing ID_UNIQUE_CLUSTER column."
+                return None, None, "Members catalog missing ID_UNIQUE_CLUSTER column."
             try:
                 matched = members[members["ID_UNIQUE_CLUSTER"] == int(cluster_id)]
             except (TypeError, ValueError) as exc:
-                return None, f"Invalid cluster ID: {exc}"
-            return matched, None
+                return None, None, f"Invalid cluster ID: {exc}"
+            return matched, data, None
 
-        def _members_alert(matched, cluster_id):
-            n = len(matched)
-            msg = f"{n} member {'galaxy' if n == 1 else 'galaxies'} for cluster ID {int(cluster_id)}"
-            return dbc.Alert(msg, color="success" if n > 0 else "info")
+        def _members_alert(n_table, n_plotted, cluster_id):
+            content = [
+                html.Div([
+                    html.Span("In catalog: ", className="fw-bold"),
+                    html.Span(f"{n_table} {'galaxy' if n_table == 1 else 'galaxies'}"),
+                ]),
+                html.Div([
+                    html.Span("Plotted: ", className="fw-bold"),
+                    html.Span(f"{n_plotted}"),
+                    html.Span(
+                        " (some may fall outside available CATRED tiles)" if n_plotted < n_table else "",
+                        className="text-muted small ms-1",
+                    ),
+                ]),
+            ]
+            return dbc.Alert(
+                [html.Strong(f"Cluster ID {int(cluster_id)} — "), *content],
+                color="success" if n_table > 0 else "info",
+                className="py-2",
+            )
 
         @self.app.callback(
             [
                 Output("cluster-members-output", "children"),
                 Output("cluster-members-collapse", "is_open"),
+                Output("cluster-plot", "figure", allow_duplicate=True),
             ],
             [Input("cluster-members-button", "n_clicks")],
-            [State("algorithm-dropdown", "value")],
+            [State("algorithm-dropdown", "value"), State("cluster-plot", "figure")],
             prevent_initial_call=True,
         )
-        def show_cluster_members(n_clicks, algorithm):
+        def show_cluster_members(n_clicks, algorithm, current_figure):
             if not n_clicks:
-                return dash.no_update, dash.no_update
-            matched, err = _query_members(algorithm)
+                return dash.no_update, dash.no_update, dash.no_update
+            matched, data, err = _query_members(algorithm)
             if err:
-                return dbc.Alert(err, color="warning"), True
-            return _members_alert(matched, self.selected_cluster["merged_cluster_id"]), True
+                return dbc.Alert(err, color="warning"), True, dash.no_update
+            cluster_id = self.selected_cluster["merged_cluster_id"]
+            n_table = len(matched)
+            if n_table == 0 or "OBJECT_ID" not in matched.dtype.names:
+                return _members_alert(n_table, 0, cluster_id), True, dash.no_update
+            ra, dec = self._fetch_member_radec(matched["OBJECT_ID"], data)
+            n_plotted = len(ra)
+            alert = _members_alert(n_table, n_plotted, cluster_id)
+            if n_plotted == 0:
+                return alert, True, dash.no_update
+            fig = go.Figure(current_figure)
+            fig.add_trace(self._build_members_trace(ra, dec, cluster_id))
+            return alert, True, fig.to_dict()
 
         @self.app.callback(
-            Output("tab-cluster-members-output", "children"),
+            [
+                Output("tab-cluster-members-output", "children"),
+                Output("cluster-plot", "figure", allow_duplicate=True),
+            ],
             [Input("tab-view-cluster-members", "n_clicks")],
-            [State("algorithm-dropdown", "value")],
+            [
+                State("algorithm-dropdown", "value"),
+                State("cluster-plot", "figure"),
+                State("tab-members-marker-color-picker", "value"),
+                State("tab-members-marker-size", "value"),
+            ],
             prevent_initial_call=True,
         )
-        def show_tab_cluster_members(n_clicks, algorithm):
+        def show_tab_cluster_members(n_clicks, algorithm, current_figure, marker_color, marker_size):
             if not n_clicks:
-                return dash.no_update
-            matched, err = _query_members(algorithm)
+                return dash.no_update, dash.no_update
+            matched, data, err = _query_members(algorithm)
             if err:
-                return dbc.Alert(err, color="warning")
-            return _members_alert(matched, self.selected_cluster["merged_cluster_id"])
+                return dbc.Alert(err, color="warning"), dash.no_update
+            cluster_id = self.selected_cluster["merged_cluster_id"]
+            n_table = len(matched)
+            if n_table == 0 or "OBJECT_ID" not in matched.dtype.names:
+                return _members_alert(n_table, 0, cluster_id), dash.no_update
+            ra, dec = self._fetch_member_radec(matched["OBJECT_ID"], data)
+            n_plotted = len(ra)
+            alert = _members_alert(n_table, n_plotted, cluster_id)
+            if n_plotted == 0:
+                return alert, dash.no_update
+            color = marker_color or "#FFD700"
+            size = float(marker_size) if marker_size else 10.0
+            fig = go.Figure(current_figure)
+            fig.add_trace(self._build_members_trace(ra, dec, cluster_id, color=color, size=size))
+            return alert, fig.to_dict()

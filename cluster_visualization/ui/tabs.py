@@ -304,6 +304,48 @@ class TabContent:
                                                     id="tab-cluster-members-output",
                                                     className="mb-2",
                                                 ),
+                                                dbc.Row(
+                                                    [
+                                                        dbc.Col(
+                                                            [
+                                                                html.Label(
+                                                                    "Marker Size:",
+                                                                    className="form-label",
+                                                                ),
+                                                                dbc.Input(
+                                                                    id="tab-members-marker-size",
+                                                                    type="number",
+                                                                    value=10.0,
+                                                                    min=4.0,
+                                                                    max=30.0,
+                                                                    step=1.0,
+                                                                    className="mb-2",
+                                                                ),
+                                                            ],
+                                                            width=6,
+                                                        ),
+                                                        dbc.Col(
+                                                            [
+                                                                html.Label(
+                                                                    "Marker Color:",
+                                                                    className="form-label",
+                                                                ),
+                                                                dbc.Input(
+                                                                    id="tab-members-marker-color-picker",
+                                                                    type="color",
+                                                                    value="#FFD700",
+                                                                    className="w-100",
+                                                                    style={
+                                                                        "height": "38px",
+                                                                        "cursor": "pointer",
+                                                                        "border-radius": "6px",
+                                                                    },
+                                                                ),
+                                                            ],
+                                                            width=6,
+                                                        ),
+                                                    ]
+                                                ),
                                                 html.Div(
                                                     [
                                                         dbc.Button(
