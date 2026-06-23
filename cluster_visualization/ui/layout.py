@@ -150,6 +150,7 @@ class AppLayout:
                                                                         ],
                                                                         "responsive": True,
                                                                         "doubleClickDelay": 1000,
+                                                                        "doubleClick": False,
                                                                     },
                                                                 )
                                                             ],

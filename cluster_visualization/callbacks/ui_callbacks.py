@@ -1102,12 +1102,14 @@ class UICallbacks:
                 var clusterPts = [];  // {ra, dec, name}
                 var catredPts = [];
                 var maskPolygons = [];  // [[ra,dec], ...] per polygon segment
+                var membersPts = [];
 
                 (figure.data || []).forEach(function(trace) {
                     var name = (trace.name || '');
                     var isCatred = name.indexOf('CATRED') === 0;
                     var isMask = name.indexOf('Mask overlay') === 0 || name.indexOf('Inverted mask overlay') === 0;
-                    var isCluster = !isCatred && !isMask && (
+                    var isMembers = name.indexOf('Members (ID') === 0;
+                    var isCluster = !isCatred && !isMask && !isMembers && (
                         name.indexOf('Merged') >= 0 || name.indexOf('PZWAV') >= 0 || name.indexOf('AMICO') >= 0
                     );
                     // Exclude glow halos (no cluster-count suffix and contain 'near CATRED')
@@ -1154,6 +1156,17 @@ class UICallbacks:
                             }
                         }
                         if (poly.length > 1) maskPolygons.push(poly);
+                    } else if (isMembers) {
+                        for (var i = 0; i < xs.length; i++) {
+                            var ra = xs[i], dec = ys[i];
+                            if (ra == null || dec == null) continue;
+                            var dra = (ra - raCtr) * cosD;
+                            var ddec = dec - decCtr;
+                            if (Math.sqrt(dra*dra + ddec*ddec) <= fov2) {
+                                var lbl = (typeof texts[i] === 'string') ? texts[i] : '';
+                                membersPts.push({ra: ra, dec: dec, name: lbl});
+                            }
+                        }
                     }
                 });
 
@@ -1168,6 +1181,7 @@ class UICallbacks:
                     clusters: clusterPts,
                     catred: catredPts,
                     mask_polygons: maskPolygons,
+                    members: membersPts,
                     viewport: {ra: raCtr, dec: decCtr, fov: fov},
                     survey: survey || 'P/DESI-Legacy-Surveys/DR10/color'
                 };
@@ -1251,6 +1265,10 @@ class UICallbacks:
                         var catredSrcs = (data.catred || []).map(function(r) {
                             return A.source(r.ra, r.dec, {name: r.name || 'CATRED'});
                         });
+                        var membersCat = A.catalog({name: 'Members', color: '#FFD700', shape: 'rhomb', sourceSize: 10});
+                        var membersSrcs = (data.members || []).map(function(r) {
+                            return A.source(r.ra, r.dec, {name: r.name || 'Member'});
+                        });
 
                         // Add catalogs on next animation frame so Aladin sky tiles can start loading first
                         requestAnimationFrame(function() {
@@ -1261,6 +1279,8 @@ class UICallbacks:
                             requestAnimationFrame(function() {
                                 if (catredSrcs.length) catredCat.addSources(catredSrcs);
                                 aladin.addCatalog(catredCat);
+                                if (membersSrcs.length) membersCat.addSources(membersSrcs);
+                                aladin.addCatalog(membersCat);
                             });
                         });
                     }

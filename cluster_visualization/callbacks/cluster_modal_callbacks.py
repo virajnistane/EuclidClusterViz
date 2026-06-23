@@ -1039,6 +1039,22 @@ class ClusterModalCallbacks:
                             f"Debug: Re-injected {len(mosaic_images)} mosaic layout images after CATRED box rebuild"
                         )
 
+                # Re-inject Members traces dropped by the full figure rebuild
+                members_traces = self._extract_existing_members_traces(current_figure)
+                for t in members_traces:
+                    if isinstance(t, dict):
+                        fig.add_trace(go.Scattergl(
+                            x=t.get("x", []), y=t.get("y", []),
+                            mode=t.get("mode", "markers"),
+                            marker=t.get("marker", {}),
+                            name=t.get("name", ""),
+                            hovertemplate=t.get("hovertemplate", None),
+                        ))
+                    else:
+                        fig.add_trace(t)
+                if members_traces:
+                    print(f"Debug: Re-injected {len(members_traces)} Members trace(s) after CATRED box rebuild")
+
                 empty_phz_fig = self._create_empty_phz_plot()
 
                 status_msg = dbc.Alert(
@@ -1857,6 +1873,17 @@ class ClusterModalCallbacks:
                     )
         return existing_mask_overlay_traces
 
+    def _extract_existing_members_traces(self, current_figure):
+        """Extract existing Members traces from current figure to preserve them across rebuilds."""
+        result = []
+        if current_figure and "data" in current_figure:
+            for trace in current_figure["data"]:
+                name = trace.get("name", "") if isinstance(trace, dict) else getattr(trace, "name", "") or ""
+                if name.startswith("Members (ID"):
+                    result.append(trace)
+                    print(f"Debug: Preserved existing Members trace: {name}")
+        return result
+
     def _create_fallback_figure(self, traces, algorithm, free_aspect_ratio):
         """Fallback figure creation method"""
         fig = go.Figure(traces)
@@ -2237,6 +2264,94 @@ class ClusterModalCallbacks:
             prevent_initial_call=True,
         )
 
+        # Members clear (clientside)
+        self.app.clientside_callback(
+            """
+            function(n_clicks, figure) {
+                if (!n_clicks) {
+                    return [window.dash_clientside.no_update, window.dash_clientside.no_update, window.dash_clientside.no_update];
+                }
+                if (!figure || !figure.data) {
+                    return [window.dash_clientside.no_update, window.dash_clientside.no_update, window.dash_clientside.no_update];
+                }
+
+                const filtered = (figure.data || []).filter(function(trace) {
+                    const name = (trace && trace.name) ? trace.name : '';
+                    return name.indexOf('Members (ID') < 0;
+                });
+
+                const newFigure = Object.assign({}, figure, {data: filtered});
+                return [newFigure, true, true];
+            }
+            """,
+            [
+                Output("cluster-plot", "figure", allow_duplicate=True),
+                Output("tab-members-toggle-visibility", "disabled", allow_duplicate=True),
+                Output("tab-members-clear", "disabled", allow_duplicate=True),
+            ],
+            Input("tab-members-clear", "n_clicks"),
+            State("cluster-plot", "figure"),
+            prevent_initial_call=True,
+        )
+
+        @self.app.callback(
+            Output("tab-members-clear", "title"),
+            Input("tab-members-clear", "n_clicks"),
+            prevent_initial_call=True,
+        )
+        def clear_members_server_state(n_clicks):
+            if not n_clicks:
+                return dash.no_update
+            if self.catred_handler and self.catred_handler.current_catred_data:
+                keys_to_remove = [k for k in self.catred_handler.current_catred_data if k.startswith("Members (ID")]
+                for k in keys_to_remove:
+                    del self.catred_handler.current_catred_data[k]
+                print(f"Debug: Cleared {len(keys_to_remove)} Members entry(ies) from current_catred_data")
+            return dash.no_update
+
+        # Members visibility toggle
+        @self.app.callback(
+            [
+                Output("cluster-plot", "figure", allow_duplicate=True),
+                Output("tab-members-toggle-visibility", "children"),
+                Output("tab-members-toggle-visibility", "disabled", allow_duplicate=True),
+            ],
+            [Input("tab-members-toggle-visibility", "n_clicks")],
+            [State("cluster-plot", "figure")],
+            prevent_initial_call=True,
+        )
+        def toggle_members_visibility(n_clicks, current_figure):
+            if not current_figure or "data" not in current_figure:
+                return dash.no_update, dash.no_update, dash.no_update
+
+            members_exist = False
+            all_visible = True
+
+            for trace in current_figure["data"]:
+                trace_name = trace.get("name", "")
+                if "Members (ID" in trace_name:
+                    members_exist = True
+                    if trace.get("visible", True) in (False, "legendonly"):
+                        all_visible = False
+
+            if not members_exist:
+                return dash.no_update, dash.no_update, dash.no_update
+
+            new_visible = not all_visible
+            new_data = []
+            for trace in current_figure["data"]:
+                if "Members (ID" in trace.get("name", ""):
+                    updated = dict(trace)
+                    updated["visible"] = new_visible
+                    new_data.append(updated)
+                else:
+                    new_data.append(trace)
+
+            updated_figure = dict(current_figure)
+            updated_figure["data"] = new_data
+            button_label = [html.I(className="fas fa-eye-slash me-2"), "Show"] if all_visible else [html.I(className="fas fa-eye me-2"), "Hide"]
+            return updated_figure, button_label, False
+
         # Enable buttons when traces are generated
         @self.app.callback(
             [
@@ -2428,6 +2543,8 @@ class ClusterModalCallbacks:
                 Output("cluster-members-output", "children"),
                 Output("cluster-members-collapse", "is_open"),
                 Output("cluster-plot", "figure", allow_duplicate=True),
+                Output("tab-members-toggle-visibility", "disabled", allow_duplicate=True),
+                Output("tab-members-clear", "disabled", allow_duplicate=True),
             ],
             [Input("cluster-members-button", "n_clicks")],
             [State("algorithm-dropdown", "value"), State("cluster-plot", "figure")],
@@ -2435,19 +2552,19 @@ class ClusterModalCallbacks:
         )
         def show_cluster_members(n_clicks, algorithm, current_figure):
             if not n_clicks:
-                return dash.no_update, dash.no_update, dash.no_update
+                return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
             matched, data, err = _query_members(algorithm)
             if err:
-                return dbc.Alert(err, color="warning"), True, dash.no_update
+                return dbc.Alert(err, color="warning"), True, dash.no_update, dash.no_update, dash.no_update
             cluster_id = self.selected_cluster["merged_cluster_id"]
             n_table = len(matched)
             if n_table == 0 or "OBJECT_ID" not in matched.dtype.names:
-                return _members_alert(n_table, 0, cluster_id), True, dash.no_update
+                return _members_alert(n_table, 0, cluster_id), True, dash.no_update, dash.no_update, dash.no_update
             ra, dec, phz_pdf, phz_mode1, phz_median, phz_70int = self._fetch_member_radec(matched["OBJECT_ID"], data)
             n_plotted = len(ra)
             alert = _members_alert(n_table, n_plotted, cluster_id)
             if n_plotted == 0:
-                return alert, True, dash.no_update
+                return alert, True, dash.no_update, dash.no_update, dash.no_update
             trace_name = f"Members (ID {int(cluster_id)})"
             if self.catred_handler:
                 if self.catred_handler.current_catred_data is None:
@@ -2459,12 +2576,14 @@ class ClusterModalCallbacks:
                 }
             fig = go.Figure(current_figure)
             fig.add_trace(self._build_members_trace(ra, dec, cluster_id))
-            return alert, True, fig.to_dict()
+            return alert, True, fig.to_dict(), False, False
 
         @self.app.callback(
             [
                 Output("tab-cluster-members-output", "children"),
                 Output("cluster-plot", "figure", allow_duplicate=True),
+                Output("tab-members-toggle-visibility", "disabled", allow_duplicate=True),
+                Output("tab-members-clear", "disabled", allow_duplicate=True),
             ],
             [Input("tab-view-cluster-members", "n_clicks")],
             [
@@ -2477,19 +2596,19 @@ class ClusterModalCallbacks:
         )
         def show_tab_cluster_members(n_clicks, algorithm, current_figure, marker_color, marker_size):
             if not n_clicks:
-                return dash.no_update, dash.no_update
+                return dash.no_update, dash.no_update, dash.no_update, dash.no_update
             matched, data, err = _query_members(algorithm)
             if err:
-                return dbc.Alert(err, color="warning"), dash.no_update
+                return dbc.Alert(err, color="warning"), dash.no_update, dash.no_update, dash.no_update
             cluster_id = self.selected_cluster["merged_cluster_id"]
             n_table = len(matched)
             if n_table == 0 or "OBJECT_ID" not in matched.dtype.names:
-                return _members_alert(n_table, 0, cluster_id), dash.no_update
+                return _members_alert(n_table, 0, cluster_id), dash.no_update, dash.no_update, dash.no_update
             ra, dec, phz_pdf, phz_mode1, phz_median, phz_70int = self._fetch_member_radec(matched["OBJECT_ID"], data)
             n_plotted = len(ra)
             alert = _members_alert(n_table, n_plotted, cluster_id)
             if n_plotted == 0:
-                return alert, dash.no_update
+                return alert, dash.no_update, dash.no_update, dash.no_update
             trace_name = f"Members (ID {int(cluster_id)})"
             if self.catred_handler:
                 if self.catred_handler.current_catred_data is None:
@@ -2503,4 +2622,4 @@ class ClusterModalCallbacks:
             size = float(marker_size) if marker_size else 10.0
             fig = go.Figure(current_figure)
             fig.add_trace(self._build_members_trace(ra, dec, cluster_id, color=color, size=size))
-            return alert, fig.to_dict()
+            return alert, fig.to_dict(), False, False
