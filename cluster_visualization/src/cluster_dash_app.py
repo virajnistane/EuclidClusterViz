@@ -192,6 +192,7 @@ from cluster_visualization.utils.colordefinitions import colors_list, colors_lis
 
 # Import utilities
 from cluster_visualization.utils.myutils import get_xml_element
+from cluster_visualization.utils.magnitude import RichCLMagLimHandler
 
 print(f"✓ Utilities loaded from: {utils_path}")
 
@@ -328,6 +329,8 @@ class ClusterVisualizationApp:
 
             self.phz_callbacks = PHZCallbacks(self.app, self.catred_handler, self.data_loader)
 
+            richcl_maglim_handler = RichCLMagLimHandler(getattr(config, "richcl_params_file", None))
+
             # 🆕 Initialize cluster modal callbacks
             self.cluster_modal_callbacks = ClusterModalCallbacks(
                 app=self.app,
@@ -336,6 +339,7 @@ class ClusterVisualizationApp:
                 mosaic_handler=self.mosaic_handler,
                 trace_creator=self.trace_creator,
                 figure_manager=self.figure_manager,
+                richcl_maglim_handler=richcl_maglim_handler,
             )
 
             # Aladin Lite overlay callbacks

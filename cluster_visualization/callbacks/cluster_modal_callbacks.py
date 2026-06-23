@@ -14,13 +14,15 @@ import plotly.graph_objs as go  # type: ignore[import]
 import dash
 from dash import Input, Output, State, callback_context, html
 from typing import Any, Dict, List, Optional, Tuple
+from cluster_visualization.utils.magnitude import Magnitude
 
 
 class ClusterModalCallbacks:
     """Handles cluster modal and action callbacks"""
 
     def __init__(
-        self, app, data_loader, catred_handler, mosaic_handler, trace_creator, figure_manager
+        self, app, data_loader, catred_handler, mosaic_handler, trace_creator, figure_manager,
+        richcl_maglim_handler=None,
     ):
         """
         Initialize cluster modal callbacks.
@@ -37,6 +39,7 @@ class ClusterModalCallbacks:
         self.mosaic_handler = mosaic_handler
         self.trace_creator = trace_creator
         self.figure_manager = figure_manager
+        self.richcl_maglim_handler = richcl_maglim_handler
 
         # Store selected cluster data
         self.selected_cluster = None
@@ -2406,7 +2409,7 @@ class ClusterModalCallbacks:
         """
         from astropy.io import fits as _fits
 
-        _empty = (np.array([]), np.array([]), [], [], [], [], [], [])
+        _empty = (np.array([]), np.array([]), [], [], [], [], [], [], [])
 
         if not self.selected_cluster:
             return _empty
@@ -2446,6 +2449,7 @@ class ClusterModalCallbacks:
         ra_all, dec_all = [], []
         phz_pdf_all, phz_mode1_all, phz_median_all, phz_70int_all = [], [], [], []
         pmem_zp_all, pmem_rs_all = [], []
+        flux_h_unif_all = []
 
         for tile_id in tile_ids:
             if not remaining:
@@ -2485,6 +2489,10 @@ class ClusterModalCallbacks:
                         tdata["PHZ_70_INT"][mask].tolist() if "PHZ_70_INT" in tdata.names
                         else [None] * n_match
                     )
+                    flux_h_unif_all.extend(
+                        tdata["FLUX_H_UNIF"][mask].tolist() if "FLUX_H_UNIF" in tdata.names
+                        else [float("nan")] * n_match
+                    )
                     found_ids = obj_ids[mask].tolist()
                     for oid in found_ids:
                         zp, rs = pmem_lookup.get(int(oid), (float("nan"), float("nan")))
@@ -2505,6 +2513,7 @@ class ClusterModalCallbacks:
             phz_70int_all,
             pmem_zp_all,
             pmem_rs_all,
+            flux_h_unif_all,
         )
 
     def _build_members_trace(self, ra, dec, cluster_id, color="#000000", size=10,
@@ -2577,6 +2586,8 @@ class ClusterModalCallbacks:
     def _setup_cluster_members_callback(self):
         """Setup callbacks for Cluster Members buttons in modal and tab."""
 
+        MEMBER_Z_COL = "phz_median"  # cache key for per-member redshift; change here to switch column
+
         def _query_members(algorithm):
             """Return (matched_array, data_dict, error_msg_or_None)."""
             if not self.selected_cluster:
@@ -2643,7 +2654,7 @@ class ClusterModalCallbacks:
             n_table = len(matched)
             if n_table == 0 or "OBJECT_ID" not in matched.dtype.names:
                 return _members_alert(n_table, 0, cluster_id), True, dash.no_update, dash.no_update, dash.no_update, dash.no_update
-            ra, dec, phz_pdf, phz_mode1, phz_median, phz_70int, pmem_zp, pmem_rs = self._fetch_member_radec(matched["OBJECT_ID"], data, matched=matched)
+            ra, dec, phz_pdf, phz_mode1, phz_median, phz_70int, pmem_zp, pmem_rs, flux_h_unif = self._fetch_member_radec(matched["OBJECT_ID"], data, matched=matched)
             n_plotted = len(ra)
             alert = _members_alert(n_table, n_plotted, cluster_id)
             if n_plotted == 0:
@@ -2658,6 +2669,7 @@ class ClusterModalCallbacks:
                     "phz_median": phz_median, "phz_70_int": phz_70int,
                     "pmem_zp": list(pmem_zp),
                     "pmem_rs": list(pmem_rs),
+                    "flux_h_unif": list(flux_h_unif),
                 }
             fig = go.Figure(current_figure)
             fig.add_trace(self._build_members_trace(ra, dec, cluster_id, pmem_zp=pmem_zp, pmem_rs=pmem_rs))
@@ -2681,11 +2693,12 @@ class ClusterModalCallbacks:
                 State("tab-members-marker-size", "value"),
                 State("tab-members-filter-mode", "value"),
                 State("tab-members-pmem-slider", "value"),
+                State("tab-members-mag-filter-switch", "value"),
             ],
             prevent_initial_call=True,
         )
         def show_tab_cluster_members(n_clicks, algorithm, current_figure, marker_color, marker_size,
-                                     filter_mode, pmem_threshold):
+                                     filter_mode, pmem_threshold, mag_filter_on):
             if not n_clicks:
                 return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
             matched, data, err = _query_members(algorithm)
@@ -2695,7 +2708,7 @@ class ClusterModalCallbacks:
             n_table = len(matched)
             if n_table == 0 or "OBJECT_ID" not in matched.dtype.names:
                 return _members_alert(n_table, 0, cluster_id), dash.no_update, dash.no_update, dash.no_update, dash.no_update
-            ra, dec, phz_pdf, phz_mode1, phz_median, phz_70int, pmem_zp, pmem_rs = self._fetch_member_radec(matched["OBJECT_ID"], data, matched=matched)
+            ra, dec, phz_pdf, phz_mode1, z_member, phz_70int, pmem_zp, pmem_rs, flux_h_unif = self._fetch_member_radec(matched["OBJECT_ID"], data, matched=matched)
             trace_name = f"Members (ID {int(cluster_id)})"
             if self.catred_handler:
                 if self.catred_handler.current_catred_data is None:
@@ -2703,9 +2716,10 @@ class ClusterModalCallbacks:
                 self.catred_handler.current_catred_data[trace_name] = {
                     "ra": ra.tolist(), "dec": dec.tolist(),
                     "phz_pdf": phz_pdf, "phz_mode_1": phz_mode1,
-                    "phz_median": phz_median, "phz_70_int": phz_70int,
+                    MEMBER_Z_COL: list(z_member), "phz_70_int": phz_70int,
                     "pmem_zp": list(pmem_zp),
                     "pmem_rs": list(pmem_rs),
+                    "flux_h_unif": list(flux_h_unif),
                 }
             # Apply PMEM filter
             if filter_mode in ("zp", "rs") and pmem_threshold is not None:
@@ -2719,10 +2733,32 @@ class ClusterModalCallbacks:
                     dec = dec[keep]
                     pmem_zp = [pmem_zp[i] for i in keep]
                     pmem_rs = [pmem_rs[i] for i in keep]
+                    flux_h_unif = [flux_h_unif[i] for i in keep]
+                    z_member = [z_member[i] for i in keep]
                     phz_pdf = [phz_pdf[i] for i in keep]
                     phz_mode1 = [phz_mode1[i] for i in keep]
-                    phz_median = [phz_median[i] for i in keep]
                     phz_70int = [phz_70int[i] for i in keep]
+                else:
+                    ra = np.array([])
+            # Apply magnitude filter (per-member redshift)
+            if len(ra) > 0 and mag_filter_on and self.richcl_maglim_handler and self.richcl_maglim_handler.available:
+                flux_arr = np.array(flux_h_unif)
+                mags = Magnitude.flux_to_magnitude(flux_arr.copy(), "H", "muJy")
+                mag_keep = np.array([
+                    i for i, (m, z) in enumerate(zip(mags, z_member))
+                    if not (m != m) and not (z != z)
+                    and m <= self.richcl_maglim_handler.get_maglim(float(z))
+                ], dtype=int)
+                if len(mag_keep) > 0:
+                    ra = ra[mag_keep]
+                    dec = dec[mag_keep]
+                    pmem_zp = [pmem_zp[i] for i in mag_keep]
+                    pmem_rs = [pmem_rs[i] for i in mag_keep]
+                    flux_h_unif = [flux_h_unif[i] for i in mag_keep]
+                    z_member = [z_member[i] for i in mag_keep]
+                    phz_pdf = [phz_pdf[i] for i in mag_keep]
+                    phz_mode1 = [phz_mode1[i] for i in mag_keep]
+                    phz_70int = [phz_70int[i] for i in mag_keep]
                 else:
                     ra = np.array([])
             n_plotted = len(ra)
@@ -2757,10 +2793,11 @@ class ClusterModalCallbacks:
                 State("cluster-plot", "figure"),
                 State("tab-members-filter-mode", "value"),
                 State("tab-members-pmem-slider", "value"),
+                State("tab-members-mag-filter-switch", "value"),
             ],
             prevent_initial_call=True,
         )
-        def apply_members_filter(n_clicks, current_figure, filter_mode, pmem_threshold):
+        def apply_members_filter(n_clicks, current_figure, filter_mode, pmem_threshold, mag_filter_on):
             if not n_clicks or not self.selected_cluster:
                 return dash.no_update, dash.no_update
             cluster_id = self.selected_cluster.get("merged_cluster_id")
@@ -2775,6 +2812,8 @@ class ClusterModalCallbacks:
             dec = np.array(entry["dec"])
             pmem_zp = list(entry.get("pmem_zp", [float("nan")] * len(ra)))
             pmem_rs = list(entry.get("pmem_rs", [float("nan")] * len(ra)))
+            flux_h_unif = list(entry.get("flux_h_unif", [float("nan")] * len(ra)))
+            z_member = list(entry.get(MEMBER_Z_COL, [float("nan")] * len(ra)))
             if filter_mode in ("zp", "rs") and pmem_threshold is not None:
                 pmem_vals = pmem_zp if filter_mode == "zp" else pmem_rs
                 keep = np.array([
@@ -2786,6 +2825,23 @@ class ClusterModalCallbacks:
                     dec = dec[keep]
                     pmem_zp = [pmem_zp[i] for i in keep]
                     pmem_rs = [pmem_rs[i] for i in keep]
+                    flux_h_unif = [flux_h_unif[i] for i in keep]
+                    z_member = [z_member[i] for i in keep]
+                else:
+                    ra = np.array([])
+            if len(ra) > 0 and mag_filter_on and self.richcl_maglim_handler and self.richcl_maglim_handler.available:
+                flux_arr = np.array(flux_h_unif)
+                mags = Magnitude.flux_to_magnitude(flux_arr.copy(), "H", "muJy")
+                mag_keep = np.array([
+                    i for i, (m, z) in enumerate(zip(mags, z_member))
+                    if not (m != m) and not (z != z)
+                    and m <= self.richcl_maglim_handler.get_maglim(float(z))
+                ], dtype=int)
+                if len(mag_keep) > 0:
+                    ra = ra[mag_keep]
+                    dec = dec[mag_keep]
+                    pmem_zp = [pmem_zp[i] for i in mag_keep]
+                    pmem_rs = [pmem_rs[i] for i in mag_keep]
                 else:
                     ra = np.array([])
             fig = go.Figure(current_figure)

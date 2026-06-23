@@ -138,6 +138,13 @@ class Config:
         else:
             self.characterization_dir = None
 
+        if self.config_parser.has_option("misc", "richcl_params_file"):
+            self.richcl_params_file = self._expand_path(
+                self.config_parser.get("misc", "richcl_params_file")
+            )
+        else:
+            self.richcl_params_file = None
+
         # Environment paths
         self.eden_path = self._cvmfs_eden_path
 

@@ -5,6 +5,7 @@ This module provides functionality to convert flux measurements to magnitudes
 and apply magnitude-based cuts on CATRED data.
 """
 
+import os
 import numpy as np
 
 
@@ -210,3 +211,54 @@ class Magnitude:
         except Exception as e:
             print(f"Error estimating magnitude range: {e}")
             return (20, 26)
+
+
+class RichCLMagLimHandler:
+    """Load H_star.asc + dmag_faint from a richcl params file; interpolate maglim at cluster z."""
+
+    def __init__(self, params_file_path):
+        self._z_arr = None
+        self._mag_arr = None
+        self._dmag_faint = 0.0
+        if params_file_path:
+            self._load(params_file_path)
+
+    def _load(self, params_file_path):
+        import yaml
+        if not os.path.exists(params_file_path):
+            print(f"Warning: richcl_params_file not found: {params_file_path}")
+            return
+        with open(params_file_path) as fstream:
+            param_data = yaml.safe_load(fstream)
+        if not isinstance(param_data, dict):
+            print(f"Warning: richcl_params_file parsed to unexpected type: {type(param_data)}")
+            return
+        parent = os.path.dirname(os.path.abspath(params_file_path))
+        aux = param_data.get("aux", param_data)
+        hstar_file = aux.get("H_star") if isinstance(aux, dict) else param_data.get("H_star")
+        if hstar_file:
+            hstar_path = os.path.join(parent, str(hstar_file).strip())
+            if os.path.exists(hstar_path):
+                data = np.loadtxt(hstar_path)
+                self._z_arr = data[:, 0]
+                self._mag_arr = data[:, 1]
+            else:
+                print(f"Warning: H_star.asc not found: {hstar_path}")
+        richness_specs = param_data.get("richness_specs", param_data)
+        dmag = richness_specs.get("dmag_faint") if isinstance(richness_specs, dict) else param_data.get("dmag_faint")
+        if dmag is not None:
+            try:
+                self._dmag_faint = float(dmag)
+            except (ValueError, TypeError):
+                pass
+
+    @property
+    def available(self):
+        return self._z_arr is not None
+
+    def get_maglim(self, z):
+        """Return interpolated H_star magnitude at redshift z plus dmag_faint correction."""
+        if not self.available:
+            return None
+        mag = float(np.interp(float(z), self._z_arr, self._mag_arr))
+        return mag + self._dmag_faint

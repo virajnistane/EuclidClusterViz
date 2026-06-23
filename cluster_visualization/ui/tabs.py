@@ -399,6 +399,12 @@ class TabContent:
                                                     dbc.Card(
                                                         dbc.CardBody(
                                                             [
+                                                                dbc.Switch(
+                                                                    id="tab-members-mag-filter-switch",
+                                                                    label="Magnitude filter (H★ limit)",
+                                                                    value=True,
+                                                                    className="mb-2",
+                                                                ),
                                                                 html.Label(
                                                                     "PMEM threshold (keep > value):",
                                                                     className="small mb-1",
