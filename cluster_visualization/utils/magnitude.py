@@ -58,6 +58,8 @@ class Magnitude:
         """
         reference_magnitude = Magnitude.band_to_reference_magnitude(band, unit)
 
+        if len(flux) == 0:
+            return np.array([])
         ratio_badFlux = np.sum(flux <= 0) * 1.0 / len(flux)
         if ratio_badFlux >= error_ratio:
             print(

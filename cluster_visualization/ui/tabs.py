@@ -218,31 +218,6 @@ class TabContent:
                                     [
                                         dbc.Button(
                                             [
-                                                html.I(className="fas fa-magnifying-glass me-2"),
-                                                "CATRED Data Box",
-                                                html.I(className="fas fa-chevron-down ms-2"),
-                                            ],
-                                            id="tab-catred-box-button",
-                                            color="success",
-                                            className="w-100 mb-2",
-                                            n_clicks=0,
-                                        ),
-                                        html.Small(
-                                            "Click to see box options",
-                                            className="text-muted d-block text-center",
-                                        ),
-                                    ],
-                                    width=6,
-                                ),
-                            ],
-                            className="mb-3",
-                        ),
-                        dbc.Row(
-                            [
-                                dbc.Col(
-                                    [
-                                        dbc.Button(
-                                            [
                                                 html.I(className="fas fa-layer-group me-2"),
                                                 "Healpix Mask Cutout",
                                                 html.I(className="fas fa-chevron-down ms-2"),
@@ -260,6 +235,101 @@ class TabContent:
                                     ],
                                     width=6,
                                 ),
+                            ],
+                            className="mb-3",
+                        ),
+                        dbc.Row(
+                            [
+                                dbc.Col(
+                                    [
+                                        dbc.Button(
+                                            [
+                                                html.I(className="fas fa-magnifying-glass me-2"),
+                                                "CATRED Data Box",
+                                                html.I(className="fas fa-chevron-down ms-2"),
+                                            ],
+                                            id="tab-catred-box-button",
+                                            color="success",
+                                            className="w-100 mb-2",
+                                            n_clicks=0,
+                                        ),
+                                        html.Small(
+                                            "Click to see box options",
+                                            className="text-muted d-block text-center",
+                                        ),
+                                    ],
+                                    width=6,
+                                ),
+                                dbc.Col(
+                                    [
+                                        dbc.Button(
+                                            [
+                                                html.I(className="fas fa-users me-2"),
+                                                "Cluster Members",
+                                                html.I(className="fas fa-chevron-down ms-2"),
+                                            ],
+                                            id="tab-cluster-members-button",
+                                            color="secondary",
+                                            className="w-100 mb-2",
+                                            n_clicks=0,
+                                        ),
+                                        html.Small(
+                                            "View member galaxy count",
+                                            className="text-muted d-block text-center",
+                                        ),
+                                    ],
+                                    width=6,
+                                ),
+                            ],
+                            className="mb-3",
+                        ),
+                        dbc.Collapse(
+                            [
+                                dbc.Card(
+                                    [
+                                        dbc.CardHeader(
+                                            [
+                                                html.H6(
+                                                    [
+                                                        html.I(className="fas fa-users me-2"),
+                                                        "Cluster Members",
+                                                    ],
+                                                    className="mb-0",
+                                                )
+                                            ]
+                                        ),
+                                        dbc.CardBody(
+                                            [
+                                                html.Div(
+                                                    id="tab-cluster-members-output",
+                                                    className="mb-2",
+                                                ),
+                                                html.Div(
+                                                    [
+                                                        dbc.Button(
+                                                            [
+                                                                html.I(className="fas fa-play me-2"),
+                                                                "View Members",
+                                                            ],
+                                                            id="tab-view-cluster-members",
+                                                            color="secondary",
+                                                            className="w-50 mb-2",
+                                                            n_clicks=0,
+                                                        ),
+                                                    ],
+                                                    className="d-flex justify-content-center",
+                                                ),
+                                            ]
+                                        ),
+                                    ]
+                                )
+                            ],
+                            id="tab-cluster-members-options",
+                            is_open=False,
+                            className="mb-3",
+                        ),
+                        dbc.Row(
+                            [
                                 dbc.Col(
                                     [
                                         dbc.Button(

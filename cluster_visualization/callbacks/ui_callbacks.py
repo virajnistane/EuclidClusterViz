@@ -193,6 +193,25 @@ class UICallbacks:
 
         @self.app.callback(
             [
+                Output("cluster-members-button", "disabled"),
+                Output("tab-cluster-members-button", "disabled"),
+            ],
+            [Input("render-button", "n_clicks")],
+            prevent_initial_call=False,
+        )
+        def toggle_cluster_members_button(n_clicks):
+            """Disable Cluster Members buttons if members catalog not configured or not yet rendered."""
+            n_clicks = n_clicks or 0
+            if n_clicks == 0:
+                return True, True
+            if self.config is None:
+                return True, True
+            members_xml = self.config.get_gluematchcat_members_xml()
+            disabled = members_xml is None
+            return disabled, disabled
+
+        @self.app.callback(
+            [
                 Output("idcluster-render-button", "disabled"),
                 Output("idcluster-status-display", "children"),
             ],

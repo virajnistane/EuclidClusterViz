@@ -144,6 +144,7 @@ class DataLoader:
         data_detcluster_by_cltile = self._load_data_detcluster_by_cltile(paths, select_algorithm)
         has_individual_cltile_data = bool(data_detcluster_by_cltile)
 
+        data_gluematchcat_members = self._load_data_gluematchcat_members(paths)
         catred_fileinfo_df = self._load_catred_info(paths)
         catred_dsr = self.config.get_catred_dsr() if self.config else None
         effcovmask_fileinfo_df = self._load_effcovmask_info(paths)
@@ -186,6 +187,7 @@ class DataLoader:
         # Assemble final data structure
         data = {
             "data_detcluster_mergedcat": data_detcluster_mergedcat,
+            "data_gluematchcat_members": data_gluematchcat_members,
             "data_detcluster_by_cltile": data_detcluster_by_cltile,
             "has_individual_cltile_data": has_individual_cltile_data,
             "individual_cltile_data_message": (
@@ -386,6 +388,11 @@ class DataLoader:
         gluematchcat_xml = self.config.get_gluematchcat_clusters_xml()
         use_gluematchcat = gluematchcat_xml is not None and os.path.exists(gluematchcat_xml)
 
+        gluematchcat_members_xml = self.config.get_gluematchcat_members_xml()
+        if gluematchcat_members_xml is not None and not os.path.exists(gluematchcat_members_xml):
+            print(f"Warning: GlueMatchCat members XML not found: {gluematchcat_members_xml}")
+            gluematchcat_members_xml = None
+
         if not use_gluematchcat:
             # If not using gluematchcat, we need the separate mergedetcat XML files for merged data.
             mergedetcat_xml_files_dict: Dict[str, str] = self.config.get_mergedetcat_xml_files(
@@ -406,6 +413,7 @@ class DataLoader:
                 "use_gluematchcat": True,
                 "gluematchcat_dir": self.config.gluematchcat_dir,
                 "gluematchcat_xml": gluematchcat_xml,
+                "gluematchcat_members_xml": gluematchcat_members_xml,
                 "mergedetcat_dir": self.config.mergedetcat_dir,
                 "detintile_dir": self.config.detintile_dir,
                 "detfiles_list_files_dict": detfiles_list_files_dict,
@@ -415,9 +423,10 @@ class DataLoader:
             }
         else:
             print(f"✓ Using separate MergeDetCat files for {algorithm}")
-            
+
             paths = {
                 "use_gluematchcat": False,
+                "gluematchcat_members_xml": gluematchcat_members_xml,
                 "mergedetcat_dir": self.config.mergedetcat_dir,
                 "mergedetcat_xml_files_dict": mergedetcat_xml_files_dict,
                 "detintile_dir": self.config.detintile_dir,
@@ -804,6 +813,36 @@ class DataLoader:
             self.disk_cache.set(cache_key, data_by_tile, source_files)
 
         return data_by_tile
+
+    def _load_data_gluematchcat_members(self, paths: Dict[str, Any]) -> Optional[np.ndarray]:
+        """Load GlueMatchCat member galaxies FITS from XML path, or return None if not configured."""
+        members_xml = paths.get("gluematchcat_members_xml")
+        if members_xml is None:
+            return None
+
+        gluematchcat_dir = paths.get("gluematchcat_dir")
+        if gluematchcat_dir is None:
+            print("Warning: gluematchcat_dir not available for members loading")
+            return None
+
+        try:
+            fits_filename = self.get_xml_element(
+                members_xml, "Data/RichMembersFile/DataContainer/FileName"
+            ).text
+        except Exception as e:
+            print(f"Warning: Could not extract members FITS filename from XML: {e}")
+            return None
+
+        fitsfile = os.path.join(gluematchcat_dir, "data", fits_filename)
+        if not os.path.exists(fitsfile):
+            print(f"Warning: Members FITS file not found: {fitsfile}")
+            return None
+
+        print(f"Loading cluster members from: {os.path.basename(fitsfile)}")
+        with fits.open(fitsfile, mode="readonly", memmap=True) as hdul:
+            data_members = np.array(hdul[1].data)
+        print(f"Loaded {len(data_members)} member galaxy entries")
+        return data_members
 
     def _load_catred_info(self, paths: Dict[str, str]) -> pd.DataFrame:
         """Load CATRED file information and polygon data."""

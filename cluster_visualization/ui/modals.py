@@ -55,27 +55,6 @@ class Modals:
                                     [
                                         dbc.Button(
                                             [
-                                                html.I(className="fas fa-magnifying-glass me-2"),
-                                                "View CATRED Box",
-                                            ],
-                                            id="cluster-catred-box-button",
-                                            color="success",
-                                            className="w-100 mb-2",
-                                            n_clicks=0,
-                                        ),
-                                        html.Small("View CATRED Box", className="text-muted"),
-                                    ],
-                                    width=6,
-                                ),
-                            ],
-                            className="mb-3",
-                        ),
-                        dbc.Row(
-                            [
-                                dbc.Col(
-                                    [
-                                        dbc.Button(
-                                            [
                                                 html.I(className="fas fa-layer-group me-2"),
                                                 "Healpix Mask Cutout",
                                             ],
@@ -89,6 +68,51 @@ class Modals:
                                     ],
                                     width=6,
                                 ),
+                            ],
+                            className="mb-3",
+                        ),
+                        dbc.Row(
+                            [
+                                dbc.Col(
+                                    [
+                                        dbc.Button(
+                                            [
+                                                html.I(className="fas fa-magnifying-glass me-2"),
+                                                "View CATRED Box",
+                                            ],
+                                            id="cluster-catred-box-button",
+                                            color="success",
+                                            className="w-100 mb-2",
+                                            n_clicks=0,
+                                        ),
+                                        html.Small("View CATRED Box", className="text-muted"),
+                                    ],
+                                    width=6,
+                                ),
+                                dbc.Col(
+                                    [
+                                        dbc.Button(
+                                            [
+                                                html.I(className="fas fa-users me-2"),
+                                                "Cluster Members",
+                                            ],
+                                            id="cluster-members-button",
+                                            color="secondary",
+                                            className="w-100 mb-2",
+                                            n_clicks=0,
+                                        ),
+                                        html.Small(
+                                            "View member galaxies for this cluster",
+                                            className="text-muted",
+                                        ),
+                                    ],
+                                    width=6,
+                                ),
+                            ],
+                            className="mb-3",
+                        ),
+                        dbc.Row(
+                            [
                                 dbc.Col(
                                     [
                                         dbc.Button(
@@ -108,6 +132,18 @@ class Modals:
                                 ),
                             ],
                             className="mb-3",
+                        ),
+                        dbc.Collapse(
+                            [
+                                dbc.Card(
+                                    dbc.CardBody(
+                                        html.Div(id="cluster-members-output")
+                                    ),
+                                    className="mb-3",
+                                )
+                            ],
+                            id="cluster-members-collapse",
+                            is_open=False,
                         ),
                         # Cutout options (initially hidden)
                         dbc.Collapse(

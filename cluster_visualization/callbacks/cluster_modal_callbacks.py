@@ -56,6 +56,7 @@ class ClusterModalCallbacks:
         self._setup_parameter_sync_callbacks()
         self._setup_trace_management_callbacks()  # 🆕 Add trace management callbacks
         self._setup_selection_box_callback()
+        self._setup_cluster_members_callback()
 
     def _setup_cluster_click_callback(self):
         """Setup callback to detect cluster clicks and show in cluster tab."""
@@ -572,42 +573,48 @@ class ClusterModalCallbacks:
                 Output("tab-cutout-options", "is_open"),
                 Output("tab-catred-box-options", "is_open"),
                 Output("tab-mask-cutout-options", "is_open"),
-                Output("tab-tagging-options", "is_open")
+                Output("tab-tagging-options", "is_open"),
+                Output("tab-cluster-members-options", "is_open"),
             ],
             [
                 Input("tab-cutout-button", "n_clicks"),
                 Input("tab-catred-box-button", "n_clicks"),
                 Input("tab-mask-cutout-button", "n_clicks"),
                 Input("tab-tag-panel-button", "n_clicks"),
+                Input("tab-cluster-members-button", "n_clicks"),
             ],
             [
                 State("tab-cutout-options", "is_open"),
                 State("tab-catred-box-options", "is_open"),
                 State("tab-mask-cutout-options", "is_open"),
-                State("tab-tagging-options", "is_open")
+                State("tab-tagging-options", "is_open"),
+                State("tab-cluster-members-options", "is_open"),
             ],
             prevent_initial_call=True,
         )
         def toggle_tab_options(
-            cutout_clicks, catred_clicks, mask_clicks, tagging_clicks, cutout_open, catred_open, mask_open, tagging_open
+            cutout_clicks, catred_clicks, mask_clicks, tagging_clicks, members_clicks,
+            cutout_open, catred_open, mask_open, tagging_open, members_open,
         ):
             """Toggle tab options - only one collapse open at a time"""
             ctx = dash.callback_context
             if not ctx.triggered:
-                return cutout_open, catred_open, mask_open, tagging_open
+                return cutout_open, catred_open, mask_open, tagging_open, members_open
 
             button_id = ctx.triggered[0]["prop_id"].split(".")[0]
 
             if button_id == "tab-cutout-button":
-                return not cutout_open, False, False, False
+                return not cutout_open, False, False, False, False
             elif button_id == "tab-catred-box-button":
-                return False, not catred_open, False, False
+                return False, not catred_open, False, False, False
             elif button_id == "tab-mask-cutout-button":
-                return False, False, not mask_open, False
+                return False, False, not mask_open, False, False
             elif button_id == "tab-tag-panel-button":
-                return False, False, False, not tagging_open
+                return False, False, False, not tagging_open, False
+            elif button_id == "tab-cluster-members-button":
+                return False, False, False, False, not members_open
 
-            return cutout_open, catred_open, mask_open, tagging_open
+            return cutout_open, catred_open, mask_open, tagging_open, members_open
 
         # Handle tab action buttons
         @self.app.callback(
@@ -2269,3 +2276,64 @@ class ClusterModalCallbacks:
                 not has_mask_cutouts,
                 not has_mask_cutouts,  # mask cutout buttons
             )
+
+    def _setup_cluster_members_callback(self):
+        """Setup callbacks for Cluster Members buttons in modal and tab."""
+
+        def _query_members(algorithm):
+            """Return (members_array_or_None, error_msg_or_None)."""
+            if not self.selected_cluster:
+                return None, "No cluster selected."
+            cluster_id = self.selected_cluster.get("merged_cluster_id")
+            if cluster_id is None:
+                return None, "Cluster ID not resolved for selected point."
+            try:
+                data = self.data_loader.load_data(select_algorithm=algorithm)
+            except Exception as exc:
+                return None, f"Failed to load data: {exc}"
+            members = data.get("data_gluematchcat_members")
+            if members is None:
+                return None, "Members catalog not available. Set gluematchcat_members in config.ini."
+            if "ID_UNIQUE_CLUSTER" not in members.dtype.names:
+                return None, "Members catalog missing ID_UNIQUE_CLUSTER column."
+            try:
+                matched = members[members["ID_UNIQUE_CLUSTER"] == int(cluster_id)]
+            except (TypeError, ValueError) as exc:
+                return None, f"Invalid cluster ID: {exc}"
+            return matched, None
+
+        def _members_alert(matched, cluster_id):
+            n = len(matched)
+            msg = f"{n} member {'galaxy' if n == 1 else 'galaxies'} for cluster ID {int(cluster_id)}"
+            return dbc.Alert(msg, color="success" if n > 0 else "info")
+
+        @self.app.callback(
+            [
+                Output("cluster-members-output", "children"),
+                Output("cluster-members-collapse", "is_open"),
+            ],
+            [Input("cluster-members-button", "n_clicks")],
+            [State("algorithm-dropdown", "value")],
+            prevent_initial_call=True,
+        )
+        def show_cluster_members(n_clicks, algorithm):
+            if not n_clicks:
+                return dash.no_update, dash.no_update
+            matched, err = _query_members(algorithm)
+            if err:
+                return dbc.Alert(err, color="warning"), True
+            return _members_alert(matched, self.selected_cluster["merged_cluster_id"]), True
+
+        @self.app.callback(
+            Output("tab-cluster-members-output", "children"),
+            [Input("tab-view-cluster-members", "n_clicks")],
+            [State("algorithm-dropdown", "value")],
+            prevent_initial_call=True,
+        )
+        def show_tab_cluster_members(n_clicks, algorithm):
+            if not n_clicks:
+                return dash.no_update
+            matched, err = _query_members(algorithm)
+            if err:
+                return dbc.Alert(err, color="warning")
+            return _members_alert(matched, self.selected_cluster["merged_cluster_id"])
