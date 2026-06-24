@@ -446,6 +446,21 @@ class TabContent:
                                                     value=True,
                                                     className="mb-2",
                                                 ),
+                                                html.Small(
+                                                    "3. Radius-based",
+                                                    className="text-muted fw-semibold mb-1 d-block",
+                                                ),
+                                                dbc.RadioItems(
+                                                    id="tab-members-radius-filter-mode",
+                                                    options=[
+                                                        {"label": " None", "value": "none"},
+                                                        {"label": " ZP", "value": "zp"},
+                                                        {"label": " RS", "value": "rs"},
+                                                    ],
+                                                    value="none",
+                                                    inline=True,
+                                                    className="mb-2",
+                                                ),
                                                 dbc.Button(
                                                     [
                                                         html.I(className="fas fa-filter me-2"),

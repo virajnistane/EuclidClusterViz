@@ -2694,11 +2694,12 @@ class ClusterModalCallbacks:
                 State("tab-members-filter-mode", "value"),
                 State("tab-members-pmem-slider", "value"),
                 State("tab-members-mag-filter-switch", "value"),
+                State("tab-members-radius-filter-mode", "value"),
             ],
             prevent_initial_call=True,
         )
         def show_tab_cluster_members(n_clicks, algorithm, current_figure, marker_color, marker_size,
-                                     filter_mode, pmem_threshold, mag_filter_on):
+                                     filter_mode, pmem_threshold, mag_filter_on, radius_filter_mode):
             if not n_clicks:
                 return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
             matched, data, err = _query_members(algorithm)
@@ -2761,6 +2762,37 @@ class ClusterModalCallbacks:
                     phz_70int = [phz_70int[i] for i in mag_keep]
                 else:
                     ra = np.array([])
+            # Apply radius filter
+            if len(ra) > 0 and radius_filter_mode in ("zp", "rs") and self.selected_cluster:
+                import math
+                r_key = "RADIUS_ZP" if radius_filter_mode == "zp" else "RADIUS_RS"
+                rec = self.selected_cluster.get("merged_record") or {}
+                r_arcmin = rec.get(r_key)
+                cl_ra = self.selected_cluster.get("ra")
+                cl_dec = self.selected_cluster.get("dec")
+                if r_arcmin is not None and cl_ra is not None and cl_dec is not None:
+                    try:
+                        r_deg = float(r_arcmin) / 60.0
+                    except (TypeError, ValueError):
+                        r_deg = None
+                    if r_deg and r_deg == r_deg and r_deg > 0:
+                        cos_dec = math.cos(math.radians(float(cl_dec))) or 1.0
+                        dra = (ra - float(cl_ra)) * cos_dec
+                        ddec = dec - float(cl_dec)
+                        dist = np.sqrt(dra**2 + ddec**2)
+                        r_keep = np.where(dist <= r_deg)[0]
+                        if len(r_keep) > 0:
+                            ra = ra[r_keep]
+                            dec = dec[r_keep]
+                            pmem_zp = [pmem_zp[i] for i in r_keep]
+                            pmem_rs = [pmem_rs[i] for i in r_keep]
+                            flux_h_unif = [flux_h_unif[i] for i in r_keep]
+                            z_member = [z_member[i] for i in r_keep]
+                            phz_pdf = [phz_pdf[i] for i in r_keep]
+                            phz_mode1 = [phz_mode1[i] for i in r_keep]
+                            phz_70int = [phz_70int[i] for i in r_keep]
+                        else:
+                            ra = np.array([])
             n_plotted = len(ra)
             alert = _members_alert(n_table, n_plotted, cluster_id)
             if n_plotted == 0:
@@ -2794,10 +2826,11 @@ class ClusterModalCallbacks:
                 State("tab-members-filter-mode", "value"),
                 State("tab-members-pmem-slider", "value"),
                 State("tab-members-mag-filter-switch", "value"),
+                State("tab-members-radius-filter-mode", "value"),
             ],
             prevent_initial_call=True,
         )
-        def apply_members_filter(n_clicks, current_figure, filter_mode, pmem_threshold, mag_filter_on):
+        def apply_members_filter(n_clicks, current_figure, filter_mode, pmem_threshold, mag_filter_on, radius_filter_mode):
             if not n_clicks or not self.selected_cluster:
                 return dash.no_update, dash.no_update
             cluster_id = self.selected_cluster.get("merged_cluster_id")
@@ -2844,6 +2877,32 @@ class ClusterModalCallbacks:
                     pmem_rs = [pmem_rs[i] for i in mag_keep]
                 else:
                     ra = np.array([])
+            # Apply radius filter
+            if len(ra) > 0 and radius_filter_mode in ("zp", "rs") and self.selected_cluster:
+                import math
+                r_key = "RADIUS_ZP" if radius_filter_mode == "zp" else "RADIUS_RS"
+                rec = self.selected_cluster.get("merged_record") or {}
+                r_arcmin = rec.get(r_key)
+                cl_ra = self.selected_cluster.get("ra")
+                cl_dec = self.selected_cluster.get("dec")
+                if r_arcmin is not None and cl_ra is not None and cl_dec is not None:
+                    try:
+                        r_deg = float(r_arcmin) / 60.0
+                    except (TypeError, ValueError):
+                        r_deg = None
+                    if r_deg and r_deg == r_deg and r_deg > 0:
+                        cos_dec = math.cos(math.radians(float(cl_dec))) or 1.0
+                        dra = (ra - float(cl_ra)) * cos_dec
+                        ddec = dec - float(cl_dec)
+                        dist = np.sqrt(dra**2 + ddec**2)
+                        r_keep = np.where(dist <= r_deg)[0]
+                        if len(r_keep) > 0:
+                            ra = ra[r_keep]
+                            dec = dec[r_keep]
+                            pmem_zp = [pmem_zp[i] for i in r_keep]
+                            pmem_rs = [pmem_rs[i] for i in r_keep]
+                        else:
+                            ra = np.array([])
             fig = go.Figure(current_figure)
             fig.data = tuple(t for t in fig.data if not (getattr(t, "name", "") or "").startswith(trace_name))
             if len(ra) > 0:
