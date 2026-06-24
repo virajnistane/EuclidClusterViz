@@ -138,12 +138,16 @@ class Config:
         else:
             self.characterization_dir = None
 
+        _RICHCL_PARAMS_DEFAULT = (
+            "/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/opt/euclid/LE3_RICH_CL/5.1/"
+            "InstallArea/x86_64-conda_ry9-gcc11-o2g/auxdir/"
+            "parameters_detcl_forPipeline.cfg"
+        )
         if self.config_parser.has_option("misc", "richcl_params_file"):
-            self.richcl_params_file = self._expand_path(
-                self.config_parser.get("misc", "richcl_params_file")
-            )
+            _val = self._expand_path(self.config_parser.get("misc", "richcl_params_file"))
+            self.richcl_params_file = _val if _val else _RICHCL_PARAMS_DEFAULT
         else:
-            self.richcl_params_file = None
+            self.richcl_params_file = _RICHCL_PARAMS_DEFAULT
 
         # Environment paths
         self.eden_path = self._cvmfs_eden_path
