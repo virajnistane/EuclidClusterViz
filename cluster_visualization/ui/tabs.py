@@ -384,6 +384,10 @@ class TabContent:
                                                     "Filter Members:",
                                                     className="fw-bold small mb-1",
                                                 ),
+                                                html.Small(
+                                                    "1. PMEM-based (Rich-CL algorithm)",
+                                                    className="text-muted fw-semibold mb-1 d-block",
+                                                ),
                                                 dbc.RadioItems(
                                                     id="tab-members-filter-mode",
                                                     options=[
@@ -399,12 +403,6 @@ class TabContent:
                                                     dbc.Card(
                                                         dbc.CardBody(
                                                             [
-                                                                dbc.Switch(
-                                                                    id="tab-members-mag-filter-switch",
-                                                                    label="Magnitude filter (H★ limit)",
-                                                                    value=True,
-                                                                    className="mb-2",
-                                                                ),
                                                                 html.Label(
                                                                     "PMEM threshold (keep > value):",
                                                                     className="small mb-1",
@@ -430,18 +428,6 @@ class TabContent:
                                                                         "minHeight": "60px",
                                                                     },
                                                                 ),
-                                                                dbc.Button(
-                                                                    [
-                                                                        html.I(className="fas fa-filter me-2"),
-                                                                        "Apply Filter",
-                                                                    ],
-                                                                    id="tab-members-apply-filter",
-                                                                    color="primary",
-                                                                    size="sm",
-                                                                    className="w-100 mt-1",
-                                                                    n_clicks=0,
-                                                                    disabled=True,
-                                                                ),
                                                             ],
                                                             className="py-2",
                                                         ),
@@ -449,6 +435,28 @@ class TabContent:
                                                     ),
                                                     id="tab-members-pmem-slider-collapse",
                                                     is_open=False,
+                                                ),
+                                                html.Small(
+                                                    "2. Magnitude-based",
+                                                    className="text-muted fw-semibold mb-1 d-block",
+                                                ),
+                                                dbc.Switch(
+                                                    id="tab-members-mag-filter-switch",
+                                                    label="Magnitude filter (H★ limit)",
+                                                    value=True,
+                                                    className="mb-2",
+                                                ),
+                                                dbc.Button(
+                                                    [
+                                                        html.I(className="fas fa-filter me-2"),
+                                                        "Apply Filter",
+                                                    ],
+                                                    id="tab-members-apply-filter",
+                                                    color="primary",
+                                                    size="sm",
+                                                    className="w-100 mt-2",
+                                                    n_clicks=0,
+                                                    disabled=True,
                                                 ),
                                             ]
                                         ),

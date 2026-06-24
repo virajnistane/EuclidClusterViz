@@ -2620,7 +2620,7 @@ class ClusterModalCallbacks:
                     html.Span("Plotted: ", className="fw-bold"),
                     html.Span(f"{n_plotted}"),
                     html.Span(
-                        " (some may fall outside available CATRED tiles)" if n_plotted < n_table else "",
+                        " (some members outside queried CATRED tiles / filtered)" if n_plotted < n_table else "",
                         className="text-muted small ms-1",
                     ),
                 ]),

@@ -222,6 +222,7 @@ class RichCLMagLimHandler:
         self._dmag_faint = 0.0
         if params_file_path:
             self._load(params_file_path)
+        print(f"RichCLMagLimHandler: available={self.available}, dmag_faint={self._dmag_faint}, params_file={params_file_path!r}")
 
     def _load(self, params_file_path):
         import yaml
@@ -235,7 +236,11 @@ class RichCLMagLimHandler:
             return
         parent = os.path.dirname(os.path.abspath(params_file_path))
         aux = param_data.get("aux", param_data)
-        hstar_file = aux.get("H_star") if isinstance(aux, dict) else param_data.get("H_star")
+        hstar_file = (
+            aux.get("mstar_filename") or aux.get("H_star")
+            if isinstance(aux, dict)
+            else param_data.get("mstar_filename") or param_data.get("H_star")
+        )
         if hstar_file:
             hstar_path = os.path.join(parent, str(hstar_file).strip())
             if os.path.exists(hstar_path):
