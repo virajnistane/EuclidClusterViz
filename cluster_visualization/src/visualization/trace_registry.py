@@ -23,6 +23,7 @@ class TraceType(Enum):
     MOSAIC = auto()
     MASK_OVERLAY = auto()
     CATRED = auto()
+    NED_SPECZ = auto()
     MEMBERS = auto()
     MATCHED_PAIR = auto()
     CLUSTER = auto()
@@ -89,6 +90,10 @@ def _match_mask_overlay(trace) -> bool:
 
 def _match_catred(trace) -> bool:
     return _name_startswith(trace, "CATRED")
+
+
+def _match_ned_specz(trace) -> bool:
+    return _name_startswith(trace, "NED Spec-z")
 
 
 def _match_members(trace) -> bool:
@@ -215,6 +220,22 @@ def _reconstruct_catred(trace: dict):
     )
 
 
+def _reconstruct_ned_specz(trace: dict):
+    return go.Scattergl(
+        x=trace.get("x", []),
+        y=trace.get("y", []),
+        mode=trace.get("mode", "markers"),
+        marker=trace.get("marker", {}),
+        name=trace.get("name", "NED Spec-z Galaxies"),
+        text=trace.get("text", []),
+        customdata=trace.get("customdata", None),
+        hovertemplate=trace.get("hovertemplate", None),
+        hoverinfo=trace.get("hoverinfo", "text"),
+        showlegend=trace.get("showlegend", True),
+        visible=trace.get("visible", True),
+    )
+
+
 def _reconstruct_members(trace: dict):
     return go.Scattergl(
         x=trace.get("x", []),
@@ -262,6 +283,12 @@ TRACE_SPECS: dict[TraceType, TraceTypeSpec] = {
         match=_match_catred,
         reconstruct=_reconstruct_catred,
     ),
+    TraceType.NED_SPECZ: TraceTypeSpec(
+        name="ned_specz",
+        layer_order=45,
+        match=_match_ned_specz,
+        reconstruct=_reconstruct_ned_specz,
+    ),
     TraceType.MEMBERS: TraceTypeSpec(
         name="members",
         layer_order=50,
@@ -296,6 +323,7 @@ _MATCH_ORDER = [
     TraceType.MEMBERS,
     TraceType.MASK_OVERLAY,
     TraceType.CATRED,
+    TraceType.NED_SPECZ,
     TraceType.POLYGON,
     TraceType.MOSAIC,
     TraceType.CLUSTER,

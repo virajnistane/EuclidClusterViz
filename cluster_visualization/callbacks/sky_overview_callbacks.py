@@ -311,6 +311,7 @@ class SkyOverviewCallbacks:
                 State("flag-quality-rs-checklist", "value"),
                 State("idcluster-upload", "contents"),
                 State("idcluster-upload", "filename"),
+                State("ned-specz-filter-switch", "value"),
             ],
             prevent_initial_call=True,
         )
@@ -334,6 +335,7 @@ class SkyOverviewCallbacks:
             flag_quality_rs,
             idcluster_upload_contents,
             idcluster_upload_filename,
+            ned_specz_filter,
         ):
             if view_mode != "globe":
                 return no_update, no_update
@@ -350,6 +352,7 @@ class SkyOverviewCallbacks:
                     richness_include_missing_zp, richness_include_missing_rs,
                     richness_mode, flag_quality_zp, flag_quality_rs,
                     idcluster_upload_contents, idcluster_upload_filename,
+                    ned_specz_filter=ned_specz_filter,
                 )
                 _t = time.perf_counter()
                 data = self.data_loader.load_data(algorithm)
