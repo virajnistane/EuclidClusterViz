@@ -341,6 +341,23 @@ class SidebarSections:
         )
 
     @staticmethod
+    def create_ned_specz_filter_section():
+        """Only clusters with a NED spec-z cross-match (spec-z verification), at the next Apply"""
+        return html.Div(
+            [
+                _group_label("Spec-z verification"),
+                dbc.Switch(
+                    id="ned-specz-filter-switch",
+                    label="Only clusters with a NED spec-z match",
+                    value=False,
+                ),
+                _pending_tag("ned-specz-filter-switch"),
+                _help("Needs the NED catalog ([paths] ned_specz_fits in config.ini)"),
+            ],
+            className="control-group",
+        )
+
+    @staticmethod
     def create_apply_filters_bar():
         """Sticky bar with the single Apply action for every filter above"""
         return html.Div(
