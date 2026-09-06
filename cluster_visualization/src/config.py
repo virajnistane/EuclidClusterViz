@@ -385,6 +385,16 @@ class Config:
             return path.strip()
         return None
 
+    def get_ned_specz_fits(self):
+        """Get path to the NED spectroscopic-redshift cross-match FITS catalog.
+
+        Returns None if not configured (blank or missing key).
+        """
+        if self.config_parser.has_option("paths", "ned_specz_fits"):
+            path = self.config_parser.get("paths", "ned_specz_fits").strip()
+            return self._expand_path(path) if path else None
+        return None
+
     def _get_mosaic_option(self, option_name: str, fallback=None):
         """Get a value from [mosaic] section with optional fallback."""
         if self.config_parser.has_option("mosaic", option_name):

@@ -543,6 +543,7 @@ class ClusterModalCallbacks:
                 State("catred-mode-switch", "value"),
                 State("catred-threshold-slider", "value"),
                 State("magnitude-limit-slider", "value"),
+                State("ned-specz-filter-switch", "value"),
                 State("cluster-plot", "relayoutData"),
                 State("cluster-plot", "figure"),
             ],
@@ -595,6 +596,7 @@ class ClusterModalCallbacks:
             catred_masked,
             threshold,
             maglim,
+            ned_specz_filter,
             relayout_data,
             current_figure,
         ):
@@ -812,12 +814,19 @@ class ClusterModalCallbacks:
                 # Extract existing traces to preserve across re-render
                 _preserved = TraceRegistry.extract_traces(
                     current_figure,
-                    {TraceType.CATRED, TraceType.MOSAIC, TraceType.MASK_OVERLAY, TraceType.MEMBERS},
+                    {
+                        TraceType.CATRED,
+                        TraceType.MOSAIC,
+                        TraceType.MASK_OVERLAY,
+                        TraceType.MEMBERS,
+                        TraceType.NED_SPECZ,
+                    },
                 )
                 existing_catred_traces = _preserved[TraceType.CATRED]
                 existing_mosaic_traces = _preserved[TraceType.MOSAIC]
                 existing_mask_overlay_traces = _preserved[TraceType.MASK_OVERLAY]
                 members_traces = _preserved[TraceType.MEMBERS]
+                existing_ned_specz_traces = _preserved[TraceType.NED_SPECZ]
 
                 # Load CATRED Box data
                 box_params = self.catred_handler._extract_box_data_from_cluster_click(
@@ -856,10 +865,12 @@ class ClusterModalCallbacks:
                         existing_catred_traces=[],
                         existing_mosaic_traces=existing_mosaic_traces,
                         existing_mask_overlay_traces=existing_mask_overlay_traces,
+                        existing_ned_specz_traces=existing_ned_specz_traces,
                         snr_threshold_lower_pzwav=snr_pzwav_lower,
                         snr_threshold_upper_pzwav=snr_pzwav_upper,
                         snr_threshold_lower_amico=snr_amico_lower,
                         snr_threshold_upper_amico=snr_amico_upper,
+                        ned_specz_filter=ned_specz_filter,
                         threshold=catred_mask_threshold,
                         show_unmerged_clusters=show_unmerged_clusters,
                         show_cltile_info=show_cltile_info,

@@ -603,6 +603,52 @@ class DataControls:
         )
 
     @staticmethod
+    def create_ned_specz_section():
+        """Create NED spec-z verification galaxy display section.
+
+        Only meaningful (and shown) once the spec-z cluster filter switch is
+        active - visibility of the wrapper is toggled by a callback in
+        NEDCallbacks. Distinct marker style from CATRED so points can be
+        manually cross-checked.
+        """
+        return html.Div(
+            id="ned-specz-section-wrapper",
+            style={"display": "none"},
+            children=[
+                dbc.Card(
+                    [
+                        dbc.CardBody(
+                            [
+                                html.Div(
+                                    [
+                                        html.I(className="fas fa-star me-0 text-danger"),
+                                        dbc.Switch(
+                                            id="ned-specz-display-switch",
+                                            label="Show NED spec-z galaxies",
+                                            value=False,
+                                            className="ms-1",
+                                        ),
+                                    ],
+                                    className="d-flex align-items-center mb-0",
+                                ),
+                                dbc.Badge(
+                                    [html.I(className="fas fa-diamond me-1"), "Distinct marker vs. CATRED"],
+                                    color="danger",
+                                    className="opacity-75",
+                                ),
+                            ]
+                        )
+                    ],
+                    className="mb-3 border-0 shadow-sm",
+                    style={
+                        "background": "linear-gradient(45deg, #ffe8e8, #ffffff)",
+                        "border-radius": "12px",
+                    },
+                ),
+            ],
+        )
+
+    @staticmethod
     def create_healpix_mask_section():
         """Create Healpix mask controls section with opacity slider and load/hide/delete."""
         return html.Div(

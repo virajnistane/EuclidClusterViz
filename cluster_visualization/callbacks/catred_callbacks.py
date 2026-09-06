@@ -113,6 +113,7 @@ class CATREDCallbacks:
                 State("redshift-range-slider", "value"),
                 State("idcluster-upload", "contents"),
                 State("idcluster-upload", "filename"),
+                State("ned-specz-filter-switch", "value"),
                 State("polygon-switch", "value"),
                 State("mer-switch", "value"),
                 State("aspect-ratio-switch", "value"),
@@ -145,6 +146,7 @@ class CATREDCallbacks:
             redshift_range,
             idcluster_upload_contents,
             idcluster_upload_filename,
+            ned_specz_filter,
             show_polygons,
             show_mer_tiles,
             free_aspect_ratio,
@@ -220,11 +222,12 @@ class CATREDCallbacks:
                 # Extract existing traces to preserve across re-render
                 _preserved = TraceRegistry.extract_traces(
                     current_figure,
-                    {TraceType.CATRED, TraceType.MOSAIC, TraceType.MASK_OVERLAY},
+                    {TraceType.CATRED, TraceType.MOSAIC, TraceType.MASK_OVERLAY, TraceType.NED_SPECZ},
                 )
                 existing_catred_traces = _preserved[TraceType.CATRED]
                 existing_mosaic_traces = _preserved[TraceType.MOSAIC]
                 existing_mask_overlay_traces = _preserved[TraceType.MASK_OVERLAY]
+                existing_ned_specz_traces = _preserved[TraceType.NED_SPECZ]
 
                 print(
                     f"Debug: Preserving {len(existing_catred_traces)} CATRED, "
@@ -243,6 +246,7 @@ class CATREDCallbacks:
                         existing_catred_traces=existing_catred_traces,
                         existing_mosaic_traces=existing_mosaic_traces,  # 🆕 PASS MOSAIC TRACES
                         existing_mask_overlay_traces=existing_mask_overlay_traces,  # 🆕 PASS MASK OVERLAY TRACES
+                        existing_ned_specz_traces=existing_ned_specz_traces,
                         snr_threshold_lower_pzwav=snr_pzwav_lower,
                         snr_threshold_upper_pzwav=snr_pzwav_upper,
                         snr_threshold_lower_amico=snr_amico_lower,
@@ -250,6 +254,7 @@ class CATREDCallbacks:
                         z_threshold_lower=z_lower,
                         z_threshold_upper=z_upper,
                         idcluster_list=idcluster_list,
+                        ned_specz_filter=ned_specz_filter,
                         threshold=threshold,
                         show_unmerged_clusters=show_unmerged_clusters,
                         show_cltile_info=show_cltile_info,
@@ -464,6 +469,7 @@ class CATREDCallbacks:
         existing_catred_traces=None,
         existing_mosaic_traces=None,
         existing_mask_overlay_traces=None,
+        existing_ned_specz_traces=None,
         manual_catred_data=None,
         snr_threshold_lower_pzwav=None,
         snr_threshold_upper_pzwav=None,
@@ -472,6 +478,7 @@ class CATREDCallbacks:
         z_threshold_lower=None,
         z_threshold_upper=None,
         idcluster_list=None,
+        ned_specz_filter=False,
         threshold=0.8,
         show_unmerged_clusters=False,
         show_cltile_info=True,
@@ -488,6 +495,7 @@ class CATREDCallbacks:
                 existing_catred_traces=existing_catred_traces,
                 existing_mosaic_traces=existing_mosaic_traces,
                 existing_mask_overlay_traces=existing_mask_overlay_traces,
+                existing_ned_specz_traces=existing_ned_specz_traces,
                 manual_catred_data=manual_catred_data,
                 snr_threshold_lower_pzwav=snr_threshold_lower_pzwav,
                 snr_threshold_upper_pzwav=snr_threshold_upper_pzwav,
@@ -496,6 +504,7 @@ class CATREDCallbacks:
                 z_threshold_lower=z_threshold_lower,
                 z_threshold_upper=z_threshold_upper,
                 idcluster_list=idcluster_list,
+                ned_specz_filter=ned_specz_filter,
                 threshold=threshold,
                 show_unmerged_clusters=show_unmerged_clusters,
                 show_cltile_info=show_cltile_info,
