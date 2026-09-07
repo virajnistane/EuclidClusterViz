@@ -820,6 +820,7 @@ class ClusterModalCallbacks:
                         TraceType.MASK_OVERLAY,
                         TraceType.MEMBERS,
                         TraceType.NED_SPECZ,
+                        TraceType.NED_NEARBY_CATRED,
                     },
                 )
                 existing_catred_traces = _preserved[TraceType.CATRED]
@@ -827,6 +828,7 @@ class ClusterModalCallbacks:
                 existing_mask_overlay_traces = _preserved[TraceType.MASK_OVERLAY]
                 members_traces = _preserved[TraceType.MEMBERS]
                 existing_ned_specz_traces = _preserved[TraceType.NED_SPECZ]
+                existing_ned_nearby_catred_traces = _preserved[TraceType.NED_NEARBY_CATRED]
 
                 # Load CATRED Box data
                 box_params = self.catred_handler._extract_box_data_from_cluster_click(
@@ -866,6 +868,7 @@ class ClusterModalCallbacks:
                         existing_mosaic_traces=existing_mosaic_traces,
                         existing_mask_overlay_traces=existing_mask_overlay_traces,
                         existing_ned_specz_traces=existing_ned_specz_traces,
+                        existing_ned_nearby_catred_traces=existing_ned_nearby_catred_traces,
                         snr_threshold_lower_pzwav=snr_pzwav_lower,
                         snr_threshold_upper_pzwav=snr_pzwav_upper,
                         snr_threshold_lower_amico=snr_amico_lower,

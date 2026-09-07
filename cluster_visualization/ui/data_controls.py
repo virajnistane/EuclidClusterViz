@@ -645,6 +645,63 @@ class DataControls:
                         "border-radius": "12px",
                     },
                 ),
+                html.Div(
+                    id="ned-nearby-catred-wrapper",
+                    style={"display": "none"},
+                    children=[
+                        dbc.Card(
+                            [
+                                dbc.CardBody(
+                                    [
+                                        html.Div(
+                                            [
+                                                html.I(className="fas fa-circle-dot me-0 text-info"),
+                                                html.Small(
+                                                    "CATRED sources near NED galaxies",
+                                                    className="ms-1 fw-bold",
+                                                ),
+                                            ],
+                                            className="d-flex align-items-center mb-2",
+                                        ),
+                                        dbc.InputGroup(
+                                            [
+                                                dbc.InputGroupText("Match radius (arcsec)"),
+                                                dbc.Input(
+                                                    id="ned-nearby-catred-radius-arcsec",
+                                                    type="number",
+                                                    min=0.1,
+                                                    step=0.1,
+                                                    value=3.0,
+                                                ),
+                                            ],
+                                            size="sm",
+                                            className="mb-2",
+                                        ),
+                                        dbc.Button(
+                                            [html.I(className="fas fa-crosshairs me-2"), "Load CATRED near NED"],
+                                            id="ned-nearby-catred-button",
+                                            color="info",
+                                            size="sm",
+                                            className="w-100 shadow-sm btn-enhanced",
+                                            n_clicks=0,
+                                            disabled=True,
+                                            style={"border-radius": "8px", "font-weight": "600"},
+                                        ),
+                                        html.Small(
+                                            "Zoom in to enable (requires a small RA/Dec view)",
+                                            className="text-muted d-block mt-1",
+                                        ),
+                                    ]
+                                )
+                            ],
+                            className="mb-3 border-0 shadow-sm",
+                            style={
+                                "background": "linear-gradient(45deg, #e8f8ff, #ffffff)",
+                                "border-radius": "12px",
+                            },
+                        ),
+                    ],
+                ),
             ],
         )
 

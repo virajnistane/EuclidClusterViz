@@ -406,6 +406,8 @@ class ClusterVisualizationApp:
                 app=self.app,
                 ned_handler=self.ned_handler,
                 figure_manager=self.figure_manager,
+                catred_handler=self.catred_handler,
+                data_loader=self.data_loader,
             )
 
             logger.debug("All callbacks registered")
