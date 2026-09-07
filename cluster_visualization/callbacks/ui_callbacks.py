@@ -1809,6 +1809,8 @@ class UICallbacks:
                 var count = 0;
                 var clusterPts = [];  // {ra, dec, name}
                 var catredPts = [];
+                var nedPts = [];
+                var nedCatredPts = [];
                 var maskPolygons = [];  // [[ra,dec], ...] per polygon segment (kept for legacy)
                 var maskMocPixels = [];  // flat int array of HEALPix pixel IDs (order 14)
                 var membersPts = [];
@@ -1816,6 +1818,8 @@ class UICallbacks:
                 (figure.data || []).forEach(function(trace) {
                     var name = (trace.name || '');
                     var isCatred = name.indexOf('CATRED') === 0;
+                    var isNed = name.indexOf('NED Spec-z') === 0;
+                    var isNedCatred = name.indexOf('NED-Nearby CATRED') === 0;
                     // Modal mask cutout traces carry a 'Cutout ' prefix (CUTOUT_MASK_PREFIX)
                     var maskName = name.indexOf('Cutout ') === 0 ? name.slice(7) : name;
                     var isMask = maskName.indexOf('Mask overlay') === 0 || maskName.indexOf('Inverted mask overlay') === 0;
@@ -1855,6 +1859,26 @@ class UICallbacks:
                             var ddec = dec - decCtr;
                             if (Math.sqrt(dra*dra + ddec*ddec) <= fov2) {
                                 catredPts.push({ra: ra, dec: dec, name: 'CATRED'});
+                            }
+                        }
+                    } else if (isNed) {
+                        for (var i = 0; i < xs.length; i++) {
+                            var ra = xs[i], dec = ys[i];
+                            if (ra == null || dec == null) continue;
+                            var dra = (ra - raCtr) * cosD;
+                            var ddec = dec - decCtr;
+                            if (Math.sqrt(dra*dra + ddec*ddec) <= fov2) {
+                                nedPts.push({ra: ra, dec: dec, name: 'NED'});
+                            }
+                        }
+                    } else if (isNedCatred) {
+                        for (var i = 0; i < xs.length; i++) {
+                            var ra = xs[i], dec = ys[i];
+                            if (ra == null || dec == null) continue;
+                            var dra = (ra - raCtr) * cosD;
+                            var ddec = dec - decCtr;
+                            if (Math.sqrt(dra*dra + ddec*ddec) <= fov2) {
+                                nedCatredPts.push({ra: ra, dec: dec, name: 'NED-Nearby CATRED'});
                             }
                         }
                     } else if (isMask) {
@@ -1902,6 +1926,8 @@ class UICallbacks:
                 var overlayData = {
                     clusters: clusterPts,
                     catred: catredPts,
+                    ned: nedPts,
+                    ned_catred: nedCatredPts,
                     mask_polygons: maskPolygons,
                     mask_moc_pixels: maskMocPixels,
                     mask_hips_path: maskHipsPath || null,
@@ -2026,6 +2052,12 @@ class UICallbacks:
                         var catredSrcs = (data.catred || []).map(function(r) {
                             return A.source(r.ra, r.dec, {name: r.name || 'CATRED'});
                         });
+                        var nedSrcs = (data.ned || []).map(function(r) {
+                            return A.source(r.ra, r.dec, {name: r.name || 'NED'});
+                        });
+                        var nedCatredSrcs = (data.ned_catred || []).map(function(r) {
+                            return A.source(r.ra, r.dec, {name: r.name || 'NED-Nearby CATRED'});
+                        });
                         var membersSrcs = (data.members || []).map(function(r) {
                             return A.source(r.ra, r.dec, {name: r.name || 'Member'});
                         });
@@ -2048,6 +2080,18 @@ class UICallbacks:
                             catredCat.addSources(catredSrcs);
                             aladin.addCatalog(catredCat);
                             reg.catalogs.push(catredCat);
+                        }
+                        if (nedSrcs.length) {
+                            var nedCat = A.catalog({name: 'NED Spec-z', color: '#ff8800', shape: 'rhomb', sourceSize: 10});
+                            nedCat.addSources(nedSrcs);
+                            aladin.addCatalog(nedCat);
+                            reg.catalogs.push(nedCat);
+                        }
+                        if (nedCatredSrcs.length) {
+                            var nedCatredCat = A.catalog({name: 'NED-Nearby CATRED', color: '#0096ff', shape: 'square', sourceSize: 8});
+                            nedCatredCat.addSources(nedCatredSrcs);
+                            aladin.addCatalog(nedCatredCat);
+                            reg.catalogs.push(nedCatredCat);
                         }
                         if (membersSrcs.length) {
                             var membersCat = A.catalog({name: 'Members', color: '#FFD700', shape: 'rhomb', sourceSize: 10});
