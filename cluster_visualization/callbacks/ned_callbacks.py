@@ -6,13 +6,11 @@ cluster spec-z filter switch) and rendering the NED galaxy markers, styled
 distinctly from CATRED, for manual verification against CATRED sources.
 """
 
-import numpy as np
-import pandas as pd
 import plotly.graph_objs as go
 from dash import Input, Output, State
 
+from cluster_visualization.src.data.ned_catred_matcher import match_ned_to_catred
 from cluster_visualization.src.visualization.trace_registry import TraceRegistry, TraceType
-from cluster_visualization.utils.spatial_index import SpatialIndex
 
 
 class NEDCallbacks:
@@ -269,96 +267,38 @@ class NEDCallbacks:
         if len(ned_ra) == 0:
             return []
 
-        margin_deg = radius_deg + 0.01
-        zoom_data = {
-            "ra_min": float(ned_ra.min()) - margin_deg,
-            "ra_max": float(ned_ra.max()) + margin_deg,
-            "dec_min": float(ned_dec.min()) - margin_deg,
-            "dec_max": float(ned_dec.max()) + margin_deg,
-        }
-
         data = self.data_loader.load_data(algorithm)
-        if catred_masked:
-            catred_scatter = self.catred_handler.update_catred_data_with_coverage(
-                zoom_data, data, maglim, threshold
-            )
-        else:
-            catred_scatter = self.catred_handler.update_catred_data_unmasked(
-                zoom_data, data, maglim=1000.0
-            )
-
-        catred_ra = np.asarray(catred_scatter.get("ra", []), dtype=float)
-        catred_dec = np.asarray(catred_scatter.get("dec", []), dtype=float)
-        if len(catred_ra) == 0:
+        result = match_ned_to_catred(
+            df_in_view, self.catred_handler, data, radius_arcsec, catred_masked, threshold, maglim
+        )
+        if result is None:
+            print("Debug: NED-nearby-CATRED: no CATRED points loaded for this viewport")
             return []
 
-        index = SpatialIndex(catred_ra, catred_dec)
-        matched: set = set()
-        for hits in index.query_multiple_radius(ned_ra, ned_dec, radius_deg):
-            matched.update(hits.tolist())
-
-        try:
-            self._record_nearest_catred_matches(
-                df_in_view, ned_ra, ned_dec, index, catred_scatter, radius_arcsec
-            )
-        except Exception as e:
-            print(f"Warning: Failed to record NED-nearby-CATRED matches: {e}")
-
-        if not matched:
-            nearest_arcsec = min(
-                2 * np.arcsin(min(index.query_nearest(ra, dec, k=1)[0], 1.0) / 2) * 206264.80625
-                for ra, dec in zip(ned_ra, ned_dec)
-            )
+        if len(result.nearest_rows) > 0:
             print(
-                f"Debug: NED-nearby-CATRED: 0 of {len(catred_ra)} CATRED sources within "
-                f"{radius_arcsec} arcsec of any of the {len(ned_ra)} NED galaxies in view "
-                f"(nearest CATRED source is {nearest_arcsec:.2f} arcsec away - try a larger radius)"
+                f"Debug: NED-nearby-CATRED: recording {len(result.nearest_rows)} "
+                "nearest-match row(s) to output file"
+            )
+            try:
+                self.ned_handler.write_catred_matches(result.nearest_rows)
+            except Exception as e:
+                print(f"Warning: Failed to record NED-nearby-CATRED matches: {e}")
+
+        if len(result.display_matched_idx) == 0:
+            print(
+                f"Debug: NED-nearby-CATRED: 0 of {len(result.catred_ra)} CATRED sources within "
+                f"{radius_arcsec} arcsec of any of {len(ned_ra)} NED galaxies in view "
+                f"(nearest CATRED source is {result.overall_nearest_arcsec:.2f} arcsec away - "
+                "try a larger radius)"
             )
             return []
 
-        idx = np.array(sorted(matched))
+        idx = result.display_matched_idx
         print(f"Debug: NED-nearby-CATRED: matched {len(idx)} CATRED sources within {radius_arcsec} arcsec")
 
-        hover_text = self._format_catred_hover_text(catred_scatter, idx)
-        return [self._build_nearby_catred_trace(catred_ra[idx], catred_dec[idx], hover_text)]
-
-    def _record_nearest_catred_matches(self, df_in_view, ned_ra, ned_dec, index, catred_scatter, radius_arcsec):
-        """Record, per NED galaxy in view, its single nearest CATRED match
-        (if within radius_arcsec) to the companion output FITS file via
-        NEDHandler.write_catred_matches - independent of the on-screen
-        display trace, which still shows every CATRED source within radius."""
-        cluster_cols = ["ID_UNIQUE_CLUSTER", "DET_CODE_NB", "CROSS_ID_CLUSTER", "RA_CLUSTER", "DEC_CLUSTER", "Z_CLUSTER"]
-        catred_ra = catred_scatter.get("ra", [])
-        catred_dec = catred_scatter.get("dec", [])
-        phz_median = catred_scatter.get("phz_median", [])
-        phz_mode_1 = catred_scatter.get("phz_mode_1", [])
-
-        rows = []
-        for i in range(len(ned_ra)):
-            dist_chord, catred_idx = index.query_nearest(ned_ra[i], ned_dec[i], k=1)
-            nearest_arcsec = 2 * np.arcsin(min(float(dist_chord), 1.0) / 2) * 206264.80625
-            if nearest_arcsec > radius_arcsec:
-                continue
-
-            catred_idx = int(catred_idx)
-            ned_row = df_in_view.iloc[i]
-            row = {col: ned_row[col] for col in cluster_cols}
-            row["RA"] = float(catred_ra[catred_idx])
-            row["DEC"] = float(catred_dec[catred_idx])
-            row["PHZ_MEDIAN"] = float(phz_median[catred_idx]) if catred_idx < len(phz_median) else np.nan
-            row["PHZ_MODE"] = float(phz_mode_1[catred_idx]) if catred_idx < len(phz_mode_1) else np.nan
-            row["NED_RA"] = float(ned_ra[i])
-            row["NED_DEC"] = float(ned_dec[i])
-            row["NED_Z"] = float(ned_row["Z"]) if "Z" in df_in_view.columns else np.nan
-            rows.append(row)
-
-        if not rows:
-            return
-
-        columns = cluster_cols + ["RA", "DEC", "PHZ_MEDIAN", "PHZ_MODE", "NED_RA", "NED_DEC", "NED_Z"]
-        new_rows = pd.DataFrame(rows, columns=columns)
-        print(f"Debug: NED-nearby-CATRED: recording {len(new_rows)} nearest-match row(s) to output file")
-        self.ned_handler.write_catred_matches(new_rows)
+        hover_text = self._format_catred_hover_text(result.catred_scatter, idx)
+        return [self._build_nearby_catred_trace(result.catred_ra[idx], result.catred_dec[idx], hover_text)]
 
     @staticmethod
     def _format_catred_hover_text(catred_scatter, idx):
