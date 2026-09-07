@@ -1067,12 +1067,19 @@ class MainPlotCallbacks:
                 # Extract existing traces to preserve across re-render
                 _preserved = TraceRegistry.extract_traces(
                     current_figure,
-                    {TraceType.CATRED, TraceType.MOSAIC, TraceType.MASK_OVERLAY, TraceType.NED_SPECZ},
+                    {
+                        TraceType.CATRED,
+                        TraceType.MOSAIC,
+                        TraceType.MASK_OVERLAY,
+                        TraceType.NED_SPECZ,
+                        TraceType.NED_NEARBY_CATRED,
+                    },
                 )
                 existing_catred_traces = _preserved[TraceType.CATRED]
                 existing_mosaic_traces = _preserved[TraceType.MOSAIC]
                 existing_mask_overlay_traces = _preserved[TraceType.MASK_OVERLAY]
                 existing_ned_specz_traces = _preserved[TraceType.NED_SPECZ]
+                existing_ned_nearby_catred_traces = _preserved[TraceType.NED_NEARBY_CATRED]
 
                 print(
                     f"Debug: Options update - preserving {len(existing_catred_traces)} CATRED, "
@@ -1090,6 +1097,7 @@ class MainPlotCallbacks:
                     existing_mosaic_traces=existing_mosaic_traces,
                     existing_mask_overlay_traces=existing_mask_overlay_traces,
                     existing_ned_specz_traces=existing_ned_specz_traces,
+                    existing_ned_nearby_catred_traces=existing_ned_nearby_catred_traces,
                     snr_threshold_lower_pzwav=snr_pzwav_lower,
                     snr_threshold_upper_pzwav=snr_pzwav_upper,
                     snr_threshold_lower_amico=snr_amico_lower,
@@ -1696,6 +1704,7 @@ class MainPlotCallbacks:
         existing_mosaic_traces=None,
         existing_mask_overlay_traces=None,
         existing_ned_specz_traces=None,
+        existing_ned_nearby_catred_traces=None,
         manual_catred_data=None,
         snr_threshold_lower_pzwav=None,
         snr_threshold_upper_pzwav=None,
@@ -1733,6 +1742,7 @@ class MainPlotCallbacks:
                 existing_mosaic_traces=existing_mosaic_traces,
                 existing_mask_overlay_traces=existing_mask_overlay_traces,
                 existing_ned_specz_traces=existing_ned_specz_traces,
+                existing_ned_nearby_catred_traces=existing_ned_nearby_catred_traces,
                 manual_catred_data=manual_catred_data,
                 snr_threshold_lower_pzwav=snr_threshold_lower_pzwav,
                 snr_threshold_upper_pzwav=snr_threshold_upper_pzwav,

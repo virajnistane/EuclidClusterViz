@@ -76,6 +76,7 @@ class TraceCreator:
         existing_mosaic_traces: Optional[List] = None,
         existing_mask_overlay_traces: Optional[List] = None,
         existing_ned_specz_traces: Optional[List] = None,
+        existing_ned_nearby_catred_traces: Optional[List] = None,
         snr_threshold_lower_pzwav: Optional[float] = None,
         snr_threshold_upper_pzwav: Optional[float] = None,
         snr_threshold_lower_amico: Optional[float] = None,
@@ -214,6 +215,13 @@ class TraceCreator:
         if ned_specz_traces:
             print(f"Debug: Preserving {len(ned_specz_traces)} existing NED spec-z traces in layer order")
 
+        # Prepare NED-nearby CATRED traces (preserve existing ones)
+        ned_nearby_catred_traces = existing_ned_nearby_catred_traces or []
+        if ned_nearby_catred_traces:
+            print(
+                f"Debug: Preserving {len(ned_nearby_catred_traces)} existing NED-nearby CATRED traces in layer order"
+            )
+
         # Combine in proper layer order: polygons (bottom) → mosaics → CATRED → clusters (top)
         # This ensures cluster traces are always on top of mosaic and CATRED traces
 
@@ -241,6 +249,7 @@ class TraceCreator:
             + mask_overlay_traces
             + catred_traces
             + ned_specz_traces
+            + ned_nearby_catred_traces
             + cluster_traces
         )
         self._profiler.record("create_traces:total", time.perf_counter() - _t_create)
