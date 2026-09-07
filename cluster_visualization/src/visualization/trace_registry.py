@@ -24,6 +24,7 @@ class TraceType(Enum):
     MASK_OVERLAY = auto()
     CATRED = auto()
     NED_SPECZ = auto()
+    NED_NEARBY_CATRED = auto()
     MEMBERS = auto()
     MATCHED_PAIR = auto()
     CLUSTER = auto()
@@ -94,6 +95,10 @@ def _match_catred(trace) -> bool:
 
 def _match_ned_specz(trace) -> bool:
     return _name_startswith(trace, "NED Spec-z")
+
+
+def _match_ned_nearby_catred(trace) -> bool:
+    return _name_startswith(trace, "NED-Nearby CATRED")
 
 
 def _match_members(trace) -> bool:
@@ -236,6 +241,25 @@ def _reconstruct_ned_specz(trace: dict):
     )
 
 
+def _reconstruct_ned_nearby_catred(trace: dict):
+    return go.Scattergl(
+        x=trace.get("x", []),
+        y=trace.get("y", []),
+        mode=trace.get("mode", "markers"),
+        marker=trace.get("marker", {}),
+        name=trace.get("name", "NED-Nearby CATRED Sources"),
+        text=trace.get("text", []),
+        customdata=trace.get("customdata", None),
+        hovertemplate=trace.get("hovertemplate", None),
+        hoverlabel=trace.get("hoverlabel", None),
+        hoverinfo=trace.get("hoverinfo", "text"),
+        legendgroup=trace.get("legendgroup", None),
+        opacity=trace.get("opacity", None),
+        showlegend=trace.get("showlegend", True),
+        visible=trace.get("visible", True),
+    )
+
+
 def _reconstruct_members(trace: dict):
     return go.Scattergl(
         x=trace.get("x", []),
@@ -289,6 +313,12 @@ TRACE_SPECS: dict[TraceType, TraceTypeSpec] = {
         match=_match_ned_specz,
         reconstruct=_reconstruct_ned_specz,
     ),
+    TraceType.NED_NEARBY_CATRED: TraceTypeSpec(
+        name="ned_nearby_catred",
+        layer_order=46,
+        match=_match_ned_nearby_catred,
+        reconstruct=_reconstruct_ned_nearby_catred,
+    ),
     TraceType.MEMBERS: TraceTypeSpec(
         name="members",
         layer_order=50,
@@ -324,6 +354,7 @@ _MATCH_ORDER = [
     TraceType.MASK_OVERLAY,
     TraceType.CATRED,
     TraceType.NED_SPECZ,
+    TraceType.NED_NEARBY_CATRED,
     TraceType.POLYGON,
     TraceType.MOSAIC,
     TraceType.CLUSTER,
