@@ -11,8 +11,8 @@ Tracking checklist from the 2026-09-30 UX audit. Check items off as completed.
 - [ ] (optional) Auto-dismiss status alerts after N seconds
 
 ## Sidebar information architecture
-- [ ] Default-open "Detected Clusters" section instead of "App Configuration"
-- [ ] Add summary badges to collapsed section headers (e.g. current SNR/z range) so state is visible without expanding
+- [x] Default-open "Detected Clusters" section instead of "App Configuration"
+- [x] Add summary badges to collapsed section headers (e.g. current SNR/z range) so state is visible without expanding
 
 ## Manual render/apply workflow
 - [ ] Add "N unapplied changes" indicator near Apply buttons (SNR/redshift/CATRED/mosaic)

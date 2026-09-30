@@ -694,7 +694,7 @@ class AppLayout:
                     "⚙️ App Configuration",
                     "app-config",
                     [SidebarSections.create_config_info_section()],
-                    is_open=True,
+                    is_open=False,
                     color="secondary",
                 ),
                 # Core Settings Section
@@ -710,8 +710,9 @@ class AppLayout:
                         SidebarSections.create_richness_section(),
                         SidebarSections.create_idcluster_section(),
                     ],
-                    is_open=False,
+                    is_open=True,
                     color="primary",
+                    badge_id="clusters-settings-badge",
                 ),
                 # Mask Section (CATRED controls + Healpix mask)
                 AppLayout._create_collapsible_card(
@@ -723,6 +724,7 @@ class AppLayout:
                     ],
                     is_open=False,
                     color="warning",
+                    badge_id="mask-controls-badge",
                 ),
                 # Image Controls Section
                 AppLayout._create_collapsible_card(
@@ -731,6 +733,7 @@ class AppLayout:
                     [DataControls.create_mosaic_controls_section()],
                     is_open=False,
                     color="info",
+                    badge_id="image-controls-badge",
                 ),
                 # Display Options Section
                 AppLayout._create_collapsible_card(
@@ -739,31 +742,37 @@ class AppLayout:
                     [SidebarSections.create_display_options_section()],
                     is_open=False,
                     color="success",
+                    badge_id="display-options-badge",
                 ),
             ]
         )
 
     @staticmethod
-    def _create_collapsible_card(title, card_id, content, is_open=True, color="primary"):
+    def _create_collapsible_card(title, card_id, content, is_open=True, color="primary", badge_id=None):
         """Create a beautiful collapsible card section"""
+        header_children = [
+            html.I(className=f"fas fa-chevron-{'down' if is_open else 'right'} me-2"),
+            title,
+        ]
         return dbc.Card(
             [
                 dbc.CardHeader(
                     [
                         dbc.Button(
-                            [
-                                html.I(
-                                    className=f"fas fa-chevron-{'down' if is_open else 'right'} me-2"
-                                ),
-                                title,
-                            ],
+                            header_children,
                             id=f"{card_id}-toggle",
                             color="link",
-                            className="text-decoration-none fw-bold w-100 text-start p-2 collapse-header",
-                            style={"color": f"var(--bs-{color})"},
+                            className="text-decoration-none fw-bold flex-grow-1 text-truncate text-start p-2 collapse-header",
+                            style={"color": f"var(--bs-{color})", "minWidth": 0},
+                        ),
+                        html.Span(
+                            id=badge_id,
+                            className="me-2 small text-muted text-truncate section-badge",
                         )
+                        if badge_id
+                        else None,
                     ],
-                    className="border-0 p-0",
+                    className="border-0 p-0 d-flex align-items-center overflow-hidden",
                     style={
                         "background": f"linear-gradient(45deg, var(--bs-{color}-100), var(--bs-{color}-50))",
                         "border-radius": "8px 8px 0 0",
