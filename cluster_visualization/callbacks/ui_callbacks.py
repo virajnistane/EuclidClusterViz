@@ -50,6 +50,7 @@ class UICallbacks:
         self._setup_file_browser_callbacks()
         self._setup_view_mode_callbacks()
         self._setup_status_toast_dismiss_callback()
+        self._setup_getting_started_callback()
 
     def _setup_button_text_callbacks(self):
         """Setup callbacks to update button text based on current settings"""
@@ -1012,6 +1013,29 @@ class UICallbacks:
             """,
             Output("status-toast-outer", "className"),
             Input("status-toast-minimized-store", "data"),
+        )
+
+    def _setup_getting_started_callback(self):
+        """Auto-open onboarding modal for first-time users (onboarding-seen-store persists in localStorage)."""
+        self.app.clientside_callback(
+            "function(seen) { return !seen; }",
+            Output("getting-started-modal", "is_open"),
+            Input("onboarding-seen-store", "data"),
+        )
+
+        self.app.clientside_callback(
+            "function(n_clicks) { return n_clicks ? true : window.dash_clientside.no_update; }",
+            Output("getting-started-modal", "is_open", allow_duplicate=True),
+            Input("getting-started-open", "n_clicks"),
+            prevent_initial_call=True,
+        )
+
+        self.app.clientside_callback(
+            "function(c1, c2) { return (c1 || c2) ? [false, true] : [window.dash_clientside.no_update, window.dash_clientside.no_update]; }",
+            [Output("getting-started-modal", "is_open", allow_duplicate=True),
+             Output("onboarding-seen-store", "data")],
+            [Input("getting-started-close", "n_clicks"), Input("getting-started-close-footer", "n_clicks")],
+            prevent_initial_call=True,
         )
 
     def _setup_view_mode_callbacks(self):

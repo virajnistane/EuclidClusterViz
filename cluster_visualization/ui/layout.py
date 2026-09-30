@@ -32,6 +32,19 @@ class AppLayout:
                                     "ESA Euclid Mission: Cluster Detection Visualization",
                                     className="text-center mb-3",
                                 ),
+                                html.Div(
+                                    dbc.Button(
+                                        "?",
+                                        id="getting-started-open",
+                                        n_clicks=0,
+                                        color="secondary",
+                                        outline=True,
+                                        size="sm",
+                                        title="Getting Started",
+                                        className="rounded-circle",
+                                    ),
+                                    className="text-center mb-2",
+                                ),
                                 create_view_mode_toggle(),
                             ]
                         )
@@ -454,6 +467,9 @@ class AppLayout:
                 Modals.create_cluster_action_modal(),
                 # File Browser Modal Dialog
                 Modals.create_file_browser_modal(),
+                # Getting Started onboarding modal
+                Modals.create_getting_started_modal(),
+                dcc.Store(id="onboarding-seen-store", storage_type="local", data=False),
             ],
             fluid=True,
             className="px-3",

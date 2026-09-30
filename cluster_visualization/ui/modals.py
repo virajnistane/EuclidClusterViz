@@ -405,3 +405,93 @@ class Modals:
             size="lg",
             is_open=False,
         )
+
+    @staticmethod
+    def create_getting_started_modal():
+        """First-run onboarding walkthrough; reopenable via the header help button"""
+        return dbc.Modal(
+            [
+                dbc.ModalHeader(
+                    [
+                        html.H4("Getting Started", className="modal-title"),
+                        dbc.Button(
+                            "×", className="btn-close", id="getting-started-close", n_clicks=0
+                        ),
+                    ]
+                ),
+                dbc.ModalBody(
+                    [
+                        html.Ol(
+                            [
+                                html.Li(
+                                    [
+                                        html.Strong("Pick your data: "),
+                                        "choose Algorithm (PZWAV / AMICO / BOTH) and adjust the SNR, "
+                                        "redshift and other filters in the sidebar.",
+                                    ],
+                                    className="mb-2",
+                                ),
+                                html.Li(
+                                    [
+                                        html.Strong("Render: "),
+                                        "click 🚀 Initial Render to draw clusters. After that, most "
+                                        "sidebar changes update the plot automatically while keeping your zoom.",
+                                    ],
+                                    className="mb-2",
+                                ),
+                                html.Li(
+                                    [
+                                        html.Strong("Inspect a cluster: "),
+                                        "click any point on the plot to open its action modal — "
+                                        "generate cutouts, load a CATRED box, or tag it good/bad/dubious.",
+                                    ],
+                                    className="mb-2",
+                                ),
+                                html.Li(
+                                    [
+                                        html.Strong("High-res data & imagery: "),
+                                        "open the CATRED / Mosaic sections in the sidebar, set your "
+                                        "options, then click their own Apply/Render button.",
+                                    ],
+                                    className="mb-2",
+                                ),
+                                html.Li(
+                                    [
+                                        html.Strong("Switch views: "),
+                                        "use the Standard / Aladin toggle above the plot for a "
+                                        "sky-survey-backed view of the same region.",
+                                    ],
+                                    className="mb-2",
+                                ),
+                                html.Li(
+                                    [
+                                        html.Strong("Status updates: "),
+                                        "progress and results show as a toast top-right; click × to "
+                                        "shrink it to a small dot, click the dot to bring it back.",
+                                    ],
+                                    className="mb-0",
+                                ),
+                            ],
+                            className="ps-3",
+                        ),
+                        html.Hr(),
+                        html.Small(
+                            "Reopen this any time with the ? button next to the title.",
+                            className="text-muted",
+                        ),
+                    ]
+                ),
+                dbc.ModalFooter(
+                    [
+                        dbc.Button(
+                            "Got it", id="getting-started-close-footer", color="primary", n_clicks=0
+                        )
+                    ]
+                ),
+            ],
+            id="getting-started-modal",
+            is_open=False,
+            size="lg",
+            backdrop=True,
+            scrollable=True,
+        )
