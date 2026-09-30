@@ -295,7 +295,7 @@ class AppLayout:
                                                                                                         75: {"label": "75", "style": {"color": "#666", "fontSize": "11px"}},
                                                                                                         100:{"label": "100","style": {"color": "#666", "fontSize": "11px"}},
                                                                                                     },
-                                                                                                    tooltip={"placement": "bottom", "always_visible": False, "style": {"fontSize": "12px"}},
+                                                                                                    tooltip={"placement": "bottom", "always_visible": False},
                                                                                                     className="custom-slider flex-grow-1",
                                                                                                 ),
                                                                                             ],
@@ -542,7 +542,6 @@ class AppLayout:
                                             tooltip={
                                                 "placement": "bottom",
                                                 "always_visible": False,
-                                                "style": {"fontSize": "12px"},
                                             },
                                             disabled=False,
                                             className="custom-slider",

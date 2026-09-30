@@ -218,7 +218,6 @@ class SidebarSections:
                                     tooltip={
                                         "placement": "bottom",
                                         "always_visible": False,
-                                        "style": {"fontSize": "12px"},
                                     },
                                     allowCross=False,
                                     className="custom-range-slider",
@@ -284,7 +283,6 @@ class SidebarSections:
                                     tooltip={
                                         "placement": "bottom",
                                         "always_visible": False,
-                                        "style": {"fontSize": "12px"},
                                     },
                                     allowCross=False,
                                     className="custom-range-slider",
@@ -380,7 +378,6 @@ class SidebarSections:
                                             tooltip={
                                                 "placement": "bottom",
                                                 "always_visible": False,
-                                                "style": {"fontSize": "12px"},
                                             },
                                             allowCross=False,
                                             className="custom-range-slider",
@@ -516,7 +513,6 @@ class SidebarSections:
                                     tooltip={
                                         "placement": "bottom",
                                         "always_visible": False,
-                                        "style": {"fontSize": "12px"},
                                     },
                                     allowCross=False,
                                     className="custom-range-slider",
@@ -608,7 +604,6 @@ class SidebarSections:
                                     tooltip={
                                         "placement": "bottom",
                                         "always_visible": False,
-                                        "style": {"fontSize": "12px"},
                                     },
                                     allowCross=False,
                                     className="custom-range-slider",

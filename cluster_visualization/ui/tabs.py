@@ -418,7 +418,6 @@ class TabContent:
                                                                         tooltip={
                                                                             "placement": "bottom",
                                                                             "always_visible": False,
-                                                                            "style": {"fontSize": "12px"},
                                                                         },
                                                                         className="custom-slider",
                                                                     ),

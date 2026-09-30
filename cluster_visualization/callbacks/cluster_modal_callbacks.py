@@ -58,7 +58,6 @@ class ClusterModalCallbacks:
         self._setup_cutout_toggle_callback()
         self._setup_catred_visibility_callback()
         self._setup_action_callbacks()
-        self._setup_sidebar_callbacks()
         self._setup_tab_callbacks()  # 🆕 Add tab callbacks
         self._setup_cluster_tagging_callbacks()
         self._setup_parameter_sync_callbacks()
@@ -437,116 +436,6 @@ class ClusterModalCallbacks:
 
                 print(
                     f"💾 Data export requested for cluster at RA={cluster['ra']:.3f}°, Dec={cluster['dec']:.3f}°"
-                )
-                return status_msg
-
-            return dash.no_update
-
-    def _setup_sidebar_callbacks(self):
-        """Setup sidebar-specific callbacks"""
-
-        # Toggle cutout options in sidebar
-        @self.app.callback(
-            Output("sidebar-cutout-options", "is_open"),
-            [Input("quick-cutout-button", "n_clicks")],
-            [State("sidebar-cutout-options", "is_open")],
-            prevent_initial_call=True,
-        )
-        def toggle_sidebar_cutout_options(n_clicks, is_open):
-            """Toggle sidebar cutout options"""
-            if n_clicks:
-                return not is_open
-            return is_open
-
-        # Toggle CATRED box options in sidebar
-        @self.app.callback(
-            Output("sidebar-catred-box-options", "is_open"),
-            [Input("quick-catred-box-button", "n_clicks")],
-            [State("sidebar-catred-box-options", "is_open")],
-            prevent_initial_call=True,
-        )
-        def toggle_sidebar_catred_box_options(n_clicks, is_open):
-            """Toggle sidebar CATRED box options"""
-            if n_clicks:
-                return not is_open
-            return is_open
-
-        # Handle sidebar action buttons
-        @self.app.callback(
-            Output("status-info", "children", allow_duplicate=True),
-            [
-                Input("sidebar-generate-cutout", "n_clicks"),
-                Input("quick-phz-button", "n_clicks"),
-                Input("quick-catred-box-button", "n_clicks"),
-                Input("cluster-more-options-button", "n_clicks"),
-            ],
-            [State("sidebar-cutout-size", "value"), State("sidebar-cutout-type", "value")],
-            prevent_initial_call=True,
-        )
-        def handle_sidebar_actions(
-            cutout_clicks, phz_clicks, catred_box_clicks, more_clicks, cutout_size, cutout_type
-        ):
-            """Handle sidebar action button clicks"""
-            ctx = callback_context
-            if not ctx.triggered:
-                return dash.no_update
-
-            button_id = ctx.triggered[0]["prop_id"].split(".")[0]
-
-            if not self.selected_cluster:
-                return dbc.Alert("⚠️ No cluster selected", color="warning")
-
-            cluster = self.selected_cluster
-
-            if button_id == "sidebar-generate-cutout":
-                status_msg = dbc.Alert(
-                    [
-                        html.H6("🔬 Generating Cutout...", className="mb-2"),
-                        html.P(
-                            [
-                                f"📍 RA {cluster['ra']:.3f}°, Dec {cluster['dec']:.3f}°",
-                                html.Br(),
-                                f"📏 {cutout_size} arcmin | 📊 {cutout_type.title()}",
-                            ]
-                        ),
-                        html.Small("Cutout generation in progress...", className="text-muted"),
-                    ],
-                    color="info",
-                )
-
-                print(
-                    f"🔬 Sidebar cutout: RA={cluster['ra']:.3f}°, Dec={cluster['dec']:.3f}°, Size={cutout_size}, Type={cutout_type}"
-                )
-                return status_msg
-
-            elif button_id == "quick-phz-button":
-                status_msg = dbc.Alert(
-                    [
-                        html.H6("📈 PHZ Analysis", className="mb-2"),
-                        html.P(f"🎯 z={cluster['redshift']:.3f} | SNR={cluster['snr']:.3f}"),
-                    ],
-                    color="success",
-                )
-                return status_msg
-
-            elif button_id == "quick-catred-box-button":
-                status_msg = dbc.Alert(
-                    [
-                        html.H6("🖼️ Loading CATRED Box...", className="mb-2"),
-                        html.P(f"📍 RA {cluster['ra']:.3f}°, Dec {cluster['dec']:.3f}°"),
-                    ],
-                    color="primary",
-                )
-                return status_msg
-
-            elif button_id == "cluster-more-options-button":
-                # This could open the full modal for advanced options
-                status_msg = dbc.Alert(
-                    [
-                        html.H6("⚙️ More Options", className="mb-2"),
-                        html.P("Advanced analysis options available"),
-                    ],
-                    color="secondary",
                 )
                 return status_msg
 

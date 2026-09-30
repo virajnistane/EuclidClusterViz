@@ -231,7 +231,9 @@ class ClusterVisualizationCore:
                 debug=debug,
                 use_reloader=False,
                 dev_tools_hot_reload=debug,
-                dev_tools_ui=debug,
+                # dev_tools_ui off: its callback-graph panel crashes ("g.node(...) is undefined")
+                # on apps using ALL/MATCH pattern-matching callback ids, which this app has.
+                dev_tools_ui=False,
                 dev_tools_props_check=debug,
             )
         finally:

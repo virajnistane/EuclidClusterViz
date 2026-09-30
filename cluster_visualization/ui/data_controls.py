@@ -109,7 +109,6 @@ class DataControls:
                                             tooltip={
                                                 "placement": "bottom",
                                                 "always_visible": False,
-                                                "style": {"fontSize": "12px"},
                                             },
                                             className="custom-slider",
                                         )
@@ -202,7 +201,6 @@ class DataControls:
                                             tooltip={
                                                 "placement": "bottom",
                                                 "always_visible": False,
-                                                "style": {"fontSize": "12px"},
                                             },
                                             className="custom-slider",
                                         )
@@ -459,7 +457,6 @@ class DataControls:
                                             tooltip={
                                                 "placement": "bottom",
                                                 "always_visible": False,
-                                                "style": {"fontSize": "12px"},
                                             },
                                             disabled=False,
                                             className="custom-slider",
@@ -680,7 +677,6 @@ class DataControls:
                                             tooltip={
                                                 "placement": "bottom",
                                                 "always_visible": False,
-                                                "style": {"fontSize": "12px"},
                                             },
                                             disabled=False,
                                             className="custom-slider",
