@@ -49,6 +49,7 @@ class UICallbacks:
         self._setup_file_configuration_callback()
         self._setup_file_browser_callbacks()
         self._setup_view_mode_callbacks()
+        self._setup_status_toast_dismiss_callback()
 
     def _setup_button_text_callbacks(self):
         """Setup callbacks to update button text based on current settings"""
@@ -984,6 +985,35 @@ class UICallbacks:
     #         reader = csv.reader(io.StringIO(decoded_text))
     #         return sum(1 for row in reader for value in row if str(value).strip())
 
+    def _setup_status_toast_dismiss_callback(self):
+        """Toggle button minimizes the status-info toast to a blob; content stays mounted so it can be restored.
+        New content arriving auto-restores it from the minimized state."""
+        self.app.clientside_callback(
+            """
+            function(n_clicks, children, isMinimized) {
+                const trig = window.dash_clientside.callback_context.triggered[0].prop_id;
+                if (trig.startsWith('status-info.')) {
+                    return children ? false : window.dash_clientside.no_update;
+                }
+                return !isMinimized;
+            }
+            """,
+            Output("status-toast-minimized-store", "data"),
+            [Input("status-info-toggle", "n_clicks"), Input("status-info", "children")],
+            State("status-toast-minimized-store", "data"),
+            prevent_initial_call=True,
+        )
+
+        self.app.clientside_callback(
+            """
+            function(isMinimized) {
+                return isMinimized ? 'status-toast-container status-toast-minimized' : 'status-toast-container';
+            }
+            """,
+            Output("status-toast-outer", "className"),
+            Input("status-toast-minimized-store", "data"),
+        )
+
     def _setup_view_mode_callbacks(self):
         """Clientside callbacks for switching between Standard (Plotly) and Aladin views."""
 
@@ -1564,5 +1594,6 @@ class UICallbacks:
             Input("richness-mode-radio", "value"),
             prevent_initial_call=True,
         )
+
 
     #     return 0

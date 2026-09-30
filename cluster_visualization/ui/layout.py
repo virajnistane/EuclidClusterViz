@@ -429,8 +429,21 @@ class AppLayout:
                                     ],
                                     className="mt-2",
                                 ),
-                                # Status info row
-                                dbc.Row([dbc.Col([html.Div(id="status-info", className="mt-2")])]),
+                                # Status info row — floating toast; minimizes to a blob instead of clearing content
+                                html.Div(
+                                    [
+                                        html.Button(
+                                            "×",
+                                            id="status-info-toggle",
+                                            n_clicks=0,
+                                            className="status-toast-toggle",
+                                        ),
+                                        html.Div(id="status-info"),
+                                    ],
+                                    id="status-toast-outer",
+                                    className="status-toast-container",
+                                ),
+                                dcc.Store(id="status-toast-minimized-store", data=False),
                             ],
                             width=10,
                         ),

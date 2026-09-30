@@ -222,13 +222,17 @@ class ClusterVisualizationCore:
             print("")
 
         try:
+            # use_reloader=False: Werkzeug's file-watcher restart forks a second process that
+            # reruns all module-level init (data loading, port selection) and fights
+            # _free_port_if_stale over the same port — was causing the port-hopping/reinit loop.
             self.app.run_server(
                 host=host,
                 port=port,
                 debug=debug,
-                dev_tools_hot_reload=False,
-                dev_tools_ui=False,
-                dev_tools_props_check=False,
+                use_reloader=False,
+                dev_tools_hot_reload=debug,
+                dev_tools_ui=debug,
+                dev_tools_props_check=debug,
             )
         finally:
             # Stop monitoring when server shuts down
