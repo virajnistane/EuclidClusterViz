@@ -5,6 +5,7 @@ Tracking checklist from the 2026-09-30 UX audit. Check items off as completed.
 ## Onboarding
 - [ ] ~~Surface the SSH tunnel command + assigned port in the browser UI~~ — rejected: page is only reachable after the tunnel is already up, so an in-browser banner tells the user nothing new (chicken-and-egg). Console print at startup remains the right place for this.
 - [x] Add an in-app "Getting Started" card/modal for first-time users (replaces reading 10 separate docs)
+- [x] Add an interactive guided tour ("Tutorial" button, driver.js) that walks through the plot, view toggle, sidebar sections and status toast
 
 ## Status feedback visibility
 - [x] Reposition `status-info` alerts as a floating/fixed toast (top-right) instead of bottom-of-page div

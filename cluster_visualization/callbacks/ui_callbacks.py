@@ -52,6 +52,7 @@ class UICallbacks:
         self._setup_view_mode_callbacks()
         self._setup_status_toast_dismiss_callback()
         self._setup_getting_started_callback()
+        self._setup_tutorial_tour_callback()
 
     def _setup_button_text_callbacks(self):
         """Setup callbacks to update button text based on current settings"""
@@ -1134,6 +1135,55 @@ class UICallbacks:
             [Output("getting-started-modal", "is_open", allow_duplicate=True),
              Output("onboarding-seen-store", "data")],
             [Input("getting-started-close", "n_clicks"), Input("getting-started-close-footer", "n_clicks")],
+            prevent_initial_call=True,
+        )
+
+    def _setup_tutorial_tour_callback(self):
+        """Interactive guided tour (driver.js), lazy-loaded from CDN on first click."""
+        self.app.clientside_callback(
+            """
+            function(n_clicks) {
+                if (!n_clicks) return window.dash_clientside.no_update;
+
+                function runTour() {
+                    var d = window.driver.js.driver({
+                        showProgress: true,
+                        allowClose: true,
+                        steps: [
+                            { element: '#cluster-plot', popover: { title: 'Main plot', description: 'Pan, zoom and click a cluster to select it.', side: 'bottom' } },
+                            { element: '#view-mode-plotly-btn', popover: { title: 'View modes', description: 'Switch between the Standard scatter view and Aladin sky view (Aladin enables once you zoom to a single cluster).', side: 'bottom' } },
+                            { element: '#clusters-settings-toggle', popover: { title: 'Detected Clusters', description: 'Choose the detection algorithm and set SNR / redshift filters here.', side: 'right' } },
+                            { element: '#mask-controls-toggle', popover: { title: 'Mask', description: 'Toggle the CATRED source overlay and Healpix mask.', side: 'right' } },
+                            { element: '#image-controls-toggle', popover: { title: 'Mosaic', description: 'Load survey imagery for the selected cluster.', side: 'right' } },
+                            { element: '#display-options-toggle', popover: { title: 'Display Options', description: 'Toggle polygon/MER overlays and other display settings.', side: 'right' } },
+                            { element: '#status-info-toggle', popover: { title: 'Status', description: 'Status messages show up here; click to restore if minimized.', side: 'left' } },
+                            { element: '#getting-started-open', popover: { title: 'Need more detail?', description: 'Reopen the full Getting Started guide anytime.', side: 'bottom' } },
+                        ]
+                    });
+                    d.drive();
+                }
+
+                if (!document.getElementById('driverjs-css')) {
+                    var link = document.createElement('link');
+                    link.id = 'driverjs-css'; link.rel = 'stylesheet';
+                    link.href = 'https://cdn.jsdelivr.net/npm/driver.js@1/dist/driver.css';
+                    document.head.appendChild(link);
+                }
+                if (!document.getElementById('driverjs-js')) {
+                    var script = document.createElement('script');
+                    script.id = 'driverjs-js';
+                    script.src = 'https://cdn.jsdelivr.net/npm/driver.js@1/dist/driver.js.iife.js';
+                    script.onload = runTour;
+                    document.head.appendChild(script);
+                    return window.dash_clientside.no_update;
+                }
+
+                runTour();
+                return window.dash_clientside.no_update;
+            }
+            """,
+            Output("tour-init-dummy", "children"),
+            Input("tutorial-tour-button", "n_clicks"),
             prevent_initial_call=True,
         )
 
