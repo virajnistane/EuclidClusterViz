@@ -519,7 +519,8 @@ class AppLayout:
                     is_open=is_open,
                 ),
             ],
-            className="sidebar-section",
+            id=f"{card_id}-section",
+            className="sidebar-section" + (" is-open" if is_open else ""),
         )
 
     @staticmethod

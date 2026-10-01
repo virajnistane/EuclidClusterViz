@@ -13,6 +13,8 @@
     --cv-accent: #2b5797;
     --cv-accent-hover: #234a82;
     --cv-accent-soft: rgba(43, 87, 151, 0.12);
+    --cv-section-open: #d2ddee;
+    --cv-section-open-hover: #c5d3e9;
     --cv-pending-bg: #fff3cd;
     --cv-pending-text: #664d03;
     --cv-focus: 0 0 0 3px rgba(43, 87, 151, 0.28);
@@ -81,6 +83,12 @@ body {
     border-top: 1px solid var(--cv-border);
 }
 
+/* Open section: tinted panel so its controls read as one block, distinct from
+   the closed headers around it */
+.sidebar-section.is-open {
+    background: var(--cv-surface-2);
+}
+
 .section-toggle.btn {
     display: flex;
     align-items: center;
@@ -94,12 +102,31 @@ body {
     font-size: 0.9375rem;
     text-align: left;
     text-decoration: none;
+    background: var(--cv-surface);
+}
+
+/* Headers of open sections stay pinned while their controls scroll, so the
+   current section is always named at the top of the sidebar */
+.section-toggle.btn.is-open {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: var(--cv-section-open);
+    border-bottom: 1px solid var(--cv-border);
+}
+
+.section-toggle.btn.is-open .section-icon {
+    color: var(--cv-accent);
 }
 
 .section-toggle.btn:hover,
 .section-toggle.btn:focus-visible {
     background: var(--cv-surface-2);
     color: var(--cv-text);
+}
+
+.section-toggle.btn.is-open:hover {
+    background: var(--cv-section-open-hover);
 }
 
 .section-toggle.btn:focus-visible {
@@ -124,7 +151,7 @@ body {
 }
 
 .section-body {
-    padding: 0.25rem 0.875rem 0.875rem;
+    padding: 0.75rem 0.875rem 0.875rem;
 }
 
 /* Cards inside sections (Mask, Mosaic) render flat: grouping comes from spacing */
@@ -133,7 +160,17 @@ body {
     border: 0;
     box-shadow: none;
     border-radius: 0;
-    margin-bottom: 1rem !important;
+    margin-bottom: 0 !important;
+}
+
+/* Sub-blocks inside a section (filter groups, Mask/Mosaic cards) are separated
+   by a hairline so neighbouring controls never run together */
+.section-body > *:not(.apply-bar) + *:not(.apply-bar),
+.section-body .control-group + .control-group,
+.section-body .card + .card {
+    margin-top: 0.875rem;
+    padding-top: 0.875rem;
+    border-top: 1px solid var(--cv-border);
 }
 
 .section-body .card-header,
@@ -155,13 +192,13 @@ body {
 /* ---------------------------------------------------------------- Controls */
 
 .control-group {
-    margin-bottom: 1rem;
+    margin-bottom: 0;
 }
 
 .control-label {
     display: block;
-    margin-bottom: 0.375rem;
-    font-size: 0.8125rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
     font-weight: 600;
     color: var(--cv-text);
 }

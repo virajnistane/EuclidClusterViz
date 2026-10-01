@@ -574,9 +574,13 @@ class UICallbacks:
             )
             self.app.clientside_callback(
                 """
-                function(isOpen) { return isOpen ? 'section-toggle is-open' : 'section-toggle'; }
+                function(isOpen) {
+                    return isOpen
+                        ? ['section-toggle is-open', 'sidebar-section is-open']
+                        : ['section-toggle', 'sidebar-section'];
+                }
                 """,
-                Output(f"{section}-toggle", "className"),
+                [Output(f"{section}-toggle", "className"), Output(f"{section}-section", "className")],
                 Input(f"{section}-collapse", "is_open"),
             )
 
