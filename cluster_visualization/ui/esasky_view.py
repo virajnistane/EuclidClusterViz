@@ -31,6 +31,7 @@ def create_view_mode_toggle() -> html.Div:
                     ),
                 ],
                 size="sm",
+                id="view-mode-btn-group",
             ),
             dbc.Tooltip(
                 "Zoom to exactly 1 cluster to enable Aladin view",

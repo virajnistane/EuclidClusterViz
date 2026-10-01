@@ -1139,7 +1139,7 @@ class UICallbacks:
                         allowClose: true,
                         steps: [
                             { element: '#cluster-plot', popover: { title: 'Main plot', description: 'Pan, zoom and click a cluster to select it.', side: 'bottom' } },
-                            { element: '#view-mode-plotly-btn', popover: { title: 'View modes', description: 'Switch between the Standard scatter view and Aladin sky view (Aladin enables once you zoom to a single cluster).', side: 'bottom' } },
+                            { element: '#view-mode-btn-group', popover: { title: 'View modes', description: 'Switch between the Standard scatter view and Aladin sky view (Aladin enables once you zoom to a single cluster).', side: 'bottom' } },
                             { element: '#render-button', popover: { title: 'Render', description: 'Draw the catalog for the selected algorithm. Click again to re-render.', side: 'right' } },
                             { element: '#clusters-settings-toggle', popover: { title: 'Catalog', description: 'Choose the detection algorithm, CL-tile information and unmerged clusters.', side: 'right' } },
                             { element: '#filters-settings-toggle', popover: { title: 'Filters', description: 'Set redshift, SNR, richness, cluster-ID and matched-cluster options, then press Apply filters at the bottom of the section.', side: 'right' } },
