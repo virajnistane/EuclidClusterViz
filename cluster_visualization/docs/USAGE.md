@@ -22,9 +22,10 @@ source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 ```
 - 🆕 **Real-time interactive web application**
 - 🆕 **Auto-opens browser** at http://localhost:8050
-- 🆕 **Manual render button** for performance control - select options then click "Render Visualization" 
-- 🆕 **Live algorithm switching** between PZWAV and AMICO
-- 🆕 **Interactive controls** for polygons and MER tiles
+- 🆕 **Manual render button** for performance control - select options then click "Render clusters" (later "Re-render · <algorithm>")
+- 🆕 **Apply filters** - filter changes take effect with one sticky "Apply filters" button, which re-sends only the cluster traces
+- 🆕 **Live algorithm switching** between PZWAV, AMICO, and "PZWAV and AMICO"
+- 🆕 **Display section** controls for polygons and MER tiles (update live, using the last-applied filters)
 - 🆕 **No file generation needed** - works with live data
 - 🆕 **Automatic virtual environment setup** - handles all dependencies
 - ✅ **Zoom, pan, hover** with real-time updates
@@ -67,17 +68,17 @@ source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 ```
 
 All methods provide comprehensive visualization with:
-- ✅ **Algorithm Comparison**: PZWAV (7,437 clusters) vs AMICO (25,843 clusters) vs BOTH
+- ✅ **Algorithm Comparison**: PZWAV (7,437 clusters) vs AMICO (25,843 clusters) vs "PZWAV and AMICO"
 - ✅ **Cluster Matching**: Visual indication of matched PZWAV-AMICO pairs
 - ✅ **Cluster Analysis**: Dedicated tab for cutouts, CATRED boxes, and mask overlays
 - ✅ **CATRED Integration**: High-resolution catalog with PHZ probability plots
-- ✅ **Cluster-ID Upload Filtering**: Upload `.txt`, `.dat`, or `.csv` files to constrain merged-catalog views; multi-column `.dat` files use the first column as the ID list
+- ✅ **Cluster-ID Upload Filtering**: In the **Filters** section, upload `.txt`, `.dat`, or `.csv` files to constrain merged-catalog views (applied with **Apply filters**, removed with **Clear**); multi-column `.dat` files use the first column as the ID list
 - ✅ **Mosaic & Mask Overlays**: Background images and coverage visualization
 - ✅ **Trace Management**: Independent control of all overlay layers
-- ✅ **Interactive Controls**: Zoom, pan, polygon fill toggle, aspect ratio
+- ✅ **Interactive Controls**: Zoom, pan, and the **Display** section (polygon fill, MER tiles, aspect ratio)
 - ✅ **Tile Information Control**: Toggle to show/hide tile coloring and MER tile polygons
-- ✅ **Smart Filtering**: Client-side SNR and redshift filtering
-- ✅ **PHZ Cluster Data Filtering**: PHZ cluster-data plots follow the same algorithm, viewport, SNR, redshift, and uploaded ID constraints as the current view
+- ✅ **Smart Filtering**: Redshift, SNR, richness and cluster-ID filters applied with **Apply filters**; pending changes show a "Not applied" tag, and only the cluster traces are rebuilt
+- ✅ **PHZ Cluster Data Filtering**: PHZ cluster-data plots follow the same algorithm, viewport, SNR, redshift, and uploaded ID constraints as the current view; refresh them with the Refresh button, the sub-tab, or the bins slider
 - ✅ **Hover Information**: Detailed cluster, tile, and catalog data with optional tile IDs
 - ✅ **Color-coded Tiles**: Each tile has unique colors for identification (when enabled)
 - ✅ **Viewport Zoom Guidance**: Real-time indicator showing zoom level and rendering readiness for matched clusters
@@ -156,7 +157,7 @@ The survey value is read as a `State` by `push_overlay_data`, so it is captured 
 
 **Step 4 — Apply SNR / redshift filters**
 
-The SNR range sliders (`snr-range-slider-pzwav`, `snr-range-slider-amico`) and the redshift range slider (`redshift-range-slider`) are wired as `State` inputs (not `Input` triggers) to the server-side `push_overlay_data` callback in `aladin_callbacks.py`. This means the overlay re-pushes whenever the mode switches to `"aladin"`, the viewport cluster count changes, or a CATRED render completes — and the current slider values are captured at that moment. To force an overlay refresh after adjusting filters, switch away from Aladin mode and back.
+The SNR range sliders (`snr-range-slider-pzwav`, `snr-range-slider-amico`) and the redshift range slider (`redshift-range-slider`) are wired as `State` inputs (not `Input` triggers) to the server-side `push_overlay_data` callback in `aladin_callbacks.py`. This means the overlay re-pushes whenever the mode switches to `"aladin"`, the viewport cluster count changes, or a CATRED render completes — and the current slider values are captured at that moment. Filters change the main plot only when you press **Apply filters**; to force an overlay refresh after applying, switch away from Aladin mode and back.
 
 Cluster entries in the overlay payload include `SNR` and `Z` fields so that the JS bridge can display them in a popup when a source is clicked.
 

@@ -30,8 +30,9 @@ Default mode. Renders the full interactive `dcc.Graph(id="cluster-plot")` scatte
 - Running CATRED box queries
 - Loading MER mosaic tiles or HEALPix masks
 
-The main plot occupies the left 8 columns. All sidebar controls (render button, filters,
-mosaic/mask panel) apply to this mode.
+The sidebar is a fixed ~300–380 px column beside the plot on desktop (stacked above it below
+992 px). All sidebar controls (Render clusters, Apply filters, Mask and Mosaic sections) apply to
+this mode.
 
 ---
 
@@ -73,7 +74,7 @@ Default: **DSS2 Color**.
 
 ### SNR / redshift filter pass-through
 
-Changing the SNR or redshift sliders in Standard mode updates
+Applying SNR or redshift filters (**Apply filters**) in Standard mode updates
 `aladin-overlay-data-store`, which triggers the clientside JS to redraw the catalog
 overlay in Aladin without reloading the sky tiles.
 

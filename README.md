@@ -166,7 +166,7 @@ This tool provides a professional-grade visualization solution for Euclid cluste
 - **Interactive Cluster Analysis Tab** with cutout generation, CATRED box views, and mask overlays
 - **High-resolution CATRED data** with masked HEALPix processing and PHZ analysis
 - **Interactive mosaic imaging** with MER tile integration and trace management
-- **Real-time filtering** by SNR and redshift with client-side performance
+- **Filtering** by SNR, redshift, richness and cluster-ID list, applied with one **Apply filters** action that patches only the cluster traces
 - **Advanced UI controls** with dynamic visibility and responsive design
 - **Professional remote access** with SSH tunnel monitoring and automation
 - **Trace management** with hide/show and clear controls for all overlay types
@@ -199,10 +199,10 @@ The EDEN-3.1 environment lacks several critical modules (`healpy`, `dash`, `plot
 ## 🎯 Key Features
 
 ### 🔬 **Advanced Data Analysis**
-- **Algorithm Comparison**: Real-time switching between PZWAV, AMICO, and BOTH algorithms
-- **Cluster Matching**: Visual overlay showing matched PZWAV-AMICO cluster pairs with connecting ovals (BOTH mode only)
+- **Algorithm Comparison**: Real-time switching between PZWAV, AMICO, and combined ("PZWAV and AMICO") catalogs
+- **Cluster Matching**: Visual overlay showing matched PZWAV-AMICO cluster pairs with connecting ovals ("PZWAV and AMICO" only)
 - **Interactive Cluster Analysis**: Dedicated tab with cutout generation, CATRED box views, and mask cutouts
-- **Smart Filtering**: Client-side SNR and redshift filtering with preserved zoom states
+- **Smart Filtering**: SNR, redshift and richness filters applied incrementally (cluster traces only) with preserved zoom states
 - **Uploaded ID Filtering**: Restrict merged-catalog analysis using uploaded cluster-ID lists from `.txt`, `.dat`, or `.csv` files
 - **CATRED Integration**: High-resolution masked data with effective coverage thresholding
 - **Mosaic Visualization**: Dynamic MER tile mosaic loading with opacity controls and ESA/local provider selection
@@ -220,12 +220,15 @@ The EDEN-3.1 environment lacks several critical modules (`healpy`, `dash`, `plot
 
 ### 🖥️ **Professional UI Controls**
 - **Tabbed Interface**: Separate tabs for main visualization and cluster analysis
-- **App Configuration Panel**: Collapsible sidebar card showing active merged catalog file and tile data paths, read live from the loaded configuration with abbreviated display and full path on hover
+- **Configuration Section**: Last collapsible sidebar section, showing the active merged catalog file and tile data paths, read live from the loaded configuration with abbreviated display and full path on hover
 - **Highlighted Section Headers**: Clear visual hierarchy with Bootstrap styling
 - **Dynamic Visibility**: Context-aware control hiding/showing based on user selections
-- **Algorithm-Based Toggle Control**: Matching clusters toggle enabled only in BOTH mode
-- **Real-time Updates**: Live button text updates showing click counts and status
-- **Responsive Design**: Optimized layout for different screen sizes and zoom levels
+- **Algorithm-Based Toggle Control**: Matched-clusters switch enabled only when the algorithm is "PZWAV and AMICO"
+- **Render Button State**: The main button reads "Render clusters" before the first render and "Re-render · <algorithm>" afterwards
+- **Single Apply for Filters**: One sticky "Apply filters" button applies every filter; it lists what changed ("Changed: Redshift, SNR") and pending controls show a "Not applied" tag
+- **Responsive Design**: Sidebar is a fixed ~300–380 px column beside the plot on desktop and stacks above it below 992 px
+- **Quiet Visual Style**: Neutral surfaces, one accent colour, flat sections, tabular numerals, visible focus rings and reduced-motion support
+- **Onboarding**: Getting Started modal on first visit and a guided Tutorial tour of the main controls
 - **Intuitive Workflow**: Guided user experience with helpful tooltips and status indicators
 - **Stable CATRED Render Gating**: CATRED render button state now follows the actual plot zoom window robustly across zoom, pan, dragmode changes, and rerenders
 - **Mosaic & Mask Management**: Separate controls for background images and HEALPix footprint overlays
@@ -239,7 +242,7 @@ The EDEN-3.1 environment lacks several critical modules (`healpy`, `dash`, `plot
 - **Connection Validation**: Real-time feedback on tunnel status and user connectivity
 
 ### ⚡ **Performance Optimization**
-- **Client-side Filtering**: Real-time SNR/redshift filtering without server round-trips
+- **Incremental Filtering**: Apply filters rebuilds only the cluster traces in the main server process and patches them into the figure
 - **Background Callbacks**: Heavy data-loading operations run as true background tasks with real percentage progress bars (powered by `diskcache` and Dash `background=True`)
 - **Layered Rendering**: Optimized trace ordering (polygons → mosaics → mask overlays → CATRED → clusters)
 - **Preserved State**: Zoom levels and filter settings maintained during updates
@@ -397,16 +400,15 @@ python cluster_visualization/src/cluster_dash_app.py --help
 The app opens with a tabbed interface:
 
 #### **Main Visualization Tab**
-Highlighted control sections:
-- 🔵 **Algorithm**: Switch between PZWAV/AMICO/BOTH
-- 🔵 **Cluster Matching**: Enable matched cluster visualization (available in BOTH mode only)
-- 🔵 **SNR Filtering**: Real-time signal-to-noise filtering with separate controls for PZWAV/AMICO
-- 🔵 **Redshift Filtering**: Photometric redshift constraints
-- 🔵 **Cluster-ID Upload Filter**: Upload `.txt`, `.dat`, or `.csv` ID lists to restrict merged-catalog views; `.dat` files may contain multiple columns and column 0 is used as the ID source
-- 🔵 **Display Options**: Polygon fills, MER tiles, aspect ratio
-- 🔵 **High-res CATRED data**: Advanced catalog integration with dynamic controls
-- 🔵 **Mosaic Image Controls**: Background image overlays with opacity control
-- 🔵 **HEALPix Mask Overlay**: Effective coverage footprint visualization
+The sidebar starts with the **Render clusters** button (later **Re-render · <algorithm>**), followed by collapsible sections:
+- **Catalog**: Detection algorithm (PZWAV, AMICO, or PZWAV and AMICO), CL-tile information, unmerged clusters
+- **Filters**: Redshift, SNR (only the selected algorithm's filter is shown), Richness (Off / ZP / RS with quality flags), Cluster-ID list upload (`.txt`, `.dat`, or `.csv`; for `.dat` files column 0 is used as the ID source; **Clear** removes the list), and Show matched clusters (CAT-CL)
+  - Each range filter shows the selected range against the data range ("5.00 – 45.10 of 2.31 – 45.10") with Min/Max number inputs synced to the slider
+  - Filters take effect only when you press the sticky **Apply filters** button at the bottom of the section; it lists what changed and each pending control shows a **Not applied** tag
+- **Mask**: High-res CATRED data and the HEALPix effective-coverage mask overlay
+- **Mosaic**: Background image overlays with opacity control
+- **Display**: MER tiles, CL-tile (CORE) polygon fill, free aspect ratio — these update live, using the last-applied filters
+- **Configuration**: Active catalog and tile data paths, GlueMatchCat file selector
 
 #### **Cluster Analysis Tab**
 Interactive cluster-specific analysis:
@@ -426,7 +428,7 @@ Interactive cluster-specific analysis:
 #### **PHZ Analysis**
 - 📈 **PHZ_PDF Viewer**: Click CATRED points to inspect photometric redshift probability distributions
 - 📊 **Cluster Data Sub-tab**: Histogram and SNR-vs-redshift views are generated from the merged catalog after applying the current algorithm, viewport, SNR, redshift, and uploaded cluster-ID filters
-- 🔁 **Manual Refresh**: Use the cluster-data refresh button or update the ID filter to recompute the PHZ cluster-data plots
+- 🔁 **Manual Refresh**: Use the cluster-data Refresh button, switch to the sub-tab, or change the bins slider to recompute the PHZ cluster-data plots
 
 ## Configuration
 
@@ -640,14 +642,14 @@ To view PHZ probability distributions:
 ### **Cluster Matching Visualization**
 To visualize matched PZWAV-AMICO cluster pairs:
 
-1. **Select BOTH Algorithm**: Set the algorithm dropdown to "BOTH"
-2. **Enable Matching**: The "Show matched clusters (CAT-CL)" switch becomes enabled automatically
-3. **Toggle On**: Activate the switch to see green ovals connecting matched pairs
+1. **Select Both Algorithms**: In **Catalog**, set the algorithm dropdown to "PZWAV and AMICO" and render
+2. **Enable Matching**: In **Filters**, the "Show matched clusters (CAT-CL)" switch becomes enabled automatically
+3. **Zoom and Apply**: Zoom in, turn the switch on, then press **Apply filters** to draw green ovals connecting matched pairs in the current view
 4. **Visual Indicators**:
    - 🟦 **Square markers**: PZWAV detected clusters
    - 🔷 **Diamond markers**: AMICO detected clusters  
    - 🟢 **Green ovals**: Visual connections between matched pairs
-5. **Filter & Zoom**: Use SNR/redshift filters and zoom - matching ovals update in real-time
+5. **Filter & Zoom**: After changing filters or zooming, press **Apply filters** (or **Re-render**) to redraw the ovals for the current view; the hint under the switch shows whether the view is small enough
 
 **Note**: The matching switch is automatically disabled when using PZWAV or AMICO individually.
 
@@ -655,7 +657,7 @@ To visualize matched PZWAV-AMICO cluster pairs:
 To visualize the effective survey coverage:
 
 1. **Zoom In**: Zoom to a region smaller than 2° × 2° (button becomes enabled)
-2. **Click "Render HEALPix Mask Overlay"**: Loads footprint data for visible tiles
+2. **Click "Load Healpix mask for this view"** in the **Mask** section: Loads footprint data for visible tiles
 3. **Adjust Opacity**: Use the opacity slider to control mask transparency (0.0-1.0)
 4. **Interpret Colors**: 
    - **Yellow/Green**: High coverage (weight ≥ 0.95)
@@ -667,14 +669,14 @@ To visualize the effective survey coverage:
 ### **Mosaic Image Background**
 To add astronomical background images:
 
-1. **Enable Mosaic**: Activate the "Enable MER-MOSAIC loading" switch
+1. **Enable Mosaic**: In the **Mosaic** section, activate the "Enable mosaic images" switch
 2. **Select Provider**: Choose **Local MER FITS** (on-disk tiles) or **ESA Sky (Public HiPS)** (online cutout)
 3. **Select Source** (ESA Sky only): Pick from available HiPS surveys (e.g., DSS2 Color, Euclid VIS)
 4. **Select Image Format** (ESA Sky only): Choose between:
    - **FITS (32-bit, high quality)** — 32-bit float, WCS-derived bounds, percentile normalisation
    - **JPEG (8-bit, faster)** — 8-bit, geometric bounds, max-pixel normalisation
 5. **Zoom In**: Zoom to a region smaller than 2° × 2°
-6. **Click "Render MER-MOSAIC images"**: Loads background images for visible tiles
+6. **Click "Load mosaic for this view"**: Loads background images for visible tiles
 7. **Adjust Opacity**: Use the mosaic opacity slider (0.0-1.0)
 8. **Multiple Layers**: Mosaics and masks can be displayed simultaneously
 
@@ -700,7 +702,7 @@ Bottom → Top Layer Order:
 ```
 
 **Smart Preservation**: All overlay layers are retained when:
-- Switching algorithms (PZWAV ↔ AMICO ↔ BOTH)
+- Switching algorithms (PZWAV ↔ AMICO ↔ PZWAV and AMICO)
 - Applying SNR/redshift filters
 - Rendering/clearing CATRED data
 - Zooming or panning the view
@@ -748,7 +750,7 @@ UI_CONFIG = {
 ```
 
 ### **Performance Optimizations**
-- **Client-side Filtering**: Real-time SNR/redshift updates without server round-trips
+- **Incremental Filtering**: Filter changes patch only the cluster traces (`dash.Patch`), leaving polygons and overlays in the browser
 - **Lazy Loading**: CATRED, MOSAIC, and HEALPix mask data loaded on-demand with progress indicators
 - **Optimized Trace Layering**: Strategic rendering order (polygons → mosaics → mask overlays → CATRED → clusters)
 - **Memory Management**: Efficient HEALPix processing with masked arrays (NSIDE=16384)
@@ -758,11 +760,11 @@ UI_CONFIG = {
 ### **Advanced Features**
 - **SSH Tunnel Monitoring**: Automatic connection detection with real-time guidance
 - **Dynamic UI Controls**: CATRED controls auto-hide/show based on switch state
-- **Cluster Matching Visualization**: Oval shapes connecting matched PZWAV-AMICO cluster pairs (BOTH mode)
+- **Cluster Matching Visualization**: Oval shapes connecting matched PZWAV-AMICO cluster pairs ("PZWAV and AMICO")
 - **HEALPix Mask Overlay**: Effective coverage footprint visualization with configurable opacity
 - **PHZ PDF Integration**: Interactive photometric redshift probability plots
 - **Responsive Layout**: Bootstrap-styled UI with highlighted section organization
-- **Multi-algorithm Support**: Seamless PZWAV ↔ AMICO ↔ BOTH switching with data preservation
+- **Multi-algorithm Support**: Seamless PZWAV ↔ AMICO ↔ combined switching with data preservation
 - **Trace Management**: Intelligent preservation of mosaic and mask overlay layers across updates
 
 ## 🛠️ Development Environment
@@ -863,7 +865,7 @@ cluster_visualization/src/
 ```
 
 ### **Interactive Data Exploration**
-- **Smart Filtering**: Client-side SNR and redshift filtering without server delays
+- **Smart Filtering**: SNR and redshift filters applied incrementally without a full re-render
 - **Dynamic Layering**: Optimized trace rendering (polygons → mosaics → mask overlays → CATRED → clusters)
 - **Spatial Navigation**: Advanced zoom/pan with coordinate system preservation
 - **Hover Analytics**: Detailed cluster properties, tile information, and metadata
@@ -882,7 +884,7 @@ cluster_visualization/src/
 - **Mosaic Image Overlays**: Background astronomical images with opacity control
 - **HEALPix Mask Overlays**: Effective coverage footprint with independent opacity settings
 - **MER Tile Visualization**: 1,935 tile polygons with unique color coding
-- **Cluster Matching Toggle**: Enable/disable matched cluster pair visualization (BOTH mode only)
+- **Cluster Matching Toggle**: Enable/disable matched cluster pair visualization ("PZWAV and AMICO" only; applies on Apply filters)
 
 ## 🚀 Performance & Scalability
 
@@ -896,7 +898,7 @@ cluster_visualization/src/
 - **Editable Install**: Development mode with instant code changes
 
 ### **Runtime Optimization Features**
-- **Client-side Processing**: Real-time filtering without server round-trips
+- **Incremental Processing**: Filter changes re-send only the cluster traces
 - **Background Callbacks**: All heavy data-loading operations use Dash `background=True` with `DiskcacheManager` — real percentage progress bars keep users informed and buttons are disabled to prevent duplicate requests
 - **Lazy Loading Architecture**: On-demand data loading for CATRED, MOSAIC, and HEALPix mask components
 - **Memory Efficiency**: Smart caching system for algorithm switching with `psutil` monitoring
@@ -1003,19 +1005,19 @@ export PYTHONPATH="${PYTHONPATH}:/path/to/cluster_visualization"
 ### **Performance Optimization**
 - **Slow Installation**: Install uv: `pip install uv`, then reinstall: `uv pip install -e .`
 - **Slow Loading**: Start with Basic View, enable Detailed View only when needed
-- **Memory Issues**: Use client-side filtering instead of server-side processing
+- **Memory Issues**: Narrow filters and zoom in before enabling unmerged clusters or matched ovals
 - **Large Datasets**: Enable CATRED sparse mode for NSIDE=16384 data
 - **Network Latency**: Use local SSH tunnel, avoid direct server access
 ## 💼 Enterprise Benefits & Comparison
 
 ### **New Visualization Capabilities**
 
-#### **🔗 Cluster Matching Visualization (BOTH Mode)**
-When using the "BOTH" algorithm mode, the application can display matched PZWAV-AMICO cluster pairs:
+#### **🔗 Cluster Matching Visualization ("PZWAV and AMICO")**
+When the algorithm is set to "PZWAV and AMICO", the application can display matched PZWAV-AMICO cluster pairs:
 - **Visual Matching**: Semi-transparent green ovals connect each PZWAV cluster (square marker) with its matched AMICO cluster (diamond marker)
-- **Smart Activation**: The matching clusters toggle is automatically enabled only when algorithm is set to "BOTH"
+- **Smart Activation**: The matching clusters toggle is automatically enabled only when the algorithm is set to "PZWAV and AMICO"
 - **Cross-Identification**: Uses `CROSS_ID_CLUSTER` field to link detections between algorithms
-- **Interactive Overlay**: Ovals are rendered with proper layering and can be toggled on/off without losing mosaic or mask data
+- **Interactive Overlay**: Ovals are rendered with proper layering and are toggled with the matched-clusters switch and drawn on **Apply filters**, without losing mosaic or mask data
 
 #### **🗺️ HEALPix Mask Overlay**
 Visualize the effective survey coverage using HEALPix footprint data:
@@ -1032,7 +1034,7 @@ The application now supports independent control of multiple overlay layers:
 2. **Mosaic Layer**: Background astronomical images (local MER FITS or ESA Sky HiPS) with opacity and format controls
 3. **Mask Layer**: HEALPix effective coverage footprint with separate opacity
 4. **CATRED Layer**: High-resolution catalog data points
-5. **Cluster Layer**: Detection markers with matching ovals (BOTH mode)
+5. **Cluster Layer**: Detection markers with matching ovals ("PZWAV and AMICO")
 
 **Layer Management**:
 - Each layer can be independently toggled on/off
@@ -1047,7 +1049,7 @@ The application now supports independent control of multiple overlay layers:
 4. **📱 Responsive Design**: Adaptive interface works across devices and screen sizes
 5. **📦 Self-contained Deployment**: Standalone HTML exports work without server dependencies
 6. **🎯 Superior Interactivity**: Real-time zoom, pan, and filtering operations
-7. **🔄 Algorithm Comparison**: Seamless switching between PZWAV, AMICO, and BOTH with preserved settings
+7. **🔄 Algorithm Comparison**: Seamless switching between PZWAV, AMICO, and both combined with preserved settings
 8. **🔗 Visual Cross-Matching**: Geometric overlay showing matched cluster pairs across algorithms
 9. **🗺️ Multi-Layer Visualization**: Independent control of mosaics, masks, CATRED, cutouts, and clusters
 10. **🔬 Cluster Analysis Tools**: Dedicated interface for cutout generation, CATRED boxes, and mask overlays
@@ -1131,7 +1133,7 @@ The application now supports independent control of multiple overlay layers:
 - ✅ **Interactive Cluster Analysis**: Comprehensive tools for detailed cluster investigation
 - ✅ **Robust State Management**: Preserved traces and settings across all data operations
 - ✅ **Background Progress**: Real percentage-based progress bars on all heavy callbacks via `diskcache`
-- ✅ **Config Display**: Live active-configuration panel in the sidebar for quick path inspection
+- ✅ **Config Display**: Live active-configuration panel in the sidebar Configuration section for quick path inspection
 - ✅ **Professional Documentation**: Comprehensive README reflecting sophisticated architecture
 - ✅ **Trace Management**: Granular control over visibility and clearing of all overlay types
 
@@ -1143,6 +1145,16 @@ The application now supports independent control of multiple overlay layers:
 - ✅ **Smart Fallback Colors**: Algorithm-specific cluster colors when tile coloring disabled
 - ✅ **Conditional Hovertemplates**: Dynamic hover text with optional tile ID suffix
 
+### **October 2026: Sidebar Redesign & Incremental Apply**
+- ✅ **Sidebar Regrouped**: Sections are now Catalog → Filters → Mask → Mosaic → Display → Configuration (moved last); matched clusters moved into Filters
+- ✅ **Single Apply Filters Button**: One sticky "Apply filters" bar replaces the per-filter Apply buttons and the ovals "Render" button; it lists changed filters and pending controls show a "Not applied" tag. Filter switches, the richness radio and quality flags no longer redraw live
+- ✅ **Range Filter Readouts**: Selected-range readout plus synced Min/Max inputs on every range slider; SNR shows only the selected algorithm's filter
+- ✅ **Incremental Apply**: "Apply filters" runs in the main server process, rebuilds only the cluster traces (`TraceCreator.create_cluster_traces`) and patches them into the figure with `dash.Patch` (`MainPlotCallbacks._setup_apply_filters_callback`). Polygons, CATRED, mosaic and mask overlays stay in the browser. Tile colours and richness hover text are cached per loaded catalog
+- ✅ **Overlay Preservation on Render**: Full **Re-render** now keeps CATRED, mosaic and mask overlay traces
+- ✅ **Live Display Options Use Applied Filters**: Toggling a Display option no longer applies pending filter changes
+- ✅ **Quiet, Responsive UI**: Gradients, emoji and perpetual animations removed; fixed-width sidebar column on desktop that stacks below 992 px
+- ✅ **Figure-Size Logging Opt-In**: The full-figure JSON size log now runs only with `CLUSTERVIZ_LOG_FIGURE_SIZE=1`
+
 ## 📊 Technical Specifications & Data Insights
 
 ### **Dataset Statistics**
@@ -1152,7 +1164,7 @@ The application now supports independent control of multiple overlay layers:
 - **CATRED Integration**: High-resolution catalog with coverage threshold filtering
 
 ### **Performance Metrics**
-- **Rendering Speed**: Client-side filtering enables real-time updates (< 100ms)
+- **Rendering Speed**: Apply filters patches only cluster traces instead of re-rendering the whole figure
 - **Memory Efficiency**: HEALPix sparse format reduces memory usage by ~80%
 - **Connection Monitoring**: SSH tunnel validation within 1-2 seconds
 - **Data Loading**: Progressive loading with visual progress indicators

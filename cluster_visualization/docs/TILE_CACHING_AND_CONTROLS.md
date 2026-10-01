@@ -71,7 +71,7 @@ tile_data = self._tile_def_cache[tile_def_path]
 
 ### UI Control
 
-Located in the **Merged Clusters** section of the sidebar:
+Located in the **Catalog** section of the sidebar:
 
 ```
 ☑ Show CL-tile information
@@ -222,6 +222,8 @@ hovertemplate=(
 - `cluster_visualization/ui/sidebar_sections.py`
 
 All callbacks pass `show_cltile_info` through State and Input to `create_traces()`.
+
+Full renders go through `create_traces()`, which delegates the filter-dependent cluster traces to `TraceCreator.create_cluster_traces()`. The **Apply filters** button calls `create_cluster_traces()` directly from `MainPlotCallbacks._setup_apply_filters_callback()` and patches only those traces into the figure (`dash.Patch`). Tile colours and tile IDs from `_compute_merged_tile_colors()` are computed once per loaded catalog and cached in the data dict (`_render_row_cache`), then sliced by cluster ID.
 
 ---
 

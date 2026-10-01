@@ -10,25 +10,26 @@ The matched cluster oval feature now uses **zoom-based rendering** to prevent pe
 
 ### Workflow
 
-1. **Select BOTH algorithm** from dropdown
-2. **Enable "Show matched clusters"** toggle
-3. **Zoom into region of interest** (pan/zoom on the plot)
-4. **Click Re-render button** next to the toggle
+1. **Select "PZWAV and AMICO"** in the Catalog section's algorithm dropdown and render
+2. **Zoom into region of interest** (pan/zoom on the plot)
+3. **Turn on "Show matched clusters"** in the Filters section (it shows a "Not applied" tag)
+4. **Click Apply filters** at the bottom of the Filters section
 5. **Ovals appear only for matches in viewport!**
 
 ### Re-rendering
 
 - Ovals are **not automatically updated** when you pan/zoom
 - This prevents constant re-rendering and maintains performance
-- Click **Re-render button** whenever you want to update ovals for new viewport
+- After panning or zooming with no filter change, click the main **Re-render** button to redraw ovals for the new viewport (Apply filters stays disabled when no filter changed)
+- If you also changed a filter, **Apply filters** redraws the ovals for the current viewport
 
 ### Viewport Zoom Indicator
 
-The sidebar displays a real-time **zoom level indicator** next to the Re-render button that shows:
+The sidebar displays a real-time **zoom level indicator** under the "Show matched clusters" switch that shows:
 
 **Ready State** (Green ✓)
 ```
-✓ 2.1° × 1.8° — ready to render ovals
+✓ 2.1° × 1.8° — ovals draw on Apply filters
 ```
 - Maximum dimension < 5°
 - Safe to render matched clusters
@@ -106,7 +107,7 @@ Result: Clear view of individual matched pairs!
 ## Tips for Best Experience
 
 ### 1. Start with Filters
-Apply SNR or redshift filters first to reduce total cluster count:
+Set SNR or redshift filters (then Apply filters) first to reduce total cluster count:
 ```
 - Set SNR threshold: e.g., > 5.0
 - Set redshift range: e.g., 0.2 - 0.5
@@ -116,7 +117,7 @@ Apply SNR or redshift filters first to reduce total cluster count:
 ### 2. Zoom Before Rendering
 ```
 1. Zoom into your region of interest first
-2. Then click Re-render
+2. Then click Apply filters (or Re-render if no filter changed)
 3. Don't render at full sky view!
 ```
 
@@ -125,7 +126,7 @@ Apply SNR or redshift filters first to reduce total cluster count:
 1. Start with medium zoom (100-500 clusters)
 2. See general pattern of matches
 3. Zoom tighter (20-100 clusters) for details
-4. Re-render at each zoom level
+4. Re-render at each zoom level (main Re-render button)
 ```
 
 ### 4. Monitor Feedback
@@ -202,7 +203,7 @@ Watch terminal output:
 | Browser memory | May crash | Stable |
 | Visualization | Too cluttered | Clear & detailed |
 | User control | None | Full control |
-| Re-render on pan | N/A (frozen) | Click Re-render |
+| Re-render on pan | N/A (frozen) | Click Re-render (or Apply filters with filter changes) |
 
 ---
 
@@ -212,26 +213,26 @@ Watch terminal output:
 **Problem:** Ovals won't render because viewport info missing
 **Solution:** 
 1. Zoom in on the plot first
-2. Then click Re-render button
+2. Then click Apply filters (or Re-render)
 3. System needs viewport bounds from zoom action
 
 ### Too many ovals even when zoomed
 **Problem:** "Still too many" warning at tight zoom
 **Solution:**
-1. Apply SNR filters: Increase minimum SNR
-2. Apply redshift filters: Narrow the range
+1. Raise the minimum SNR, then Apply filters
+2. Narrow the redshift range, then Apply filters
 3. Zoom even tighter: Focus on smaller region
 
 ### Ovals don't update when I pan
 **Expected behavior:** This is intentional!
 **Why:** Prevents constant re-rendering
-**Solution:** Click Re-render button after panning
+**Solution:** Click the main Re-render button after panning
 
 ### No ovals appear
 **Check:**
-1. Is "Show matched clusters" toggle ON?
-2. Did you select "BOTH" algorithm?
-3. Did you click Re-render after zooming?
+1. Is "Show matched clusters" ON, with no "Not applied" tag left?
+2. Did you select "PZWAV and AMICO" as the algorithm?
+3. Did you click Apply filters (or Re-render) after zooming?
 4. Are there matches in your viewport? (check terminal)
 
 ---
@@ -252,7 +253,7 @@ Watch terminal output:
 1. Start: SNR > 3.0 (see all matches)
 2. Refine: SNR > 5.0 (higher quality)
 3. Focus: SNR > 7.0 (best matches only)
-# Re-render after each filter change
+# Apply filters after each filter change
 ```
 
 ### Systematic Survey
@@ -261,7 +262,7 @@ Watch terminal output:
 1. Apply tight filters (reduce to ~2000 total)
 2. Divide sky into grid regions
 3. Zoom to each grid cell
-4. Re-render and inspect
+4. Re-render and inspect (main Re-render button)
 5. Move to next cell
 ```
 
@@ -285,7 +286,7 @@ Watch terminal output:
 
 **Key Benefits:**
 1. ✅ No more hanging/crashing with large datasets
-2. ✅ User controls when ovals are rendered (Re-render button)
+2. ✅ User controls when ovals are rendered (Apply filters / Re-render)
 3. ✅ Only shows relevant ovals for current view
 4. ✅ Clear feedback about what's being shown
 5. ✅ Encourages focused, detailed exploration
@@ -293,6 +294,6 @@ Watch terminal output:
 **Best Practice:**
 1. Apply filters to reduce total clusters
 2. Zoom to region of interest (not full sky!)
-3. Click Re-render to show ovals
-4. Pan to new area, Re-render again
+3. Click Apply filters to show ovals
+4. Pan to new area, click Re-render
 5. Enjoy smooth, responsive visualization!

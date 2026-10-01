@@ -266,3 +266,22 @@ The debug output is already verbose. To disable:
 5. 📊 Current vs maximum memory usage
 
 **All of this happens automatically** - no action required unless you see warning patterns consistently.
+
+---
+
+## Render Diagnostics
+
+| Output | When You See It |
+|--------|-----------------|
+| `Debug: Apply filters - patched N cluster traces in X.XXXs` | Every **Apply filters** click that patches the figure incrementally |
+| `Debug: Apply filters - full rebuild (no patchable render on screen)` | Apply filters when the algorithm on screen differs from the dropdown, or nothing has been rendered yet |
+| `Debug: Figure JSON N KB, M traces, K merged clusters` | Full renders, only when `CLUSTERVIZ_LOG_FIGURE_SIZE=1` is set |
+
+Serializing the whole figure to measure its size is expensive, so the figure-size log is opt-in:
+
+```bash
+CLUSTERVIZ_LOG_FIGURE_SIZE=1 ./launch.sh
+```
+
+Section timings (`apply:cluster_traces`, `apply:patch`, `apply:total`, `row_cache:build`, `create_traces:*`) are recorded by the trace profiler, enabled unless `CLUSTERVIZ_PROFILE=0`.
+

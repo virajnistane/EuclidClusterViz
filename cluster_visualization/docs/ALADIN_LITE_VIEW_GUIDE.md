@@ -86,7 +86,7 @@ snr_mask = (snr_sub >= snr_range[0]) & (snr_sub <= snr_range[1])
 z_mask   = (z_sub  >= redshift_range[0]) & (z_sub  <= redshift_range[1])
 ```
 
-Only clusters that pass both filters are included in the `"clusters"` list pushed to `aladin-overlay-data-store`. This means the Aladin catalog overlay always reflects the same population shown in the Plotly view — adjusting the SNR or redshift slider will re-trigger `push_overlay_data` and refresh the overlay markers.
+Only clusters that pass both filters are included in the `"clusters"` list pushed to `aladin-overlay-data-store`. This means the Aladin catalog overlay always reflects the same population shown in the Plotly view — slider values are read as they stand when the overlay refreshes. In the main plot, filter changes take effect only on **Apply filters**.
 
 The spatial 2×FOV pre-filter clips to a circle of radius `2 × FOV` around the viewport center using the helper `_filter_within_2fov_vectorized`, which avoids sending the entire catalog to the browser on large datasets.
 
