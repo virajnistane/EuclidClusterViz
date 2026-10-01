@@ -18,21 +18,91 @@
     border: 1px solid rgba(255, 255, 255, 0.18) !important;
 }
 
-/* Enhanced button styling */
+/* Buttons: colour comes from the Bootstrap variant (primary for the main
+   render, outline-secondary for filter Apply buttons) */
 .btn-enhanced {
-    background: linear-gradient(45deg, #667eea 0%, #764ba2 100%) !important;
-    border: none !important;
-    border-radius: 12px !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.5px !important;
-    text-transform: uppercase !important;
-    transition: all 0.3s ease !important;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: background-color 0.15s ease-out, border-color 0.15s ease-out,
+        color 0.15s ease-out, box-shadow 0.15s ease-out;
 }
 
-.btn-enhanced:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3) !important;
+.btn-enhanced:disabled {
+    opacity: 0.55;
+}
+
+.btn-primary-action {
+    padding: 0.6rem 1rem;
+    font-size: 1rem;
+}
+
+/* Selected-range readout above each range slider */
+.range-readout {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.5rem;
+    min-height: 1.5rem;
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.range-readout-value {
+    font-weight: 600;
+    color: #212529;
+}
+
+.range-readout-range {
+    color: #5c636a;
+}
+
+.range-readout-flag {
+    padding: 0 0.4rem;
+    border-radius: 4px;
+    background: #fff3cd;
+    color: #664d03;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.range-readout.is-empty .range-readout-range {
+    font-style: italic;
+}
+
+.range-input {
+    font-variant-numeric: tabular-nums;
+    -moz-appearance: textfield;
+}
+
+.range-input::-webkit-inner-spin-button,
+.range-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.range-input-label {
+    display: block;
+    margin-bottom: 0.125rem;
+    font-size: 0.75rem;
+    color: #5c636a;
+}
+
+.apply-hint {
+    display: block;
+}
+
+/* Sidebar: full width when stacked; a fixed, readable column beside the plot */
+@media (min-width: 992px) {
+    .sidebar-col {
+        flex: 0 0 clamp(300px, 22vw, 380px);
+        max-width: clamp(300px, 22vw, 380px);
+    }
+
+    .main-col {
+        flex: 1 1 0;
+        min-width: 0;
+        max-width: none;
+    }
 }
 
 /* Slider styling enhancements */

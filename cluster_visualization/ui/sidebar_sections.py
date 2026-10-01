@@ -9,6 +9,37 @@ import dash_bootstrap_components as dbc
 from dash import dcc, html
 
 
+def _range_inputs(slider_id):
+    """Paired min/max number inputs kept in sync with a RangeSlider."""
+
+    def bound_input(suffix, label):
+        input_id = f"{slider_id}-{suffix}"
+        return dbc.Col(
+            [
+                html.Label(label, htmlFor=input_id, className="range-input-label"),
+                dbc.Input(
+                    id=input_id,
+                    type="number",
+                    size="sm",
+                    debounce=True,
+                    className="range-input",
+                ),
+            ],
+            width=6,
+        )
+
+    return dbc.Row([bound_input("lo", "Min"), bound_input("hi", "Max")], className="g-2 mb-2")
+
+
+def _apply_hint(button_id):
+    """Reason shown under an Apply button while it is disabled."""
+    return html.Small(
+        "Render once to enable filters",
+        id=f"{button_id}-hint",
+        className="apply-hint text-muted small mt-1",
+    )
+
+
 class SidebarSections:
     """Handles sidebar control sections"""
 
@@ -193,18 +224,8 @@ class SidebarSections:
             [
                 dbc.CardBody(
                     [
-                        # SNR range display badge
-                        dbc.Badge(
-                            id="snr-range-display-pzwav",
-                            color="light",
-                            className="w-100 mb-3 p-2 fs-6 badge-enhanced status-indicator",
-                            style={
-                                "background": "linear-gradient(45deg, #e8f5e8, #f0f8f0)",
-                                "color": "#2d5a2d",
-                                "border-radius": "8px",
-                                "border": "1px solid rgba(46, 204, 113, 0.3)",
-                            },
-                        ),
+                        # Selected-range readout (set clientside)
+                        html.Div(id="snr-range-display-pzwav", className="range-readout mb-2"),
                         # SNR range slider
                         html.Div(
                             [
@@ -226,6 +247,7 @@ class SidebarSections:
                             className="mb-1",
                             style={"padding": "10px 15px", "margin": "5px 0", "minHeight": "60px"},
                         ),
+                        _range_inputs("snr-range-slider-pzwav"),
                         dbc.Switch(
                             id="snr-include-missing-pzwav",
                             label="Include clusters with missing SNR",
@@ -234,15 +256,16 @@ class SidebarSections:
                         ),
                         # Apply button
                         dbc.Button(
-                            [html.I(className="fas fa-filter me-2"), "Apply SNR Filter (PZWAV)"],
+                            [html.I(className="fas fa-filter me-2"), "Apply SNR filter"],
                             id="snr-render-button-pzwav",
-                            color="success",
+                            color="secondary",
+                            outline=True,
                             size="sm",
-                            className="w-100 shadow-sm btn-enhanced",
+                            className="w-100 btn-enhanced",
                             n_clicks=0,
                             disabled=True,
-                            style={"border-radius": "8px", "font-weight": "600"},
                         ),
+                        _apply_hint("snr-render-button-pzwav"),
                     ],
                     className="p-3",
                 )
@@ -258,18 +281,8 @@ class SidebarSections:
             [
                 dbc.CardBody(
                     [
-                        # SNR range display badge
-                        dbc.Badge(
-                            id="snr-range-display-amico",
-                            color="light",
-                            className="w-100 mb-3 p-2 fs-6 badge-enhanced status-indicator",
-                            style={
-                                "background": "linear-gradient(45deg, #e8f5e8, #f0f8f0)",
-                                "color": "#2d5a2d",
-                                "border-radius": "8px",
-                                "border": "1px solid rgba(46, 204, 113, 0.3)",
-                            },
-                        ),
+                        # Selected-range readout (set clientside)
+                        html.Div(id="snr-range-display-amico", className="range-readout mb-2"),
                         # SNR range slider
                         html.Div(
                             [
@@ -291,6 +304,7 @@ class SidebarSections:
                             className="mb-1",
                             style={"padding": "10px 15px", "margin": "5px 0", "minHeight": "60px"},
                         ),
+                        _range_inputs("snr-range-slider-amico"),
                         dbc.Switch(
                             id="snr-include-missing-amico",
                             label="Include clusters with missing SNR",
@@ -299,15 +313,16 @@ class SidebarSections:
                         ),
                         # Apply button
                         dbc.Button(
-                            [html.I(className="fas fa-filter me-2"), "Apply SNR Filter (AMICO)"],
+                            [html.I(className="fas fa-filter me-2"), "Apply SNR filter"],
                             id="snr-render-button-amico",
-                            color="success",
+                            color="secondary",
+                            outline=True,
                             size="sm",
-                            className="w-100 shadow-sm btn-enhanced",
+                            className="w-100 btn-enhanced",
                             n_clicks=0,
                             disabled=True,
-                            style={"border-radius": "8px", "font-weight": "600"},
                         ),
+                        _apply_hint("snr-render-button-amico"),
                     ],
                     className="p-3",
                 )
@@ -353,18 +368,8 @@ class SidebarSections:
                     [
                         dbc.CardBody(
                             [
-                                # Redshift range display badge
-                                dbc.Badge(
-                                    id="redshift-range-display",
-                                    color="light",
-                                    className="w-100 mb-3 p-2 fs-6 badge-enhanced status-indicator",
-                                    style={
-                                        "background": "linear-gradient(45deg, #ffe8e8, #fff0f0)",
-                                        "color": "#5a2d2d",
-                                        "border-radius": "8px",
-                                        "border": "1px solid rgba(231, 76, 60, 0.3)",
-                                    },
-                                ),
+                                # Selected-range readout (set clientside)
+                                html.Div(id="redshift-range-display", className="range-readout mb-2"),
                                 # Redshift range slider
                                 html.Div(
                                     [
@@ -390,6 +395,7 @@ class SidebarSections:
                                         "minHeight": "60px",
                                     },
                                 ),
+                                _range_inputs("redshift-range-slider"),
                                 dbc.Switch(
                                     id="redshift-include-missing",
                                     label="Include clusters with missing redshift",
@@ -400,16 +406,17 @@ class SidebarSections:
                                 dbc.Button(
                                     [
                                         html.I(className="fas fa-filter me-2"),
-                                        "Apply Redshift Filter",
+                                        "Apply redshift filter",
                                     ],
                                     id="redshift-render-button",
-                                    color="danger",
+                                    color="secondary",
+                                    outline=True,
                                     size="sm",
-                                    className="w-100 shadow-sm btn-enhanced",
+                                    className="w-100 btn-enhanced",
                                     n_clicks=0,
                                     disabled=True,
-                                    style={"border-radius": "8px", "font-weight": "600"},
                                 ),
+                                _apply_hint("redshift-render-button"),
                             ],
                             className="p-3",
                         )
@@ -462,18 +469,8 @@ class SidebarSections:
             [
                 dbc.CardBody(
                     [
-                        # Richness range display badge
-                        dbc.Badge(
-                            id="richness-range-display-zp",
-                            color="light",
-                            className="w-100 mb-3 p-2 fs-6 badge-enhanced status-indicator",
-                            style={
-                                "background": "linear-gradient(45deg, #e8f5e8, #f0f8f0)",
-                                "color": "#2d5a2d",
-                                "border-radius": "8px",
-                                "border": "1px solid rgba(46, 204, 113, 0.3)",
-                            },
-                        ),
+                        # Selected-range readout (set clientside)
+                        html.Div(id="richness-range-display-zp", className="range-readout mb-2"),
                         # FLAG_QUALITY_ZP filter checklist
                         html.Div(
                             [
@@ -521,6 +518,7 @@ class SidebarSections:
                             className="mb-1",
                             style={"padding": "10px 15px", "margin": "5px 0", "minHeight": "60px"},
                         ),
+                        _range_inputs("richness-range-slider-zp"),
                         dbc.Switch(
                             id="richness-include-missing-zp",
                             label="Include clusters with missing richness (ZP)",
@@ -529,15 +527,16 @@ class SidebarSections:
                         ),
                         # Apply button
                         dbc.Button(
-                            [html.I(className="fas fa-filter me-2"), "Apply Richness Filter (ZP)"],
+                            [html.I(className="fas fa-filter me-2"), "Apply richness filter"],
                             id="richness-render-button-zp",
-                            color="success",
+                            color="secondary",
+                            outline=True,
                             size="sm",
-                            className="w-100 shadow-sm btn-enhanced",
+                            className="w-100 btn-enhanced",
                             n_clicks=0,
                             disabled=True,
-                            style={"border-radius": "8px", "font-weight": "600"},
                         ),
+                        _apply_hint("richness-render-button-zp"),
                     ],
                     className="p-3",
                 )
@@ -553,18 +552,8 @@ class SidebarSections:
             [
                 dbc.CardBody(
                     [
-                        # Richness range display badge
-                        dbc.Badge(
-                            id="richness-range-display-rs",
-                            color="light",
-                            className="w-100 mb-3 p-2 fs-6 badge-enhanced status-indicator",
-                            style={
-                                "background": "linear-gradient(45deg, #e8f5e8, #f0f8f0)",
-                                "color": "#2d5a2d",
-                                "border-radius": "8px",
-                                "border": "1px solid rgba(46, 204, 113, 0.3)",
-                            },
-                        ),
+                        # Selected-range readout (set clientside)
+                        html.Div(id="richness-range-display-rs", className="range-readout mb-2"),
                         # FLAG_QUALITY_RS filter checklist
                         html.Div(
                             [
@@ -612,6 +601,7 @@ class SidebarSections:
                             className="mb-1",
                             style={"padding": "10px 15px", "margin": "5px 0", "minHeight": "60px"},
                         ),
+                        _range_inputs("richness-range-slider-rs"),
                         dbc.Switch(
                             id="richness-include-missing-rs",
                             label="Include clusters with missing richness (RS)",
@@ -620,15 +610,16 @@ class SidebarSections:
                         ),
                         # Apply button
                         dbc.Button(
-                            [html.I(className="fas fa-filter me-2"), "Apply Richness Filter (RS)"],
+                            [html.I(className="fas fa-filter me-2"), "Apply richness filter"],
                             id="richness-render-button-rs",
-                            color="success",
+                            color="secondary",
+                            outline=True,
                             size="sm",
-                            className="w-100 shadow-sm btn-enhanced",
+                            className="w-100 btn-enhanced",
                             n_clicks=0,
                             disabled=True,
-                            style={"border-radius": "8px", "font-weight": "600"},
                         ),
+                        _apply_hint("richness-render-button-rs"),
                     ],
                     className="p-3",
                 )
@@ -654,7 +645,7 @@ class SidebarSections:
                 html.Div(
                     id="richness-zp-container",
                     children=[richness_zp_card],
-                    style={"display": "block"}  # Initially visible
+                    style={"display": "none"}  # Hidden: radio defaults to "none"
                 ),
                 # Container for RS richness filter
                 html.Div(
@@ -684,7 +675,7 @@ class SidebarSections:
                             },
                         )
                     ],
-                    style={"display": "none"},
+                    style={"display": "block"},  # Matches radio default "none"
                 ),
             ]
         )
@@ -766,15 +757,15 @@ class SidebarSections:
                                 dbc.Button(
                                     [
                                         html.I(className="fas fa-filter me-2"),
-                                        "Apply Cluster-ID Filter",
+                                        "Apply cluster-ID filter",
                                     ],
                                     id="idcluster-render-button",
-                                    color="danger",
+                                    color="secondary",
+                                    outline=True,
                                     size="sm",
-                                    className="w-100 shadow-sm btn-enhanced",
+                                    className="w-100 btn-enhanced",
                                     n_clicks=0,
                                     disabled=True,
-                                    style={"border-radius": "8px", "font-weight": "600"},
                                 ),
                             ],
                             className="p-4",

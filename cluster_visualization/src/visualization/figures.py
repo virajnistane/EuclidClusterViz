@@ -108,7 +108,7 @@ class FigureManager:
             layout_config["annotations"] = [
                 dict(
                     text="Select your preferred algorithm and display options from the sidebar,<br>"
-                    "then click the 'Initial Render' button to generate the plot.",
+                    "then click 'Render clusters' to generate the plot.",
                     xref="paper",
                     yref="paper",
                     x=0.5,

@@ -23,6 +23,34 @@ class UICallbacks:
     DEFAULT_UNMERGED_HELP_TEXT = "Clusters in individual tiles but absent from merged catalog"
     NO_INDIVIDUAL_CLTILE_DATA_MESSAGE = "No individual CL-tile data available"
 
+    # Filter Apply buttons that stay disabled until the first render
+    FILTER_APPLY_BUTTONS = [
+        "snr-render-button-pzwav",
+        "snr-render-button-amico",
+        "redshift-render-button",
+        "richness-render-button-zp",
+        "richness-render-button-rs",
+    ]
+    # Range slider id -> id of its selected-range readout
+    RANGE_SLIDER_READOUTS = {
+        "snr-range-slider-pzwav": "snr-range-display-pzwav",
+        "snr-range-slider-amico": "snr-range-display-amico",
+        "redshift-range-slider": "redshift-range-display",
+        "richness-range-slider-zp": "richness-range-display-zp",
+        "richness-range-slider-rs": "richness-range-display-rs",
+    }
+    # Every button that triggers the main render (which reads all slider values)
+    RENDER_TRIGGER_BUTTONS = [
+        "render-button",
+        "snr-render-button-pzwav",
+        "snr-render-button-amico",
+        "redshift-render-button",
+        "richness-render-button-zp",
+        "richness-render-button-rs",
+        "idcluster-render-button",
+        "rerender-ovals-button",
+    ]
+
     def __init__(self, app, config=None, data_loader=None):
         """
         Initialize UI callbacks.
@@ -41,6 +69,7 @@ class UICallbacks:
         """Setup all UI-related callbacks"""
         self._setup_button_text_callbacks()
         self._setup_button_state_callbacks()
+        self._setup_range_readout_callbacks()
         self._setup_catred_visibility_callback()
         self._setup_catred_render_color_callback()
         self._setup_catred_box_color_callback()
@@ -53,26 +82,122 @@ class UICallbacks:
         self._setup_getting_started_callback()
         self._setup_tutorial_tour_callback()
 
+    def _setup_range_readout_callbacks(self):
+        """Selected-range readouts, number inputs and "not applied" state for range sliders"""
+        sliders = list(self.RANGE_SLIDER_READOUTS)
+
+        # Remember the slider values each render used
+        self.app.clientside_callback(
+            """
+            function() {
+                const ids = %s;
+                // Arguments are the button n_clicks followed by the slider values
+                const values = Array.from(arguments).slice(-ids.length);
+                const applied = {};
+                ids.forEach((id, i) => { applied[id] = values[i]; });
+                return applied;
+            }
+            """
+            % sliders,
+            Output("applied-filters-store", "data"),
+            [Input(button_id, "n_clicks") for button_id in self.RENDER_TRIGGER_BUTTONS],
+            [State(slider_id, "value") for slider_id in sliders],
+            prevent_initial_call=True,
+        )
+
+        for slider_id, readout_id in self.RANGE_SLIDER_READOUTS.items():
+            # Two-way sync: slider <-> min/max number inputs
+            self.app.clientside_callback(
+                """
+                function(value, lo, hi, min, max) {
+                    const nu = window.dash_clientside.no_update;
+                    const ctx = window.dash_clientside.callback_context;
+                    const fromInput = ctx.triggered.some(
+                        t => t.prop_id.endsWith('-lo.value') || t.prop_id.endsWith('-hi.value')
+                    );
+                    const round = x => Math.round(x * 100) / 100;
+                    if (!fromInput) {
+                        if (!value) { return [nu, nu, nu]; }
+                        return [nu, round(value[0]), round(value[1])];
+                    }
+                    const num = (x, fallback) =>
+                        (x === null || x === undefined || x === '' || isNaN(x)) ? fallback : Number(x);
+                    let a = num(lo, value ? value[0] : min);
+                    let b = num(hi, value ? value[1] : max);
+                    a = Math.min(Math.max(a, min), max);
+                    b = Math.min(Math.max(b, min), max);
+                    if (a > b) { [a, b] = [b, a]; }
+                    return [[a, b], a, b];
+                }
+                """,
+                [
+                    Output(slider_id, "value", allow_duplicate=True),
+                    Output(f"{slider_id}-lo", "value"),
+                    Output(f"{slider_id}-hi", "value"),
+                ],
+                [
+                    Input(slider_id, "value"),
+                    Input(f"{slider_id}-lo", "value"),
+                    Input(f"{slider_id}-hi", "value"),
+                ],
+                [State(slider_id, "min"), State(slider_id, "max")],
+                prevent_initial_call=True,
+            )
+
+            # Readout: selected cut, data range, and whether the plot reflects it
+            self.app.clientside_callback(
+                """
+                function(value, min, max, disabled, applied) {
+                    const span = (text, className) => ({
+                        namespace: 'dash_html_components', type: 'Span',
+                        props: {children: text, className: className}
+                    });
+                    if (disabled) {
+                        return [[span('No data for this column', 'range-readout-range')],
+                                'range-readout is-empty'];
+                    }
+                    if (!value) { return ['', 'range-readout']; }
+                    const f = x => Number(x).toFixed(2);
+                    const children = [
+                        span(f(value[0]) + ' – ' + f(value[1]), 'range-readout-value'),
+                        span('of ' + f(min) + ' – ' + f(max), 'range-readout-range'),
+                    ];
+                    const last = applied ? applied['%s'] : null;
+                    const pending = last && (
+                        Math.abs(last[0] - value[0]) > 1e-9 || Math.abs(last[1] - value[1]) > 1e-9
+                    );
+                    if (pending) {
+                        children.push(span('Not applied', 'range-readout-flag'));
+                        return [children, 'range-readout is-pending'];
+                    }
+                    return [children, 'range-readout'];
+                }
+                """
+                % slider_id,
+                [Output(readout_id, "children"), Output(readout_id, "className")],
+                [
+                    Input(slider_id, "value"),
+                    Input(slider_id, "min"),
+                    Input(slider_id, "max"),
+                    Input(slider_id, "disabled"),
+                    Input("applied-filters-store", "data"),
+                ],
+            )
+
     def _setup_button_text_callbacks(self):
         """Setup callbacks to update button text based on current settings"""
 
-        # Use a dummy interval to trigger initial callback and then button clicks
         @self.app.callback(
             Output("render-button", "children"),
-            [Input("render-button", "n_clicks"),
-             Input("snr-render-button-pzwav", "n_clicks"),
-             Input("snr-render-button-amico", "n_clicks"),
-             Input("redshift-render-button", "n_clicks"),
-             Input("idcluster-render-button", "n_clicks")],
+            [Input("render-button", "n_clicks"), Input("algorithm-dropdown", "value")],
             prevent_initial_call=False,
         )
-        def update_main_button_text(n_clicks, snr_pzwav_clicks, snr_amico_clicks, redshift_clicks, idcluster_clicks):
-            """Update main render button text"""
-            if n_clicks is None:
-                n_clicks = 0
-            if any([snr_pzwav_clicks, snr_amico_clicks, redshift_clicks, idcluster_clicks]):
-                n_clicks += 1
-            return "🚀 Initial Render" if n_clicks == 0 else f"✅ Live Updates Active ({n_clicks})"
+        def update_main_button_text(n_clicks, algorithm):
+            """Name the action: first render, then re-render for the selected algorithm"""
+            if not n_clicks:
+                return [html.I(className="fas fa-play me-2"), "Render clusters"]
+            label = f"Re-render · {algorithm}" if algorithm else "Re-render"
+            return [html.I(className="fas fa-redo me-2"), label]
 
         @self.app.callback(
             Output("catred-render-button", "children"),
@@ -87,57 +212,6 @@ class UICallbacks:
                 f"🔍 Render CATRED Data ({catred_n_clicks})"
                 if catred_n_clicks > 0
                 else "🔍 Render CATRED Data"
-            )
-
-        @self.app.callback(
-            Output("snr-render-button-pzwav", "children"),
-            [Input("snr-render-button-pzwav", "n_clicks")],
-            prevent_initial_call=False,
-        )
-        def update_snr_pzwav_button_text(snr_n_clicks):
-            """Update PZWAV SNR button text"""
-            if snr_n_clicks is None:
-                snr_n_clicks = 0
-            return [
-                html.I(className="fas fa-filter me-2"),
-                (
-                    f"Apply SNR Filter (PZWAV) ({snr_n_clicks})"
-                    if snr_n_clicks > 0
-                    else "Apply SNR Filter (PZWAV)"
-                ),
-            ]
-
-        @self.app.callback(
-            Output("snr-render-button-amico", "children"),
-            [Input("snr-render-button-amico", "n_clicks")],
-            prevent_initial_call=False,
-        )
-        def update_snr_amico_button_text(snr_n_clicks):
-            """Update AMICO SNR button text"""
-            if snr_n_clicks is None:
-                snr_n_clicks = 0
-            return [
-                html.I(className="fas fa-filter me-2"),
-                (
-                    f"Apply SNR Filter (AMICO) ({snr_n_clicks})"
-                    if snr_n_clicks > 0
-                    else "Apply SNR Filter (AMICO)"
-                ),
-            ]
-
-        @self.app.callback(
-            Output("redshift-render-button", "children"),
-            [Input("redshift-render-button", "n_clicks")],
-            prevent_initial_call=False,
-        )
-        def update_redshift_button_text(redshift_n_clicks):
-            """Update redshift button text"""
-            if redshift_n_clicks is None:
-                redshift_n_clicks = 0
-            return (
-                f"🌌 Update Redshift Filter ({redshift_n_clicks})"
-                if redshift_n_clicks > 0
-                else "🌌 Update Redshift Filter"
             )
 
         @self.app.callback(
@@ -164,7 +238,8 @@ class UICallbacks:
                 Output("redshift-render-button", "disabled"),
                 Output("richness-render-button-zp", "disabled"),
                 Output("richness-render-button-rs", "disabled"),
-            ],
+            ]
+            + [Output(f"{button_id}-hint", "style") for button_id in self.FILTER_APPLY_BUTTONS],
             [Input("render-button", "n_clicks")],
             prevent_initial_call=False,
         )
@@ -172,7 +247,8 @@ class UICallbacks:
             """Enable SNR, redshift, and richness filter buttons after initial render"""
             n_clicks = n_clicks or 0
             disabled = n_clicks == 0
-            return disabled, disabled, disabled, disabled, disabled
+            hint_style = {} if disabled else {"display": "none"}
+            return (disabled,) * 5 + (hint_style,) * len(self.FILTER_APPLY_BUTTONS)
 
         @self.app.callback(
             [
@@ -1662,7 +1738,6 @@ class UICallbacks:
                 Output("richness-none-container", "style")
             ],
             Input("richness-mode-radio", "value"),
-            prevent_initial_call=True,
         )
 
 

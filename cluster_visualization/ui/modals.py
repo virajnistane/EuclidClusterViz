@@ -434,8 +434,8 @@ class Modals:
                                 html.Li(
                                     [
                                         html.Strong("Render: "),
-                                        "click 🚀 Initial Render to draw clusters. After that, most "
-                                        "sidebar changes update the plot automatically while keeping your zoom.",
+                                        "click Render clusters to draw the catalog. Display options then update live and keep "
+                                        "your zoom; filters take effect when you press their Apply button.",
                                     ],
                                     className="mb-2",
                                 ),

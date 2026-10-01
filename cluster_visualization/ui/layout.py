@@ -98,7 +98,7 @@ class AppLayout:
                                                 dbc.Alert(
                                                     [
                                                         html.I(className="fas fa-info-circle me-2"),
-                                                        "Options update in real-time while preserving zoom level",
+                                                        "Display options update live and keep your zoom. Filters take effect when you press Apply.",
                                                     ],
                                                     color="info",
                                                     className="mb-3 small text-center border-0 card-hover",
@@ -141,8 +141,8 @@ class AppLayout:
                                     },
                                 )
                             ],
-                            width=2,
-                            className="pe-3",
+                            xs=12,
+                            className="sidebar-col pe-lg-3 mb-3 mb-lg-0",
                         ),
                         # Right side: Plot area and status
                         dbc.Col(
@@ -187,7 +187,7 @@ class AppLayout:
                                                 # Aladin Lite view (hidden until mode switch)
                                                 create_aladin_view(),
                                             ],
-                                            width=8,
+                                            xs=12, xl=8,
                                         ),
                                         # Tabbed interface for PHZ plot and Cluster Analysis
                                         dbc.Col(
@@ -369,7 +369,7 @@ class AppLayout:
                                                     style={"height": "75vh"},
                                                 )
                                             ],
-                                            width=4,
+                                            xs=12, xl=4,
                                         ),
                                     ]
                                 ),
@@ -455,8 +455,11 @@ class AppLayout:
                                     className="status-toast-container",
                                 ),
                                 dcc.Store(id="status-toast-minimized-store", data=False),
+                                # Slider values used by the last render, for "not applied" readouts
+                                dcc.Store(id="applied-filters-store", data=None),
                             ],
-                            width=10,
+                            xs=12,
+                            className="main-col",
                         ),
                     ],
                     className="g-0",
@@ -647,28 +650,11 @@ class AppLayout:
                 dbc.CardBody(
                     [
                         dbc.Button(
-                            [html.I(className="fas fa-rocket me-2"), "🚀 Initial Render"],
+                            [html.I(className="fas fa-play me-2"), "Render clusters"],
                             id="render-button",
                             color="primary",
-                            size="lg",
-                            className="w-100 mb-2 shadow-sm btn-enhanced pulse",
+                            className="w-100 mb-0 btn-enhanced btn-primary-action",
                             n_clicks=0,
-                            style={
-                                "background": "linear-gradient(45deg, #007bff, #0056b3)",
-                                "border": "none",
-                                "border-radius": "12px",
-                                "font-weight": "bold",
-                                "text-transform": "uppercase",
-                                "letter-spacing": "0.5px",
-                                "box-shadow": "0 4px 15px rgba(0,123,255,0.3)",
-                            },
-                        ),
-                        html.Small(
-                            [
-                                html.I(className="fas fa-magic me-1"),
-                                "After initial render, options update automatically",
-                            ],
-                            className="text-muted d-block text-center fst-italic",
                         ),
                     ],
                     className="p-2",

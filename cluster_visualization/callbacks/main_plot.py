@@ -77,7 +77,7 @@ class MainPlotCallbacks:
                 Output("snr-range-slider-pzwav", "max"),
                 Output("snr-range-slider-pzwav", "value"),
                 Output("snr-range-slider-pzwav", "marks"),
-                Output("snr-range-display-pzwav", "children"),
+                Output("snr-range-slider-pzwav", "disabled"),
             ],
             [Input("algorithm-dropdown", "value")],
             prevent_initial_call=False,
@@ -95,16 +95,7 @@ class MainPlotCallbacks:
                 # Default to full range
                 default_value = [snr_min, snr_max]
 
-                display_text = html.Div(
-                    [
-                        html.Small(
-                            f"SNR Range: {snr_min:.2f} to {snr_max:.2f}", className="text-muted"
-                        ),
-                        html.Small(" | Move sliders to set filter range", className="text-muted"),
-                    ]
-                )
-
-                return snr_min, snr_max, default_value, marks, display_text
+                return snr_min, snr_max, default_value, marks, False
 
             except Exception as e:
                 # Fallback values if data loading fails
@@ -113,7 +104,7 @@ class MainPlotCallbacks:
                     100,
                     [0, 100],
                     {0: "0", 100: "100"},
-                    html.Small("SNR data not available", className="text-muted"),
+                    True,
                 )
 
     def _setup_snr_slider_amico_callback(self):
@@ -125,7 +116,7 @@ class MainPlotCallbacks:
                 Output("snr-range-slider-amico", "max"),
                 Output("snr-range-slider-amico", "value"),
                 Output("snr-range-slider-amico", "marks"),
-                Output("snr-range-display-amico", "children"),
+                Output("snr-range-slider-amico", "disabled"),
             ],
             [Input("algorithm-dropdown", "value")],
             prevent_initial_call=False,
@@ -143,16 +134,7 @@ class MainPlotCallbacks:
                 # Default to full range
                 default_value = [snr_min, snr_max]
 
-                display_text = html.Div(
-                    [
-                        html.Small(
-                            f"SNR Range: {snr_min:.2f} to {snr_max:.2f}", className="text-muted"
-                        ),
-                        html.Small(" | Move sliders to set filter range", className="text-muted"),
-                    ]
-                )
-
-                return snr_min, snr_max, default_value, marks, display_text
+                return snr_min, snr_max, default_value, marks, False
 
             except Exception as e:
                 # Fallback values if data loading fails
@@ -161,7 +143,7 @@ class MainPlotCallbacks:
                     100,
                     [0, 100],
                     {0: "0", 100: "100"},
-                    html.Small("SNR data not available", className="text-muted"),
+                    True,
                 )
 
     def _setup_redshift_slider_callback(self):
@@ -173,7 +155,7 @@ class MainPlotCallbacks:
                 Output("redshift-range-slider", "max"),
                 Output("redshift-range-slider", "value"),
                 Output("redshift-range-slider", "marks"),
-                Output("redshift-range-display", "children"),
+                Output("redshift-range-slider", "disabled"),
             ],
             [Input("algorithm-dropdown", "value")],
             prevent_initial_call=False,
@@ -191,16 +173,7 @@ class MainPlotCallbacks:
                 # Default to full range
                 default_value = [z_min, z_max]
 
-                display_text = html.Div(
-                    [
-                        html.Small(
-                            f"Redshift Range: {z_min:.2f} to {z_max:.2f}", className="text-muted"
-                        ),
-                        html.Small(" | Move sliders to set filter range", className="text-muted"),
-                    ]
-                )
-
-                return z_min, z_max, default_value, marks, display_text
+                return z_min, z_max, default_value, marks, False
 
             except Exception as e:
                 # Fallback values if data loading fails
@@ -209,7 +182,7 @@ class MainPlotCallbacks:
                     10,
                     [0, 10],
                     {0: "0", 10: "10"},
-                    html.Small("Redshift data not available", className="text-muted"),
+                    True,
                 )
 
     def _setup_richness_slider_zp_callback(self):
@@ -219,7 +192,7 @@ class MainPlotCallbacks:
                 Output("richness-range-slider-zp", "max"),
                 Output("richness-range-slider-zp", "value"),
                 Output("richness-range-slider-zp", "marks"),
-                Output("richness-range-display-zp", "children"),
+                Output("richness-range-slider-zp", "disabled"),
             ],
             [Input("algorithm-dropdown", "value")],
             prevent_initial_call=False,
@@ -234,17 +207,11 @@ class MainPlotCallbacks:
                 mark_min_zp = r_min if r_min != 0.0 else 0.001
                 mark_max_zp = r_max
                 marks = {mark_min_zp: f"{r_min:.1f}", mark_max_zp: f"{r_max:.1f}"}
-                display_text = html.Div(
-                    [
-                        html.Small(f"ZP Range: {r_min:.2f} to {r_max:.2f}", className="text-muted"),
-                        html.Small(" | Move sliders to set filter range", className="text-muted"),
-                    ]
-                )
-                return r_min, r_max, [r_min, r_max], marks, display_text
+                return r_min, r_max, [r_min, r_max], marks, False
             except Exception:
                 return (
                     0, 100, [0, 100], {0.001: "0", 100: "100"}, 
-                    html.Small("Richness ZP data not available", className="text-muted"),
+                    True,
                 )
 
     def _setup_richness_slider_rs_callback(self):
@@ -254,7 +221,7 @@ class MainPlotCallbacks:
                 Output("richness-range-slider-rs", "max"),
                 Output("richness-range-slider-rs", "value"),
                 Output("richness-range-slider-rs", "marks"),
-                Output("richness-range-display-rs", "children"),
+                Output("richness-range-slider-rs", "disabled"),
             ],
             [Input("algorithm-dropdown", "value")],
             prevent_initial_call=False,
@@ -269,17 +236,11 @@ class MainPlotCallbacks:
                 mark_min_rs = r_min if r_min != 0.0 else 0.001
                 mark_max_rs = r_max
                 marks = {mark_min_rs: f"{r_min:.1f}", mark_max_rs: f"{r_max:.1f}"}
-                display_text = html.Div(
-                    [
-                        html.Small(f"RS Range: {r_min:.2f} to {r_max:.2f}", className="text-muted"),
-                        html.Small(" | Move sliders to set filter range", className="text-muted"),
-                    ]
-                )
-                return r_min, r_max, [r_min, r_max], marks, display_text
+                return r_min, r_max, [r_min, r_max], marks, False
             except Exception:
                 return (
                     0, 100, [0, 100], {0.001: "0", 100: "100"},
-                    html.Small("Richness RS data not available", className="text-muted"),
+                    True,
                 )
 
     def _setup_main_render_callback(self):
@@ -1478,7 +1439,7 @@ class MainPlotCallbacks:
             showlegend=False,
             annotations=[
                 dict(
-                    text="Select your preferred algorithm and display options from the sidebar,<br>then click the 'Initial Render' button to generate the plot.",
+                    text="Select your preferred algorithm and display options from the sidebar,<br>then click 'Render clusters' to generate the plot.",
                     xref="paper",
                     yref="paper",
                     x=0.5,
@@ -1500,7 +1461,7 @@ class MainPlotCallbacks:
             [
                 html.H6("Ready to render", className="mb-1"),
                 html.P(
-                    "Click 'Initial Render' to begin. After that, options will update automatically while preserving your zoom level.",
+                    "Click 'Render clusters' to begin. Display options then update live and keep your zoom; filters take effect when you press Apply.",
                     className="mb-0",
                 ),
             ],
