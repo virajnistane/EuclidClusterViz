@@ -6,6 +6,8 @@ including initial rendering, real-time option updates, and SNR filtering.
 """
 
 import base64
+import os
+import time
 import io
 from typing import Optional, cast
 from numpy.typing import NDArray
@@ -15,7 +17,7 @@ import dash_bootstrap_components as dbc  # type: ignore[import]
 import numpy as np
 import pandas as pd  # type: ignore[import]
 import plotly.graph_objs as go  # type: ignore[import]
-from dash import Input, Output, State, html
+from dash import Input, Output, Patch, State, html
 
 from cluster_visualization.src.visualization.trace_registry import TraceRegistry, TraceType
 
@@ -61,6 +63,7 @@ class MainPlotCallbacks:
         self._setup_richness_slider_zp_callback()
         self._setup_richness_slider_rs_callback()
         self._setup_main_render_callback()
+        self._setup_apply_filters_callback()
         self._setup_options_update_callback()
         self._setup_threshold_clientside_callback()
         # self._setup_snr_pzwav_clientside_callback()
@@ -251,10 +254,10 @@ class MainPlotCallbacks:
                 Output("cluster-plot", "figure"),
                 Output("phz-pdf-plot", "figure"),
                 Output("status-info", "children"),
+                Output("rendered-meta-store", "data"),
             ],
             [
                 Input("render-button", "n_clicks"),
-                Input("apply-filters-button", "n_clicks"),
             ],
             [
                 State("algorithm-dropdown", "value"),
@@ -299,7 +302,6 @@ class MainPlotCallbacks:
         def update_plot(
             set_progress,
             n_clicks,
-            apply_filters_n_clicks,
             algorithm,
             matching_clusters,
             snr_range_pzwav,
@@ -329,98 +331,50 @@ class MainPlotCallbacks:
             current_figure,
             box_coords,
         ):
-            # Only render if button has been clicked at least once
-            if all(
-                clicks in [None, 0]
-                for clicks in [
-                    n_clicks,
-                    apply_filters_n_clicks,
-                ]
-            ):
-                return self._create_initial_empty_plots(free_aspect_ratio)
+            # Only render once the button has been clicked
+            if not n_clicks:
+                return (*self._create_initial_empty_plots(free_aspect_ratio), None)
 
             try:
                 set_progress((5, f"Preparing {algorithm} data..."))
-
-                # Extract SNR values from range sliders (separate for PZWAV and AMICO)
-                snr_pzwav_lower = (
-                    snr_range_pzwav[0] if snr_range_pzwav and len(snr_range_pzwav) == 2 else None
-                )
-                snr_pzwav_upper = (
-                    snr_range_pzwav[1] if snr_range_pzwav and len(snr_range_pzwav) == 2 else None
-                )
-
-                snr_amico_lower = (
-                    snr_range_amico[0] if snr_range_amico and len(snr_range_amico) == 2 else None
-                )
-                snr_amico_upper = (
-                    snr_range_amico[1] if snr_range_amico and len(snr_range_amico) == 2 else None
-                )
-
-                # Extract redshift values from range slider
-                z_lower = redshift_range[0] if redshift_range and len(redshift_range) == 2 else None
-                z_upper = redshift_range[1] if redshift_range and len(redshift_range) == 2 else None
-
-                # Extract richness values based on selected mode
-                if richness_mode == "zp" and richness_range_zp and len(richness_range_zp) == 2:
-                    richness_lower = richness_range_zp[0]
-                    richness_upper = richness_range_zp[1]
-                elif richness_mode == "rs" and richness_range_rs and len(richness_range_rs) == 2:
-                    richness_lower = richness_range_rs[0]
-                    richness_upper = richness_range_rs[1]
-                else:
-                    richness_lower = None
-                    richness_upper = None
-
-                if richness_mode == "zp":
-                    richness_include_missing = richness_include_missing_zp
-                elif richness_mode == "rs":
-                    richness_include_missing = richness_include_missing_rs
-                else:
-                    richness_include_missing = True
-
-                idcluster_list = None
                 if idcluster_upload_contents and idcluster_upload_filename:
                     set_progress((10, f"Processing uploaded cluster IDs from {idcluster_upload_filename}..."))
-                    idcluster_list = get_idclusters_array(idcluster_upload_contents, idcluster_upload_filename)
+                kw = self._resolve_filter_kwargs(
+                    snr_range_pzwav, snr_range_amico,
+                    snr_include_missing_pzwav, snr_include_missing_amico,
+                    redshift_range, redshift_include_missing,
+                    richness_range_zp, richness_range_rs,
+                    richness_include_missing_zp, richness_include_missing_rs,
+                    richness_mode, flag_quality_zp, flag_quality_rs,
+                    idcluster_upload_contents, idcluster_upload_filename,
+                )
 
                 # Load data for selected algorithm
                 set_progress((20, f"Loading {algorithm} catalog..."))
                 data = self.load_data(algorithm)
 
-                # Only reset CATRED traces cache if algorithm changed, not for SNR/redshift filtering
-                # CATRED data doesn't have SNR and shouldn't be affected by cluster-level filtering
-                # Note: This preserves CATRED data when only SNR/redshift filters change
+                # Keep CATRED / mosaic / mask overlays across renders
+                preserved = TraceRegistry.extract_traces(
+                    current_figure,
+                    {TraceType.CATRED, TraceType.MOSAIC, TraceType.MASK_OVERLAY},
+                )
 
                 set_progress((55, "Creating visualization traces..."))
-                # Create traces with separate SNR thresholds
                 traces = self.create_traces(
                     data,
                     show_polygons,
                     show_mer_tiles,
                     relayout_data,
                     catred_masked,
-                    snr_threshold_lower_pzwav=snr_pzwav_lower,
-                    snr_threshold_upper_pzwav=snr_pzwav_upper,
-                    snr_threshold_lower_amico=snr_amico_lower,
-                    snr_threshold_upper_amico=snr_amico_upper,
-                    snr_include_missing_pzwav=snr_include_missing_pzwav,
-                    snr_include_missing_amico=snr_include_missing_amico,
-                    z_threshold_lower=z_lower,
-                    z_threshold_upper=z_upper,
-                    z_include_missing=redshift_include_missing,
-                    richness_threshold_lower=richness_lower,
-                    richness_threshold_upper=richness_upper,
-                    richness_mode=richness_mode,
-                    richness_include_missing=richness_include_missing,
-                    flag_quality_zp=flag_quality_zp,
-                    flag_quality_rs=flag_quality_rs,
-                    idcluster_list=idcluster_list,
+                    existing_catred_traces=preserved[TraceType.CATRED],
+                    existing_mosaic_traces=preserved[TraceType.MOSAIC],
+                    existing_mask_overlay_traces=preserved[TraceType.MASK_OVERLAY],
                     threshold=threshold,
                     maglim=maglim,
                     show_unmerged_clusters=show_unmerged_clusters,
                     matching_clusters=matching_clusters,
                     show_cltile_info=show_cltile_info,
+                    **kw,
                 )
 
                 # Create figure
@@ -454,93 +408,344 @@ class MainPlotCallbacks:
                     else:
                         self._preserve_zoom_state_fallback(fig, relayout_data, current_figure)
 
-                # Calculate filtered cluster counts for status (use appropriate SNR values for display)
-                if algorithm == "BOTH":
-                    # For BOTH mode, we'll show combined count
-                    filtered_merged_count = self._calculate_filtered_count_both(
-                        data["data_detcluster_mergedcat"],
-                        snr_pzwav_lower,
-                        snr_pzwav_upper,
-                        snr_amico_lower,
-                        snr_amico_upper,
-                        z_lower,
-                        z_upper,
-                        snr_include_missing_pzwav=snr_include_missing_pzwav,
-                        snr_include_missing_amico=snr_include_missing_amico,
-                        z_include_missing=redshift_include_missing,
-                    )
-                    # For status display in BOTH mode, show both SNR ranges
-                    snr_lower_display = (
-                        f"PZWAV: {snr_pzwav_lower:.2f}, AMICO: {snr_amico_lower:.2f}"
-                        if snr_pzwav_lower is not None and snr_amico_lower is not None
-                        else None
-                    )
-                    snr_upper_display = (
-                        f"PZWAV: {snr_pzwav_upper:.2f}, AMICO: {snr_amico_upper:.2f}"
-                        if snr_pzwav_upper is not None and snr_amico_upper is not None
-                        else None
-                    )
-                elif algorithm == "PZWAV":
-                    filtered_merged_count = self._calculate_filtered_count(
-                        data["data_detcluster_mergedcat"],
-                        snr_pzwav_lower,
-                        snr_pzwav_upper,
-                        z_lower,
-                        z_upper,
-                        snr_include_missing=snr_include_missing_pzwav,
-                        z_include_missing=redshift_include_missing,
-                    )
-                    snr_lower_display = snr_pzwav_lower
-                    snr_upper_display = snr_pzwav_upper
-                else:  # AMICO
-                    filtered_merged_count = self._calculate_filtered_count(
-                        data["data_detcluster_mergedcat"],
-                        snr_amico_lower,
-                        snr_amico_upper,
-                        z_lower,
-                        z_upper,
-                        snr_include_missing=snr_include_missing_amico,
-                        z_include_missing=redshift_include_missing,
-                    )
-                    snr_lower_display = snr_amico_lower
-                    snr_upper_display = snr_amico_upper
-
-                # Create status info
-                status = self._create_status_info(
-                    algorithm,
-                    data,
-                    filtered_merged_count,
-                    snr_lower_display,
-                    snr_upper_display,
-                    z_lower,
-                    z_upper,
-                    show_polygons,
-                    show_mer_tiles,
-                    free_aspect_ratio,
-                    "success",
+                status = self._filtered_status(
+                    algorithm, data, kw, show_polygons, show_mer_tiles, free_aspect_ratio
                 )
 
                 # Create empty PHZ_PDF plot
                 empty_phz_fig = self._create_empty_phz_plot()
-                
+
                 if box_coords:
-                    fig.add_trace(go.Scatter(
-                        x=[box_coords["ra"]],
-                        y=[box_coords["dec"]],
-                        mode="markers",
-                        marker=dict(symbol="square-open", size=18, color="yellow", line=dict(color="yellow", width=2)),
-                        name="__selected_cluster__",
-                        showlegend=False,
-                        hoverinfo="skip",
-                    ))
+                    fig.add_trace(self._selected_cluster_marker(box_coords))
 
-                _fig_json = fig.to_json()
-                print(f"Debug: Figure JSON {len(_fig_json) / 1024:.0f} KB, {len(traces)} traces, {len(data['data_detcluster_mergedcat'])} merged clusters")
-
-                return fig, empty_phz_fig, status
+                self._log_figure_size(fig, data)
+                return fig, empty_phz_fig, status, {"algorithm": algorithm}
 
             except Exception as e:
-                return self._create_error_plots(str(e))
+                return (*self._create_error_plots(str(e)), dash.no_update)
+
+    # ------------------------------------------------------------------
+    # Shared render helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _resolve_filter_kwargs(
+        snr_range_pzwav, snr_range_amico,
+        snr_include_missing_pzwav, snr_include_missing_amico,
+        redshift_range, redshift_include_missing,
+        richness_range_zp, richness_range_rs,
+        richness_include_missing_zp, richness_include_missing_rs,
+        richness_mode, flag_quality_zp, flag_quality_rs,
+        idcluster_upload_contents, idcluster_upload_filename,
+    ):
+        """Turn raw filter control values into create_traces / create_cluster_traces kwargs."""
+
+        def bounds(value):
+            return (value[0], value[1]) if value and len(value) == 2 else (None, None)
+
+        snr_pzwav_lower, snr_pzwav_upper = bounds(snr_range_pzwav)
+        snr_amico_lower, snr_amico_upper = bounds(snr_range_amico)
+        z_lower, z_upper = bounds(redshift_range)
+
+        if richness_mode == "zp":
+            richness_lower, richness_upper = bounds(richness_range_zp)
+            richness_include_missing = richness_include_missing_zp
+        elif richness_mode == "rs":
+            richness_lower, richness_upper = bounds(richness_range_rs)
+            richness_include_missing = richness_include_missing_rs
+        else:
+            richness_lower = richness_upper = None
+            richness_include_missing = True
+
+        idcluster_list = None
+        if idcluster_upload_contents and idcluster_upload_filename:
+            idcluster_list = get_idclusters_array(idcluster_upload_contents, idcluster_upload_filename)
+
+        return dict(
+            snr_threshold_lower_pzwav=snr_pzwav_lower,
+            snr_threshold_upper_pzwav=snr_pzwav_upper,
+            snr_threshold_lower_amico=snr_amico_lower,
+            snr_threshold_upper_amico=snr_amico_upper,
+            snr_include_missing_pzwav=snr_include_missing_pzwav,
+            snr_include_missing_amico=snr_include_missing_amico,
+            z_threshold_lower=z_lower,
+            z_threshold_upper=z_upper,
+            z_include_missing=redshift_include_missing,
+            richness_threshold_lower=richness_lower,
+            richness_threshold_upper=richness_upper,
+            richness_mode=richness_mode,
+            richness_include_missing=richness_include_missing,
+            flag_quality_zp=flag_quality_zp,
+            flag_quality_rs=flag_quality_rs,
+            idcluster_list=idcluster_list,
+        )
+
+    def _filtered_status(self, algorithm, data, kw, show_polygons, show_mer_tiles, free_aspect_ratio):
+        """Status toast with the filtered merged-cluster count for the given filter kwargs."""
+        merged = data["data_detcluster_mergedcat"]
+        if algorithm == "BOTH":
+            filtered_merged_count = self._calculate_filtered_count_both(
+                merged,
+                kw["snr_threshold_lower_pzwav"],
+                kw["snr_threshold_upper_pzwav"],
+                kw["snr_threshold_lower_amico"],
+                kw["snr_threshold_upper_amico"],
+                kw["z_threshold_lower"],
+                kw["z_threshold_upper"],
+                snr_include_missing_pzwav=kw["snr_include_missing_pzwav"],
+                snr_include_missing_amico=kw["snr_include_missing_amico"],
+                z_include_missing=kw["z_include_missing"],
+            )
+            lp, la = kw["snr_threshold_lower_pzwav"], kw["snr_threshold_lower_amico"]
+            up, ua = kw["snr_threshold_upper_pzwav"], kw["snr_threshold_upper_amico"]
+            snr_lower_display = (
+                f"PZWAV: {lp:.2f}, AMICO: {la:.2f}" if lp is not None and la is not None else None
+            )
+            snr_upper_display = (
+                f"PZWAV: {up:.2f}, AMICO: {ua:.2f}" if up is not None and ua is not None else None
+            )
+        else:
+            suffix = "pzwav" if algorithm == "PZWAV" else "amico"
+            snr_lower_display = kw[f"snr_threshold_lower_{suffix}"]
+            snr_upper_display = kw[f"snr_threshold_upper_{suffix}"]
+            filtered_merged_count = self._calculate_filtered_count(
+                merged,
+                snr_lower_display,
+                snr_upper_display,
+                kw["z_threshold_lower"],
+                kw["z_threshold_upper"],
+                snr_include_missing=kw[f"snr_include_missing_{suffix}"],
+                z_include_missing=kw["z_include_missing"],
+            )
+
+        return self._create_status_info(
+            algorithm,
+            data,
+            filtered_merged_count,
+            snr_lower_display,
+            snr_upper_display,
+            kw["z_threshold_lower"],
+            kw["z_threshold_upper"],
+            show_polygons,
+            show_mer_tiles,
+            free_aspect_ratio,
+            "success",
+        )
+
+    @staticmethod
+    def _selected_cluster_marker(box_coords):
+        """Yellow square marking the cluster selected in the action modal."""
+        return go.Scatter(
+            x=[box_coords["ra"]],
+            y=[box_coords["dec"]],
+            mode="markers",
+            marker=dict(symbol="square-open", size=18, color="yellow", line=dict(color="yellow", width=2)),
+            name="__selected_cluster__",
+            showlegend=False,
+            hoverinfo="skip",
+        )
+
+    @staticmethod
+    def _log_figure_size(fig, data):
+        """Debug log of the serialized figure size; serializing is costly, so opt-in only."""
+        if os.environ.get("CLUSTERVIZ_LOG_FIGURE_SIZE") != "1":
+            return
+        _fig_json = fig.to_json()
+        print(
+            f"Debug: Figure JSON {len(_fig_json) / 1024:.0f} KB, {len(fig.data)} traces, "
+            f"{len(data['data_detcluster_mergedcat'])} merged clusters"
+        )
+
+    def _shared_catred_points(self):
+        """CATRED (ra, dec) points persisted by the last render, for near-CATRED markers.
+
+        The incremental Apply path does not receive the figure, so it reads the
+        CATRED data that create_traces writes to the shared state cache.
+        """
+        try:
+            import diskcache as _dc
+
+            state_dir = os.path.join(os.path.expanduser("~"), ".cache", "clusterviz_state")
+            with _dc.Cache(state_dir) as cache:
+                catred_data = cache.get("catred_click_data")
+        except Exception as exc:
+            print(f"Warning: Could not read CATRED state cache: {exc}")
+            return None
+
+        points = []
+        for entry in (catred_data or {}).values():
+            if entry and entry.get("ra"):
+                points.extend(zip(entry["ra"], entry["dec"]))
+        return points or None
+
+    def _setup_apply_filters_callback(self):
+        """Incremental re-render for "Apply filters".
+
+        Runs in the main server process (warm data cache, no background fork), rebuilds
+        only the filter-dependent cluster traces and patches them into the figure.
+        Polygons, CATRED, mosaic and mask overlays are left untouched in the browser.
+        """
+
+        @self.app.callback(
+            [
+                Output("cluster-plot", "figure", allow_duplicate=True),
+                Output("status-info", "children", allow_duplicate=True),
+                Output("rendered-meta-store", "data", allow_duplicate=True),
+            ],
+            Input("apply-filters-button", "n_clicks"),
+            [
+                State("algorithm-dropdown", "value"),
+                State("matching-clusters-switch", "value"),
+                State("snr-range-slider-pzwav", "value"),
+                State("snr-range-slider-amico", "value"),
+                State("snr-include-missing-pzwav", "value"),
+                State("snr-include-missing-amico", "value"),
+                State("redshift-range-slider", "value"),
+                State("redshift-include-missing", "value"),
+                State("richness-range-slider-zp", "value"),
+                State("richness-range-slider-rs", "value"),
+                State("richness-include-missing-zp", "value"),
+                State("richness-include-missing-rs", "value"),
+                State("richness-mode-radio", "value"),
+                State("flag-quality-zp-checklist", "value"),
+                State("flag-quality-rs-checklist", "value"),
+                State("idcluster-upload", "contents"),
+                State("idcluster-upload", "filename"),
+                State("polygon-switch", "value"),
+                State("mer-switch", "value"),
+                State("aspect-ratio-switch", "value"),
+                State("unmerged-clusters-switch", "value"),
+                State("cltile-info-switch", "value"),
+                State("catred-mode-switch", "value"),
+                State("cluster-plot", "relayoutData"),
+                State("selected-cluster-box-coords", "data"),
+                State("rendered-meta-store", "data"),
+                State("cluster-trace-index-store", "data"),
+            ],
+            prevent_initial_call=True,
+        )
+        def apply_filters(
+            n_clicks,
+            algorithm,
+            matching_clusters,
+            snr_range_pzwav,
+            snr_range_amico,
+            snr_include_missing_pzwav,
+            snr_include_missing_amico,
+            redshift_range,
+            redshift_include_missing,
+            richness_range_zp,
+            richness_range_rs,
+            richness_include_missing_zp,
+            richness_include_missing_rs,
+            richness_mode,
+            flag_quality_zp,
+            flag_quality_rs,
+            idcluster_upload_contents,
+            idcluster_upload_filename,
+            show_polygons,
+            show_mer_tiles,
+            free_aspect_ratio,
+            show_unmerged_clusters,
+            show_cltile_info,
+            catred_masked,
+            relayout_data,
+            box_coords,
+            rendered_meta,
+            trace_index,
+        ):
+            if not n_clicks:
+                return dash.no_update, dash.no_update, dash.no_update
+
+            _t_total = time.perf_counter()
+            try:
+                kw = self._resolve_filter_kwargs(
+                    snr_range_pzwav, snr_range_amico,
+                    snr_include_missing_pzwav, snr_include_missing_amico,
+                    redshift_range, redshift_include_missing,
+                    richness_range_zp, richness_range_rs,
+                    richness_include_missing_zp, richness_include_missing_rs,
+                    richness_mode, flag_quality_zp, flag_quality_rs,
+                    idcluster_upload_contents, idcluster_upload_filename,
+                )
+                data = self.load_data(algorithm)
+
+                can_patch = bool(
+                    self.trace_creator is not None
+                    and rendered_meta
+                    and rendered_meta.get("algorithm") == algorithm
+                    and trace_index
+                    and trace_index.get("n", 0) > 0
+                )
+
+                if not can_patch:
+                    # Figure on screen is not this algorithm's (or unknown): rebuild in full
+                    print("Debug: Apply filters - full rebuild (no patchable render on screen)")
+                    traces = self.create_traces(
+                        data,
+                        show_polygons,
+                        show_mer_tiles,
+                        relayout_data,
+                        catred_masked,
+                        show_unmerged_clusters=show_unmerged_clusters,
+                        matching_clusters=matching_clusters,
+                        show_cltile_info=show_cltile_info,
+                        **kw,
+                    )
+                    fig = (
+                        self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio)
+                        if self.figure_manager
+                        else self._create_fallback_figure(traces, algorithm, free_aspect_ratio)
+                    )
+                    if self.figure_manager:
+                        self.figure_manager.preserve_zoom_state(fig, relayout_data, None)
+                    if box_coords:
+                        fig.add_trace(self._selected_cluster_marker(box_coords))
+                    status = self._filtered_status(
+                        algorithm, data, kw, show_polygons, show_mer_tiles, free_aspect_ratio
+                    )
+                    return fig, status, {"algorithm": algorithm}
+
+                # Incremental: rebuild only the cluster traces
+                self.trace_creator.proximity_detector.clear_bounds_cache()
+                catred_points = self._shared_catred_points() if trace_index.get("has_catred") else None
+
+                _t = time.perf_counter()
+                cluster_traces = self.trace_creator.create_cluster_traces(
+                    data,
+                    relayout_data=relayout_data,
+                    catred_points=catred_points,
+                    show_unmerged_clusters=show_unmerged_clusters,
+                    matching_clusters=matching_clusters,
+                    show_cltile_info=show_cltile_info,
+                    **kw,
+                )
+                if box_coords:
+                    cluster_traces.append(self._selected_cluster_marker(box_coords))
+                self.trace_creator._profiler.record("apply:cluster_traces", time.perf_counter() - _t)
+
+                # Replace the old cluster traces: remove from the end so indices stay valid,
+                # then append, keeping clusters as the top layer like a full render
+                _t = time.perf_counter()
+                patch = Patch()
+                for index in sorted(trace_index.get("cluster", []), reverse=True):
+                    patch["data"].__delitem__(index)
+                patch["data"].extend([trace.to_plotly_json() for trace in cluster_traces])
+                self.trace_creator._profiler.record("apply:patch", time.perf_counter() - _t)
+
+                status = self._filtered_status(
+                    algorithm, data, kw, show_polygons, show_mer_tiles, free_aspect_ratio
+                )
+                self.trace_creator._profiler.record("apply:total", time.perf_counter() - _t_total)
+                print(
+                    f"Debug: Apply filters - patched {len(cluster_traces)} cluster traces "
+                    f"in {time.perf_counter() - _t_total:.3f}s"
+                )
+                return patch, status, dash.no_update
+
+            except Exception as e:
+                _fig, _phz, status = self._create_error_plots(str(e))
+                return dash.no_update, status, dash.no_update
 
     def _setup_options_update_callback(self):
         """Setup real-time options update callback (preserves zoom)"""
@@ -550,6 +755,7 @@ class MainPlotCallbacks:
                 Output("cluster-plot", "figure", allow_duplicate=True),
                 Output("phz-pdf-plot", "figure", allow_duplicate=True),
                 Output("status-info", "children", allow_duplicate=True),
+                Output("rendered-meta-store", "data", allow_duplicate=True),
             ],
             [
                 Input("algorithm-dropdown", "value"),
@@ -621,7 +827,7 @@ class MainPlotCallbacks:
         ):
             # Only update if render button has been clicked at least once
             if n_clicks == 0:
-                return dash.no_update, dash.no_update, dash.no_update
+                return dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
             # Filters change the plot only via Apply filters: redraw display options
             # with the filter values of the last render, not the controls' pending values
@@ -863,14 +1069,13 @@ class MainPlotCallbacks:
                         hoverinfo="skip",
                     ))
 
-                _fig_json = fig.to_json()
-                print(f"Debug: Figure JSON {len(_fig_json) / 1024:.0f} KB, {len(traces)} traces, {len(data['data_detcluster_mergedcat'])} merged clusters")
+                self._log_figure_size(fig, data)
 
-                return fig, empty_phz_fig, status
+                return fig, empty_phz_fig, status, {"algorithm": algorithm}
 
             except Exception as e:
                 error_status = dbc.Alert(f"Error updating: {str(e)}", color="warning")
-                return dash.no_update, dash.no_update, error_status
+                return dash.no_update, dash.no_update, error_status, dash.no_update
 
     def _setup_threshold_clientside_callback(self):
         """Setup client-side callback for real-time threshold filtering of CATRED data"""

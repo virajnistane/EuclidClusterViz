@@ -201,6 +201,30 @@ class UICallbacks:
             ],
         )
 
+        # Where the filter-dependent cluster traces sit in the figure (for incremental Apply).
+        # Name rules mirror TraceRegistry: CLUSTER, MATCHED_PAIR and SELECTED_CLUSTER types.
+        self.app.clientside_callback(
+            """
+            function(figure) {
+                const data = (figure && figure.data) || [];
+                const cluster = [];
+                let hasCatred = false;
+                data.forEach((trace, i) => {
+                    const name = trace.name || '';
+                    if (name.startsWith('CATRED')) { hasCatred = true; }
+                    if (name.includes('Merged') || name.includes('Unmerged')
+                        || name.includes('(Enhanced)') || name.includes('Cluster in Proximity')
+                        || name === 'Matched Pair' || name === '__selected_cluster__') {
+                        cluster.push(i);
+                    }
+                });
+                return {cluster: cluster, has_catred: hasCatred, n: data.length};
+            }
+            """,
+            Output("cluster-trace-index-store", "data"),
+            Input("cluster-plot", "figure"),
+        )
+
         # Only the selected algorithm's SNR filter is shown
         self.app.clientside_callback(
             """

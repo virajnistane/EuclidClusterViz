@@ -55,6 +55,10 @@ class TraceCreator:
         # Performance profiler (set CLUSTERVIZ_PROFILE=0 to disable)
         self._profiler = TraceProfiler()
 
+        # Per-row tile colours / richness strings of the merged catalog being rendered.
+        # Set by create_cluster_traces for the duration of one build (see _row_cache_for).
+        self._active_rows: Optional[Dict[str, Any]] = None
+
     def create_traces(
         self,
         data: Dict[str, Any],
@@ -113,38 +117,6 @@ class TraceCreator:
         traces: List = []  # Polygon traces (bottom layer)
         _t_create = time.perf_counter()
 
-        # Apply SNR filtering to merged data
-        # if data['algorithm'] == 'PZWAV':
-        #     datamod_detcluster_mergedcat = self._apply_snr_filtering(data['data_detcluster_mergedcat'], algorithm=data['algorithm'],
-        #                                                              snr_threshold_lower=snr_threshold_lower_pzwav, snr_threshold_upper=snr_threshold_upper_pzwav)
-        # elif data['algorithm'] == 'AMICO':
-        #     datamod_detcluster_mergedcat = self._apply_snr_filtering(data['data_detcluster_mergedcat'], algorithm=data['algorithm'],
-        #                                                              snr_threshold_lower=snr_threshold_lower_amico, snr_threshold_upper=snr_threshold_upper_amico)
-
-        datamod_detcluster_mergedcat = self._apply_redshift_filtering(
-            data["data_detcluster_mergedcat"], z_threshold_lower, z_threshold_upper, z_include_missing
-        )
-
-        datamod_detcluster_mergedcat = self._apply_richness_filtering(
-            datamod_detcluster_mergedcat,
-            richness_threshold_lower,
-            richness_threshold_upper,
-            richness_mode,
-            flag_quality_zp=flag_quality_zp,
-            flag_quality_rs=flag_quality_rs,
-            include_missing=richness_include_missing,
-        )
-
-        try:
-            assert data["paths"]["use_gluematchcat"] == True and idcluster_list is not None
-            datamod_detcluster_mergedcat = self._apply_idcluster_filtering(
-                datamod_detcluster_mergedcat, idcluster_list
-            )
-        except:
-            print(
-                "Debug: ID-cluster based filtering skipped - either not using gluematchcat or idcluster_list is None"
-            )
-
         # Check zoom threshold for CATRED data display
         zoom_threshold_met = self._check_zoom_threshold(relayout_data, show_mer_tiles)
 
@@ -156,7 +128,6 @@ class TraceCreator:
         # Create data traces in layered order for proper visual hierarchy
         # Layer order: CATRED (bottom) → Merged clusters → Individual tile clusters (top)
         catred_traces: List = []
-        cluster_traces: List = []
 
         # Add CATRED traces to separate list (bottom layer)
         self._add_existing_catred_traces(catred_traces, existing_catred_traces)
@@ -182,54 +153,38 @@ class TraceCreator:
             )
             pass
 
-        # Add cluster traces to separate list (top layer) - merged clusters always shown
-        _t = time.perf_counter()
-        self._add_merged_cluster_trace(
-            cluster_traces,
-            datamod_detcluster_mergedcat,
-            data["algorithm"],
-            matching_clusters,
-            data_detcluster_by_cltile=data["data_detcluster_by_cltile"],
+        # Filter-dependent cluster traces (merged, matched-pair ovals, unmerged) - top layer
+        cluster_traces = self.create_cluster_traces(
+            data,
+            relayout_data=relayout_data,
+            catred_points=catred_points,
             snr_threshold_lower_pzwav=snr_threshold_lower_pzwav,
             snr_threshold_upper_pzwav=snr_threshold_upper_pzwav,
             snr_threshold_lower_amico=snr_threshold_lower_amico,
             snr_threshold_upper_amico=snr_threshold_upper_amico,
             snr_include_missing_pzwav=snr_include_missing_pzwav,
             snr_include_missing_amico=snr_include_missing_amico,
-            catred_points=catred_points,
-            relayout_data=relayout_data,
+            z_threshold_lower=z_threshold_lower,
+            z_threshold_upper=z_threshold_upper,
+            z_include_missing=z_include_missing,
+            richness_threshold_lower=richness_threshold_lower,
+            richness_threshold_upper=richness_threshold_upper,
+            richness_mode=richness_mode,
+            richness_include_missing=richness_include_missing,
+            flag_quality_zp=flag_quality_zp,
+            flag_quality_rs=flag_quality_rs,
+            idcluster_list=idcluster_list,
+            show_unmerged_clusters=show_unmerged_clusters,
+            matching_clusters=matching_clusters,
             show_cltile_info=show_cltile_info,
         )
-        self._profiler.record("create_traces:merged_cluster_trace", time.perf_counter() - _t)
 
-        # Create CL-tile polygons
-        # _t = time.perf_counter()
+        # Create CL-tile polygons (filter-independent)
         for tile_key, value in data["data_detcluster_by_cltile"].items():
             tileid = value.get("tile_id", tile_key)
             self._create_cltile_polygons(
                 traces, data, tileid, value, show_polygons, show_mer_tiles, legendgroup=None
             )
-        # self._profiler.record("create_traces:polygon_loop", time.perf_counter() - _t)
-
-        # Add unmerged cluster traces if requested
-        if show_unmerged_clusters:
-            _t = time.perf_counter()
-            self._add_unmerged_cluster_traces(
-                cluster_traces,
-                data,
-                datamod_detcluster_mergedcat,
-                snr_threshold_lower_pzwav,
-                snr_threshold_upper_pzwav,
-                snr_threshold_lower_amico,
-                snr_threshold_upper_amico,
-                z_threshold_lower,
-                z_threshold_upper,
-                catred_points,
-                snr_include_missing_pzwav=snr_include_missing_pzwav,
-                snr_include_missing_amico=snr_include_missing_amico,
-                z_include_missing=z_include_missing,
-            )
-            self._profiler.record("create_traces:unmerged_traces", time.perf_counter() - _t)
 
         # Prepare mosaic traces (preserve existing ones)
         mosaic_traces = existing_mosaic_traces or []
@@ -268,6 +223,185 @@ class TraceCreator:
         self._profiler.record("create_traces:total", time.perf_counter() - _t_create)
         self._profiler.tick_render()
         return _result
+
+    def create_cluster_traces(
+        self,
+        data: Dict[str, Any],
+        relayout_data: Optional[Dict] = None,
+        catred_points: Optional[List] = None,
+        snr_threshold_lower_pzwav: Optional[float] = None,
+        snr_threshold_upper_pzwav: Optional[float] = None,
+        snr_threshold_lower_amico: Optional[float] = None,
+        snr_threshold_upper_amico: Optional[float] = None,
+        snr_include_missing_pzwav: bool = True,
+        snr_include_missing_amico: bool = True,
+        z_threshold_lower: Optional[float] = None,
+        z_threshold_upper: Optional[float] = None,
+        z_include_missing: bool = True,
+        richness_threshold_lower: Optional[float] = None,
+        richness_threshold_upper: Optional[float] = None,
+        richness_mode: Optional[str] = None,
+        richness_include_missing: bool = True,
+        flag_quality_zp: Optional[List[int]] = None,
+        flag_quality_rs: Optional[List[int]] = None,
+        idcluster_list: Optional[List[int]] = None,
+        show_unmerged_clusters: bool = False,
+        matching_clusters: bool = False,
+        show_cltile_info: bool = True,
+    ) -> List:
+        """Build only the filter-dependent traces: merged clusters (+ near-CATRED variants),
+        matched-pair ovals and unmerged clusters.
+
+        Used by create_traces for full renders and directly by the incremental
+        "Apply filters" path, which replaces just these traces in the figure.
+        """
+        merged_full = data["data_detcluster_mergedcat"]
+        datamod_detcluster_mergedcat = self._apply_redshift_filtering(
+            merged_full, z_threshold_lower, z_threshold_upper, z_include_missing
+        )
+
+        datamod_detcluster_mergedcat = self._apply_richness_filtering(
+            datamod_detcluster_mergedcat,
+            richness_threshold_lower,
+            richness_threshold_upper,
+            richness_mode,
+            flag_quality_zp=flag_quality_zp,
+            flag_quality_rs=flag_quality_rs,
+            include_missing=richness_include_missing,
+        )
+
+        try:
+            assert data["paths"]["use_gluematchcat"] == True and idcluster_list is not None
+            datamod_detcluster_mergedcat = self._apply_idcluster_filtering(
+                datamod_detcluster_mergedcat, idcluster_list
+            )
+        except:
+            print(
+                "Debug: ID-cluster based filtering skipped - either not using gluematchcat or idcluster_list is None"
+            )
+
+        cluster_traces: List = []
+        self._active_rows = self._row_cache_for(data)
+        try:
+            _t = time.perf_counter()
+            self._add_merged_cluster_trace(
+                cluster_traces,
+                datamod_detcluster_mergedcat,
+                data["algorithm"],
+                matching_clusters,
+                data_detcluster_by_cltile=data["data_detcluster_by_cltile"],
+                snr_threshold_lower_pzwav=snr_threshold_lower_pzwav,
+                snr_threshold_upper_pzwav=snr_threshold_upper_pzwav,
+                snr_threshold_lower_amico=snr_threshold_lower_amico,
+                snr_threshold_upper_amico=snr_threshold_upper_amico,
+                snr_include_missing_pzwav=snr_include_missing_pzwav,
+                snr_include_missing_amico=snr_include_missing_amico,
+                catred_points=catred_points,
+                relayout_data=relayout_data,
+                show_cltile_info=show_cltile_info,
+            )
+            self._profiler.record("create_traces:merged_cluster_trace", time.perf_counter() - _t)
+        finally:
+            self._active_rows = None
+
+        if show_unmerged_clusters:
+            _t = time.perf_counter()
+            self._add_unmerged_cluster_traces(
+                cluster_traces,
+                data,
+                datamod_detcluster_mergedcat,
+                snr_threshold_lower_pzwav,
+                snr_threshold_upper_pzwav,
+                snr_threshold_lower_amico,
+                snr_threshold_upper_amico,
+                z_threshold_lower,
+                z_threshold_upper,
+                catred_points,
+                snr_include_missing_pzwav=snr_include_missing_pzwav,
+                snr_include_missing_amico=snr_include_missing_amico,
+                z_include_missing=z_include_missing,
+            )
+            self._profiler.record("create_traces:unmerged_traces", time.perf_counter() - _t)
+
+        return cluster_traces
+
+    # ------------------------------------------------------------------
+    # Per-row cache: tile colours and richness strings are row-independent,
+    # so compute them once per loaded catalog and slice by cluster ID.
+    # ------------------------------------------------------------------
+
+    def _row_cache_for(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Return (building on first use) the per-row cache stored in the data dict.
+
+        Stored in ``data`` so it lives as long as the DataLoader's cached catalog,
+        and is inherited by forked background renders. Returns None (callers fall
+        back to direct computation) when cluster IDs are missing or not unique.
+        """
+        merged = data.get("data_detcluster_mergedcat")
+        by_cltile = data.get("data_detcluster_by_cltile")
+        if merged is None or len(merged) == 0 or "ID_UNIQUE_CLUSTER" not in (merged.dtype.names or ()):
+            return None
+
+        cache = data.get("_render_row_cache")
+        if cache is not None and cache["merged"] is merged and cache["by_cltile"] is by_cltile:
+            return cache
+
+        _t = time.perf_counter()
+        ids = np.asarray(merged["ID_UNIQUE_CLUSTER"])
+        order = np.argsort(ids, kind="stable")
+        sorted_ids = ids[order]
+        if len(sorted_ids) > 1 and np.any(sorted_ids[1:] == sorted_ids[:-1]):
+            print("Debug: ID_UNIQUE_CLUSTER not unique - per-row render cache disabled")
+            data["_render_row_cache"] = None
+            return None
+
+        cache = {
+            "merged": merged,
+            "by_cltile": by_cltile,
+            "order": order,
+            "sorted_ids": sorted_ids,
+            "colors": None,  # built lazily: only needed when CL-tile info is shown
+            "tile_ids": None,
+            "richness": tuple(np.asarray(col, dtype=object) for col in self._richness_arrays(merged)),
+        }
+        data["_render_row_cache"] = cache
+        self._profiler.record("row_cache:build", time.perf_counter() - _t)
+        return cache
+
+    def _row_positions(self, subset: np.ndarray) -> Optional[np.ndarray]:
+        """Positions of ``subset`` rows in the cached full catalog, or None if not resolvable."""
+        cache = self._active_rows
+        if cache is None or len(subset) == 0:
+            return None
+        if "ID_UNIQUE_CLUSTER" not in (subset.dtype.names or ()):
+            return None
+        ids = np.asarray(subset["ID_UNIQUE_CLUSTER"])
+        sorted_ids = cache["sorted_ids"]
+        idx = np.searchsorted(sorted_ids, ids)
+        if np.any(idx >= len(sorted_ids)) or np.any(sorted_ids[np.minimum(idx, len(sorted_ids) - 1)] != ids):
+            return None
+        return cache["order"][idx]
+
+    def _tile_colors_for(
+        self, subset: np.ndarray, data_detcluster_by_cltile: Dict[str, Any]
+    ) -> Tuple[List[str], List[str]]:
+        """Cached equivalent of _compute_merged_tile_colors(subset, ...)."""
+        cache = self._active_rows
+        pos = self._row_positions(subset)
+        if pos is None or cache["by_cltile"] is not data_detcluster_by_cltile:
+            return self._compute_merged_tile_colors(subset, data_detcluster_by_cltile)
+        if cache["colors"] is None:
+            colors, tile_ids = self._compute_merged_tile_colors(cache["merged"], data_detcluster_by_cltile)
+            cache["colors"] = np.asarray(colors, dtype=object)
+            cache["tile_ids"] = np.asarray(tile_ids, dtype=object)
+        return cache["colors"][pos].tolist(), cache["tile_ids"][pos].tolist()
+
+    def _richness_for(self, subset: np.ndarray) -> "tuple[list, list, list, list]":
+        """Cached equivalent of _richness_arrays(subset)."""
+        pos = self._row_positions(subset)
+        if pos is None:
+            return self._richness_arrays(subset)
+        return tuple(col[pos].tolist() for col in self._active_rows["richness"])
 
     def _get_catred_data_points(
         self,
@@ -994,7 +1128,7 @@ class TraceCreator:
                 # PZWAV trace - has_det_code & algorithm=BOTH 
                 if len(pzwav_data) > 0:
                     pzwav_colors, pzwav_tile_ids = (
-                        self._compute_merged_tile_colors(pzwav_data, data_detcluster_by_cltile)
+                        self._tile_colors_for(pzwav_data, data_detcluster_by_cltile)
                         if (show_cltile_info and data_detcluster_by_cltile)
                         else (["royalblue"] * len(pzwav_data), ["?"] * len(pzwav_data))
                     )
@@ -1016,7 +1150,7 @@ class TraceCreator:
                                 pzwav_data["DET_CODE_NB"],
                                 pzwav_data["ID_UNIQUE_CLUSTER"],
                                 pzwav_tile_ids,
-                                *self._richness_arrays(pzwav_data),
+                                *self._richness_for(pzwav_data),
                             )
                         ],
                         hovertemplate=(
@@ -1039,7 +1173,7 @@ class TraceCreator:
                 # AMICO trace - has_det_code & algorithm=BOTH
                 if len(amico_data) > 0:
                     amico_colors, amico_tile_ids = (
-                        self._compute_merged_tile_colors(amico_data, data_detcluster_by_cltile)
+                        self._tile_colors_for(amico_data, data_detcluster_by_cltile)
                         if (show_cltile_info and data_detcluster_by_cltile)
                         else (["tomato"] * len(amico_data), ["?"] * len(amico_data))
                     )
@@ -1061,7 +1195,7 @@ class TraceCreator:
                                 amico_data["DET_CODE_NB"],
                                 amico_data["ID_UNIQUE_CLUSTER"],
                                 amico_tile_ids,
-                                *self._richness_arrays(amico_data),
+                                *self._richness_for(amico_data),
                             )
                         ],
                         hovertemplate=(
@@ -1107,7 +1241,7 @@ class TraceCreator:
                     )
 
                 merged_colors, merged_tile_ids = (
-                    self._compute_merged_tile_colors(
+                    self._tile_colors_for(
                         datamod_detcluster_mergedcat, data_detcluster_by_cltile
                     )
                     if (show_cltile_info and data_detcluster_by_cltile)
@@ -1127,7 +1261,7 @@ class TraceCreator:
                             det_code_values_customdata,
                             datamod_detcluster_mergedcat["ID_UNIQUE_CLUSTER"],
                             merged_tile_ids,
-                            *self._richness_arrays(datamod_detcluster_mergedcat),
+                            *self._richness_for(datamod_detcluster_mergedcat),
                         )
                     ],
                     hovertemplate=(
@@ -1183,7 +1317,7 @@ class TraceCreator:
                     # PZWAV away trace
                     if len(pzwav_away) > 0:
                         pzwav_away_colors, pzwav_away_tile_ids = (
-                            self._compute_merged_tile_colors(
+                            self._tile_colors_for(
                                 pzwav_away, data_detcluster_by_cltile
                             )
                             if (show_cltile_info and data_detcluster_by_cltile)
@@ -1207,7 +1341,7 @@ class TraceCreator:
                                     pzwav_away["DET_CODE_NB"],
                                     pzwav_away["ID_UNIQUE_CLUSTER"],
                                     pzwav_away_tile_ids,
-                                    *self._richness_arrays(pzwav_away),
+                                    *self._richness_for(pzwav_away),
                                 )
                             ],
                             hovertemplate=(
@@ -1230,7 +1364,7 @@ class TraceCreator:
                     # AMICO away trace
                     if len(amico_away) > 0:
                         amico_away_colors, amico_away_tile_ids = (
-                            self._compute_merged_tile_colors(
+                            self._tile_colors_for(
                                 amico_away, data_detcluster_by_cltile
                             )
                             if (show_cltile_info and data_detcluster_by_cltile)
@@ -1254,7 +1388,7 @@ class TraceCreator:
                                     amico_away["DET_CODE_NB"],
                                     amico_away["ID_UNIQUE_CLUSTER"],
                                     amico_away_tile_ids,
-                                    *self._richness_arrays(amico_away),
+                                    *self._richness_for(amico_away),
                                 )
                             ],
                             hovertemplate=(
@@ -1300,7 +1434,7 @@ class TraceCreator:
                         )
 
                     away_colors, away_tile_ids = (
-                        self._compute_merged_tile_colors(
+                        self._tile_colors_for(
                             away_from_catred_data, data_detcluster_by_cltile
                         )
                         if (show_cltile_info and data_detcluster_by_cltile)
@@ -1322,7 +1456,7 @@ class TraceCreator:
                                 det_code_values_customdata,
                                 away_from_catred_data["ID_UNIQUE_CLUSTER"],
                                 away_tile_ids,
-                                *self._richness_arrays(away_from_catred_data),
+                                *self._richness_for(away_from_catred_data),
                             )
                         ],
                         hovertemplate=(
@@ -1368,7 +1502,7 @@ class TraceCreator:
                     # PZWAV enhanced traces
                     if len(pzwav_near) > 0:
                         pzwav_near_colors, pzwav_near_tile_ids = (
-                            self._compute_merged_tile_colors(
+                            self._tile_colors_for(
                                 pzwav_near, data_detcluster_by_cltile
                             )
                             if (show_cltile_info and data_detcluster_by_cltile)
@@ -1382,7 +1516,7 @@ class TraceCreator:
                                 pzwav_near["DET_CODE_NB"],
                                 pzwav_near["ID_UNIQUE_CLUSTER"],
                                 pzwav_near_tile_ids,
-                                *self._richness_arrays(pzwav_near),
+                                *self._richness_for(pzwav_near),
                             )
                         ]
                         _pzwav_near_hovertemplate = (
@@ -1437,7 +1571,7 @@ class TraceCreator:
                     # AMICO enhanced traces
                     if len(amico_near) > 0:
                         amico_near_colors, amico_near_tile_ids = (
-                            self._compute_merged_tile_colors(
+                            self._tile_colors_for(
                                 amico_near, data_detcluster_by_cltile
                             )
                             if (show_cltile_info and data_detcluster_by_cltile)
@@ -1451,7 +1585,7 @@ class TraceCreator:
                                 amico_near["DET_CODE_NB"],
                                 amico_near["ID_UNIQUE_CLUSTER"],
                                 amico_near_tile_ids,
-                                *self._richness_arrays(amico_near),
+                                *self._richness_for(amico_near),
                             )
                         ]
                         _amico_near_hovertemplate = (
@@ -1526,7 +1660,7 @@ class TraceCreator:
                         )
 
                     near_colors, near_tile_ids = (
-                        self._compute_merged_tile_colors(
+                        self._tile_colors_for(
                             near_catred_data, data_detcluster_by_cltile
                         )
                         if (show_cltile_info and data_detcluster_by_cltile)
@@ -1544,7 +1678,7 @@ class TraceCreator:
                             ),
                             near_catred_data["ID_UNIQUE_CLUSTER"],
                             near_tile_ids,
-                            *self._richness_arrays(near_catred_data),
+                            *self._richness_for(near_catred_data),
                         )
                     ]
                     _near_hovertemplate = (

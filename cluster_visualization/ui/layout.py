@@ -404,6 +404,10 @@ class AppLayout:
                                 dcc.Store(id="status-toast-minimized-store", data=False),
                                 # Slider values used by the last render, for "not applied" readouts
                                 dcc.Store(id="applied-filters-store", data=None),
+                                # Algorithm of the figure on screen, and where its cluster traces are,
+                                # so "Apply filters" can patch only those traces
+                                dcc.Store(id="rendered-meta-store", data=None),
+                                dcc.Store(id="cluster-trace-index-store", data=None),
                             ],
                             xs=12,
                             className="main-col",
