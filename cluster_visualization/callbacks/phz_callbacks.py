@@ -19,6 +19,27 @@ except ImportError:
     )
 
 
+# Plot style shared by the analysis tabs (matches the sidebar's quiet palette)
+PLOT_ACCENT = "#2b5797"
+PLOT_INK = "#1d2127"
+PLOT_MUTED = "#59616b"
+PLOT_GRID = "#e6e9ee"
+PLOT_BASE = dict(
+    template="plotly_white",
+    font=dict(family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif", size=12, color=PLOT_INK),
+    paper_bgcolor="#ffffff",
+    plot_bgcolor="#ffffff",
+)
+PLOT_LAYOUT = dict(
+    template="plotly_white",
+    font=dict(family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif", size=12, color=PLOT_INK),
+    margin=dict(l=48, r=16, t=56, b=44),
+    xaxis=dict(gridcolor=PLOT_GRID, zeroline=False),
+    yaxis=dict(gridcolor=PLOT_GRID, zeroline=False),
+    paper_bgcolor="#ffffff",
+    plot_bgcolor="#ffffff",
+)
+
 class PHZCallbacks:
     """Handles PHZ_PDF plot callbacks"""
 
@@ -49,7 +70,12 @@ class PHZCallbacks:
         """Setup callback for handling clicks on CATRED data points to show PHZ_PDF"""
 
         @self.app.callback(
-            Output("phz-pdf-plot", "figure", allow_duplicate=True),
+            [
+                Output("phz-pdf-plot", "figure", allow_duplicate=True),
+                # Bring the p(z) into view: PHZ Analysis tab, CATRED Data sub-tab
+                Output("analysis-tabs", "active_tab", allow_duplicate=True),
+                Output("phz-inner-tabs", "active_tab", allow_duplicate=True),
+            ],
             [Input("cluster-plot", "clickData")],
             [
                 dash.dependencies.State("cluster-plot", "figure")
@@ -63,7 +89,7 @@ class PHZCallbacks:
 
             if not clickData:
                 print("Debug: No clickData received")
-                return dash.no_update
+                return dash.no_update, dash.no_update, dash.no_update
 
             # Get current CATRED data from handler or fallback
             current_catred_data = None
@@ -122,7 +148,7 @@ class PHZCallbacks:
                 print(
                     f"Debug: self.current_catred_data available: {hasattr(self, 'current_catred_data')}"
                 )
-                return dash.no_update
+                return dash.no_update, dash.no_update, dash.no_update
 
             try:
                 # Extract click information
@@ -274,12 +300,12 @@ class PHZCallbacks:
                         f"Debug: PHZ_PDF length: {len(phz_pdf)}, PHZ_MODE_1: {phz_mode_1}, PHZ_MEDIAN: {phz_median}"
                     )
 
-                    return self._create_phz_pdf_plot(phz_pdf, ra, dec, phz_mode_1, phz_median)
+                    return self._create_phz_pdf_plot(phz_pdf, ra, dec, phz_mode_1, phz_median), "phz-tab", "phz-catred-subtab"
                 else:
                     print("Debug: Click was not on a CATRED data point")
 
                 # If we get here, the click wasn't on a CATRED point
-                return dash.no_update
+                return dash.no_update, dash.no_update, dash.no_update
 
             except Exception as e:
                 print(f"Debug: Error creating PHZ_PDF plot: {e}")
@@ -287,7 +313,7 @@ class PHZCallbacks:
 
                 print(f"Debug: Traceback: {traceback.format_exc()}")
 
-                return self._create_error_phz_plot(str(e))
+                return self._create_error_phz_plot(str(e)), dash.no_update, dash.no_update
 
     def _create_phz_pdf_plot(self, phz_pdf, ra, dec, phz_mode_1, phz_median):
         """Create PHZ_PDF plot for a given CATRED point"""
@@ -305,45 +331,55 @@ class PHZCallbacks:
                 print(f"Debug: PHZ_PDF contains NaN or infinite values")
                 return self._create_error_phz_plot("PHZ_PDF contains invalid values")
 
-            # Create redshift bins (assuming typical range for photometric redshift)
+            # The catalogue does not ship its redshift grid; PHZ_PDF is assumed to be
+            # sampled uniformly on z in [0, 3]. Stated on the axis so it is never hidden.
             z_bins = np.linspace(0, 3, len(phz_pdf_array))
 
-            # Create PHZ_PDF plot
             phz_fig = go.Figure()
-
             phz_fig.add_trace(
                 go.Scatter(
                     x=z_bins,
                     y=phz_pdf_array,
-                    mode="lines+markers",
-                    name="PHZ_PDF",
-                    line=dict(color="blue", width=2),
-                    marker=dict(size=4),
-                    fill="tozeroy",  # Fill to zero y-axis instead of previous trace
+                    mode="lines",
+                    name="p(z)",
+                    line=dict(color=PLOT_ACCENT, width=2),
+                    fill="tozeroy",
+                    fillcolor="rgba(43, 87, 151, 0.12)",
+                    hovertemplate="z = %{x:.3f}<br>p = %{y:.4f}<extra></extra>",
                 )
             )
-
-            # Add vertical line for PHZ_MODE_1
-            phz_fig.add_vline(
-                x=phz_mode_1,
-                line=dict(color="red", width=2, dash="dash"),
-                annotation_text=f"PHZ_MODE_1: {phz_mode_1:.3f}",
-                annotation_position="top",
-            )
-
-            phz_fig.add_vline(
-                x=phz_median,
-                line=dict(color="green", width=2, dash="dot"),
-                annotation_text=f"PHZ_MEDIAN: {phz_median:.3f}",
-                annotation_position="top left" if phz_median < phz_mode_1 else "top right",
-            )
+            # Mode and median differ by line style and label, not colour alone
+            for value, label, dash in (
+                (phz_mode_1, "Mode", "solid"),
+                (phz_median, "Median", "dot"),
+            ):
+                phz_fig.add_trace(
+                    go.Scatter(
+                        x=[value, value],
+                        y=[0, float(np.nanmax(phz_pdf_array)) if len(phz_pdf_array) else 1],
+                        mode="lines",
+                        name=f"{label} z = {value:.3f}",
+                        line=dict(color=PLOT_INK, width=1.5, dash=dash),
+                        hoverinfo="skip",
+                    )
+                )
 
             phz_fig.update_layout(
-                title=f"PHZ_PDF for CATRED Point at RA: {ra:.6f}, Dec: {dec:.6f}",
-                xaxis_title="Redshift (z)",
-                yaxis_title="Probability Density",
-                margin=dict(l=40, r=20, t=60, b=40),
+                **{**PLOT_LAYOUT, "margin": dict(l=48, r=16, t=64, b=96)},
+                title=dict(
+                    text=(
+                        "Redshift probability"
+                        f"<br><span style='font-size:11px;color:{PLOT_MUTED}'>"
+                        f"RA {ra:.5f}°, Dec {dec:.5f}°</span>"
+                    ),
+                    x=0, xanchor="left", y=0.98, yanchor="top",
+                    font=dict(size=13),
+                ),
+                xaxis_title=f"Redshift z (grid assumed 0–3, {len(phz_pdf_array)} bins)",
+                yaxis_title="Probability density",
                 showlegend=True,
+                # Legend under the axis title so it never collides with the title or toolbar
+                legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="left", x=0, font=dict(size=11)),
                 hovermode="x unified",
             )
 
@@ -358,25 +394,17 @@ class PHZCallbacks:
             return self._create_error_phz_plot(f"Error creating plot: {str(e)}")
 
     def _create_error_phz_plot(self, error_message):
-        """Create error PHZ_PDF plot"""
+        """p(z) plot placeholder explaining why the PDF could not be shown"""
         error_fig = go.Figure()
         error_fig.update_layout(
-            title="PHZ_PDF Plot - Error",
-            xaxis_title="Redshift",
-            yaxis_title="Probability Density",
-            margin=dict(l=40, r=20, t=40, b=40),
-            showlegend=False,
+            **{**PLOT_LAYOUT, "xaxis": dict(visible=False), "yaxis": dict(visible=False)},
             annotations=[
                 dict(
-                    text=f"Error loading PHZ_PDF data: {error_message}",
-                    xref="paper",
-                    yref="paper",
-                    x=0.5,
-                    y=0.5,
-                    xanchor="center",
-                    yanchor="middle",
-                    showarrow=False,
-                    font=dict(size=12, color="red"),
+                    text="Couldn't show this source's redshift probability."
+                    f"<br><span style='font-size:11px;color:{PLOT_MUTED}'>{error_message}</span>",
+                    xref="paper", yref="paper", x=0.5, y=0.5,
+                    xanchor="center", yanchor="middle", showarrow=False,
+                    font=dict(size=13, color=PLOT_INK),
                 )
             ],
         )
@@ -677,14 +705,13 @@ class PHZCallbacks:
                 text=f"Z_CLUSTER distribution — {alg_label} ({n_clusters} clusters, {viewport_label})",
                 font=dict(size=12),
             ),
-            xaxis_title="Z_CLUSTER",
-            yaxis_title="Probability Density",
+            xaxis_title="Redshift z (Z_CLUSTER)",
+            yaxis_title="Probability density",
             margin=dict(l=40, r=15, t=45, b=40),
             legend=dict(font=dict(size=10), orientation="h", y=1.12),
             hovermode="x unified",
             barmode="overlay",
-            plot_bgcolor="white",
-            paper_bgcolor="white",
+            **PLOT_BASE,
         )
         return fig
 
@@ -724,13 +751,12 @@ class PHZCallbacks:
                 text=f"SNR vs Z — {alg_label} ({n_clusters} clusters, {viewport_label})",
                 font=dict(size=12),
             ),
-            xaxis_title="Z_CLUSTER",
-            yaxis_title="SNR_CLUSTER",
+            xaxis_title="Redshift z (Z_CLUSTER)",
+            yaxis_title="Signal-to-noise (SNR_CLUSTER)",
             margin=dict(l=40, r=15, t=45, b=40),
             legend=dict(font=dict(size=10), orientation="h", y=1.12),
             hovermode="closest",
-            plot_bgcolor="white",
-            paper_bgcolor="white",
+            **PLOT_BASE,
         )
         return fig
 
@@ -749,12 +775,11 @@ class PHZCallbacks:
                     xanchor="center",
                     yanchor="middle",
                     showarrow=False,
-                    font=dict(size=12, color="gray"),
+                    font=dict(size=12, color=PLOT_MUTED),
                 )
             ],
             xaxis=dict(visible=False),
             yaxis=dict(visible=False),
-            plot_bgcolor="white",
-            paper_bgcolor="white",
+            **PLOT_BASE,
         )
         return fig

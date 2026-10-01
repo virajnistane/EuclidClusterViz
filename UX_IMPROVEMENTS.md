@@ -30,7 +30,7 @@ Tracking checklist from the 2026-09-30 UX audit. Check items off as completed.
 - [x] Main button names its action: "Render clusters", then "Re-render · <algorithm>" (no click counters)
 
 ## Disabled / dead-end controls
-- [ ] Resolve duplicate cluster-action UI: `Modals.create_cluster_action_modal()` vs `AppLayout._create_cluster_action_modal()` (tab version) have inconsistent enabled/disabled feature sets — pick one source of truth
+- [x] Resolve duplicate cluster-action UI — the modal (`Modals.create_cluster_action_modal`) was mounted but never opened and a second copy (`AppLayout._create_cluster_action_modal`) was unused; both removed with their modal-only callbacks. The Cluster Tools tab is the single source of truth
 - [ ] Wire up or remove dead ESASky view-mode toggle (code exists in `esasky_callbacks.py` but not exposed in header toggle)
 - [ ] Standardize "why is this disabled" explanation pattern (currently inconsistent small-text captions) into one reusable popover component
 
@@ -39,3 +39,16 @@ Tracking checklist from the 2026-09-30 UX audit. Check items off as completed.
 
 ## Search / navigation
 - [ ] Add a quick-jump-to-cluster input (RA/Dec or cluster ID → pan+zoom) as an alternative to zoom-and-click or CSV ID upload
+
+## Analysis tabs (critique 2026-10-01, 16/40)
+- [x] Clicking a CATRED source switches to PHZ Analysis → CATRED source and shows its p(z); CATRED source is the default sub-tab; empty-state copy points at the map
+- [x] p(z) plot: quiet styling, zoom tools back, mode/median as labelled line styles, assumed z grid stated on the axis; plain-language error message
+- [x] Tabs and Cluster Tools match the sidebar (shared `.cv-panel` accent, underline tabs, no emoji, one filled primary per panel, flat sections, single scroll area)
+- [x] Cluster Tools grouped into Overlays and Classify; each options panel opens under its trigger; pinned selected-cluster summary with copyable RA/Dec and Deselect
+- [x] Quick tagging: Good / Bad / Dubious buttons with G / B / D keys (ignored while typing), live status; Tag button needs an explicit choice; CSV path remembered per browser
+- [x] Labels linked to inputs; cutout size and bin width can no longer be 0; members marker default visible on dark cutouts
+- [x] "Analysis panel" guided tour
+- [x] Short definitions for ZP (photometric-redshift branch) / RS (red-sequence branch) of Rich-CL, PMEM and the H★ band, in the sidebar richness filter, member filters and tour
+- [x] Member filters show "Not applied" until Show members / Apply member filters; returning to a tagged cluster highlights its tag; CSV note says the file is written on the server (cluster)
+- [ ] Actual PHZ_PDF redshift grid (currently assumed uniform on 0–3)
+

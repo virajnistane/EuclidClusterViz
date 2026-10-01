@@ -135,7 +135,7 @@ class FigureManager:
             showlegend=False,
             annotations=[
                 dict(
-                    text="Click on a CATRED data point above to view its PHZ_PDF",
+                    text="Click a CATRED source on the map to see its redshift probability, p(z)",
                     xref="paper",
                     yref="paper",
                     x=0.5,

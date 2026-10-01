@@ -58,7 +58,7 @@ class TestTourSteps(unittest.TestCase):
                 self.assertEqual(step["section"], section)
 
     def test_entry_points_exist(self):
-        expected = {"tour-quick", "tour-full", "tutorial-tour-menu", "tour-init-dummy"}
+        expected = {"tour-quick", "tour-full", "tutorial-tour-menu", "tour-init-dummy", "tour-analysis"}
         for section in SECTION_ORDER:
             expected |= {
                 f"tour-section-{section}",

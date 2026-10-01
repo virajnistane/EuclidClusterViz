@@ -8,7 +8,7 @@ from pathlib import Path
 import glob
 from dash import Input, Output, State, html, dash, ALL, callback_context
 
-from cluster_visualization.ui.tour_steps import SECTION_ORDER, TOUR_STEPS
+from cluster_visualization.ui.tour_steps import EXTRA_TOURS, SECTION_ORDER, TOUR_STEPS
 import dash_bootstrap_components as dbc
 import base64
 import csv
@@ -348,23 +348,20 @@ class UICallbacks:
         """Setup callbacks to enable/disable buttons based on conditions"""
 
         @self.app.callback(
-            [
-                Output("cluster-members-button", "disabled"),
-                Output("tab-cluster-members-button", "disabled"),
-            ],
-            [Input("render-button", "n_clicks")],
+            Output("tab-cluster-members-button", "disabled"),
+            Input("render-button", "n_clicks"),
             prevent_initial_call=False,
         )
         def toggle_cluster_members_button(n_clicks):
             """Disable Cluster Members buttons if members catalog not configured or not yet rendered."""
             n_clicks = n_clicks or 0
             if n_clicks == 0:
-                return True, True
+                return True
             if self.config is None:
-                return True, True
+                return True
             members_xml = self.config.get_gluematchcat_members_xml()
             disabled = members_xml is None
-            return disabled, disabled
+            return disabled
 
         @self.app.callback(
             [
@@ -1148,7 +1145,7 @@ class UICallbacks:
         """
         triggers = ["tour-quick", "tour-full"] + [
             f"tour-section-{section}" for section in SECTION_ORDER
-        ] + [f"{section}-tour" for section in SECTION_ORDER]
+        ] + [f"{section}-tour" for section in SECTION_ORDER] + [f"tour-{key}" for key in EXTRA_TOURS]
 
         engine = """
             function() {
@@ -1158,13 +1155,15 @@ class UICallbacks:
 
                 var STEPS = __STEPS__;
                 var ORDER = __ORDER__;
+                var EXTRA = __EXTRA__;
                 var trigger = ctx.triggered[0].prop_id.split('.')[0];
 
                 var keys;
                 if (trigger === 'tour-quick') { keys = ['quick']; }
-                else if (trigger === 'tour-full') { keys = ['quick'].concat(ORDER); }
+                else if (trigger === 'tour-full') { keys = ['quick'].concat(ORDER, EXTRA); }
+                else if (EXTRA.indexOf(trigger.replace(/^tour-/, '')) !== -1) { keys = [trigger.replace(/^tour-/, '')]; }
                 else { keys = [trigger.replace(/^tour-section-/, '').replace(/-tour$/, '')]; }
-                var sections = keys.filter(function(k) { return k !== 'quick'; });
+                var sections = keys.filter(function(k) { return ORDER.indexOf(k) !== -1; });
 
                 function isOpen(id) {
                     var c = document.getElementById(id + '-collapse');
@@ -1244,7 +1243,9 @@ class UICallbacks:
                 run();
                 return NO_UPDATE;
             }
-        """.replace("__STEPS__", json.dumps(TOUR_STEPS)).replace("__ORDER__", json.dumps(SECTION_ORDER))
+        """.replace("__STEPS__", json.dumps(TOUR_STEPS)).replace("__ORDER__", json.dumps(SECTION_ORDER)).replace(
+            "__EXTRA__", json.dumps(list(EXTRA_TOURS))
+        )
 
         self.app.clientside_callback(
             engine,

@@ -324,7 +324,7 @@ body {
     box-shadow: var(--cv-focus);
 }
 
-.sidebar-panel .btn-primary {
+.cv-panel .btn-primary {
     --bs-btn-bg: var(--cv-accent);
     --bs-btn-border-color: var(--cv-accent);
     --bs-btn-hover-bg: var(--cv-accent-hover);
@@ -637,5 +637,327 @@ body {
     background: var(--cv-accent);
     border-color: var(--cv-accent);
     color: #fff;
+}
+
+/* ---------------------------------------------------------- Analysis panel */
+
+/* One column, one scroll area: tabs stay put, content scrolls below them */
+.analysis-panel {
+    overflow: hidden;
+    height: 75vh;
+    min-height: 420px;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--cv-border);
+    border-radius: 10px;
+    box-shadow: none;
+    background: var(--cv-surface);
+}
+
+.analysis-panel > .card-header {
+    flex: 0 0 auto;
+    background: var(--cv-surface);
+    border-bottom: 1px solid var(--cv-border);
+}
+
+.analysis-panel > .card-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--cv-border-strong) transparent;
+}
+
+.cv-panel .nav-tabs {
+    border-bottom: 1px solid var(--cv-border);
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0 0.5rem;
+    /* Keep tab names on one row; scroll sideways if the panel gets narrow */
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+}
+
+.cv-panel .nav-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.cv-panel .nav-tabs .nav-item {
+    flex: 0 0 auto;
+}
+
+.cv-panel .nav-tabs .nav-link {
+    white-space: nowrap;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    padding: 0.5rem 0.75rem;
+    color: var(--cv-text-muted);
+    font-size: 0.875rem;
+    font-weight: 600;
+    background: transparent;
+}
+
+.cv-panel .nav-tabs .nav-link:hover {
+    color: var(--cv-text);
+}
+
+.cv-panel .nav-tabs .nav-link.active {
+    color: var(--cv-accent);
+    border-bottom-color: var(--cv-accent);
+    background: transparent;
+}
+
+.cv-panel .nav-tabs .nav-link:focus-visible {
+    box-shadow: var(--cv-focus);
+}
+
+/* ------------------------------------------------------------ Cluster tools */
+
+.cluster-tools {
+    container-type: inline-size;
+    font-size: 0.875rem;
+}
+
+.tool-empty {
+    padding: 3rem 1.5rem;
+    text-align: center;
+    color: var(--cv-text-muted);
+}
+
+.tool-empty-icon {
+    font-size: 1.75rem;
+    margin-bottom: 0.75rem;
+    color: var(--cv-border-strong);
+}
+
+.tool-empty-title {
+    font-weight: 600;
+    color: var(--cv-text);
+    margin-bottom: 0.25rem;
+}
+
+.tool-empty-text {
+    max-width: 32ch;
+    margin: 0 auto;
+    font-size: 0.8125rem;
+}
+
+/* Selected-cluster summary stays visible while the tools scroll */
+.tool-summary {
+    position: sticky;
+    top: -0.5rem;
+    z-index: 2;
+    margin: -0.5rem -0.5rem 0.75rem;
+    padding: 0.75rem;
+    background: var(--cv-section-open);
+    border-bottom: 1px solid var(--cv-border);
+}
+
+.tool-summary-title {
+    font-weight: 600;
+    font-size: 0.8125rem;
+    color: var(--cv-text);
+}
+
+.tool-facts {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.125rem 0.75rem;
+    margin: 0.375rem 0 0.25rem;
+    font-size: 0.8125rem;
+}
+
+.tool-facts dt {
+    font-weight: 400;
+    color: var(--cv-text-muted);
+}
+
+.tool-facts dd {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+}
+
+.tool-coords {
+    font-variant-numeric: tabular-nums;
+}
+
+.tool-copy {
+    display: inline-block;
+    margin-left: 0.5rem;
+    color: var(--cv-text-muted);
+    cursor: pointer;
+}
+
+.tool-copy:hover {
+    color: var(--cv-accent);
+}
+
+.tool-group-title {
+    margin: 1rem 0 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--cv-text-muted);
+}
+
+.tool-row {
+    border: 1px solid var(--cv-border);
+    border-radius: 8px;
+    margin-bottom: 0.375rem;
+    background: var(--cv-surface);
+}
+
+.tool-trigger.btn {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    color: var(--cv-text);
+    font-weight: 600;
+    font-size: 0.875rem;
+    text-align: left;
+    text-decoration: none;
+}
+
+.tool-trigger.btn:hover {
+    background: var(--cv-surface-2);
+    color: var(--cv-text);
+}
+
+.tool-trigger.btn:focus-visible {
+    box-shadow: var(--cv-focus);
+}
+
+.tool-icon {
+    width: 1rem;
+    color: var(--cv-text-muted);
+    text-align: center;
+}
+
+.tool-title {
+    flex: 1 1 auto;
+}
+
+.tool-chevron {
+    font-size: 0.6875rem;
+    color: var(--cv-text-muted);
+    transition: transform 0.15s ease-out;
+}
+
+.tool-row:has(.collapse.show) .tool-chevron {
+    transform: rotate(180deg);
+}
+
+.tool-row:has(.collapse.show) .tool-icon {
+    color: var(--cv-accent);
+}
+
+.tool-panel {
+    padding: 0.75rem;
+    border-top: 1px solid var(--cv-border);
+    background: var(--cv-surface-2);
+    border-radius: 0 0 8px 8px;
+}
+
+.tool-label {
+    margin-bottom: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--cv-text);
+}
+
+.tool-static {
+    padding: 0.25rem 0;
+    font-size: 0.8125rem;
+    color: var(--cv-text-muted);
+}
+
+.tool-subheading {
+    margin: 0.875rem 0 0.375rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--cv-border);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--cv-text-muted);
+}
+
+.tool-panel .row + .row {
+    margin-top: 0.5rem;
+}
+
+.tool-colour {
+    width: 100%;
+    height: 31px;
+    padding: 2px;
+    cursor: pointer;
+}
+
+.tool-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    margin-top: 0.75rem;
+}
+
+.tool-actions .tool-primary {
+    flex: 1 1 auto;
+}
+
+.tool-preview {
+    margin-bottom: 0.75rem;
+    padding: 0.5rem 0.625rem;
+    border-radius: 6px;
+    background: var(--cv-surface);
+    border: 1px solid var(--cv-border);
+    font-size: 0.8125rem;
+}
+
+.tool-activity {
+    font-size: 0.8125rem;
+}
+
+/* Quick tagging */
+.quick-tag-bar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.375rem;
+    margin-bottom: 0.25rem;
+}
+
+.quick-tag.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-weight: 600;
+}
+
+.tool-kbd {
+    padding: 0 0.3rem;
+    border: 1px solid var(--cv-border-strong);
+    border-radius: 3px;
+    background: var(--cv-surface);
+    color: var(--cv-text-muted);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.quick-tag.btn:hover .tool-kbd,
+.quick-tag.btn:focus-visible .tool-kbd {
+    background: transparent;
+    color: inherit;
+    border-color: currentColor;
+}
+
+/* Narrow analysis panel: stack three-up form rows */
+@container (max-width: 360px) {
+    .tool-row-3 > [class*="col-"] {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
 }
 

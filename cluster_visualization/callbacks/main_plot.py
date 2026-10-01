@@ -1720,7 +1720,7 @@ class MainPlotCallbacks:
 
         # Initial empty PHZ_PDF plot
         initial_phz_fig = self._create_empty_phz_plot(
-            "Click on a MER data point above to view its PHZ_PDF"
+            "Click a CATRED source on the map to see its redshift probability, p(z)"
         )
 
         initial_status = dbc.Alert(
@@ -1737,15 +1737,17 @@ class MainPlotCallbacks:
 
         return initial_fig, initial_phz_fig, initial_status
 
-    def _create_empty_phz_plot(self, message="Click on a MER data point to view its PHZ_PDF"):
-        """Create empty PHZ_PDF plot with message"""
+    def _create_empty_phz_plot(self, message="Click a CATRED source on the map to see its redshift probability, p(z)"):
+        """Empty p(z) panel: a centred hint, no axes or grid"""
         empty_phz_fig = go.Figure()
         empty_phz_fig.update_layout(
-            title="PHZ_PDF Plot",
-            xaxis_title="Redshift",
-            yaxis_title="Probability Density",
-            margin=dict(l=40, r=20, t=40, b=40),
+            template="plotly_white",
+            paper_bgcolor="#ffffff",
+            plot_bgcolor="#ffffff",
+            margin=dict(l=16, r=16, t=16, b=16),
             showlegend=False,
+            xaxis=dict(visible=False),
+            yaxis=dict(visible=False),
             annotations=[
                 dict(
                     text=message,
@@ -1756,7 +1758,7 @@ class MainPlotCallbacks:
                     xanchor="center",
                     yanchor="middle",
                     showarrow=False,
-                    font=dict(size=14, color="gray"),
+                    font=dict(size=13, color="#59616b"),
                 )
             ],
         )

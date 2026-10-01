@@ -8,7 +8,7 @@ import dash_bootstrap_components as dbc
 from dash import dcc, html
 
 from .sidebar_sections import SidebarSections
-from .tour_steps import SECTION_TITLES
+from .tour_steps import EXTRA_TOURS, SECTION_TITLES
 from .data_controls import DataControls
 from .modals import Modals
 from .tabs import TabContent
@@ -78,7 +78,7 @@ class AppLayout:
                                         ),
                                         AppLayout._create_collapsible_sections(),
                                     ],
-                                    className="sidebar-panel",
+                                    className="sidebar-panel cv-panel",
                                 )
                             ],
                             xs=12,
@@ -139,11 +139,11 @@ class AppLayout:
                                                                 dbc.Tabs(
                                                                     [
                                                                         dbc.Tab(
-                                                                            label="📈 PHZ Analysis",
+                                                                            label="PHZ Analysis",
                                                                             tab_id="phz-tab",
                                                                         ),
                                                                         dbc.Tab(
-                                                                            label="🎯 Cluster Tools",
+                                                                            label="Cluster Tools",
                                                                             tab_id="cluster-tab",
                                                                         ),
                                                                     ],
@@ -164,7 +164,7 @@ class AppLayout:
                                                                         dbc.Tabs(
                                                                             [
                                                                                 dbc.Tab(
-                                                                                    label="📡 CATRED Data",
+                                                                                    label="CATRED source",
                                                                                     tab_id="phz-catred-subtab",
                                                                                     children=[
                                                                                         dcc.Loading(
@@ -173,20 +173,16 @@ class AppLayout:
                                                                                                 dcc.Graph(
                                                                                                     id="phz-pdf-plot",
                                                                                                     style={
-                                                                                                        "height": "58vh",
+                                                                                                        "height": "calc(75vh - 8.5rem)",
                                                                                                         "width": "100%",
-                                                                                                        "min-height": "400px",
+                                                                                                        "min-height": "340px",
                                                                                                     },
                                                                                                     config={
-                                                                                                        "displayModeBar": True,
+                                                                                                        "displayModeBar": "hover",
                                                                                                         "displaylogo": False,
                                                                                                         "modeBarButtonsToRemove": [
                                                                                                             "lasso2d",
                                                                                                             "select2d",
-                                                                                                            "pan2d",
-                                                                                                            "zoom2d",
-                                                                                                            "autoScale2d",
-                                                                                                            "resetScale2d",
                                                                                                         ],
                                                                                                         "responsive": True,
                                                                                                     },
@@ -197,7 +193,7 @@ class AppLayout:
                                                                                     ],
                                                                                 ),
                                                                                 dbc.Tab(
-                                                                                    label="🔭 Cluster Data",
+                                                                                    label="Cluster data",
                                                                                     tab_id="phz-cluster-subtab",
                                                                                     children=[
                                                                                         dbc.Button(
@@ -238,8 +234,7 @@ class AppLayout:
                                                                                             [
                                                                                                 html.Small(
                                                                                                     "Bins:",
-                                                                                                    className="text-muted me-1",
-                                                                                                    style={"font-size": "0.72rem", "white-space": "nowrap"},
+                                                                                                    className="range-input-label mb-0 me-1",
                                                                                                 ),
                                                                                                 dcc.Slider(
                                                                                                     id="phz-cluster-nbins-slider",
@@ -247,13 +242,7 @@ class AppLayout:
                                                                                                     max=100,
                                                                                                     step=5,
                                                                                                     value=40,
-                                                                                                    marks={
-                                                                                                        5:  {"label": "5",  "style": {"color": "#666", "fontSize": "11px"}},
-                                                                                                        25: {"label": "25", "style": {"color": "#666", "fontSize": "11px"}},
-                                                                                                        50: {"label": "50", "style": {"color": "#0984e3", "fontWeight": "bold", "fontSize": "12px"}},
-                                                                                                        75: {"label": "75", "style": {"color": "#666", "fontSize": "11px"}},
-                                                                                                        100:{"label": "100","style": {"color": "#666", "fontSize": "11px"}},
-                                                                                                    },
+                                                                                                    marks={5: "5", 25: "25", 50: "50", 75: "75", 100: "100"},
                                                                                                     tooltip={"placement": "bottom", "always_visible": False},
                                                                                                     className="custom-slider flex-grow-1",
                                                                                                 ),
@@ -288,7 +277,7 @@ class AppLayout:
                                                                                 ),
                                                                             ],
                                                                             id="phz-inner-tabs",
-                                                                            active_tab="phz-cluster-subtab",
+                                                                            active_tab="phz-catred-subtab",
                                                                         ),
                                                                     ],
                                                                     id="phz-tab-content",
@@ -306,7 +295,7 @@ class AppLayout:
                                                             className="p-2",
                                                         ),
                                                     ],
-                                                    style={"height": "75vh"},
+                                                    className="cv-panel analysis-panel",
                                                 )
                                             ],
                                             xs=12, xl=4,
@@ -409,7 +398,6 @@ class AppLayout:
                     className="g-0",
                 ),  # Remove gutters for tighter layout
                 # Cluster Action Modal Dialog
-                Modals.create_cluster_action_modal(),
                 # File Browser Modal Dialog
                 Modals.create_file_browser_modal(),
                 # Getting Started onboarding modal
@@ -501,6 +489,9 @@ class AppLayout:
         ] + [
             dbc.DropdownMenuItem(f"{title} section", id=f"tour-section-{section}", n_clicks=0)
             for section, title in SECTION_TITLES.items()
+        ] + [
+            dbc.DropdownMenuItem(title, id=f"tour-{key}", n_clicks=0)
+            for key, title in EXTRA_TOURS.items()
         ]
         return html.Div(
             dbc.DropdownMenu(
@@ -555,289 +546,6 @@ class AppLayout:
             ],
             id=f"{card_id}-section",
             className="sidebar-section" + (" is-open" if is_open else ""),
-        )
-
-    @staticmethod
-    def _create_cluster_action_modal():
-        """Create modal dialog for cluster actions"""
-        return dbc.Modal(
-            [
-                dbc.ModalHeader(
-                    [
-                        html.H4("Cluster Analysis Options", className="modal-title"),
-                        dbc.Button(
-                            "×", className="btn-close", id="cluster-modal-close", n_clicks=0
-                        ),
-                    ]
-                ),
-                dbc.ModalBody(
-                    [
-                        # Cluster information display
-                        html.Div(id="cluster-modal-info", className="mb-3"),
-                        # Action buttons
-                        html.H6("Available Actions:", className="mb-3"),
-                        dbc.Row(
-                            [
-                                dbc.Col(
-                                    [
-                                        dbc.Button(
-                                            [
-                                                html.I(className="fas fa-crop me-2"),
-                                                "Generate Cutout",
-                                            ],
-                                            id="cluster-cutout-button",
-                                            color="primary",
-                                            className="w-100 mb-2",
-                                            n_clicks=0,
-                                        ),
-                                        html.Small(
-                                            "Create MER mosaic cutout around this cluster",
-                                            className="text-muted",
-                                        ),
-                                    ],
-                                    width=6,
-                                ),
-                                dbc.Col(
-                                    [
-                                        dbc.Button(
-                                            [
-                                                html.I(className="fas fa-magnifying-glass me-2"),
-                                                "View CATRED Box",
-                                            ],
-                                            id="cluster-catred-box-button",
-                                            color="success",
-                                            className="w-100 mb-2",
-                                            n_clicks=0,
-                                        ),
-                                        html.Small("View CATRED Box", className="text-muted"),
-                                    ],
-                                    width=6,
-                                ),
-                            ],
-                            className="mb-3",
-                        ),
-                        dbc.Row(
-                            [
-                                dbc.Col(
-                                    [
-                                        dbc.Button(
-                                            [
-                                                html.I(className="fas fa-layer-group me-2"),
-                                                "Healpix Mask Cutout",
-                                            ],
-                                            id="cluster-healpix-mask-button",
-                                            color="info",
-                                            disabled=True,
-                                            className="w-100 mb-2",
-                                            n_clicks=0,
-                                        ),
-                                        html.Small("Coming soon ...", className="text-muted"),
-                                    ],
-                                    width=6,
-                                ),
-                                dbc.Col(
-                                    [
-                                        dbc.Button(
-                                            [html.I(className="fas fa-table me-2"), "Export Data"],
-                                            id="cluster-export-button",
-                                            color="warning",
-                                            disabled=True,
-                                            className="w-100 mb-2",
-                                            n_clicks=0,
-                                        ),
-                                        html.Small(
-                                            "Export cluster data and metadata",
-                                            className="text-muted",
-                                        ),
-                                    ],
-                                    width=6,
-                                ),
-                            ],
-                            className="mb-3",
-                        ),
-                        # Cutout options (initially hidden)
-                        dbc.Collapse(
-                            [
-                                dbc.Card(
-                                    [
-                                        dbc.CardHeader("Cutout Options"),
-                                        dbc.CardBody(
-                                            [
-                                                dbc.Row(
-                                                    [
-                                                        dbc.Col(
-                                                            [
-                                                                html.Label(
-                                                                    "Cutout Size (arcmin):",
-                                                                    className="form-label",
-                                                                ),
-                                                                dbc.Input(
-                                                                    id="cutout-size-input",
-                                                                    type="number",
-                                                                    value=5.0,
-                                                                    min=1.0,
-                                                                    max=20.0,
-                                                                    step=0.5,
-                                                                    className="mb-2",
-                                                                ),
-                                                            ],
-                                                            width=6,
-                                                        ),
-                                                        dbc.Col(
-                                                            [
-                                                                html.Label(
-                                                                    "Data Type:",
-                                                                    className="form-label",
-                                                                ),
-                                                                dbc.Select(
-                                                                    id="cutout-data-type",
-                                                                    options=[
-                                                                        {
-                                                                            "label": "MER Mosaic",
-                                                                            "value": "mermosaic",
-                                                                        },
-                                                                        {
-                                                                            "label": "Density Map",
-                                                                            "value": "density",
-                                                                        },
-                                                                        {
-                                                                            "label": "Both",
-                                                                            "value": "both",
-                                                                        },
-                                                                    ],
-                                                                    value="mermosaic",
-                                                                    className="mb-2",
-                                                                ),
-                                                            ],
-                                                            width=6,
-                                                        ),
-                                                    ]
-                                                ),
-                                                dbc.Row(
-                                                    [
-                                                        dbc.Col(
-                                                            [
-                                                                html.Label(
-                                                                    "Opacity:",
-                                                                    className="form-label",
-                                                                ),
-                                                                dbc.Input(
-                                                                    id="cutout-opacity-input",
-                                                                    type="number",
-                                                                    value=1.0,
-                                                                    min=0.0,
-                                                                    max=1.0,
-                                                                    step=0.1,
-                                                                    className="mb-2",
-                                                                ),
-                                                            ],
-                                                            width=6,
-                                                        ),
-                                                        dbc.Col(
-                                                            [
-                                                                html.Label(
-                                                                    "Colorscale:",
-                                                                    className="form-label",
-                                                                ),
-                                                                dbc.Select(
-                                                                    id="cutout-colorscale",
-                                                                    options=[
-                                                                        {
-                                                                            "label": "viridis",
-                                                                            "value": "viridis",
-                                                                        },
-                                                                        {
-                                                                            "label": "gray",
-                                                                            "value": "gray",
-                                                                        },
-                                                                        {
-                                                                            "label": "plasma",
-                                                                            "value": "plasma",
-                                                                        },
-                                                                    ],
-                                                                    value="viridis",
-                                                                    className="mb-2",
-                                                                ),
-                                                            ],
-                                                            width=6,
-                                                        ),
-                                                    ]
-                                                ),
-                                                dbc.Button(
-                                                    "Generate Cutout",
-                                                    id="generate-cutout-button",
-                                                    color="primary",
-                                                    className="w-100",
-                                                    n_clicks=0,
-                                                ),
-                                            ]
-                                        ),
-                                    ]
-                                )
-                            ],
-                            id="cutout-options-collapse",
-                            is_open=False,
-                        ),
-                        # CATRED data box options (initially hidden)
-                        dbc.Collapse(
-                            [
-                                dbc.Card(
-                                    [
-                                        dbc.CardHeader("CATRED Data Box Options"),
-                                        dbc.CardBody(
-                                            [
-                                                dbc.Row(
-                                                    [
-                                                        dbc.Col(
-                                                            [
-                                                                html.Label(
-                                                                    "Box Size (arcmin):",
-                                                                    className="form-label",
-                                                                ),
-                                                                dbc.Input(
-                                                                    id="catred-box-size-input",
-                                                                    type="number",
-                                                                    value=10.0,
-                                                                    min=5.0,
-                                                                    max=50.0,
-                                                                    step=1.0,
-                                                                    className="mb-2",
-                                                                ),
-                                                            ],
-                                                            width=6,
-                                                        )
-                                                    ]
-                                                ),
-                                                dbc.Button(
-                                                    "Generate CATRED Data Box",
-                                                    id="view-catred-box-button",
-                                                    color="success",
-                                                    className="w-100",
-                                                    n_clicks=0,
-                                                ),
-                                            ]
-                                        ),
-                                    ]
-                                )
-                            ],
-                            id="catred-box-options-collapse",
-                            is_open=False,
-                        ),
-                    ]
-                ),
-                dbc.ModalFooter(
-                    [
-                        dbc.Button(
-                            "Close", id="cluster-modal-close-footer", color="secondary", n_clicks=0
-                        )
-                    ]
-                ),
-            ],
-            id="cluster-action-modal",
-            is_open=False,
-            size="lg",
-            backdrop=True,
-            scrollable=True,
         )
 
     @staticmethod

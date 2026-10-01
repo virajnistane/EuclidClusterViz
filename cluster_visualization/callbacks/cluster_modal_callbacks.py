@@ -6,7 +6,7 @@ like cutout generation, PHZ analysis, and data export.
 """
 
 import dash  # type: ignore[import]
-from dash import Input, Output, State, callback_context, html
+from dash import Input, Output, State, callback_context, dcc, html
 import dash_bootstrap_components as _dbc  # type: ignore[import]
 import numpy as np
 import os
@@ -54,16 +54,14 @@ class ClusterModalCallbacks:
     def setup_callbacks(self):
         """Setup all cluster modal callbacks"""
         self._setup_cluster_click_callback()
-        self._setup_modal_close_callbacks()
-        self._setup_cutout_toggle_callback()
-        self._setup_catred_visibility_callback()
-        self._setup_action_callbacks()
         self._setup_tab_callbacks()  # 🆕 Add tab callbacks
         self._setup_cluster_tagging_callbacks()
         self._setup_parameter_sync_callbacks()
         self._setup_trace_management_callbacks()  # 🆕 Add trace management callbacks
         self._setup_selection_box_callback()
         self._setup_cluster_members_callback()
+        self._setup_members_pending_callbacks()
+        self._setup_tag_highlight_callback()
 
     def _setup_cluster_click_callback(self):
         """Setup callback to detect cluster clicks and show in cluster tab."""
@@ -177,67 +175,160 @@ class ClusterModalCallbacks:
 
             return no_change
 
+    MEMBER_FILTER_IDS = [
+        "tab-members-filter-mode",
+        "tab-members-pmem-slider",
+        "tab-members-mag-filter-switch",
+        "tab-members-radius-filter-mode",
+    ]
+
+    def _setup_members_pending_callbacks(self):
+        """'Not applied' tags on member filters that differ from the members drawn."""
+        ids = self.MEMBER_FILTER_IDS
+
+        # Snapshot the filter values whenever members are drawn or re-filtered
+        self.app.clientside_callback(
+            """
+            function(showClicks, applyClicks, mode, pmem, mag, radius) {
+                return {mode: mode, pmem: pmem, mag: mag, radius: radius};
+            }
+            """,
+            Output("members-applied-filters", "data"),
+            [Input("tab-view-cluster-members", "n_clicks"), Input("tab-members-apply-filter", "n_clicks")],
+            [State(i, "value") for i in ids],
+            prevent_initial_call=True,
+        )
+
+        self.app.clientside_callback(
+            """
+            function(mode, pmem, mag, radius, applied) {
+                var hide = {display: 'none'}, show = {display: 'inline-block'};
+                if (!applied) { return [hide, hide, hide, hide]; }
+                // PMEM threshold only matters while a PMEM branch is chosen
+                var pmemChanged = mode !== 'none' && applied.mode !== 'none' && pmem !== applied.pmem;
+                return [
+                    mode !== applied.mode ? show : hide,
+                    pmemChanged ? show : hide,
+                    mag !== applied.mag ? show : hide,
+                    radius !== applied.radius ? show : hide
+                ];
+            }
+            """,
+            [Output(f"{i}-pending", "style") for i in ids],
+            [Input(i, "value") for i in ids] + [Input("members-applied-filters", "data")],
+        )
+
+    def _setup_tag_highlight_callback(self):
+        """Show the selected cluster's existing tag in both the quick-tag bar and the
+        tagging panel's dropdown, so the two never disagree."""
+        self.app.clientside_callback(
+            """
+            function(record, rows) {
+                var tags = ['good', 'bad', 'dubious'];
+                var current = null;
+                var id = record ? record.ID_UNIQUE_CLUSTER : null;
+                if (id !== null && id !== undefined && Array.isArray(rows)) {
+                    rows.forEach(function(row) {
+                        if (String(row.ID_UNIQUE_CLUSTER) === String(id)) { current = row.cluster_tag; }
+                    });
+                }
+                // Tagged button fills in its meaning colour: good green, bad red, dubious yellow
+                var fill = {good: 'success', bad: 'danger', dubious: 'warning'};
+                var out = [];
+                tags.forEach(function(tag) {
+                    var on = tag === current;
+                    out.push(on ? false : true);               // outline
+                    out.push(on ? fill[tag] : 'secondary');    // color
+                });
+                out.push(current ? 'Tagged ' + current + '. Press it again to remove the tag.' : '');
+                out.push(current || 'none');                  // tagging panel dropdown
+                return out;
+            }
+            """,
+            [
+                Output("tab-quick-tag-good", "outline"),
+                Output("tab-quick-tag-good", "color"),
+                Output("tab-quick-tag-bad", "outline"),
+                Output("tab-quick-tag-bad", "color"),
+                Output("tab-quick-tag-dubious", "outline"),
+                Output("tab-quick-tag-dubious", "color"),
+                Output("tag-quick-status", "children", allow_duplicate=True),
+                Output("tab-tag-value", "value"),
+            ],
+            [Input("selected-cluster-merged-record", "data"), Input("tagged-clusters-store", "data")],
+            prevent_initial_call="initial_duplicate",
+        )
+
+    @classmethod
+    def _resolve_tag_action(cls, trigger_id, selected_tag, current_tag):
+        """Tag to apply, or "none" to remove: a quick-tag button pressed on the
+        cluster's current tag toggles it off."""
+        tag = cls._tag_from_trigger(trigger_id, selected_tag)
+        if trigger_id.startswith("tab-quick-tag-") and tag == current_tag:
+            return "none"
+        return tag
+
+    def _current_tag(self, tagged_rows, record):
+        """Tag already stored for ``record``, or None."""
+        if not record or not isinstance(tagged_rows, list):
+            return None
+        key = self._record_identity(record)
+        for row in tagged_rows:
+            if self._record_identity(row) == key:
+                return row.get("cluster_tag")
+        return None
+
+    def _remove_tagged_row(self, tagged_rows, record):
+        """Tagged rows without ``record``."""
+        key = self._record_identity(record)
+        return [row for row in tagged_rows if self._record_identity(row) != key]
+
+    @staticmethod
+    def _tag_from_trigger(trigger_id, selected_tag):
+        """Quick-tag buttons carry their own tag; the panel button uses the select."""
+        quick = {
+            "tab-quick-tag-good": "good",
+            "tab-quick-tag-bad": "bad",
+            "tab-quick-tag-dubious": "dubious",
+        }
+        return quick.get(trigger_id, selected_tag)
+
     def _build_cluster_tab_content(
         self, ra, dec, snr_str, z_str, algorithm, merged_cluster_id, resolution_note
     ):
-        """Build the cluster info tab content layout (shared by Plotly and ESA Sky clicks)."""
+        """Build the selected-cluster summary (shared by Plotly and Aladin clicks)."""
+        is_number = isinstance(ra, (int, float)) and isinstance(dec, (int, float))
+        coords = f"{ra:.5f}  {dec:.5f}" if is_number else f"{ra}  {dec}"
+
+        def item(term, value):
+            return [html.Dt(term), html.Dd(value)]
+
         return [
-            dbc.Row(
-                [
-                    dbc.Col(
+            html.Dl(
+                item(
+                    "RA, Dec (°)",
+                    html.Span(
                         [
-                            html.Strong("Coordinates", className="text-primary"),
-                            html.Div(
-                                [f"RA: {ra:.3f}°", html.Br(), f"Dec: {dec:.3f}°"]
-                                if isinstance(ra, float) else [f"RA: {ra}", html.Br(), f"Dec: {dec}"],
-                                className="mt-1",
+                            html.Span(coords, className="tool-coords"),
+                            dcc.Clipboard(
+                                content=coords,
+                                title="Copy RA, Dec",
+                                className="tool-copy",
                             ),
-                        ],
-                        width=6,
+                        ]
                     ),
-                    dbc.Col(
-                        [
-                            html.Strong("Properties", className="text-primary"),
-                            html.Div(
-                                [f"z: {z_str}", html.Br(), f"SNR: {snr_str}", html.Br()],
-                                className="mt-1",
-                            ),
-                        ],
-                        width=6,
-                    ),
-                ]
-            ),
-            html.Hr(className="my-2"),
-            html.Div([html.Strong("Source: ", className="text-primary"), f"{algorithm}"]),
-            html.Div(
-                [
-                    html.Strong("Merged Candidate ID: ", className="text-primary"),
+                )
+                + item("Redshift z", z_str)
+                + item("SNR", snr_str)
+                + item("Algorithm", f"{algorithm}")
+                + item(
+                    "Merged ID",
                     str(merged_cluster_id) if merged_cluster_id is not None else "Not resolved",
-                ]
+                ),
+                className="tool-facts",
             ),
-            html.Small(resolution_note, className="text-muted"),
+            html.Small(resolution_note, className="control-help"),
         ]
-
-    def _setup_modal_close_callbacks(self):
-        """Setup callbacks to close the modal"""
-
-        @self.app.callback(
-            [
-                Output("cluster-action-modal", "is_open", allow_duplicate=True),
-                Output("selected-cluster-box-coords", "data", allow_duplicate=True),
-            ],
-            [
-                Input("cluster-modal-close", "n_clicks"),
-                Input("cluster-modal-close-footer", "n_clicks"),
-            ],
-            [State("cluster-action-modal", "is_open")],
-            prevent_initial_call=True,
-        )
-        def close_modal(close_clicks, footer_clicks, is_open):
-            """Close the modal when close buttons are clicked"""
-            if close_clicks or footer_clicks:
-                return False, None
-            return dash.no_update, dash.no_update
 
     def _setup_selection_box_callback(self):
         """Setup clientside callback to overplot selected cluster as a square-open marker."""
@@ -275,171 +366,6 @@ class ClusterModalCallbacks:
             State("cluster-plot", "figure"),
             prevent_initial_call=True,
         )
-
-    def _setup_cutout_toggle_callback(self):
-        """Setup callback to toggle cutout options"""
-
-        @self.app.callback(
-            Output("cutout-options-collapse", "is_open"),
-            [Input("cluster-cutout-button", "n_clicks")],
-            [State("cutout-options-collapse", "is_open")],
-            prevent_initial_call=True,
-        )
-        def toggle_cutout_options(n_clicks, is_open):
-            """Toggle cutout options when cutout button is clicked"""
-            if n_clicks:
-                return not is_open
-            return is_open
-
-    def _setup_catred_visibility_callback(self):
-        @self.app.callback(
-            Output("catred-box-options-collapse", "is_open"),
-            [Input("cluster-catred-box-button", "n_clicks")],
-            [State("catred-box-options-collapse", "is_open")],
-            prevent_initial_call=True,
-        )
-        def toggle_catred_box_options(n_clicks, is_open):
-            """Toggle catred box options when catred box button is clicked"""
-            if n_clicks:
-                return not is_open
-            return is_open
-
-    def _setup_action_callbacks(self):
-        """Setup callbacks for cluster action buttons"""
-
-        @self.app.callback(
-            Output("status-info", "children", allow_duplicate=True),
-            [
-                Input("cluster-cutout-button", "n_clicks"),
-                Input("cluster-phz-button", "n_clicks"),
-                Input("cluster-catred-box-button", "n_clicks"),
-                Input("cluster-export-button", "n_clicks"),
-            ],
-            [State("cutout-size-input", "value"), State("cutout-data-type", "value")],
-            prevent_initial_call=True,
-        )
-        def handle_cluster_actions(
-            cutout_clicks, phz_clicks, catred_box_clicks, export_clicks, cutout_size, cutout_type
-        ):
-            """Handle various cluster action button clicks"""
-            ctx = callback_context
-            if not ctx.triggered:
-                return dash.no_update
-
-            button_id = ctx.triggered[0]["prop_id"].split(".")[0]
-
-            if not self.selected_cluster:
-                return dbc.Alert("⚠️ No cluster selected", color="warning")
-
-            cluster = self.selected_cluster
-
-            if button_id == "cluster-cutout-button":
-                # Placeholder for cutout generation
-                status_msg = dbc.Alert(
-                    [
-                        html.H6("🔬 Cutout Generation Requested", className="mb-2"),
-                        html.P(
-                            [
-                                f"📍 Target: RA {cluster['ra']:.3f}°, Dec {cluster['dec']:.3f}°",
-                                html.Br(),
-                                f"📏 Size: {cutout_size} arcmin",
-                                html.Br(),
-                                f"📊 Type: {cutout_type.title()} data",
-                                html.Br(),
-                                f"🎯 Algorithm: {cluster['algorithm']}",
-                            ]
-                        ),
-                        html.Small(
-                            "Cutout generation functionality will be implemented here",
-                            className="text-muted",
-                        ),
-                    ],
-                    color="info",
-                )
-
-                print(
-                    f"🔬 Cutout requested: RA={cluster['ra']}, Dec={cluster['dec']}, Size={cutout_size}arcmin, Type={cutout_type}"
-                )
-                return status_msg
-
-            elif button_id == "cluster-phz-button":
-                # Placeholder for PHZ analysis
-                status_msg = dbc.Alert(
-                    [
-                        html.H6("📈 PHZ Analysis Requested", className="mb-2"),
-                        html.P(
-                            [
-                                f"🎯 Target: RA {cluster['ra']:.3f}°, Dec {cluster['dec']:.3f}°",
-                                html.Br(),
-                                f"🔢 Current z: {cluster['redshift']:.2f}",
-                                html.Br(),
-                                f"📊 SNR: {cluster['snr']:.2f}",
-                            ]
-                        ),
-                        html.Small(
-                            "Photometric redshift analysis will be implemented here",
-                            className="text-muted",
-                        ),
-                    ],
-                    color="success",
-                )
-
-                print(
-                    f"📈 PHZ analysis requested for cluster at RA={cluster['ra']}, Dec={cluster['dec']}"
-                )
-                return status_msg
-
-            elif button_id == "cluster-catred-box-button":
-                # Placeholder for CATRED box viewing
-                status_msg = dbc.Alert(
-                    [
-                        html.H6("🖼️ CATRED Box Requested", className="mb-2"),
-                        html.P(
-                            [
-                                f"📍 Target: RA {cluster['ra']:.3f}°, Dec {cluster['dec']:.3f}°, z {cluster['redshift']:.3f}",
-                                html.Br(),
-                                f"🔍 Algorithm: {cluster['algorithm']}",
-                            ]
-                        ),
-                        html.Small(
-                            "CATRED box functionality will be implemented here",
-                            className="text-muted",
-                        ),
-                    ],
-                    color="primary",
-                )
-
-                print(
-                    f"🖼️ CATRED box requested for cluster at RA={cluster['ra']:.3f}°, Dec={cluster['dec']:.3f}°"
-                )
-                return status_msg
-
-            elif button_id == "cluster-export-button":
-                # Placeholder for data export
-                status_msg = dbc.Alert(
-                    [
-                        html.H6("💾 Data Export Requested", className="mb-2"),
-                        html.P(
-                            [
-                                f"📍 Target: RA {cluster['ra']:.3f}°, Dec {cluster['dec']:.3f}°",
-                                html.Br(),
-                                f"📊 Data: SNR={cluster['snr']:.2f}, z={cluster['redshift']:.2f}",
-                            ]
-                        ),
-                        html.Small(
-                            "Data export functionality will be implemented here",
-                            className="text-muted",
-                        ),
-                    ],
-                    color="warning",
-                )
-
-                print(
-                    f"💾 Data export requested for cluster at RA={cluster['ra']:.3f}°, Dec={cluster['dec']:.3f}°"
-                )
-                return status_msg
-
-            return dash.no_update
 
     def _setup_tab_callbacks(self):
         """Setup tab switching and tab-specific callbacks"""
@@ -619,8 +545,8 @@ class ClusterModalCallbacks:
                 return (
                     dash.no_update,
                     dash.no_update,
-                    html.P("⚠️ No cluster selected", className="text-warning"),
-                    dbc.Alert("⚠️ No cluster selected", color="warning"),
+                    html.P("Select a cluster on the map first.", className="text-muted small"),
+                    dash.no_update,
                 )
 
             cluster = self.selected_cluster
@@ -1124,8 +1050,14 @@ class ClusterModalCallbacks:
                 Output("tagged-clusters-store", "data"),
                 Output("tagged-clusters-summary", "children"),
                 Output("status-info", "children", allow_duplicate=True),
+                Output("tag-quick-status", "children"),
             ],
-            [Input("tab-tag-button", "n_clicks")],
+            [
+                Input("tab-tag-button", "n_clicks"),
+                Input("tab-quick-tag-good", "n_clicks"),
+                Input("tab-quick-tag-bad", "n_clicks"),
+                Input("tab-quick-tag-dubious", "n_clicks"),
+            ],
             [
                 State("tab-tag-value", "value"),
                 State("tab-tag-dataset-label", "value"),
@@ -1134,43 +1066,130 @@ class ClusterModalCallbacks:
             ],
             prevent_initial_call=True,
         )
-        def tag_selected_cluster(tag_clicks, selected_tag, dataset_label, selected_record, tagged_rows):
-            """Tag currently selected merged cluster candidate as good/bad/dubious."""
-            if not tag_clicks:
-                return dash.no_update, dash.no_update, dash.no_update
+        def tag_selected_cluster(
+            tag_clicks, good_clicks, bad_clicks, dubious_clicks,
+            selected_tag, dataset_label, selected_record, tagged_rows,
+        ):
+            """Tag the selected merged cluster as good/bad/dubious, or remove its tag.
+
+            The quick-tag buttons (and their G/B/D keys) carry the tag themselves and
+            toggle: pressing the cluster's current tag again removes it. "Add / update
+            tag" uses the panel's dropdown, where "None" removes the tag.
+            """
+            ctx = callback_context
+            if not ctx.triggered or not ctx.triggered[0]["value"]:
+                return dash.no_update, dash.no_update, dash.no_update, dash.no_update
+            tagged_rows = tagged_rows if isinstance(tagged_rows, list) else []
+            current_tag = self._current_tag(tagged_rows, selected_record)
+            selected_tag = self._resolve_tag_action(
+                ctx.triggered[0]["prop_id"].split(".")[0], selected_tag, current_tag
+            )
 
             if selected_record is None:
+                message = "No merged cluster was resolved for this click, so it can't be tagged."
                 return (
                     dash.no_update,
                     dash.no_update,
-                    dbc.Alert(
-                        "⚠️ No merged cluster resolved for current click.",
-                        color="warning",
-                    ),
+                    dbc.Alert(message, color="warning"),
+                    message,
+                )
+
+            cluster_id = selected_record.get("ID_UNIQUE_CLUSTER", "unknown")
+            if selected_tag == "none":
+                if current_tag is None:
+                    message = f"Cluster {cluster_id} has no tag."
+                    return dash.no_update, dash.no_update, dash.no_update, message
+                updated_rows = self._remove_tagged_row(tagged_rows, selected_record)
+                message = f"Tag removed from cluster {cluster_id}."
+                return (
+                    updated_rows,
+                    self._build_tagged_summary(updated_rows),
+                    dbc.Alert(message, color="secondary"),
+                    message,
                 )
 
             if selected_tag not in {"good", "bad", "dubious"}:
-                return (
-                    dash.no_update,
-                    dash.no_update,
-                    dbc.Alert("⚠️ Invalid tag. Choose good, bad, or dubious.", color="warning"),
-                )
+                message = "Choose Good, Bad, Dubious or None."
+                return dash.no_update, dash.no_update, dbc.Alert(message, color="warning"), message
 
-            tagged_rows = tagged_rows if isinstance(tagged_rows, list) else []
             updated_record = dict(selected_record)
             updated_record["cluster_tag"] = selected_tag
             updated_record["dataset_label"] = (dataset_label or "").strip().lower()
             updated_rows = self._upsert_tagged_rows(tagged_rows, updated_record)
 
             cluster_id = updated_record.get("ID_UNIQUE_CLUSTER", "unknown")
+            message = f"Cluster {cluster_id} tagged {selected_tag}."
             return (
                 updated_rows,
                 self._build_tagged_summary(updated_rows),
-                dbc.Alert(
-                    f"🏷️ Tagged cluster {cluster_id} as '{selected_tag}'.",
-                    color="success",
-                ),
+                dbc.Alert(message, color="success"),
+                message,
             )
+
+        # Tag button stays disabled only if the dropdown is somehow empty ("None" removes a tag)
+        self.app.clientside_callback(
+            """
+            function(value) { return !value; }
+            """,
+            Output("tab-tag-button", "disabled"),
+            Input("tab-tag-value", "value"),
+        )
+
+        # G / B / D tag the selected cluster unless the user is typing in a field
+        self.app.clientside_callback(
+            """
+            function(style) {
+                if (!window.cvQuickTagKeys) {
+                    window.cvQuickTagKeys = true;
+                    document.addEventListener('keydown', function(event) {
+                        if (event.ctrlKey || event.metaKey || event.altKey || event.repeat) { return; }
+                        var target = event.target;
+                        var tag = target && target.tagName;
+                        if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' ||
+                            (target && target.isContentEditable)) { return; }
+                        var panel = document.getElementById('cluster-selected-content');
+                        if (!panel || panel.offsetParent === null) { return; }
+                        var ids = {g: 'tab-quick-tag-good', b: 'tab-quick-tag-bad', d: 'tab-quick-tag-dubious'};
+                        var id = ids[(event.key || '').toLowerCase()];
+                        if (!id) { return; }
+                        var button = document.getElementById(id);
+                        if (button && !button.disabled) { event.preventDefault(); button.click(); }
+                    });
+                }
+                return window.dash_clientside.no_update;
+            }
+            """,
+            Output("quick-tag-keys", "children"),
+            Input("cluster-selected-content", "style"),
+        )
+
+        # Deselect: back to the empty state and remove the selection marker
+        self.app.clientside_callback(
+            """
+            function(n, figure) {
+                var NO = window.dash_clientside.no_update;
+                if (!n) { return [NO, NO, NO, NO, NO, NO]; }
+                var fig = NO;
+                if (figure && figure.data) {
+                    fig = Object.assign({}, figure, {
+                        data: figure.data.filter(function(t) { return t.name !== '__selected_cluster__'; })
+                    });
+                }
+                return [{display: 'block'}, {display: 'none'}, null, null, fig, ''];
+            }
+            """,
+            [
+                Output("cluster-no-selection", "style", allow_duplicate=True),
+                Output("cluster-selected-content", "style", allow_duplicate=True),
+                Output("selected-cluster-merged-record", "data", allow_duplicate=True),
+                Output("selected-cluster-box-coords", "data", allow_duplicate=True),
+                Output("cluster-plot", "figure", allow_duplicate=True),
+                Output("tag-quick-status", "children", allow_duplicate=True),
+            ],
+            Input("cluster-deselect-button", "n_clicks"),
+            State("cluster-plot", "figure"),
+            prevent_initial_call=True,
+        )
 
         @self.app.callback(
             [
@@ -2337,60 +2356,6 @@ class ClusterModalCallbacks:
                 color="success" if n_table > 0 else "info",
                 className="py-2",
             )
-
-        @self.app.callback(
-            [
-                Output("cluster-members-output", "children"),
-                Output("cluster-members-collapse", "is_open"),
-                Output("cluster-plot", "figure", allow_duplicate=True),
-                Output("tab-members-toggle-visibility", "disabled", allow_duplicate=True),
-                Output("tab-members-clear", "disabled", allow_duplicate=True),
-                Output("tab-members-apply-filter", "disabled", allow_duplicate=True),
-            ],
-            [Input("cluster-members-button", "n_clicks")],
-            [State("algorithm-dropdown", "value"), State("cluster-plot", "figure")],
-            prevent_initial_call=True,
-        )
-        def show_cluster_members(n_clicks, algorithm, current_figure):
-            if not n_clicks:
-                return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
-            matched, data, err = _query_members(algorithm)
-            if err:
-                return dbc.Alert(err, color="warning"), True, dash.no_update, dash.no_update, dash.no_update, dash.no_update
-
-            if self.selected_cluster is None or matched is None or data is None:
-                return dbc.Alert("No cluster selected.", color="warning"), True, dash.no_update, dash.no_update, dash.no_update, dash.no_update
-
-            cluster_id = self.selected_cluster.get("merged_cluster_id")
-            if cluster_id is None:
-                return dbc.Alert("Cluster ID not resolved for selected point.", color="warning"), True, dash.no_update, dash.no_update, dash.no_update, dash.no_update
-
-            matched_arr = cast(np.ndarray, matched)
-            n_table = len(matched_arr)
-            if n_table == 0 or "OBJECT_ID" not in (matched_arr.dtype.names or ()): 
-                return _members_alert(n_table, 0, cluster_id), True, dash.no_update, dash.no_update, dash.no_update, dash.no_update
-            ra, dec, phz_pdf, phz_mode1, phz_median, phz_70int, pmem_zp, pmem_rs, flux_h_unif = self._fetch_member_radec(matched_arr["OBJECT_ID"], data, matched=matched_arr)
-            n_plotted = len(ra)
-            alert = _members_alert(n_table, n_plotted, cluster_id)
-            if n_plotted == 0:
-                return alert, True, dash.no_update, dash.no_update, dash.no_update, dash.no_update
-            trace_name = f"Members (ID {int(cluster_id)})"
-            if self.catred_handler:
-                if self.catred_handler.current_catred_data is None:
-                    self.catred_handler.current_catred_data = {}
-                self.catred_handler.current_catred_data[trace_name] = {
-                    "ra": ra.tolist(), "dec": dec.tolist(),
-                    "phz_pdf": phz_pdf, "phz_mode_1": phz_mode1,
-                    "phz_median": phz_median, "phz_70_int": phz_70int,
-                    "pmem_zp": list(pmem_zp),
-                    "pmem_rs": list(pmem_rs),
-                    "flux_h_unif": list(flux_h_unif),
-                }
-            fig = go.Figure(current_figure)
-            fig.add_trace(self._build_members_trace(ra, dec, cluster_id, pmem_zp=pmem_zp, pmem_rs=pmem_rs))
-            existing_shapes = (current_figure or {}).get("layout", {}).get("shapes") or []
-            fig.update_layout(shapes=self._build_radius_shapes(existing_shapes))
-            return alert, True, fig.to_dict(), False, False, False
 
         @self.app.callback(
             [

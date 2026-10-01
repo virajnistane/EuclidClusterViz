@@ -238,7 +238,7 @@ class SidebarSections:
                     className="mb-1",
                 ),
                 _pending_tag("richness-mode-radio"),
-                _help("Choose which richness estimate to filter on."),
+                _help("Richness from Rich-CL, the richness and membership code: ZP is its photometric-redshift branch, RS its red-sequence branch."),
                 # Visibility of the three containers follows the radio value
                 html.Div(
                     [

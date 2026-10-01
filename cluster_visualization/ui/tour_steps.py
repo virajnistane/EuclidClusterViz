@@ -22,6 +22,8 @@ SECTION_TITLES = {
     "app-config": "Configuration",
 }
 SECTION_ORDER = list(SECTION_TITLES)
+# Tours outside the sidebar sections (own menu entry, appended to the full walkthrough)
+EXTRA_TOURS = {"analysis": "Analysis panel"}
 
 
 def _group(control_id):
@@ -96,7 +98,8 @@ TOUR_STEPS = {
         {"element": "#snr-amico-container", "title": "SNR (AMICO)",
          "body": "Signal-to-noise range for AMICO clusters. Only the selected algorithm's SNR filter is shown."},
         {"element": "#richness-mode-radio", "title": "Richness estimate",
-         "body": "Off by default. Choose ZP or RS to filter on that richness estimate; "
+         "body": "Off by default. Rich-CL, the richness and membership code, gives two estimates: "
+                 "ZP (photometric-redshift branch) and RS (red-sequence branch). Choose one to filter on; "
                  "its quality flags and range then appear below."},
         {"element": "#richness-zp-container", "title": "Richness (ZP)",
          "body": "Tick the quality flags to keep (0 with richness, 1 dubious, 2 no richness), "
@@ -179,4 +182,23 @@ TOUR_STEPS = {
         {"element": _group("gluematchcat-file-input"), "title": "Use another file",
          "body": "Or paste a path, then press \"Use this file\" to switch."},
     ]),
+    "analysis": [
+        {"element": "#analysis-tabs", "title": "Analysis panel", "side": "left",
+         "body": "Two tabs: PHZ Analysis for redshift probabilities, Cluster Tools for the cluster you selected."},
+        {"element": "#phz-inner-tabs", "title": "PHZ Analysis", "side": "left",
+         "body": "CATRED source shows the p(z) of a CATRED source you click on the map; the panel switches "
+                 "here automatically. Cluster data shows redshift and SNR distributions for the current view."},
+        {"element": "#phz-pdf-plot", "title": "Redshift probability", "side": "left",
+         "body": "The source's p(z) with its mode and median marked. Drag to zoom into a narrow peak."},
+        {"element": ".tool-summary", "title": "Selected cluster", "side": "left",
+         "body": "Click a cluster on the map to select it. Its position, redshift, SNR and merged ID stay "
+                 "pinned here; copy the coordinates or Deselect."},
+        {"element": ".tool-row:has(#tab-cutout-button)", "title": "Overlays", "side": "left",
+         "body": "Image cutout, Healpix mask cutout, CATRED box and cluster members. Each opens its options "
+                 "right below; Hide and Clear manage what you drew."},
+        {"element": ".quick-tag-bar", "title": "Quick tagging", "side": "left",
+         "body": "Tag the selected cluster Good, Bad or Dubious, or press G, B or D (not while typing in a field)."},
+        {"element": ".tool-row:has(#tab-tag-panel-button)", "title": "Tagging and export", "side": "left",
+         "body": "Add a dataset label, review the tagged list and save it as CSV. The path is remembered."},
+    ],
 }
