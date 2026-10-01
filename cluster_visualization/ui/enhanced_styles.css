@@ -123,15 +123,6 @@
     transform: translateX(2px) !important;
 }
 
-/* Collapsed-section summary badges: never force the sidebar to scroll horizontally */
-.section-badge {
-    flex-shrink: 1;
-    min-width: 0;
-    max-width: 45%;
-    overflow: hidden;
-    white-space: nowrap;
-}
-
 /* Status indicators */
 .status-indicator {
     position: relative;

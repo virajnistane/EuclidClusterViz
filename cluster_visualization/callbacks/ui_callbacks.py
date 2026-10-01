@@ -45,7 +45,6 @@ class UICallbacks:
         self._setup_catred_render_color_callback()
         self._setup_catred_box_color_callback()
         self._setup_collapsible_callbacks()
-        self._setup_section_badge_callbacks()
         self._setup_config_display_callback()
         self._setup_file_configuration_callback()
         self._setup_file_browser_callbacks()
@@ -157,26 +156,6 @@ class UICallbacks:
 
     def _setup_button_state_callbacks(self):
         """Setup callbacks to enable/disable buttons based on conditions"""
-
-        @self.app.callback(
-            [
-                Output("file-config-tab-control", "disabled"),
-                Output("file-config-tab-control", "label"),
-            ],
-            [Input("render-button", "n_clicks")],
-            prevent_initial_call=False,
-        )
-        def disable_file_config_tab(n_clicks):
-            """Disable File Config tab if gluematchcat_clusters is not configured"""
-            if self.config is None:
-                return True, "📁 File Config (Not Available)"
-            
-            # Check if gluematchcat_clusters is configured
-            gluematchcat_clusters_xml = self.config.get_gluematchcat_clusters_xml()
-            if gluematchcat_clusters_xml is None:
-                return True, "📁 File Config (GlueMatchCat XML Not Configured)"
-            
-            return False, "📁 File Config"
 
         @self.app.callback(
             [
@@ -509,88 +488,6 @@ class UICallbacks:
             is_open = (n_clicks % 2) == 1
             icon = "fas fa-chevron-up" if is_open else "fas fa-chevron-down"
             return is_open, [html.I(className=f"{icon} me-2"), "🖼️ Mosaic"]
-
-    def _setup_section_badge_callbacks(self):
-        """Clientside summaries shown on collapsed section headers (see .status-toast-* for a similar pattern)."""
-
-        self.app.clientside_callback(
-            """
-            function(algo, snrP, snrA, zRange) {
-                var parts = [];
-                if (algo) parts.push(algo);
-                if (algo === 'BOTH') {
-                    if (snrP) parts.push('P:' + snrP[0] + '-' + snrP[1]);
-                    if (snrA) parts.push('A:' + snrA[0] + '-' + snrA[1]);
-                } else if (algo === 'AMICO' && snrA) {
-                    parts.push('SNR ' + snrA[0] + '-' + snrA[1]);
-                } else if (snrP) {
-                    parts.push('SNR ' + snrP[0] + '-' + snrP[1]);
-                }
-                if (zRange) parts.push('z ' + zRange[0] + '-' + zRange[1]);
-                return parts.join(' \\u00b7 ');
-            }
-            """,
-            Output("clusters-settings-badge", "children"),
-            [
-                Input("algorithm-dropdown", "value"),
-                Input("snr-range-slider-pzwav", "value"),
-                Input("snr-range-slider-amico", "value"),
-                Input("redshift-range-slider", "value"),
-            ],
-        )
-
-        self.app.clientside_callback(
-            """
-            function(catredOn, threshold, maglim) {
-                var parts = [catredOn ? 'Mask ON' : 'Mask OFF'];
-                if (threshold != null) parts.push('Thr ' + threshold);
-                if (maglim != null) parts.push('Mag ' + maglim);
-                return parts.join(' \\u00b7 ');
-            }
-            """,
-            Output("mask-controls-badge", "children"),
-            [
-                Input("catred-mode-switch", "value"),
-                Input("catred-threshold-slider", "value"),
-                Input("magnitude-limit-slider", "value"),
-            ],
-        )
-
-        self.app.clientside_callback(
-            """
-            function(enabled, opacity, provider) {
-                if (!enabled) return 'Off';
-                var parts = ['On'];
-                if (provider) parts.push(provider);
-                if (opacity != null) parts.push(Math.round(opacity * 100) + '%');
-                return parts.join(' \\u00b7 ');
-            }
-            """,
-            Output("image-controls-badge", "children"),
-            [
-                Input("mosaic-enable-switch", "value"),
-                Input("mosaic-opacity-slider", "value"),
-                Input("mosaic-provider-selector", "value"),
-            ],
-        )
-
-        self.app.clientside_callback(
-            """
-            function(mer, polygon, aspect, unmerged, cltile) {
-                var flags = [mer, polygon, aspect, unmerged, cltile];
-                var on = flags.filter(Boolean).length;
-                return on + '/' + flags.length + ' on';
-            }
-            """,
-            Output("display-options-badge", "children"),
-            [
-                Input("mer-switch", "value"),
-                Input("polygon-switch", "value"),
-                Input("aspect-ratio-switch", "value"),
-                Input("unmerged-clusters-switch", "value"),
-                Input("cltile-info-switch", "value"),
-            ],
-        )
 
     def _setup_config_display_callback(self):
         """Setup callback to display configuration parameters"""

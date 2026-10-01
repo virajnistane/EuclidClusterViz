@@ -13,7 +13,8 @@ Tracking checklist from the 2026-09-30 UX audit. Check items off as completed.
 
 ## Sidebar information architecture
 - [x] Default-open "Detected Clusters" section instead of "App Configuration"
-- [x] Add summary badges to collapsed section headers (e.g. current SNR/z range) so state is visible without expanding
+- [ ] ~~Add summary badges to collapsed section headers (e.g. current SNR/z range)~~ — implemented then reverted: badge text kept getting cut off, removed entirely
+- [x] Make "App Configuration" an actual dedicated control section — merged the browse/edit/apply controls for the GlueMatchCat XML path (previously a separate, easy-to-miss "File Config" tab) directly into the sidebar card; Tile Detection List stays read-only (no apply pipeline existed for it)
 
 ## Manual render/apply workflow
 - [ ] Add "N unapplied changes" indicator near Apply buttons (SNR/redshift/CATRED/mosaic)
