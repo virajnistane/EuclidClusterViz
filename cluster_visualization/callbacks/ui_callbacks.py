@@ -2,10 +2,13 @@
 UI callbacks for cluster visualization
 """
 
+import json
 import os
 from pathlib import Path
 import glob
 from dash import Input, Output, State, html, dash, ALL, callback_context
+
+from cluster_visualization.ui.tour_steps import SECTION_ORDER, TOUR_STEPS
 import dash_bootstrap_components as dbc
 import base64
 import csv
@@ -576,11 +579,15 @@ class UICallbacks:
                 """
                 function(isOpen) {
                     return isOpen
-                        ? ['section-toggle is-open', 'sidebar-section is-open']
-                        : ['section-toggle', 'sidebar-section'];
+                        ? ['section-toggle is-open', 'sidebar-section is-open', 'section-header is-open']
+                        : ['section-toggle', 'sidebar-section', 'section-header'];
                 }
                 """,
-                [Output(f"{section}-toggle", "className"), Output(f"{section}-section", "className")],
+                [
+                    Output(f"{section}-toggle", "className"),
+                    Output(f"{section}-section", "className"),
+                    Output(f"{section}-header", "className"),
+                ],
                 Input(f"{section}-collapse", "is_open"),
             )
 
@@ -1131,31 +1138,80 @@ class UICallbacks:
         )
 
     def _setup_tutorial_tour_callback(self):
-        """Interactive guided tour (driver.js), lazy-loaded from CDN on first click."""
-        self.app.clientside_callback(
-            """
-            function(n_clicks) {
-                if (!n_clicks) return window.dash_clientside.no_update;
+        """Guided tours (driver.js, lazy-loaded from CDN on first use).
 
-                function runTour() {
-                    var d = window.driver.js.driver({
+        One engine for every tour: the quick overview, a detailed tour per sidebar
+        section (from the Tutorial menu or the "?" next to a section header), and the
+        full walkthrough (quick + every section). Step data lives in ui/tour_steps.py.
+        Sections a tour needs are opened first and restored to their previous state
+        when the tour closes; steps whose element is hidden are skipped.
+        """
+        triggers = ["tour-quick", "tour-full"] + [
+            f"tour-section-{section}" for section in SECTION_ORDER
+        ] + [f"{section}-tour" for section in SECTION_ORDER]
+
+        engine = """
+            function() {
+                var ctx = window.dash_clientside.callback_context;
+                var NO_UPDATE = window.dash_clientside.no_update;
+                if (!ctx.triggered.length || !ctx.triggered[0].value) { return NO_UPDATE; }
+
+                var STEPS = __STEPS__;
+                var ORDER = __ORDER__;
+                var trigger = ctx.triggered[0].prop_id.split('.')[0];
+
+                var keys;
+                if (trigger === 'tour-quick') { keys = ['quick']; }
+                else if (trigger === 'tour-full') { keys = ['quick'].concat(ORDER); }
+                else { keys = [trigger.replace(/^tour-section-/, '').replace(/-tour$/, '')]; }
+                var sections = keys.filter(function(k) { return k !== 'quick'; });
+
+                function isOpen(id) {
+                    var c = document.getElementById(id + '-collapse');
+                    return !!(c && c.classList.contains('show'));
+                }
+                function toggle(id) {
+                    var t = document.getElementById(id + '-toggle');
+                    if (t) { t.click(); }
+                }
+                function visible(selector) {
+                    var el;
+                    try { el = document.querySelector(selector); } catch (e) { return false; }
+                    return !!(el && el.offsetParent !== null && el.getClientRects().length);
+                }
+
+                // Remember section states, open the ones this tour explains
+                var before = {};
+                ORDER.forEach(function(id) { before[id] = isOpen(id); });
+                sections.forEach(function(id) { if (!isOpen(id)) { toggle(id); } });
+
+                function start() {
+                    var steps = [];
+                    keys.forEach(function(k) { steps = steps.concat(STEPS[k] || []); });
+                    steps = steps.filter(function(s) { return visible(s.element); }).map(function(s) {
+                        return {element: s.element,
+                                popover: {title: s.title, description: s.body, side: s.side || 'right'}};
+                    });
+                    if (!steps.length) { return; }
+                    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                    var tour = window.driver.js.driver({
                         showProgress: true,
                         allowClose: true,
-                        steps: [
-                            { element: '#cluster-plot', popover: { title: 'Main plot', description: 'Pan, zoom and click a cluster to select it.', side: 'bottom' } },
-                            { element: '#view-mode-btn-group', popover: { title: 'View modes', description: 'Switch between the Standard scatter view and Aladin sky view (Aladin enables once you zoom to a single cluster).', side: 'bottom' } },
-                            { element: '#render-button', popover: { title: 'Render', description: 'Draw the catalog for the selected algorithm. Click again to re-render.', side: 'right' } },
-                            { element: '#clusters-settings-toggle', popover: { title: 'Catalog', description: 'Choose the detection algorithm, CL-tile information and unmerged clusters.', side: 'right' } },
-                            { element: '#filters-settings-toggle', popover: { title: 'Filters', description: 'Set redshift, SNR, richness, cluster-ID and matched-cluster options, then press Apply filters at the bottom of the section.', side: 'right' } },
-                            { element: '#mask-controls-toggle', popover: { title: 'Mask', description: 'Toggle the CATRED source overlay and Healpix mask.', side: 'right' } },
-                            { element: '#image-controls-toggle', popover: { title: 'Mosaic', description: 'Load survey imagery for the current zoomed view.', side: 'right' } },
-                            { element: '#display-options-toggle', popover: { title: 'Display', description: 'Toggle polygon/MER overlays and other display settings.', side: 'right' } },
-                            { element: '#status-info-toggle', popover: { title: 'Status', description: 'Status messages show up here; click to restore if minimized.', side: 'left' } },
-                            { element: '#getting-started-open', popover: { title: 'Need more detail?', description: 'Reopen the full Getting Started guide anytime.', side: 'bottom' } },
-                        ]
+                        animate: !reduce,
+                        smoothScroll: !reduce,
+                        popoverClass: 'cv-tour',
+                        steps: steps,
+                        onDestroyed: function() {
+                            ORDER.forEach(function(id) {
+                                if (isOpen(id) !== before[id]) { toggle(id); }
+                            });
+                        }
                     });
-                    d.drive();
+                    tour.drive();
                 }
+
+                // Give opening sections time to expand before measuring visibility
+                function run() { setTimeout(start, sections.length ? 400 : 0); }
 
                 if (!document.getElementById('driverjs-css')) {
                     var link = document.createElement('link');
@@ -1163,21 +1219,26 @@ class UICallbacks:
                     link.href = 'https://cdn.jsdelivr.net/npm/driver.js@1/dist/driver.css';
                     document.head.appendChild(link);
                 }
-                if (!document.getElementById('driverjs-js')) {
-                    var script = document.createElement('script');
-                    script.id = 'driverjs-js';
-                    script.src = 'https://cdn.jsdelivr.net/npm/driver.js@1/dist/driver.js.iife.js';
-                    script.onload = runTour;
-                    document.head.appendChild(script);
-                    return window.dash_clientside.no_update;
+                if (!window.driver || !window.driver.js) {
+                    if (!document.getElementById('driverjs-js')) {
+                        var script = document.createElement('script');
+                        script.id = 'driverjs-js';
+                        script.src = 'https://cdn.jsdelivr.net/npm/driver.js@1/dist/driver.js.iife.js';
+                        script.onload = run;
+                        document.head.appendChild(script);
+                    }
+                    return NO_UPDATE;
                 }
 
-                runTour();
-                return window.dash_clientside.no_update;
+                run();
+                return NO_UPDATE;
             }
-            """,
+        """.replace("__STEPS__", json.dumps(TOUR_STEPS)).replace("__ORDER__", json.dumps(SECTION_ORDER))
+
+        self.app.clientside_callback(
+            engine,
             Output("tour-init-dummy", "children"),
-            Input("tutorial-tour-button", "n_clicks"),
+            [Input(trigger, "n_clicks") for trigger in triggers],
             prevent_initial_call=True,
         )
 

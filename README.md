@@ -228,7 +228,7 @@ The EDEN-3.1 environment lacks several critical modules (`healpy`, `dash`, `plot
 - **Single Apply for Filters**: One sticky "Apply filters" button applies every filter; it lists what changed ("Changed: Redshift, SNR") and pending controls show a "Not applied" tag
 - **Responsive Design**: Sidebar is a fixed ~300–380 px column beside the plot on desktop and stacks above it below 992 px
 - **Quiet Visual Style**: Neutral surfaces, one accent colour, flat sections, tabular numerals, visible focus rings and reduced-motion support
-- **Onboarding**: Getting Started modal on first visit and a guided Tutorial tour of the main controls
+- **Onboarding**: Getting Started modal on first visit; Tutorial menu with a quick tour, a full walkthrough, and a detailed tour of each sidebar section (also started from the ? next to each section header)
 - **Intuitive Workflow**: Guided user experience with helpful tooltips and status indicators
 - **Stable CATRED Render Gating**: CATRED render button state now follows the actual plot zoom window robustly across zoom, pan, dragmode changes, and rerenders
 - **Mosaic & Mask Management**: Separate controls for background images and HEALPix footprint overlays

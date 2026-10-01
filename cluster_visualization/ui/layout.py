@@ -8,6 +8,7 @@ import dash_bootstrap_components as dbc
 from dash import dcc, html
 
 from .sidebar_sections import SidebarSections
+from .tour_steps import SECTION_TITLES
 from .data_controls import DataControls
 from .modals import Modals
 from .tabs import TabContent
@@ -44,15 +45,7 @@ class AppLayout:
                                             title="Getting Started",
                                             className="rounded-circle me-2",
                                         ),
-                                        dbc.Button(
-                                            [html.I(className="fas fa-route me-1"), "Tutorial"],
-                                            id="tutorial-tour-button",
-                                            n_clicks=0,
-                                            color="secondary",
-                                            outline=True,
-                                            size="sm",
-                                            title="Take a guided tour of the app",
-                                        ),
+                                        AppLayout._create_tutorial_menu(),
                                         html.Div(id="tour-init-dummy", style={"display": "none"}),
                                     ],
                                     className="text-center mb-2",
@@ -498,20 +491,61 @@ class AppLayout:
         )
 
     @staticmethod
+    def _create_tutorial_menu():
+        """Tutorial menu: quick overview, full walkthrough, or one section in detail."""
+        items = [
+            dbc.DropdownMenuItem("Quick tour (1 min)", id="tour-quick", n_clicks=0),
+            dbc.DropdownMenuItem("Full walkthrough", id="tour-full", n_clicks=0),
+            dbc.DropdownMenuItem(divider=True),
+            dbc.DropdownMenuItem("Section in detail", header=True),
+        ] + [
+            dbc.DropdownMenuItem(f"{title} section", id=f"tour-section-{section}", n_clicks=0)
+            for section, title in SECTION_TITLES.items()
+        ]
+        return html.Div(
+            dbc.DropdownMenu(
+                items,
+                label=[html.I(className="fas fa-route me-1"), "Tutorial"],
+                color="secondary",
+                size="sm",
+                toggle_class_name="btn-outline-secondary",
+                align_end=False,
+            ),
+            id="tutorial-tour-menu",
+            className="d-inline-block",
+            title="Guided tours of the app",
+        )
+
+    @staticmethod
     def _create_collapsible_card(title, card_id, content, icon, is_open=False):
         """One collapsible sidebar section; the chevron follows the open state via CSS"""
         return html.Section(
             [
-                dbc.Button(
+                html.Div(
                     [
-                        html.I(className="fas fa-chevron-right section-chevron"),
-                        html.I(className=f"fas {icon} section-icon"),
-                        html.Span(title),
+                        dbc.Button(
+                            [
+                                html.I(className="fas fa-chevron-right section-chevron"),
+                                html.I(className=f"fas {icon} section-icon"),
+                                html.Span(title),
+                            ],
+                            id=f"{card_id}-toggle",
+                            color="link",
+                            className="section-toggle" + (" is-open" if is_open else ""),
+                            n_clicks=0,
+                        ),
+                        html.Button(
+                            "?",
+                            id=f"{card_id}-tour",
+                            n_clicks=0,
+                            type="button",
+                            className="btn btn-sm btn-outline-secondary section-tour-btn",
+                            title=f"Tour the {title} section",
+                            **{"aria-label": f"Tour the {title} section"},
+                        ),
                     ],
-                    id=f"{card_id}-toggle",
-                    color="link",
-                    className="section-toggle" + (" is-open" if is_open else ""),
-                    n_clicks=0,
+                    id=f"{card_id}-header",
+                    className="section-header" + (" is-open" if is_open else ""),
                 ),
                 dbc.Collapse(
                     html.Div(content, className="section-body"),

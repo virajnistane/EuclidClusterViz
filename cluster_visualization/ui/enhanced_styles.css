@@ -105,9 +105,16 @@ body {
     background: var(--cv-surface);
 }
 
-/* Headers of open sections stay pinned while their controls scroll, so the
-   current section is always named at the top of the sidebar */
-.section-toggle.btn.is-open {
+/* Header row: section toggle plus its "?" tour button. Open sections keep
+   their header pinned while their controls scroll, so the current section is
+   always named at the top of the sidebar */
+.section-header {
+    display: flex;
+    align-items: center;
+    background: var(--cv-surface);
+}
+
+.section-header.is-open {
     position: sticky;
     top: 0;
     z-index: 3;
@@ -115,7 +122,25 @@ body {
     border-bottom: 1px solid var(--cv-border);
 }
 
-.section-toggle.btn.is-open .section-icon {
+.section-header .section-toggle.btn {
+    flex: 1 1 auto;
+    min-width: 0;
+    background: transparent;
+}
+
+.section-tour-btn {
+    flex: 0 0 auto;
+    width: 1.75rem;
+    height: 1.75rem;
+    margin-right: 0.625rem;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.section-header.is-open .section-icon {
     color: var(--cv-accent);
 }
 
@@ -125,7 +150,7 @@ body {
     color: var(--cv-text);
 }
 
-.section-toggle.btn.is-open:hover {
+.section-header.is-open .section-toggle.btn:hover {
     background: var(--cv-section-open-hover);
 }
 
@@ -560,3 +585,42 @@ body {
         transition-duration: 0.01ms !important;
     }
 }
+
+/* ------------------------------------------------------------ Guided tours */
+
+.driver-popover.cv-tour {
+    max-width: 320px;
+    padding: 0.875rem 1rem;
+    border-radius: 8px;
+    background: var(--cv-surface);
+    color: var(--cv-text);
+    box-shadow: 0 6px 24px rgba(16, 24, 40, 0.18);
+}
+
+.driver-popover.cv-tour .driver-popover-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+}
+
+.driver-popover.cv-tour .driver-popover-description {
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: var(--cv-text-muted);
+}
+
+.driver-popover.cv-tour .driver-popover-progress-text {
+    font-variant-numeric: tabular-nums;
+    color: var(--cv-text-muted);
+}
+
+.driver-popover.cv-tour .driver-popover-navigation-btns button {
+    border-radius: 6px;
+    text-shadow: none;
+}
+
+.driver-popover.cv-tour .driver-popover-next-btn {
+    background: var(--cv-accent);
+    border-color: var(--cv-accent);
+    color: #fff;
+}
+

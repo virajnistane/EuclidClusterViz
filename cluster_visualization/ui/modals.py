@@ -457,6 +457,15 @@ class Modals:
                                 ),
                                 html.Li(
                                     [
+                                        html.Strong("Guided tours: "),
+                                        "the Tutorial menu offers a one-minute quick tour, a full walkthrough, "
+                                        "or a detailed tour of one section; the ? next to each sidebar section "
+                                        "header starts that section's tour.",
+                                    ],
+                                    className="mb-2",
+                                ),
+                                html.Li(
+                                    [
                                         html.Strong("Switch views: "),
                                         "use the Standard / Aladin toggle above the plot for a "
                                         "sky-survey-backed view of the same region.",
