@@ -88,7 +88,9 @@ TOUR_STEPS = {
          "body": "Type exact Min and Max values instead. They stay in sync with the slider; "
                  "values outside the data range are clamped."},
         {"element": "#redshift-include-missing", "title": "Missing values",
-         "body": "Keep or drop clusters that have no redshift at all. Every range filter has this switch."},
+         "body": "Keep or drop clusters that have no redshift at all. Every range filter has this switch. "
+                 "It is only enabled when some loaded clusters really lack the value; otherwise it is "
+                 "greyed out and marked \"(none missing)\"."},
         {"element": "#snr-pzwav-container", "title": "SNR (PZWAV)",
          "body": "Signal-to-noise range for PZWAV clusters. Only the selected algorithm's SNR filter is shown."},
         {"element": "#snr-amico-container", "title": "SNR (AMICO)",

@@ -81,6 +81,8 @@ class MainPlotCallbacks:
                 Output("snr-range-slider-pzwav", "value"),
                 Output("snr-range-slider-pzwav", "marks"),
                 Output("snr-range-slider-pzwav", "disabled"),
+                Output("snr-include-missing-pzwav", "disabled"),
+                Output("snr-include-missing-pzwav", "label"),
             ],
             [Input("algorithm-dropdown", "value")],
             prevent_initial_call=False,
@@ -98,7 +100,10 @@ class MainPlotCallbacks:
                 # Default to full range
                 default_value = [snr_min, snr_max]
 
-                return snr_min, snr_max, default_value, marks, False
+                switch = self._missing_switch_state(
+                    data, "SNR_CLUSTER", "SNR", det_code=2, tile_algorithm="PZWAV"
+                )
+                return (snr_min, snr_max, default_value, marks, False, *switch)
 
             except Exception as e:
                 # Fallback values if data loading fails
@@ -108,6 +113,8 @@ class MainPlotCallbacks:
                     [0, 100],
                     {0: "0", 100: "100"},
                     True,
+                    False,
+                    "Include clusters with missing SNR",
                 )
 
     def _setup_snr_slider_amico_callback(self):
@@ -120,6 +127,8 @@ class MainPlotCallbacks:
                 Output("snr-range-slider-amico", "value"),
                 Output("snr-range-slider-amico", "marks"),
                 Output("snr-range-slider-amico", "disabled"),
+                Output("snr-include-missing-amico", "disabled"),
+                Output("snr-include-missing-amico", "label"),
             ],
             [Input("algorithm-dropdown", "value")],
             prevent_initial_call=False,
@@ -137,7 +146,10 @@ class MainPlotCallbacks:
                 # Default to full range
                 default_value = [snr_min, snr_max]
 
-                return snr_min, snr_max, default_value, marks, False
+                switch = self._missing_switch_state(
+                    data, "SNR_CLUSTER", "SNR", det_code=1, tile_algorithm="AMICO"
+                )
+                return (snr_min, snr_max, default_value, marks, False, *switch)
 
             except Exception as e:
                 # Fallback values if data loading fails
@@ -147,6 +159,8 @@ class MainPlotCallbacks:
                     [0, 100],
                     {0: "0", 100: "100"},
                     True,
+                    False,
+                    "Include clusters with missing SNR",
                 )
 
     def _setup_redshift_slider_callback(self):
@@ -159,6 +173,8 @@ class MainPlotCallbacks:
                 Output("redshift-range-slider", "value"),
                 Output("redshift-range-slider", "marks"),
                 Output("redshift-range-slider", "disabled"),
+                Output("redshift-include-missing", "disabled"),
+                Output("redshift-include-missing", "label"),
             ],
             [Input("algorithm-dropdown", "value")],
             prevent_initial_call=False,
@@ -176,7 +192,8 @@ class MainPlotCallbacks:
                 # Default to full range
                 default_value = [z_min, z_max]
 
-                return z_min, z_max, default_value, marks, False
+                switch = self._missing_switch_state(data, "Z_CLUSTER", "redshift")
+                return (z_min, z_max, default_value, marks, False, *switch)
 
             except Exception as e:
                 # Fallback values if data loading fails
@@ -186,7 +203,43 @@ class MainPlotCallbacks:
                     [0, 10],
                     {0: "0", 10: "10"},
                     True,
+                    False,
+                    "Include clusters with missing redshift",
                 )
+
+    @staticmethod
+    def _has_missing_values(data, column, det_code=None, tile_algorithm=None):
+        """True if any loaded cluster lacks ``column`` (NaN).
+
+        Checks the merged catalog (restricted to ``DET_CODE_NB == det_code`` when that
+        column exists) and the per-tile catalogs (restricted to ``tile_algorithm``),
+        since the "include missing" switches also filter the unmerged tile clusters.
+        """
+        merged = data.get("data_detcluster_mergedcat")
+        if merged is not None and column in (merged.dtype.names or ()):
+            rows = merged
+            if det_code is not None and "DET_CODE_NB" in merged.dtype.names:
+                rows = merged[merged["DET_CODE_NB"] == det_code]
+            if len(rows) and np.isnan(np.asarray(rows[column], dtype=float)).any():
+                return True
+
+        for tile in (data.get("data_detcluster_by_cltile") or {}).values():
+            if tile_algorithm is not None and tile.get("algorithm", tile_algorithm) != tile_algorithm:
+                continue
+            tile_data = tile.get("detfits_data")
+            dtype = getattr(tile_data, "dtype", None)
+            if tile_data is None or dtype is None or column not in (dtype.names or ()):
+                continue
+            if len(tile_data) and np.isnan(np.asarray(tile_data[column], dtype=float)).any():
+                return True
+        return False
+
+    def _missing_switch_state(self, data, column, quantity, det_code=None, tile_algorithm=None):
+        """(disabled, label) for an "Include clusters with missing <quantity>" switch."""
+        label = f"Include clusters with missing {quantity}"
+        if self._has_missing_values(data, column, det_code=det_code, tile_algorithm=tile_algorithm):
+            return False, label
+        return True, f"{label} (none missing)"
 
     def _setup_richness_slider_zp_callback(self):
         @self.app.callback(
