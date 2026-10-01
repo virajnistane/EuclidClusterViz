@@ -588,6 +588,21 @@ body {
 
 /* ------------------------------------------------------------ Guided tours */
 
+/* Tutorial menu toggle: outline style (DropdownMenu only takes a solid colour) */
+.tour-menu-toggle.btn {
+    background: transparent;
+    border-color: #6c757d;
+    color: #495057;
+}
+
+.tour-menu-toggle.btn:hover,
+.tour-menu-toggle.btn:focus-visible,
+.tour-menu-toggle.btn.show {
+    background: #6c757d;
+    border-color: #6c757d;
+    color: #fff;
+}
+
 .driver-popover.cv-tour {
     max-width: 320px;
     padding: 0.875rem 1rem;

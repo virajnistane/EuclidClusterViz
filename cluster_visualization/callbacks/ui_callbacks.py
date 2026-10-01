@@ -1198,9 +1198,20 @@ class UICallbacks:
                         showProgress: true,
                         allowClose: true,
                         animate: !reduce,
-                        smoothScroll: !reduce,
+                        smoothScroll: false,
                         popoverClass: 'cv-tour',
                         steps: steps,
+                        // driver.js only scrolls the page; sidebar controls live in their own
+                        // scroll area (with sticky header and Apply bar), so centre the
+                        // element in its scroll container first, then re-measure
+                        onHighlightStarted: function(el) {
+                            if (el && el.scrollIntoView) {
+                                el.scrollIntoView({block: 'center', inline: 'nearest', behavior: 'instant'});
+                            }
+                        },
+                        onHighlighted: function(el, step, opts) {
+                            setTimeout(function() { opts.driver.refresh(); }, 50);
+                        },
                         onDestroyed: function() {
                             ORDER.forEach(function(id) {
                                 if (isOpen(id) !== before[id]) { toggle(id); }

@@ -508,7 +508,7 @@ class AppLayout:
                 label=[html.I(className="fas fa-route me-1"), "Tutorial"],
                 color="secondary",
                 size="sm",
-                toggle_class_name="btn-outline-secondary",
+                toggle_class_name="tour-menu-toggle",
                 align_end=False,
             ),
             id="tutorial-tour-menu",
