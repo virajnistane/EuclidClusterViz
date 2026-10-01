@@ -41,10 +41,8 @@ class DataControls:
                             ]
                         )
                     ],
-                    className="mb-3 border-0 shadow-sm",
+                    className="mb-3 border-0",
                     style={
-                        "background": "linear-gradient(45deg, #fff3cd, #ffffff)",
-                        "border-radius": "12px",
                     },
                 ),
                 # Threshold controls in beautiful card
@@ -62,8 +60,6 @@ class DataControls:
                             ],
                             className="border-0",
                             style={
-                                "background": "linear-gradient(45deg, #ffeaa7, #fdcb6e)",
-                                "border-radius": "8px 8px 0 0",
                             },
                         ),
                         dbc.CardBody(
@@ -131,7 +127,7 @@ class DataControls:
                             ]
                         ),
                     ],
-                    className="mb-3 border-0 shadow-sm",
+                    className="mb-3 border-0",
                     style={"border-radius": "12px"},
                 ),
                 # Magnitude controls in beautiful card
@@ -149,9 +145,6 @@ class DataControls:
                             ],
                             className="border-0",
                             style={
-                                "background": "linear-gradient(45deg, #a29bfe, #6c5ce7)",
-                                "color": "white",
-                                "border-radius": "8px 8px 0 0",
                             },
                         ),
                         dbc.CardBody(
@@ -223,7 +216,7 @@ class DataControls:
                             ]
                         ),
                     ],
-                    className="mb-3 border-0 shadow-sm",
+                    className="mb-3 border-0",
                     style={"border-radius": "12px"},
                 ),
                 # CATRED Data Controls with enhanced styling
@@ -241,20 +234,18 @@ class DataControls:
                             ],
                             className="border-0",
                             style={
-                                "background": "linear-gradient(45deg, #74b9ff, #0984e3)",
-                                "color": "white",
-                                "border-radius": "8px 8px 0 0",
                             },
                         ),
                         dbc.CardBody(
                             [
                                 # Render button
                                 dbc.Button(
-                                    [html.I(className="fas fa-eye me-2"), "🔍 Render CATRED Data"],
+                                    [html.I(className="fas fa-eye me-2"), "Render CATRED sources"],
                                     id="catred-render-button",
-                                    color="info",
+                                    color="secondary",
+                                    outline=True,
                                     size="sm",
-                                    className="w-100 mb-0 shadow-sm btn-enhanced",
+                                    className="w-100 mb-0 btn-enhanced",
                                     n_clicks=0,
                                     disabled=True,
                                     style={"border-radius": "8px", "font-weight": "600"},
@@ -282,7 +273,6 @@ class DataControls:
                                             style={
                                                 "height": "28px",
                                                 "cursor": "pointer",
-                                                "border-radius": "6px",
                                                 "padding": "1px 2px",
                                             },
                                         ),
@@ -321,7 +311,7 @@ class DataControls:
                         ),
                     ],
                     id="catred-controls-container",
-                    className="border-0 shadow-sm",
+                    className="border-0",
                     style={"border-radius": "12px"},
                 ),
             ]
@@ -369,10 +359,8 @@ class DataControls:
                             ]
                         )
                     ],
-                    className="mb-3 border-0 shadow-sm",
+                    className="mb-3 border-0",
                     style={
-                        "background": "linear-gradient(45deg, #f0f8ff, #ffffff)",
-                        "border-radius": "10px",
                     },
                 ),
                 # MER mosaic controls wrapper — hidden when Aladin mode is active
@@ -400,10 +388,8 @@ class DataControls:
                             ]
                         )
                     ],
-                    className="mb-3 border-0 shadow-sm",
+                    className="mb-3 border-0",
                     style={
-                        "background": "linear-gradient(45deg, #e8f4f8, #ffffff)",
-                        "border-radius": "10px",
                     },
                 ),
                 # Opacity control
@@ -421,9 +407,6 @@ class DataControls:
                             ],
                             className="border-0",
                             style={
-                                "background": "linear-gradient(45deg, #74b9ff, #0984e3)",
-                                "color": "white",
-                                "border-radius": "8px 8px 0 0",
                             },
                         ),
                         dbc.CardBody(
@@ -472,7 +455,7 @@ class DataControls:
                             className="p-2",
                         ),
                     ],
-                    className="mb-1 border-0 shadow-sm",
+                    className="mb-1 border-0",
                     style={"border-radius": "12px"},
                 ),
                 # Provider and source selection
@@ -490,9 +473,7 @@ class DataControls:
                             ],
                             className="border-0",
                             style={
-                                "background": "linear-gradient(45deg, #55efc4, #00b894)",
                                 "color": "#1f2937",
-                                "border-radius": "8px 8px 0 0",
                             },
                         ),
                         dbc.CardBody(
@@ -552,7 +533,7 @@ class DataControls:
                             className="p-3",
                         ),
                     ],
-                    className="mb-2 border-0 shadow-sm",
+                    className="mb-2 border-0",
                     style={"border-radius": "12px"},
                 ),
                 # Load mosaic button
@@ -563,12 +544,13 @@ class DataControls:
                                 dbc.Button(
                                     [
                                         html.I(className="fas fa-download me-2"),
-                                        "🖼️ Load Mosaic in Zoom",
+                                        "Load mosaic for this view",
                                     ],
                                     id="mosaic-render-button",
-                                    color="info",
+                                    color="secondary",
+                                    outline=True,
                                     size="sm",
-                                    className="w-100 mb-2 shadow-sm btn-enhanced",
+                                    className="w-100 mb-2 btn-enhanced",
                                     n_clicks=0,
                                     disabled=True,
                                     style={"border-radius": "8px", "font-weight": "600"},
@@ -611,10 +593,8 @@ class DataControls:
                             className="p-3",
                         )
                     ],
-                    className="mb-3 border-0 shadow-sm",
+                    className="mb-3 border-0",
                     style={
-                        "background": "linear-gradient(45deg, #e8f4f8, #ffffff)",
-                        "border-radius": "12px",
                     },
                 ),
                 ],  # end mer-mosaic-controls children
@@ -641,9 +621,6 @@ class DataControls:
                             ],
                             className="border-0",
                             style={
-                                "background": "linear-gradient(45deg, #74b9ff, #0984e3)",
-                                "color": "white",
-                                "border-radius": "8px 8px 0 0",
                             },
                         ),
                         dbc.CardBody(
@@ -692,7 +669,7 @@ class DataControls:
                             className="p-2",
                         ),
                     ],
-                    className="mb-1 border-0 shadow-sm",
+                    className="mb-1 border-0",
                     style={"border-radius": "12px"},
                 ),
                 dbc.Card(
@@ -702,12 +679,13 @@ class DataControls:
                                 dbc.Button(
                                     [
                                         html.I(className="fas fa-download me-2"),
-                                        "🖼️ Healpix Mask in Zoom",
+                                        "Load Healpix mask for this view",
                                     ],
                                     id="healpix-mask-button",
-                                    color="info",
+                                    color="secondary",
+                                    outline=True,
                                     size="sm",
-                                    className="w-100 mb-2 shadow-sm btn-enhanced",
+                                    className="w-100 mb-2 btn-enhanced",
                                     n_clicks=0,
                                     disabled=True,
                                     style={"border-radius": "8px", "font-weight": "600"},
@@ -790,10 +768,8 @@ class DataControls:
                             className="p-3",
                         )
                     ],
-                    className="mb-3 border-0 shadow-sm",
+                    className="mb-3 border-0",
                     style={
-                        "background": "linear-gradient(45deg, #e8f4f8, #ffffff)",
-                        "border-radius": "12px",
                     },
                 ),
             ],

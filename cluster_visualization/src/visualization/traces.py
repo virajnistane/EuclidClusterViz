@@ -941,7 +941,7 @@ class TraceCreator:
                         ]
                     else:
                         # No zoom info - show all pairs (with safety limit)
-                        print(f"⚠️  No zoom window detected - use Re-render button after zooming")
+                        print(f"⚠️  No zoom window detected - press Apply filters after zooming")
                         match_cluster_pairs = [
                             [
                                 cluster,

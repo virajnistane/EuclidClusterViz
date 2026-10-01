@@ -23,14 +23,6 @@ class UICallbacks:
     DEFAULT_UNMERGED_HELP_TEXT = "Clusters in individual tiles but absent from merged catalog"
     NO_INDIVIDUAL_CLTILE_DATA_MESSAGE = "No individual CL-tile data available"
 
-    # Filter Apply buttons that stay disabled until the first render
-    FILTER_APPLY_BUTTONS = [
-        "snr-render-button-pzwav",
-        "snr-render-button-amico",
-        "redshift-render-button",
-        "richness-render-button-zp",
-        "richness-render-button-rs",
-    ]
     # Range slider id -> id of its selected-range readout
     RANGE_SLIDER_READOUTS = {
         "snr-range-slider-pzwav": "snr-range-display-pzwav",
@@ -39,17 +31,37 @@ class UICallbacks:
         "richness-range-slider-zp": "richness-range-display-zp",
         "richness-range-slider-rs": "richness-range-display-rs",
     }
-    # Every button that triggers the main render (which reads all slider values)
-    RENDER_TRIGGER_BUTTONS = [
-        "render-button",
-        "snr-render-button-pzwav",
-        "snr-render-button-amico",
-        "redshift-render-button",
-        "richness-render-button-zp",
-        "richness-render-button-rs",
-        "idcluster-render-button",
-        "rerender-ovals-button",
-    ]
+    # Every button that triggers the main render (which reads all filter states)
+    RENDER_TRIGGER_BUTTONS = ["render-button", "apply-filters-button"]
+    # Filter states compared against the last render, grouped by the filter they belong to
+    FILTER_STATE_GROUPS = {
+        "Redshift": ["redshift-range-slider", "redshift-include-missing"],
+        "SNR": [
+            "snr-range-slider-pzwav",
+            "snr-include-missing-pzwav",
+            "snr-range-slider-amico",
+            "snr-include-missing-amico",
+        ],
+        "Richness": [
+            "richness-mode-radio",
+            "richness-range-slider-zp",
+            "richness-include-missing-zp",
+            "flag-quality-zp-checklist",
+            "richness-range-slider-rs",
+            "richness-include-missing-rs",
+            "flag-quality-rs-checklist",
+        ],
+        "Matched clusters": ["matching-clusters-switch"],
+    }
+    # Sidebar section id prefix -> starts open
+    SIDEBAR_SECTIONS = {
+        "clusters-settings": True,
+        "filters-settings": True,
+        "mask-controls": False,
+        "image-controls": False,
+        "display-options": False,
+        "app-config": False,
+    }
 
     def __init__(self, app, config=None, data_loader=None):
         """
@@ -86,22 +98,128 @@ class UICallbacks:
         """Selected-range readouts, number inputs and "not applied" state for range sliders"""
         sliders = list(self.RANGE_SLIDER_READOUTS)
 
-        # Remember the slider values each render used
+        state_ids = [i for ids in self.FILTER_STATE_GROUPS.values() for i in ids]
+        # Snapshot every filter state (and the ID list) each time a render runs
         self.app.clientside_callback(
             """
             function() {
                 const ids = %s;
-                // Arguments are the button n_clicks followed by the slider values
-                const values = Array.from(arguments).slice(-ids.length);
+                // Arguments: button n_clicks, then filter values, then upload contents + filename
+                const args = Array.from(arguments);
+                const n = ids.length;
+                const values = args.slice(args.length - n - 2, args.length - 2);
                 const applied = {};
                 ids.forEach((id, i) => { applied[id] = values[i]; });
+                const contents = args[args.length - 2];
+                const filename = args[args.length - 1];
+                applied['idcluster-upload'] = contents ? filename + ':' + contents.length : null;
                 return applied;
             }
             """
-            % sliders,
+            % state_ids,
             Output("applied-filters-store", "data"),
             [Input(button_id, "n_clicks") for button_id in self.RENDER_TRIGGER_BUTTONS],
-            [State(slider_id, "value") for slider_id in sliders],
+            [State(i, "value") for i in state_ids]
+            + [State("idcluster-upload", "contents"), State("idcluster-upload", "filename")],
+            prevent_initial_call=True,
+        )
+
+        # Apply bar: which filters differ from the last render
+        self.app.clientside_callback(
+            """
+            function() {
+                const groups = %s;
+                const args = Array.from(arguments);
+                const applied = args[args.length - 1];
+                const filename = args[args.length - 2];
+                const contents = args[args.length - 3];
+                if (!applied) {
+                    return [true, 'secondary', true, 'Render once to enable filters'];
+                }
+                const current = {};
+                let k = 0;
+                Object.values(groups).forEach(ids => ids.forEach(id => { current[id] = args[k++]; }));
+                current['idcluster-upload'] = contents ? filename + ':' + contents.length : null;
+                // Checklist order follows click order, so compare arrays sorted
+                const norm = v => Array.isArray(v) ? [...v].sort((x, y) => x - y) : v;
+                const same = (a, b) => JSON.stringify(norm(a)) === JSON.stringify(norm(b));
+                const changed = Object.keys(groups).filter(
+                    name => groups[name].some(id => !same(current[id], applied[id]))
+                );
+                if (!same(current['idcluster-upload'], applied['idcluster-upload'])) {
+                    changed.push('Cluster-ID list');
+                }
+                if (!changed.length) {
+                    return [true, 'secondary', true, 'Plot matches these filters'];
+                }
+                return [false, 'primary', false, 'Changed: ' + changed.join(', ')];
+            }
+            """
+            % self.FILTER_STATE_GROUPS,
+            [
+                Output("apply-filters-button", "disabled"),
+                Output("apply-filters-button", "color"),
+                Output("apply-filters-button", "outline"),
+                Output("apply-filters-status", "children"),
+            ],
+            [Input(i, "value") for i in state_ids]
+            + [
+                Input("idcluster-upload", "contents"),
+                Input("idcluster-upload", "filename"),
+                Input("applied-filters-store", "data"),
+            ],
+        )
+
+        # "Not applied" tag next to each non-slider filter control (sliders use their readout)
+        tagged = [i for i in state_ids if i not in self.RANGE_SLIDER_READOUTS]
+        self.app.clientside_callback(
+            """
+            function() {
+                const ids = %s;
+                const args = Array.from(arguments);
+                const applied = args[args.length - 1];
+                const filename = args[args.length - 2];
+                const contents = args[args.length - 3];
+                const hide = {display: 'none'}, show = {display: 'inline-block'};
+                const keys = ids.concat(['idcluster-upload']);
+                if (!applied) { return keys.map(() => hide); }
+                const current = {};
+                ids.forEach((id, i) => { current[id] = args[i]; });
+                current['idcluster-upload'] = contents ? filename + ':' + contents.length : null;
+                const norm = v => Array.isArray(v) ? [...v].sort((x, y) => x - y) : v;
+                const same = (a, b) => JSON.stringify(norm(a)) === JSON.stringify(norm(b));
+                return keys.map(id => same(current[id], applied[id]) ? hide : show);
+            }
+            """
+            % tagged,
+            [Output(f"{i}-pending", "style") for i in tagged + ["idcluster-upload"]],
+            [Input(i, "value") for i in tagged]
+            + [
+                Input("idcluster-upload", "contents"),
+                Input("idcluster-upload", "filename"),
+                Input("applied-filters-store", "data"),
+            ],
+        )
+
+        # Only the selected algorithm's SNR filter is shown
+        self.app.clientside_callback(
+            """
+            function(algorithm) {
+                const show = {display: 'block'}, hide = {display: 'none'};
+                return [algorithm === 'AMICO' ? hide : show, algorithm === 'PZWAV' ? hide : show];
+            }
+            """,
+            [Output("snr-pzwav-container", "style"), Output("snr-amico-container", "style")],
+            Input("algorithm-dropdown", "value"),
+        )
+
+        # Clear the uploaded cluster-ID list
+        self.app.clientside_callback(
+            """
+            function(n) { return [null, null]; }
+            """,
+            [Output("idcluster-upload", "contents"), Output("idcluster-upload", "filename")],
+            Input("idcluster-clear-button", "n_clicks"),
             prevent_initial_call=True,
         )
 
@@ -199,56 +317,8 @@ class UICallbacks:
             label = f"Re-render · {algorithm}" if algorithm else "Re-render"
             return [html.I(className="fas fa-redo me-2"), label]
 
-        @self.app.callback(
-            Output("catred-render-button", "children"),
-            [Input("catred-render-button", "n_clicks")],
-            prevent_initial_call=False,
-        )
-        def update_catred_button_text(catred_n_clicks):
-            """Update CATRED button text"""
-            if catred_n_clicks is None:
-                catred_n_clicks = 0
-            return (
-                f"🔍 Render CATRED Data ({catred_n_clicks})"
-                if catred_n_clicks > 0
-                else "🔍 Render CATRED Data"
-            )
-
-        @self.app.callback(
-            Output("catred-clear-button", "children"),
-            [Input("catred-clear-button", "n_clicks")],
-            prevent_initial_call=False,
-        )
-        def update_clear_button_text(clear_n_clicks):
-            """Update clear button text with click count"""
-            clear_n_clicks = clear_n_clicks or 0
-            return (
-                f"🗑️ Clear All CATRED ({clear_n_clicks})"
-                if clear_n_clicks > 0
-                else "🗑️ Clear All CATRED"
-            )
-
     def _setup_button_state_callbacks(self):
         """Setup callbacks to enable/disable buttons based on conditions"""
-
-        @self.app.callback(
-            [
-                Output("snr-render-button-pzwav", "disabled"),
-                Output("snr-render-button-amico", "disabled"),
-                Output("redshift-render-button", "disabled"),
-                Output("richness-render-button-zp", "disabled"),
-                Output("richness-render-button-rs", "disabled"),
-            ]
-            + [Output(f"{button_id}-hint", "style") for button_id in self.FILTER_APPLY_BUTTONS],
-            [Input("render-button", "n_clicks")],
-            prevent_initial_call=False,
-        )
-        def enable_snr_and_redshift_buttons(n_clicks):
-            """Enable SNR, redshift, and richness filter buttons after initial render"""
-            n_clicks = n_clicks or 0
-            disabled = n_clicks == 0
-            hint_style = {} if disabled else {"display": "none"}
-            return (disabled,) * 5 + (hint_style,) * len(self.FILTER_APPLY_BUTTONS)
 
         @self.app.callback(
             [
@@ -271,7 +341,7 @@ class UICallbacks:
 
         @self.app.callback(
             [
-                Output("idcluster-render-button", "disabled"),
+                Output("idcluster-clear-button", "style"),
                 Output("idcluster-status-display", "children"),
             ],
             [
@@ -281,19 +351,18 @@ class UICallbacks:
             prevent_initial_call=False,
         )
         def enable_idcluster_button(upload_contents, upload_filename):
-            """Enable Cluster-ID filter button and show uploaded entry count."""
+            """Show the uploaded entry count and offer to clear the list."""
+            hidden, shown = {"display": "none"}, {"display": "inline-block"}
             if not upload_contents or not upload_filename:
-                return True, "No ID list uploaded"
+                return hidden, "No ID list uploaded"
 
             try:
                 idcluster_array = get_idclusters_array(upload_contents, upload_filename)
                 count = int(idcluster_array.size) if idcluster_array is not None else 0
-                status = f"Uploaded {count} cluster IDs"
-
-                return False, status
+                return shown, f"{count} cluster IDs from {upload_filename}"
 
             except Exception as error:
-                return True, f"Upload error: {error}"
+                return shown, f"Could not read {upload_filename}: {error}. Check it has one ID per line."
 
         @self.app.callback(
             Output("matching-clusters-switch", "disabled"),
@@ -468,102 +537,24 @@ class UICallbacks:
         )
 
     def _setup_collapsible_callbacks(self):
-        """Setup callbacks for collapsible sections"""
-
-        # Detected Clusters Section
-        @self.app.callback(
-            [
-                Output("clusters-settings-collapse", "is_open"),
-                Output("clusters-settings-toggle", "children"),
-            ],
-            [Input("clusters-settings-toggle", "n_clicks")],
-            prevent_initial_call=False,
-        )
-        def toggle_clusters_settings(n_clicks):
-            """Toggle clusters settings section"""
-            if n_clicks is None:
-                return True, [
-                    html.I(className="fas fa-chevron-up me-2"),
-                    "🎯 Detected Clusters",
-                ]
-
-            is_open = (n_clicks % 2) == 0
-            icon = "fas fa-chevron-up" if is_open else "fas fa-chevron-down"
-            return is_open, [html.I(className=f"{icon} me-2"), "🎯 Detected Clusters"]
-
-        # Display Options Section
-        @self.app.callback(
-            [
-                Output("display-options-collapse", "is_open"),
-                Output("display-options-toggle", "children"),
-            ],
-            [Input("display-options-toggle", "n_clicks")],
-            prevent_initial_call=False,
-        )
-        def toggle_display_options(n_clicks):
-            """Toggle display options section"""
-            if n_clicks is None:
-                return False, [  # 🔧 Changed from True to False to match layout
-                    html.I(className="fas fa-chevron-right me-2"),  # 🔧 Changed to right arrow
-                    "🎨 Display Options",
-                ]
-
-            is_open = (n_clicks % 2) == 1
-            icon = "fas fa-chevron-up" if is_open else "fas fa-chevron-down"
-            return is_open, [html.I(className=f"{icon} me-2"), "🎨 Display Options"]
-
-        # Mask Section
-        @self.app.callback(
-            [
-                Output("mask-controls-collapse", "is_open"),
-                Output("mask-controls-toggle", "children"),
-            ],
-            [Input("mask-controls-toggle", "n_clicks")],
-            prevent_initial_call=False,
-        )
-        def toggle_mask_controls(n_clicks):
-            if n_clicks is None:
-                return False, [html.I(className="fas fa-chevron-right me-2"), "🎭 Mask"]
-            is_open = (n_clicks % 2) == 1
-            icon = "fas fa-chevron-up" if is_open else "fas fa-chevron-down"
-            return is_open, [html.I(className=f"{icon} me-2"), "🎭 Mask"]
-
-        # App Configuration Section
-        @self.app.callback(
-            [
-                Output("app-config-collapse", "is_open"),
-                Output("app-config-toggle", "children"),
-            ],
-            [Input("app-config-toggle", "n_clicks")],
-            prevent_initial_call=False,
-        )
-        def toggle_app_config(n_clicks):
-            if n_clicks is None:
-                return False, [html.I(className="fas fa-chevron-right me-2"), "⚙️ App Configuration"]
-            is_open = (n_clicks % 2) == 1
-            icon = "fas fa-chevron-up" if is_open else "fas fa-chevron-down"
-            return is_open, [html.I(className=f"{icon} me-2"), "⚙️ App Configuration"]
-
-        # Mosaic Section
-        @self.app.callback(
-            [
-                Output("image-controls-collapse", "is_open", allow_duplicate=True),
-                Output("image-controls-toggle", "children"),
-            ],
-            [Input("image-controls-toggle", "n_clicks")],
-            prevent_initial_call="initial_duplicate",
-        )
-        def toggle_image_controls(n_clicks):
-            """Toggle image controls section"""
-            if n_clicks is None:
-                return False, [
-                    html.I(className="fas fa-chevron-right me-2"),
-                    "🖼️ Mosaic",
-                ]
-
-            is_open = (n_clicks % 2) == 1
-            icon = "fas fa-chevron-up" if is_open else "fas fa-chevron-down"
-            return is_open, [html.I(className=f"{icon} me-2"), "🖼️ Mosaic"]
+        """Open/close sidebar sections; the toggle's class drives the chevron"""
+        for section in self.SIDEBAR_SECTIONS:
+            self.app.clientside_callback(
+                """
+                function(n, isOpen) { return !isOpen; }
+                """,
+                Output(f"{section}-collapse", "is_open"),
+                Input(f"{section}-toggle", "n_clicks"),
+                State(f"{section}-collapse", "is_open"),
+                prevent_initial_call=True,
+            )
+            self.app.clientside_callback(
+                """
+                function(isOpen) { return isOpen ? 'section-toggle is-open' : 'section-toggle'; }
+                """,
+                Output(f"{section}-toggle", "className"),
+                Input(f"{section}-collapse", "is_open"),
+            )
 
     def _setup_config_display_callback(self):
         """Setup callback to display configuration parameters"""
@@ -1125,10 +1116,12 @@ class UICallbacks:
                         steps: [
                             { element: '#cluster-plot', popover: { title: 'Main plot', description: 'Pan, zoom and click a cluster to select it.', side: 'bottom' } },
                             { element: '#view-mode-plotly-btn', popover: { title: 'View modes', description: 'Switch between the Standard scatter view and Aladin sky view (Aladin enables once you zoom to a single cluster).', side: 'bottom' } },
-                            { element: '#clusters-settings-toggle', popover: { title: 'Detected Clusters', description: 'Choose the detection algorithm and set SNR / redshift filters here.', side: 'right' } },
+                            { element: '#render-button', popover: { title: 'Render', description: 'Draw the catalog for the selected algorithm. Click again to re-render.', side: 'right' } },
+                            { element: '#clusters-settings-toggle', popover: { title: 'Catalog', description: 'Choose the detection algorithm, CL-tile information and unmerged clusters.', side: 'right' } },
+                            { element: '#filters-settings-toggle', popover: { title: 'Filters', description: 'Set redshift, SNR, richness, cluster-ID and matched-cluster options, then press Apply filters at the bottom of the section.', side: 'right' } },
                             { element: '#mask-controls-toggle', popover: { title: 'Mask', description: 'Toggle the CATRED source overlay and Healpix mask.', side: 'right' } },
-                            { element: '#image-controls-toggle', popover: { title: 'Mosaic', description: 'Load survey imagery for the selected cluster.', side: 'right' } },
-                            { element: '#display-options-toggle', popover: { title: 'Display Options', description: 'Toggle polygon/MER overlays and other display settings.', side: 'right' } },
+                            { element: '#image-controls-toggle', popover: { title: 'Mosaic', description: 'Load survey imagery for the current zoomed view.', side: 'right' } },
+                            { element: '#display-options-toggle', popover: { title: 'Display', description: 'Toggle polygon/MER overlays and other display settings.', side: 'right' } },
                             { element: '#status-info-toggle', popover: { title: 'Status', description: 'Status messages show up here; click to restore if minimized.', side: 'left' } },
                             { element: '#getting-started-open', popover: { title: 'Need more detail?', description: 'Reopen the full Getting Started guide anytime.', side: 'bottom' } },
                         ]

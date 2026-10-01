@@ -426,8 +426,8 @@ class Modals:
                                 html.Li(
                                     [
                                         html.Strong("Pick your data: "),
-                                        "choose Algorithm (PZWAV / AMICO / BOTH) and adjust the SNR, "
-                                        "redshift and other filters in the sidebar.",
+                                        "choose the algorithm (PZWAV, AMICO or both) under Catalog, and set "
+                                        "redshift, SNR and richness cuts under Filters.",
                                     ],
                                     className="mb-2",
                                 ),
@@ -435,7 +435,7 @@ class Modals:
                                     [
                                         html.Strong("Render: "),
                                         "click Render clusters to draw the catalog. Display options then update live and keep "
-                                        "your zoom; filters take effect when you press their Apply button.",
+                                        "your zoom; filters take effect when you press Apply filters.",
                                     ],
                                     className="mb-2",
                                 ),
@@ -450,8 +450,8 @@ class Modals:
                                 html.Li(
                                     [
                                         html.Strong("High-res data & imagery: "),
-                                        "open the CATRED / Mosaic sections in the sidebar, set your "
-                                        "options, then click their own Apply/Render button.",
+                                        "open the Mask (CATRED) or Mosaic section in the sidebar, set your "
+                                        "options, then click that section's own button.",
                                     ],
                                     className="mb-2",
                                 ),

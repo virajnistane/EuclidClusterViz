@@ -398,7 +398,6 @@ class PHZCallbacks:
                 Input("phz-inner-tabs", "active_tab"),
                 Input("phz-cluster-refresh-btn", "n_clicks"),
                 Input("phz-cluster-nbins-slider", "value"),
-                Input("idcluster-render-button", "n_clicks"),
             ],
             [
                 State("cluster-plot", "figure"),
@@ -412,7 +411,7 @@ class PHZCallbacks:
             prevent_initial_call=True,
         )
         def update_cluster_data_plots(
-            active_tab, _refresh_clicks, n_bins, _idcluster_clicks,
+            active_tab, _refresh_clicks, n_bins,
             cluster_figure, algorithm,
             snr_range_pzwav, snr_range_amico, redshift_range,
             idcluster_upload_contents, idcluster_upload_filename,

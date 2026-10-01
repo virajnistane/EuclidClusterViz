@@ -66,79 +66,26 @@ class AppLayout:
                 # Main horizontal layout: Controls sidebar + Plot area
                 dbc.Row(
                     [
-                        # Left sidebar with controls - Enhanced beautiful design
+                        # Left sidebar: render action, then collapsible control sections
                         dbc.Col(
                             [
-                                dbc.Card(
+                                html.Div(
                                     [
-                                        dbc.CardHeader(
+                                        html.Div(
                                             [
-                                                html.Div(
-                                                    [
-                                                        html.I(
-                                                            className="fas fa-sliders-h me-2 text-white"
-                                                        ),
-                                                        html.H5(
-                                                            "Visualization Controls",
-                                                            className="mb-0 d-inline-block text-white",
-                                                        ),
-                                                    ],
-                                                    className="d-flex align-items-center justify-content-center",
-                                                )
-                                            ],
-                                            className="bg-gradient text-white",
-                                            style={
-                                                "background": "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                                                "border-radius": "15px 15px 0 0",
-                                            },
-                                        ),
-                                        dbc.CardBody(
-                                            [
-                                                # Header info with beautiful styling
-                                                dbc.Alert(
-                                                    [
-                                                        html.I(className="fas fa-info-circle me-2"),
-                                                        "Display options update live and keep your zoom. Filters take effect when you press Apply.",
-                                                    ],
-                                                    color="info",
-                                                    className="mb-3 small text-center border-0 card-hover",
-                                                    style={
-                                                        "background": "linear-gradient(45deg, #e3f2fd, #f3e5f5)",
-                                                        "border-radius": "10px",
-                                                        "box-shadow": "0 2px 10px rgba(0,0,0,0.1)",
-                                                    },
-                                                ),
-                                                # Main render button with enhanced styling
+                                                html.H2("Controls", className="sidebar-title"),
                                                 AppLayout._create_main_render_section(),
-                                                # Elegant divider
-                                                html.Div(
-                                                    className="position-relative my-4",
-                                                    children=[
-                                                        html.Hr(
-                                                            className="border-primary",
-                                                            style={"border-width": "2px"},
-                                                        ),
-                                                        html.Div(
-                                                            "⚙️",
-                                                            className="position-absolute top-50 start-50 translate-middle bg-white px-2 text-primary",
-                                                            style={"font-size": "1.2rem"},
-                                                        ),
-                                                    ],
+                                                html.P(
+                                                    "Display options update live and keep your zoom. "
+                                                    "Filters take effect when you press Apply filters.",
+                                                    className="sidebar-note",
                                                 ),
-                                                # Collapsible sections for better organization
-                                                AppLayout._create_collapsible_sections(),
                                             ],
-                                            style={
-                                                "overflow-y": "auto",
-                                                "max-height": "calc(100vh - 200px)",
-                                            },
+                                            className="sidebar-head",
                                         ),
+                                        AppLayout._create_collapsible_sections(),
                                     ],
-                                    className="h-100 shadow-lg border-0 sidebar-card card-hover",
-                                    style={
-                                        "background": "linear-gradient(180deg, #ffffff 0%, #f8f9ff 100%)",
-                                        "border-radius": "15px",
-                                    },
+                                    className="sidebar-panel",
                                 )
                             ],
                             xs=12,
@@ -477,289 +424,98 @@ class AppLayout:
         )
 
     @staticmethod
-    def _create_mosaic_controls_section():
-        """Create mosaic image controls section with enhanced styling"""
-        return html.Div(
-            [
-                # Main mosaic toggle
-                dbc.Card(
-                    [
-                        dbc.CardBody(
-                            [
-                                html.Div(
-                                    [
-                                        html.I(className="fas fa-images me-0 text-info"),
-                                        dbc.Switch(
-                                            id="mosaic-enable-switch",
-                                            label="Enable mosaic images",
-                                            value=True,
-                                            disabled=False,
-                                            className="ms-1",
-                                        ),
-                                    ],
-                                    className="d-flex align-items-left mb-0",
-                                ),
-                            ]
-                        )
-                    ],
-                    className="mb-3 border-0 shadow-sm",
-                    style={
-                        "background": "linear-gradient(45deg, #e8f4f8, #ffffff)",
-                        "border-radius": "10px",
-                    },
-                ),
-                # Opacity control
-                dbc.Card(
-                    [
-                        dbc.CardHeader(
-                            [
-                                html.Div(
-                                    [
-                                        html.I(className="fas fa-adjust me-2"),
-                                        html.H6("Mosaic Opacity", className="mb-0"),
-                                    ],
-                                    className="d-flex align-items-center",
-                                )
-                            ],
-                            className="border-0",
-                            style={
-                                "background": "linear-gradient(45deg, #74b9ff, #0984e3)",
-                                "color": "white",
-                                "border-radius": "8px 8px 0 0",
-                            },
-                        ),
-                        dbc.CardBody(
-                            [
-                                html.Div(
-                                    [
-                                        dcc.Slider(
-                                            id="mosaic-opacity-slider",
-                                            min=0.1,
-                                            max=1.0,
-                                            step=0.1,
-                                            value=0.7,
-                                            marks={
-                                                0.1: {
-                                                    "label": "10%",
-                                                    "style": {"color": "#666", "fontSize": "12px"},
-                                                },
-                                                0.5: {
-                                                    "label": "50%",
-                                                    "style": {
-                                                        "color": "#0984e3",
-                                                        "font-weight": "bold",
-                                                        "fontSize": "13px",
-                                                    },
-                                                },
-                                                1.0: {
-                                                    "label": "100%",
-                                                    "style": {"color": "#666", "fontSize": "12px"},
-                                                },
-                                            },
-                                            tooltip={
-                                                "placement": "bottom",
-                                                "always_visible": False,
-                                            },
-                                            disabled=False,
-                                            className="custom-slider",
-                                        )
-                                    ],
-                                    style={
-                                        "padding": "5px 10px",
-                                        "margin": "0",
-                                        "minHeight": "50px",
-                                    },
-                                )
-                            ],
-                            className="p-2",
-                        ),
-                    ],
-                    className="mb-1 border-0 shadow-sm",
-                    style={"border-radius": "12px"},
-                ),
-                # Load mosaic button
-                dbc.Card(
-                    [
-                        dbc.CardBody(
-                            [
-                                dbc.Button(
-                                    [
-                                        html.I(className="fas fa-download me-2"),
-                                        "🖼️ Load Mosaic in Zoom",
-                                    ],
-                                    id="mosaic-render-button",
-                                    color="info",
-                                    size="sm",
-                                    className="w-100 mb-2 shadow-sm btn-enhanced",
-                                    n_clicks=0,
-                                    disabled=True,
-                                    style={"border-radius": "8px", "font-weight": "600"},
-                                ),
-                                html.Small(
-                                    [
-                                        html.I(className="fas fa-image me-1"),
-                                        "Load mosaic images for visible MER tiles",
-                                    ],
-                                    className="text-muted d-block text-left mb-2",
-                                ),
-                                # Mosaic visibility and delete controls
-                                html.Div(
-                                    [
-                                        dbc.Button(
-                                            [html.I(className="fas fa-eye me-1"), "Hide Mosaic"],
-                                            id="mosaic-toggle-visibility-button",
-                                            color="secondary",
-                                            size="sm",
-                                            outline=True,
-                                            className="me-1",
-                                            n_clicks=0,
-                                            disabled=True,
-                                            style={"border-radius": "6px", "font-size": "0.85rem"},
-                                        ),
-                                        dbc.Button(
-                                            [html.I(className="fas fa-trash me-1"), "Delete"],
-                                            id="mosaic-delete-button",
-                                            color="danger",
-                                            size="sm",
-                                            outline=True,
-                                            n_clicks=0,
-                                            disabled=True,
-                                            style={"border-radius": "6px", "font-size": "0.85rem"},
-                                        ),
-                                    ],
-                                    className="d-flex justify-content-between",
-                                ),
-                            ],
-                            className="p-3",
-                        )
-                    ],
-                    className="mb-3 border-0 shadow-sm",
-                    style={
-                        "background": "linear-gradient(45deg, #e8f4f8, #ffffff)",
-                        "border-radius": "12px",
-                    },
-                ),
-            ]
-        )
-
-    @staticmethod
     def _create_main_render_section():
-        """Create main render button section with beautiful styling"""
-        return dbc.Card(
-            [
-                dbc.CardBody(
-                    [
-                        dbc.Button(
-                            [html.I(className="fas fa-play me-2"), "Render clusters"],
-                            id="render-button",
-                            color="primary",
-                            className="w-100 mb-0 btn-enhanced btn-primary-action",
-                            n_clicks=0,
-                        ),
-                    ],
-                    className="p-2",
-                )
-            ],
-            className="mb-3 border-0 card-hover",
-            style={
-                "background": "linear-gradient(135deg, #e8f4f8, #f0f8ff)",
-                "border-radius": "12px",
-                "box-shadow": "0 2px 10px rgba(0,0,0,0.1)",
-            },
+        """Primary action: render (or re-render) the catalog"""
+        return dbc.Button(
+            [html.I(className="fas fa-play me-2"), "Render clusters"],
+            id="render-button",
+            color="primary",
+            className="w-100 btn-enhanced btn-primary-action",
+            n_clicks=0,
         )
 
     @staticmethod
     def _create_collapsible_sections():
-        """Create organized collapsible sections for better UX"""
+        """Sidebar sections, ordered by how often they are used"""
         return html.Div(
             [
-                # Configuration Info Section - FIRST
                 AppLayout._create_collapsible_card(
-                    "⚙️ App Configuration",
-                    "app-config",
-                    [SidebarSections.create_config_info_section()],
-                    is_open=False,
-                    color="secondary",
-                ),
-                # Core Settings Section
-                AppLayout._create_collapsible_card(
-                    "🎯 Detected Clusters",
+                    "Catalog",
                     "clusters-settings",
                     [
                         SidebarSections.create_algorithm_section(),
                         SidebarSections.create_merged_clusters_section(),
-                        SidebarSections.create_cluster_matching_section(),
+                    ],
+                    icon="fa-database",
+                    is_open=True,
+                ),
+                AppLayout._create_collapsible_card(
+                    "Filters",
+                    "filters-settings",
+                    [
                         SidebarSections.create_redshift_section(),
                         SidebarSections.create_snr_section(),
                         SidebarSections.create_richness_section(),
                         SidebarSections.create_idcluster_section(),
+                        SidebarSections.create_cluster_matching_section(),
+                        SidebarSections.create_apply_filters_bar(),
                     ],
+                    icon="fa-filter",
                     is_open=True,
-                    color="primary",
                 ),
-                # Mask Section (CATRED controls + Healpix mask)
                 AppLayout._create_collapsible_card(
-                    "🎭 Mask",
+                    "Mask",
                     "mask-controls",
                     [
                         DataControls.create_catred_data_section(),
                         DataControls.create_healpix_mask_section(),
                     ],
-                    is_open=False,
-                    color="warning",
+                    icon="fa-border-all",
                 ),
-                # Image Controls Section
                 AppLayout._create_collapsible_card(
-                    "🖼️ Mosaic",
+                    "Mosaic",
                     "image-controls",
                     [DataControls.create_mosaic_controls_section()],
-                    is_open=False,
-                    color="info",
+                    icon="fa-image",
                 ),
-                # Display Options Section
                 AppLayout._create_collapsible_card(
-                    "🎨 Display Options",
+                    "Display",
                     "display-options",
                     [SidebarSections.create_display_options_section()],
-                    is_open=False,
-                    color="success",
+                    icon="fa-eye",
+                ),
+                AppLayout._create_collapsible_card(
+                    "Configuration",
+                    "app-config",
+                    [SidebarSections.create_config_info_section()],
+                    icon="fa-cog",
                 ),
             ]
         )
 
     @staticmethod
-    def _create_collapsible_card(title, card_id, content, is_open=True, color="primary"):
-        """Create a beautiful collapsible card section"""
-        header_children = [
-            html.I(className=f"fas fa-chevron-{'down' if is_open else 'right'} me-2"),
-            title,
-        ]
-        return dbc.Card(
+    def _create_collapsible_card(title, card_id, content, icon, is_open=False):
+        """One collapsible sidebar section; the chevron follows the open state via CSS"""
+        return html.Section(
             [
-                dbc.CardHeader(
+                dbc.Button(
                     [
-                        dbc.Button(
-                            header_children,
-                            id=f"{card_id}-toggle",
-                            color="link",
-                            className="text-decoration-none fw-bold w-100 text-start p-2 collapse-header",
-                            style={"color": f"var(--bs-{color})"},
-                        ),
+                        html.I(className="fas fa-chevron-right section-chevron"),
+                        html.I(className=f"fas {icon} section-icon"),
+                        html.Span(title),
                     ],
-                    className="border-0 p-0",
-                    style={
-                        "background": f"linear-gradient(45deg, var(--bs-{color}-100), var(--bs-{color}-50))",
-                        "border-radius": "8px 8px 0 0",
-                    },
+                    id=f"{card_id}-toggle",
+                    color="link",
+                    className="section-toggle" + (" is-open" if is_open else ""),
+                    n_clicks=0,
                 ),
                 dbc.Collapse(
-                    [dbc.CardBody(content, className="pt-3")],
+                    html.Div(content, className="section-body"),
                     id=f"{card_id}-collapse",
                     is_open=is_open,
                 ),
             ],
-            className="mb-3 border-0 shadow-sm card-hover",
-            style={"border-radius": "12px", "box-shadow": "0 4px 15px rgba(0,0,0,0.1)"},
+            className="sidebar-section",
         )
 
     @staticmethod

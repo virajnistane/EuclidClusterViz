@@ -1,12 +1,46 @@
 """
 Sidebar control sections for the cluster visualization app.
 
-Contains all sidebar control UI components including algorithm selection,
-cluster options, filtering controls, and display settings.
+Contains all sidebar control UI components: catalog selection, cluster
+filters, display settings and application configuration. Styling lives in
+enhanced_styles.css (``control-*``, ``range-*`` and ``apply-bar`` classes);
+components here only carry structure.
 """
 
 import dash_bootstrap_components as dbc
 from dash import dcc, html
+
+
+def _group_label(text, html_for=None):
+    """Heading for one control group (a filter or a setting)."""
+    if html_for:
+        return html.Label(text, htmlFor=html_for, className="control-label")
+    return html.Div(text, className="control-label")
+
+
+def _help(children, help_id=None):
+    """Muted one-line explanation under a control."""
+    if help_id:
+        return html.Small(html.Span(children, id=help_id), className="control-help")
+    return html.Small(children, className="control-help")
+
+
+def _pending_tag(control_id):
+    """'Not applied' tag shown while a control differs from the last render (set clientside)."""
+    return html.Span(
+        "Not applied",
+        id=f"{control_id}-pending",
+        className="range-readout-flag pending-tag",
+        style={"display": "none"},
+    )
+
+
+def _switch(switch_id, label, value, help_text=None, help_id=None, disabled=False):
+    """Switch with optional help line, as one control group."""
+    children = [dbc.Switch(id=switch_id, label=label, value=value, disabled=disabled)]
+    if help_text is not None:
+        children.append(_help(help_text, help_id))
+    return html.Div(children, className="control-group")
 
 
 def _range_inputs(slider_id):
@@ -31,1025 +65,401 @@ def _range_inputs(slider_id):
     return dbc.Row([bound_input("lo", "Min"), bound_input("hi", "Max")], className="g-2 mb-2")
 
 
-def _apply_hint(button_id):
-    """Reason shown under an Apply button while it is disabled."""
-    return html.Small(
-        "Render once to enable filters",
-        id=f"{button_id}-hint",
-        className="apply-hint text-muted small mt-1",
+def _range_filter(slider_id, readout_id, missing_id, missing_label, missing_default,
+                  default_max=100):
+    """Readout + RangeSlider + min/max inputs + include-missing switch."""
+    return html.Div(
+        [
+            # Selected-range readout (set clientside)
+            html.Div(id=readout_id, className="range-readout"),
+            dcc.RangeSlider(
+                id=slider_id,
+                min=0,
+                max=default_max,
+                step=0.1,
+                marks={},
+                value=[0, default_max],
+                tooltip={"placement": "bottom", "always_visible": False},
+                allowCross=False,
+                className="custom-range-slider",
+            ),
+            _range_inputs(slider_id),
+            dbc.Switch(id=missing_id, label=missing_label, value=missing_default),
+            _pending_tag(missing_id),
+        ]
+    )
+
+
+def _flag_checklist(checklist_id, estimate):
+    """Quality-flag checklist for one richness estimate."""
+    return html.Div(
+        [
+            html.Div(
+                [f"Quality flag ({estimate})", _pending_tag(checklist_id)],
+                className="control-sublabel d-flex align-items-center gap-2",
+            ),
+            dbc.Checklist(
+                id=checklist_id,
+                options=[
+                    {"label": "0 · with richness", "value": 0},
+                    {"label": "1 · dubious", "value": 1},
+                    {"label": "2 · no richness", "value": 2},
+                ],
+                value=[0, 1, 2],
+                inline=True,
+                className="flag-checklist",
+            ),
+        ],
+        className="mb-2",
     )
 
 
 class SidebarSections:
     """Handles sidebar control sections"""
 
+    # ------------------------------------------------------------------ Catalog
+
     @staticmethod
     def create_algorithm_section():
-        """Create algorithm selection section with enhanced styling"""
+        """Detection algorithm selector"""
         return html.Div(
             [
-                html.Div(
-                    [
-                        html.I(className="fas fa-cogs me-2 text-primary"),
-                        html.Label("Algorithm Selection:", className="fw-bold mb-0"),
+                _group_label("Detection algorithm", "algorithm-dropdown"),
+                dcc.Dropdown(
+                    id="algorithm-dropdown",
+                    options=[
+                        {"label": "PZWAV", "value": "PZWAV"},
+                        {"label": "AMICO", "value": "AMICO"},
+                        {"label": "PZWAV and AMICO", "value": "BOTH"},
                     ],
-                    className="d-flex align-items-center mb-3",
+                    value="PZWAV",
+                    clearable=False,
                 ),
-                dbc.Card(
-                    [
-                        dbc.CardBody(
-                            [
-                                dcc.Dropdown(
-                                    id="algorithm-dropdown",
-                                    options=[
-                                        {"label": "PZWAV", "value": "PZWAV"},
-                                        {"label": "AMICO", "value": "AMICO"},
-                                        {"label": "🌌 PZWAV & AMICO", "value": "BOTH"},
-                                    ],
-                                    value="PZWAV",
-                                    clearable=False,
-                                    style={"border-radius": "8px", "font-weight": "500"},
-                                )
-                            ],
-                            className="p-2",
-                        )
-                    ],
-                    className="border-0 shadow-sm mb-3",
-                    style={
-                        "background": "linear-gradient(45deg, #f8f9ff, #ffffff)",
-                        "border-radius": "10px",
-                    },
-                ),
-            ]
+            ],
+            className="control-group",
         )
 
     @staticmethod
     def create_merged_clusters_section():
-        """Create unmerged clusters toggle section"""
+        """CL-tile information and unmerged-cluster toggles"""
         return html.Div(
             [
-                dbc.Card(
-                    [
-                        dbc.CardBody(
-                            [
-                                html.Div(
-                                    [
-                                        html.I(className="fas fa-map-marker-alt me-0 text-primary"),
-                                        dbc.Switch(
-                                            id="cltile-info-switch",
-                                            label="Show CL-tile information",
-                                            value=True,
-                                            className="ms-0",
-                                        ),
-                                    ],
-                                    className="d-flex align-items-left mb-0",
-                                ),
-                                html.Small(
-                                    [
-                                        html.I(className="fas fa-info-circle me-0"),
-                                        html.Span(
-                                            "Color clusters by tile; show CL-tile polygons",
-                                            id="cltile-info-switch-help-text",
-                                        ),
-                                    ],
-                                    className="text-muted ms-0",
-                                ),
-                            ]
-                        )
-                    ],
-                    className="mb-3 border-0 shadow-sm",
-                    style={
-                        "background": "linear-gradient(45deg, #f0f8ff, #ffffff)",
-                        "border-radius": "10px",
-                    },
+                _switch(
+                    "cltile-info-switch",
+                    "Show CL-tile information",
+                    True,
+                    "Color clusters by tile; show CL-tile polygons",
+                    "cltile-info-switch-help-text",
                 ),
-                dbc.Card(
-                    [
-                        dbc.CardBody(
-                            [
-                                html.Div(
-                                    [
-                                        html.I(className="fas fa-layer-group me-0 text-primary"),
-                                        dbc.Switch(
-                                            id="unmerged-clusters-switch",
-                                            label="Show unmerged clusters",
-                                            value=False,
-                                            className="ms-0",
-                                        ),
-                                    ],
-                                    className="d-flex align-items-left mb-0",
-                                ),
-                                html.Small(
-                                    [
-                                        html.I(className="fas fa-info-circle me-0"),
-                                        html.Span(
-                                            "Clusters in individual tiles but absent from merged catalog",
-                                            id="unmerged-clusters-switch-help-text",
-                                        ),
-                                    ],
-                                    className="text-muted ms-0",
-                                ),
-                            ]
-                        )
-                    ],
-                    className="mb-3 border-0 shadow-sm",
-                    style={
-                        "background": "linear-gradient(45deg, #f0f8ff, #ffffff)",
-                        "border-radius": "10px",
-                    },
+                _switch(
+                    "unmerged-clusters-switch",
+                    "Show unmerged clusters",
+                    False,
+                    "Clusters in individual tiles but absent from merged catalog",
+                    "unmerged-clusters-switch-help-text",
                 ),
             ]
         )
 
+    # ------------------------------------------------------------------ Filters
+
     @staticmethod
-    def create_cluster_matching_section():
-        """Create cluster matching section with enhanced styling"""
+    def create_redshift_section():
+        """Redshift range filter"""
         return html.Div(
             [
-                dbc.Card(
-                    [
-                        dbc.CardBody(
-                            [
-                                html.Div(
-                                    [
-                                        html.I(className="fas fa-object-group me-0 text-primary"),
-                                        dbc.Switch(
-                                            id="matching-clusters-switch",
-                                            label="Show matched clusters (CAT-CL)",
-                                            value=False,
-                                            disabled=True,
-                                            className="ms-0",
-                                        ),
-                                        html.Button(
-                                            [html.I(className="fas fa-sync-alt me-1"), "Render"],
-                                            id="rerender-ovals-button",
-                                            className="btn btn-sm btn-outline-primary ms-2",
-                                            style={
-                                                "fontSize": "0.75rem",
-                                                "padding": "0.25rem 0.5rem",
-                                            },
-                                            title="Re-render ovals for current zoom window",
-                                        ),
-                                    ],
-                                    className="d-flex align-items-center mb-0",
-                                ),
-                                html.Small(
-                                    [
-                                        html.I(className="fas fa-info-circle me-0"),
-                                        html.Span(
-                                            "Zoom in, then click Re-render",
-                                            id="viewport-zoom-indicator",
-                                            style={"color": "#6c757d"},
-                                        ),
-                                    ],
-                                    className="ms-0",
-                                ),
-                            ]
-                        )
-                    ],
-                    className="mb-3 border-0 shadow-sm",
-                    style={
-                        "background": "linear-gradient(45deg, #f0f8ff, #ffffff)",
-                        "border-radius": "10px",
-                    },
-                )
-            ]
+                _group_label("Redshift (z)", "redshift-range-slider"),
+                _range_filter(
+                    "redshift-range-slider",
+                    "redshift-range-display",
+                    "redshift-include-missing",
+                    "Include clusters with missing redshift",
+                    True,
+                    default_max=10,
+                ),
+            ],
+            className="control-group",
         )
 
     @staticmethod
     def create_snr_section():
-        """Create SNR filtering section with enhanced styling"""
-
-        snr_pzwav_tab = dbc.Card(
-            [
-                dbc.CardBody(
-                    [
-                        # Selected-range readout (set clientside)
-                        html.Div(id="snr-range-display-pzwav", className="range-readout mb-2"),
-                        # SNR range slider
-                        html.Div(
-                            [
-                                dcc.RangeSlider(
-                                    id="snr-range-slider-pzwav",
-                                    min=0,
-                                    max=100,
-                                    step=0.1,
-                                    marks={},
-                                    value=[0, 100],
-                                    tooltip={
-                                        "placement": "bottom",
-                                        "always_visible": False,
-                                    },
-                                    allowCross=False,
-                                    className="custom-range-slider",
-                                )
-                            ],
-                            className="mb-1",
-                            style={"padding": "10px 15px", "margin": "5px 0", "minHeight": "60px"},
-                        ),
-                        _range_inputs("snr-range-slider-pzwav"),
-                        dbc.Switch(
-                            id="snr-include-missing-pzwav",
-                            label="Include clusters with missing SNR",
-                            value=True,
-                            className="mb-2",
-                        ),
-                        # Apply button
-                        dbc.Button(
-                            [html.I(className="fas fa-filter me-2"), "Apply SNR filter"],
-                            id="snr-render-button-pzwav",
-                            color="secondary",
-                            outline=True,
-                            size="sm",
-                            className="w-100 btn-enhanced",
-                            n_clicks=0,
-                            disabled=True,
-                        ),
-                        _apply_hint("snr-render-button-pzwav"),
-                    ],
-                    className="p-3",
-                )
-            ],
-            className="border-0 shadow-sm mb-3",
-            style={
-                "background": "linear-gradient(135deg, #f0fff0, #ffffff)",
-                "border-radius": "12px",
-            },
-        )
-
-        snr_amico_tab = dbc.Card(
-            [
-                dbc.CardBody(
-                    [
-                        # Selected-range readout (set clientside)
-                        html.Div(id="snr-range-display-amico", className="range-readout mb-2"),
-                        # SNR range slider
-                        html.Div(
-                            [
-                                dcc.RangeSlider(
-                                    id="snr-range-slider-amico",
-                                    min=0,
-                                    max=100,
-                                    step=0.1,
-                                    marks={},
-                                    value=[0, 100],
-                                    tooltip={
-                                        "placement": "bottom",
-                                        "always_visible": False,
-                                    },
-                                    allowCross=False,
-                                    className="custom-range-slider",
-                                )
-                            ],
-                            className="mb-1",
-                            style={"padding": "10px 15px", "margin": "5px 0", "minHeight": "60px"},
-                        ),
-                        _range_inputs("snr-range-slider-amico"),
-                        dbc.Switch(
-                            id="snr-include-missing-amico",
-                            label="Include clusters with missing SNR",
-                            value=True,
-                            className="mb-2",
-                        ),
-                        # Apply button
-                        dbc.Button(
-                            [html.I(className="fas fa-filter me-2"), "Apply SNR filter"],
-                            id="snr-render-button-amico",
-                            color="secondary",
-                            outline=True,
-                            size="sm",
-                            className="w-100 btn-enhanced",
-                            n_clicks=0,
-                            disabled=True,
-                        ),
-                        _apply_hint("snr-render-button-amico"),
-                    ],
-                    className="p-3",
-                )
-            ],
-            className="border-0 shadow-sm mb-3",
-            style={
-                "background": "linear-gradient(135deg, #f0fff0, #ffffff)",
-                "border-radius": "12px",
-            },
-        )
-
+        """SNR range filters; only the selected algorithm's filter is shown"""
         return html.Div(
             [
+                _group_label("Signal-to-noise (SNR)"),
                 html.Div(
                     [
-                        html.I(className="fas fa-signal me-1 text-success"),
-                        html.Label("SNR Filtering:", className="fw-bold mb-1"),
+                        html.Div("PZWAV", className="control-sublabel"),
+                        _range_filter(
+                            "snr-range-slider-pzwav",
+                            "snr-range-display-pzwav",
+                            "snr-include-missing-pzwav",
+                            "Include clusters with missing SNR",
+                            True,
+                        ),
                     ],
-                    className="d-flex align-items-left mb-0",
+                    id="snr-pzwav-container",
+                    className="filter-variant",
                 ),
-                dbc.Tabs(
+                html.Div(
                     [
-                        dbc.Tab(label="PZWAV", children=[snr_pzwav_tab]),
-                        dbc.Tab(label="AMICO", children=[snr_amico_tab]),
-                    ]
+                        html.Div("AMICO", className="control-sublabel"),
+                        _range_filter(
+                            "snr-range-slider-amico",
+                            "snr-range-display-amico",
+                            "snr-include-missing-amico",
+                            "Include clusters with missing SNR",
+                            True,
+                        ),
+                    ],
+                    id="snr-amico-container",
+                    className="filter-variant",
+                    style={"display": "none"},  # Algorithm defaults to PZWAV
                 ),
-            ]
+            ],
+            className="control-group",
         )
 
-    @staticmethod
-    def create_redshift_section():
-        """Create redshift filtering section with enhanced styling"""
-        return html.Div(
-            [
-                html.Div(
-                    [
-                        html.I(className="fas fa-expand-arrows-alt me-1 text-danger"),
-                        html.Label("Redshift Filtering:", className="fw-bold mb-1"),
-                    ],
-                    className="d-flex align-items-left mb-0",
-                ),
-                dbc.Card(
-                    [
-                        dbc.CardBody(
-                            [
-                                # Selected-range readout (set clientside)
-                                html.Div(id="redshift-range-display", className="range-readout mb-2"),
-                                # Redshift range slider
-                                html.Div(
-                                    [
-                                        dcc.RangeSlider(
-                                            id="redshift-range-slider",
-                                            min=0,
-                                            max=10,
-                                            step=0.1,
-                                            marks={},
-                                            value=[0, 10],
-                                            tooltip={
-                                                "placement": "bottom",
-                                                "always_visible": False,
-                                            },
-                                            allowCross=False,
-                                            className="custom-range-slider",
-                                        )
-                                    ],
-                                    className="mb-1",
-                                    style={
-                                        "padding": "10px 15px",
-                                        "margin": "5px 0",
-                                        "minHeight": "60px",
-                                    },
-                                ),
-                                _range_inputs("redshift-range-slider"),
-                                dbc.Switch(
-                                    id="redshift-include-missing",
-                                    label="Include clusters with missing redshift",
-                                    value=True,
-                                    className="mb-2",
-                                ),
-                                # Apply button
-                                dbc.Button(
-                                    [
-                                        html.I(className="fas fa-filter me-2"),
-                                        "Apply redshift filter",
-                                    ],
-                                    id="redshift-render-button",
-                                    color="secondary",
-                                    outline=True,
-                                    size="sm",
-                                    className="w-100 btn-enhanced",
-                                    n_clicks=0,
-                                    disabled=True,
-                                ),
-                                _apply_hint("redshift-render-button"),
-                            ],
-                            className="p-3",
-                        )
-                    ],
-                    className="border-0 shadow-sm",
-                    style={
-                        "background": "linear-gradient(135deg, #fff0f0, #ffffff)",
-                        "border-radius": "12px",
-                    },
-                ),
-            ]
-        )
-    
     @staticmethod
     def create_richness_section():
-        """Create richness filtering section with enhanced styling"""
-
-        # Richness filter mode radio buttons with None option
-        richness_mode_radio_buttons = html.Div(
-            [
-                html.Div(
-                    [
-                        html.I(className="fas fa-exchange-alt me-2 text-success"),
-                        dbc.RadioItems(
-                            id="richness-mode-radio",
-                            options=[
-                                {"label": "ZP", "value": "zp"},
-                                {"label": "RS", "value": "rs"},
-                                {"label": "None", "value": "none"}
-                            ],
-                            value="none",  # Default to None
-                            inline=True,
-                            className="mb-0",
-                        ),
-                    ],
-                    className="d-flex align-items-center justify-content-between mb-2",
-                ),
-                html.Small(
-                    [
-                        html.I(className="fas fa-info-circle me-1"),
-                        "Select richness mode: ZP, RS, or None (default 0-100)",
-                    ],
-                    className="text-muted ms-0",
-                ),
-            ],
-            className="mb-3",
-        )
-
-        richness_zp_card = dbc.Card(
-            [
-                dbc.CardBody(
-                    [
-                        # Selected-range readout (set clientside)
-                        html.Div(id="richness-range-display-zp", className="range-readout mb-2"),
-                        # FLAG_QUALITY_ZP filter checklist
-                        html.Div(
-                            [
-                                html.Small(
-                                    [
-                                        html.I(className="fas fa-flag me-1"),
-                                        "Quality Flag (ZP):",
-                                    ],
-                                    className="text-muted fw-bold mb-1 d-block",
-                                ),
-                                dcc.Checklist(
-                                    id="flag-quality-zp-checklist",
-                                    options=[
-                                        {"label": " 0 — with richness", "value": 0},
-                                        {"label": " 1 — dubious richness", "value": 1},
-                                        {"label": " 2 — no richness", "value": 2},
-                                    ],
-                                    value=[0, 1, 2],
-                                    inline=True,
-                                    className="mb-2",
-                                    inputStyle={"marginRight": "4px"},
-                                    labelStyle={"marginRight": "12px", "fontSize": "12px"},
-                                ),
-                            ],
-                            className="mb-2",
-                        ),
-                        # Richness range slider
-                        html.Div(
-                            [
-                                dcc.RangeSlider(
-                                    id="richness-range-slider-zp",
-                                    min=0,
-                                    max=100,
-                                    step=0.1,
-                                    marks={},
-                                    value=[0, 100],
-                                    tooltip={
-                                        "placement": "bottom",
-                                        "always_visible": False,
-                                    },
-                                    allowCross=False,
-                                    className="custom-range-slider",
-                                )
-                            ],
-                            className="mb-1",
-                            style={"padding": "10px 15px", "margin": "5px 0", "minHeight": "60px"},
-                        ),
-                        _range_inputs("richness-range-slider-zp"),
-                        dbc.Switch(
-                            id="richness-include-missing-zp",
-                            label="Include clusters with missing richness (ZP)",
-                            value=False,
-                            className="mb-2",
-                        ),
-                        # Apply button
-                        dbc.Button(
-                            [html.I(className="fas fa-filter me-2"), "Apply richness filter"],
-                            id="richness-render-button-zp",
-                            color="secondary",
-                            outline=True,
-                            size="sm",
-                            className="w-100 btn-enhanced",
-                            n_clicks=0,
-                            disabled=True,
-                        ),
-                        _apply_hint("richness-render-button-zp"),
-                    ],
-                    className="p-3",
-                )
-            ],
-            className="border-0 shadow-sm mb-3",
-            style={
-                "background": "linear-gradient(135deg, #f0fff0, #ffffff)",
-                "border-radius": "12px",
-            },
-        )
-
-        richness_rs_card = dbc.Card(
-            [
-                dbc.CardBody(
-                    [
-                        # Selected-range readout (set clientside)
-                        html.Div(id="richness-range-display-rs", className="range-readout mb-2"),
-                        # FLAG_QUALITY_RS filter checklist
-                        html.Div(
-                            [
-                                html.Small(
-                                    [
-                                        html.I(className="fas fa-flag me-1"),
-                                        "Quality Flag (RS):",
-                                    ],
-                                    className="text-muted fw-bold mb-1 d-block",
-                                ),
-                                dcc.Checklist(
-                                    id="flag-quality-rs-checklist",
-                                    options=[
-                                        {"label": " 0 — with richness", "value": 0},
-                                        {"label": " 1 — dubious richness", "value": 1},
-                                        {"label": " 2 — no richness", "value": 2},
-                                    ],
-                                    value=[0, 1, 2],
-                                    inline=True,
-                                    className="mb-2",
-                                    inputStyle={"marginRight": "4px"},
-                                    labelStyle={"marginRight": "12px", "fontSize": "12px"},
-                                ),
-                            ],
-                            className="mb-2",
-                        ),
-                        # Richness range slider
-                        html.Div(
-                            [
-                                dcc.RangeSlider(
-                                    id="richness-range-slider-rs",
-                                    min=0,
-                                    max=100,
-                                    step=0.1,
-                                    marks={},
-                                    value=[0, 100],
-                                    tooltip={
-                                        "placement": "bottom",
-                                        "always_visible": False,
-                                    },
-                                    allowCross=False,
-                                    className="custom-range-slider",
-                                )
-                            ],
-                            className="mb-1",
-                            style={"padding": "10px 15px", "margin": "5px 0", "minHeight": "60px"},
-                        ),
-                        _range_inputs("richness-range-slider-rs"),
-                        dbc.Switch(
-                            id="richness-include-missing-rs",
-                            label="Include clusters with missing richness (RS)",
-                            value=False,
-                            className="mb-2",
-                        ),
-                        # Apply button
-                        dbc.Button(
-                            [html.I(className="fas fa-filter me-2"), "Apply richness filter"],
-                            id="richness-render-button-rs",
-                            color="secondary",
-                            outline=True,
-                            size="sm",
-                            className="w-100 btn-enhanced",
-                            n_clicks=0,
-                            disabled=True,
-                        ),
-                        _apply_hint("richness-render-button-rs"),
-                    ],
-                    className="p-3",
-                )
-            ],
-            className="border-0 shadow-sm mb-3",
-            style={
-                "background": "linear-gradient(135deg, #f0fff0, #ffffff)",
-                "border-radius": "12px",
-            },
-        )
-
+        """Richness filter on the ZP or RS estimate, or off"""
         return html.Div(
             [
+                _group_label("Richness", "richness-mode-radio"),
+                dbc.RadioItems(
+                    id="richness-mode-radio",
+                    options=[
+                        {"label": "Off", "value": "none"},
+                        {"label": "ZP", "value": "zp"},
+                        {"label": "RS", "value": "rs"},
+                    ],
+                    value="none",
+                    inline=True,
+                    className="mb-1",
+                ),
+                _pending_tag("richness-mode-radio"),
+                _help("Choose which richness estimate to filter on."),
+                # Visibility of the three containers follows the radio value
                 html.Div(
                     [
-                        html.I(className="fas fa-signal me-1 text-success"),
-                        html.Label("Richness Filtering:", className="fw-bold mb-1"),
+                        _flag_checklist("flag-quality-zp-checklist", "ZP"),
+                        _range_filter(
+                            "richness-range-slider-zp",
+                            "richness-range-display-zp",
+                            "richness-include-missing-zp",
+                            "Include clusters with missing richness (ZP)",
+                            False,
+                        ),
                     ],
-                    className="d-flex align-items-left mb-0",
-                ),
-                richness_mode_radio_buttons,
-                # Container for ZP richness filter
-                html.Div(
                     id="richness-zp-container",
-                    children=[richness_zp_card],
-                    style={"display": "none"}  # Hidden: radio defaults to "none"
+                    className="filter-variant",
+                    style={"display": "none"},
                 ),
-                # Container for RS richness filter
                 html.Div(
-                    id="richness-rs-container",
-                    children=[richness_rs_card],
-                    style={"display": "none"}  # Initially hidden
-                ),
-                # Container for None state (no richness filter)
-                html.Div(
-                    id="richness-none-container",
-                    children=[
-                        dbc.Card(
-                            dbc.CardBody(
-                                html.Small(
-                                    [
-                                        html.I(className="fas fa-info-circle me-2 text-muted"),
-                                        "No richness filter applied. Select ZP or RS to enable.",
-                                    ],
-                                    className="text-muted",
-                                ),
-                                className="p-3",
-                            ),
-                            className="border-0 shadow-sm mb-3",
-                            style={
-                                "background": "linear-gradient(135deg, #f8f9fa, #ffffff)",
-                                "border-radius": "12px",
-                            },
-                        )
+                    [
+                        _flag_checklist("flag-quality-rs-checklist", "RS"),
+                        _range_filter(
+                            "richness-range-slider-rs",
+                            "richness-range-display-rs",
+                            "richness-include-missing-rs",
+                            "Include clusters with missing richness (RS)",
+                            False,
+                        ),
                     ],
-                    style={"display": "block"},  # Matches radio default "none"
+                    id="richness-rs-container",
+                    className="filter-variant",
+                    style={"display": "none"},
                 ),
-            ]
+                html.Div(
+                    _help("No richness filter applied."),
+                    id="richness-none-container",
+                    style={"display": "block"},
+                ),
+            ],
+            className="control-group",
         )
 
     @staticmethod
     def create_idcluster_section():
-        """Create cluster-ID based filtering section with enhanced styling"""
+        """Restrict the plot to clusters listed in an uploaded ID file"""
+        return html.Div(
+            [
+                _group_label("Cluster-ID list", "idcluster-upload"),
+                dcc.Upload(
+                    id="idcluster-upload",
+                    children=html.Div(
+                        [html.I(className="fas fa-upload me-2"), "Choose or drop a file"]
+                    ),
+                    accept=".txt,.csv,.dat",
+                    className="id-upload",
+                    multiple=False,
+                ),
+                html.Div(
+                    [
+                        html.Small(
+                            "No ID list uploaded",
+                            id="idcluster-status-display",
+                            className="control-help mb-0",
+                        ),
+                        _pending_tag("idcluster-upload"),
+                        dbc.Button(
+                            "Clear",
+                            id="idcluster-clear-button",
+                            color="link",
+                            size="sm",
+                            className="p-0 ms-2",
+                            style={"display": "none"},
+                        ),
+                    ],
+                    className="d-flex align-items-baseline justify-content-between",
+                ),
+                _help(".txt, .csv or .dat, one ID per line"),
+            ],
+            className="control-group",
+        )
+
+    @staticmethod
+    def create_cluster_matching_section():
+        """Matched-cluster ovals, drawn for the zoom window at the next Apply"""
+        return html.Div(
+            [
+                _group_label("Matched clusters"),
+                dbc.Switch(
+                    id="matching-clusters-switch",
+                    label="Show matched clusters (CAT-CL)",
+                    value=False,
+                    disabled=True,
+                ),
+                _pending_tag("matching-clusters-switch"),
+                html.Small(
+                    "Zoom in, then press Apply filters",
+                    id="viewport-zoom-indicator",
+                    className="control-help",
+                ),
+            ],
+            className="control-group",
+        )
+
+    @staticmethod
+    def create_apply_filters_bar():
+        """Sticky bar with the single Apply action for every filter above"""
+        return html.Div(
+            [
+                dbc.Button(
+                    [html.I(className="fas fa-filter me-2"), "Apply filters"],
+                    id="apply-filters-button",
+                    color="secondary",
+                    outline=True,
+                    className="w-100 btn-enhanced",
+                    n_clicks=0,
+                    disabled=True,
+                ),
+                html.Small(
+                    "Render once to enable filters",
+                    id="apply-filters-status",
+                    className="apply-bar-status",
+                    **{"aria-live": "polite"},
+                ),
+            ],
+            className="apply-bar",
+        )
+
+    # ------------------------------------------------------------------ Display
+
+    @staticmethod
+    def create_display_options_section():
+        """Plot display toggles (update live)"""
+        return html.Div(
+            [
+                _switch(
+                    "mer-switch",
+                    "Show MER tiles",
+                    False,
+                    "Up to LEV2 within CL-tiles; needs CL-tile polygons shown",
+                ),
+                _switch("polygon-switch", "Fill CL-tile (CORE) polygons", False),
+                _switch(
+                    "aspect-ratio-switch",
+                    "Free aspect ratio",
+                    True,
+                    "Turn off to keep true sky proportions",
+                ),
+            ]
+        )
+
+    # ------------------------------------------------------------ Configuration
+
+    @staticmethod
+    def create_config_info_section():
+        """Loaded catalog files and the GlueMatchCat file selector"""
+
+        def loading():
+            return html.Div(
+                [dbc.Spinner(size="sm", color="secondary"), html.Span("Loading…", className="ms-2")]
+            )
+
         return html.Div(
             [
                 html.Div(
                     [
-                        html.I(className="fas fa-id-badge me-1 text-danger"),
-                        html.Label("Cluster-ID based Filtering:", className="fw-bold mb-1"),
+                        _group_label("Merged catalog"),
+                        html.Div(id="config-merged-catalog", className="small", children=[loading()]),
                     ],
-                    className="d-flex align-items-left mb-0",
+                    className="control-group",
                 ),
-                dbc.Card(
+                html.Div(
                     [
-                        dbc.CardBody(
+                        _group_label("Tile detection list"),
+                        html.Div(id="config-detintile-list", className="small", children=[loading()]),
+                    ],
+                    className="control-group",
+                ),
+                html.Div(
+                    [
+                        _group_label("Current GlueMatchCat XML file", "gluematchcat-file-display"),
+                        dbc.InputGroup(
                             [
-                                dbc.Badge(
-                                    id="idcluster-status-display",
-                                    color="light",
-                                    className="w-100 mb-2 p-2 fs-6",
-                                    style={
-                                        "background": "linear-gradient(45deg, #ffe8e8, #fff0f0)",
-                                        "color": "#5a2d2d",
-                                        "border-radius": "8px",
-                                        "border": "1px solid rgba(231, 76, 60, 0.3)",
-                                        "fontSize": "0.75rem",
-                                    },
-                                    children="No ID list uploaded",
+                                dbc.Input(
+                                    id="gluematchcat-file-display",
+                                    type="text",
+                                    value="No file selected",
+                                    readonly=True,
                                 ),
-                                # Cluster-ID file selector
-                                html.Div(
-                                    [
-                                        dcc.Upload(
-                                            id="idcluster-upload",
-                                            children=html.Div(
-                                                [
-                                                    html.I(className="fas fa-upload me-2"),
-                                                    "Upload"
-                                                ]
-                                            ),
-                                            accept=".txt,.csv,.dat",
-                                            style={
-                                                "width": "100%",
-                                                "height": "40px",
-                                                "lineHeight": "40px",
-                                                "borderWidth": "1px",
-                                                "borderStyle": "dashed",
-                                                "borderRadius": "8px",
-                                                "textAlign": "center",
-                                                "backgroundColor": "#fff0f0",
-                                                "borderColor": "#e74c3c",
-                                                "color": "#e74c3c",
-                                                "fontWeight": "500",
-                                            },
-                                            multiple=False,
-                                        ),
-                                        html.Small(
-                                            "Cluster-ID List (.txt/.csv/.dat, one ID per line)",
-                                            className="text-muted d-block me-1",
-                                            style={
-                                                "fontSize": "1rem", 
-                                                "marginTop": "5px",
-                                                "textAlign": "center",
-                                                },
-                                        ),
-                                    ],
-                                    className="mb-1",
-                                    style={
-                                        "padding": "5px 20px",
-                                        "margin": "10px 0",
-                                        "minHeight": "60px",
-                                    },
-                                ),
-                                # Apply button
                                 dbc.Button(
-                                    [
-                                        html.I(className="fas fa-filter me-2"),
-                                        "Apply cluster-ID filter",
-                                    ],
-                                    id="idcluster-render-button",
+                                    [html.I(className="fas fa-folder-open me-1"), "Browse"],
+                                    id="browse-file-button",
                                     color="secondary",
                                     outline=True,
-                                    size="sm",
-                                    className="w-100 btn-enhanced",
-                                    n_clicks=0,
-                                    disabled=True,
+                                    title="Browse for file",
                                 ),
                             ],
-                            className="p-4",
-                        )
+                            size="sm",
+                        ),
                     ],
-                    className="border-0 shadow-sm",
-                    style={
-                        "background": "linear-gradient(135deg, #fff0f0, #ffffff)",
-                        "border-radius": "12px",
-                    },
+                    className="control-group",
                 ),
-            ]
-        )
-
-    @staticmethod
-    def create_display_options_section():
-        """Create display options section with enhanced styling"""
-        return html.Div(
-            [
-                dbc.Card(
+                html.Div(
                     [
-                        dbc.CardBody(
-                            [
-                                html.Div(
-                                    [
-                                        html.I(className="fas fa-th me-0 text-warning"),
-                                        dbc.Switch(
-                                            id="mer-switch",
-                                            label="Show MER tiles (up to LEV2 in CL-tiles)",
-                                            value=False,
-                                            className="ms-0",
-                                        ),
-                                    ],
-                                    className="d-flex align-items-left mb-1",
-                                ),
-                                html.Small(
-                                    [
-                                        html.I(className="fas fa-info-circle me-1"),
-                                        "Only with open cluster-tile polygons",
-                                    ],
-                                    className="text-muted ms-0",
-                                ),
-                            ]
-                        )
+                        _group_label("New file path", "gluematchcat-file-input"),
+                        dbc.Input(
+                            id="gluematchcat-file-input",
+                            type="text",
+                            size="sm",
+                            placeholder="/path/to/gluematchcat_PZWAV_AMICO.xml",
+                        ),
                     ],
-                    className="mb-3 border-0 shadow-sm",
-                    style={
-                        "background": "linear-gradient(45deg, #fff8e1, #ffffff)",
-                        "border-radius": "10px",
-                    },
+                    id="gluematchcat-file-container",
+                    className="control-group",
                 ),
-                dbc.Card(
-                    [
-                        dbc.CardBody(
-                            [
-                                html.Div(
-                                    [
-                                        html.I(className="fas fa-shapes me-0 text-info"),
-                                        dbc.Switch(
-                                            id="polygon-switch",
-                                            label="Fill CL-tiles (CORE) polygons",
-                                            value=False,
-                                            className="ms-0",
-                                        ),
-                                    ],
-                                    className="d-flex align-items-left mb-1",
-                                )
-                            ]
-                        )
-                    ],
-                    className="mb-3 border-0 shadow-sm",
-                    style={
-                        "background": "linear-gradient(45deg, #e8f8f8, #ffffff)",
-                        "border-radius": "10px",
-                    },
+                dbc.Button(
+                    [html.I(className="fas fa-check me-2"), "Use this file"],
+                    id="apply-file-config-button",
+                    color="secondary",
+                    outline=True,
+                    size="sm",
+                    className="w-100 btn-enhanced",
+                    disabled=True,
                 ),
-                dbc.Card(
-                    [
-                        dbc.CardBody(
-                            [
-                                html.Div(
-                                    [
-                                        html.I(className="fas fa-expand me-0 text-success"),
-                                        dbc.Switch(
-                                            id="aspect-ratio-switch",
-                                            label="Free aspect ratio",
-                                            value=True,
-                                            className="ms-0",
-                                        ),
-                                    ],
-                                    className="d-flex align-items-left mb-1",
-                                ),
-                                html.Small(
-                                    [
-                                        html.I(className="fas fa-info-circle me-1"),
-                                        "Default: maintain astronomical aspect",
-                                    ],
-                                    className="text-muted ms-0",
-                                ),
-                            ]
-                        )
-                    ],
-                    className="border-0 shadow-sm",
-                    style={
-                        "background": "linear-gradient(45deg, #e8f5e8, #ffffff)",
-                        "border-radius": "10px",
-                    },
-                ),
-            ]
-        )
-
-    @staticmethod
-    def create_config_info_section():
-        """Create application configuration info section"""
-        return html.Div(
-            [
-                dbc.Card(
-                    [
-                        dbc.CardBody(
-                            [
-                                html.Div(
-                                    [
-                                        html.I(className="fas fa-database me-2 text-primary"),
-                                        html.Strong("Merged Catalog:", className="me-2"),
-                                    ],
-                                    className="d-flex align-items-center mb-2",
-                                ),
-                                html.Div(
-                                    id="config-merged-catalog",
-                                    className="mb-3 small",
-                                    children=[
-                                        html.Div(
-                                            [
-                                                dbc.Spinner(size="sm", color="primary"),
-                                                html.Span(" Loading...", className="ms-2"),
-                                            ]
-                                        )
-                                    ],
-                                ),
-                                html.Hr(className="my-2"),
-                                html.Div(
-                                    [
-                                        html.I(className="fas fa-file-alt me-2 text-info"),
-                                        html.Strong("Tile Detection List:", className="me-2"),
-                                    ],
-                                    className="d-flex align-items-center mb-2",
-                                ),
-                                html.Div(
-                                    id="config-detintile-list",
-                                    className="mb-2 small",
-                                    children=[
-                                        html.Div(
-                                            [
-                                                dbc.Spinner(size="sm", color="primary"),
-                                                html.Span(" Loading...", className="ms-2"),
-                                            ]
-                                        )
-                                    ],
-                                ),
-                            ],
-                            className="p-3",
-                        )
-                    ],
-                    className="mb-3 border-0 shadow-sm",
-                    style={
-                        "background": "linear-gradient(45deg, #f0f4ff, #ffffff)",
-                        "border-radius": "12px",
-                    },
-                ),
-                # Editable merged-catalog file control (browse + apply)
-                dbc.Card(
-                    [
-                        dbc.CardBody(
-                            [
-                                html.Div(
-                                    [
-                                        html.I(className="fas fa-folder-open me-2 text-primary"),
-                                        html.Label("Detection Catalog Configuration:", className="fw-bold mb-0"),
-                                    ],
-                                    className="d-flex align-items-center mb-3",
-                                ),
-                                # File path display (always visible, showing current file)
-                                html.Div(
-                                    [
-                                        html.Label(
-                                            [
-                                                html.I(className="fas fa-file me-2"),
-                                                "Current GlueMatchCat XML File:",
-                                            ],
-                                            className="form-label small fw-bold",
-                                        ),
-                                        dbc.InputGroup(
-                                            [
-                                                dbc.Input(
-                                                    id="gluematchcat-file-display",
-                                                    type="text",
-                                                    value="No file selected",
-                                                    readonly=True,
-                                                    className="mb-0",
-                                                    style={
-                                                        "border-radius": "8px 0 0 8px",
-                                                        "font-size": "0.9rem",
-                                                        "background-color": "#f8f9fa",
-                                                    },
-                                                ),
-                                                dbc.Button(
-                                                    html.I(className="fas fa-folder-open"),
-                                                    id="browse-file-button",
-                                                    color="primary",
-                                                    outline=True,
-                                                    size="sm",
-                                                    style={
-                                                        "border-radius": "0 8px 8px 0",
-                                                    },
-                                                    title="Browse for file",
-                                                ),
-                                            ],
-                                            className="mb-2",
-                                        ),
-                                        html.Small(
-                                            [
-                                                html.I(className="fas fa-info-circle me-1"),
-                                                "Currently loaded catalog file",
-                                            ],
-                                            className="text-muted",
-                                        ),
-                                    ],
-                                    className="mb-3",
-                                ),
-                                # Editable file path input (for changing the file)
-                                html.Div(
-                                    [
-                                        html.Label(
-                                            [
-                                                html.I(className="fas fa-edit me-2"),
-                                                "Change File Path:",
-                                            ],
-                                            className="form-label small fw-bold",
-                                        ),
-                                        dbc.Input(
-                                            id="gluematchcat-file-input",
-                                            type="text",
-                                            placeholder="Enter new path to gluematchcat XML file...",
-                                            className="mb-2",
-                                            style={
-                                                "border-radius": "8px",
-                                                "font-size": "0.9rem",
-                                            },
-                                        ),
-                                        html.Small(
-                                            [
-                                                html.I(className="fas fa-info-circle me-1"),
-                                                "Example: /path/to/gluematchcat_PZWAV_AMICO.xml",
-                                            ],
-                                            className="text-muted",
-                                        ),
-                                    ],
-                                    id="gluematchcat-file-container",
-                                    className="mb-3",
-                                ),
-                                # Apply button (always visible)
-                                dbc.Button(
-                                    [
-                                        html.I(className="fas fa-check me-2"),
-                                        "Apply File Configuration",
-                                    ],
-                                    id="apply-file-config-button",
-                                    color="success",
-                                    size="sm",
-                                    className="w-100",
-                                    disabled=True,
-                                    style={"border-radius": "8px", "font-weight": "600"},
-                                ),
-                                # Status indicator
-                                html.Div(id="file-config-status", className="mt-2 small"),
-                            ],
-                            className="p-3",
-                        )
-                    ],
-                    className="mb-3 border-0 shadow-sm",
-                    style={
-                        "background": "linear-gradient(45deg, #f0fff0, #ffffff)",
-                        "border-radius": "12px",
-                    },
-                ),
+                html.Div(id="file-config-status", className="mt-2 small"),
             ]
         )

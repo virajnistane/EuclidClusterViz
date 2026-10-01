@@ -254,13 +254,7 @@ class MainPlotCallbacks:
             ],
             [
                 Input("render-button", "n_clicks"),
-                Input("snr-render-button-pzwav", "n_clicks"),
-                Input("snr-render-button-amico", "n_clicks"),
-                Input("redshift-render-button", "n_clicks"),
-                Input("richness-render-button-zp", "n_clicks"),
-                Input("richness-render-button-rs", "n_clicks"),
-                Input("idcluster-render-button", "n_clicks"),
-                Input("rerender-ovals-button", "n_clicks"),
+                Input("apply-filters-button", "n_clicks"),
             ],
             [
                 State("algorithm-dropdown", "value"),
@@ -296,12 +290,6 @@ class MainPlotCallbacks:
             running=[
                 (Output("data-load-progress-container", "style"), {"display": "block"}, {"display": "none"}),
                 (Output("render-button", "disabled"), True, False),
-                (Output("snr-render-button-pzwav", "disabled"), True, False),
-                (Output("snr-render-button-amico", "disabled"), True, False),
-                (Output("redshift-render-button", "disabled"), True, False),
-                (Output("richness-render-button-zp", "disabled"), True, False),
-                (Output("richness-render-button-rs", "disabled"), True, False),
-                (Output("idcluster-render-button", "disabled"), True, False),
             ],
             progress=[
                 Output("data-load-progress", "value"),
@@ -311,13 +299,7 @@ class MainPlotCallbacks:
         def update_plot(
             set_progress,
             n_clicks,
-            snr_pzwav_n_clicks,
-            snr_amico_n_clicks,
-            redshift_n_clicks,
-            richness_zp_n_clicks,
-            richness_rs_n_clicks,
-            idcluster_n_clicks,
-            rerender_ovals_n_clicks,
+            apply_filters_n_clicks,
             algorithm,
             matching_clusters,
             snr_range_pzwav,
@@ -352,13 +334,7 @@ class MainPlotCallbacks:
                 clicks in [None, 0]
                 for clicks in [
                     n_clicks,
-                    snr_pzwav_n_clicks,
-                    snr_amico_n_clicks,
-                    redshift_n_clicks,
-                    richness_zp_n_clicks,
-                    richness_rs_n_clicks,
-                    idcluster_n_clicks,
-                    rerender_ovals_n_clicks,
+                    apply_filters_n_clicks,
                 ]
             ):
                 return self._create_initial_empty_plots(free_aspect_ratio)
@@ -583,12 +559,6 @@ class MainPlotCallbacks:
                 Input("unmerged-clusters-switch", "value"),
                 Input("cltile-info-switch", "value"),
                 Input("catred-mode-switch", "value"),
-                Input("richness-mode-radio", "value"),
-                Input("snr-include-missing-pzwav", "value"),
-                Input("snr-include-missing-amico", "value"),
-                Input("redshift-include-missing", "value"),
-                Input("richness-include-missing-zp", "value"),
-                Input("richness-include-missing-rs", "value"),
             ],
             [
                 State("render-button", "n_clicks"),
@@ -607,6 +577,13 @@ class MainPlotCallbacks:
                 State("cluster-plot", "relayoutData"),
                 State("cluster-plot", "figure"),
                 State("selected-cluster-box-coords", "data"),
+                State("richness-mode-radio", "value"),
+                State("snr-include-missing-pzwav", "value"),
+                State("snr-include-missing-amico", "value"),
+                State("redshift-include-missing", "value"),
+                State("richness-include-missing-zp", "value"),
+                State("richness-include-missing-rs", "value"),
+                State("applied-filters-store", "data"),
             ],
             prevent_initial_call=True,
         )
@@ -618,12 +595,6 @@ class MainPlotCallbacks:
             show_unmerged_clusters,
             show_cltile_info,
             catred_masked,
-            richness_mode,
-            snr_include_missing_pzwav,
-            snr_include_missing_amico,
-            redshift_include_missing,
-            richness_include_missing_zp,
-            richness_include_missing_rs,
             n_clicks,
             matching_clusters,
             snr_range_pzwav,
@@ -640,10 +611,47 @@ class MainPlotCallbacks:
             relayout_data,
             current_figure,
             box_coords,
+            richness_mode,
+            snr_include_missing_pzwav,
+            snr_include_missing_amico,
+            redshift_include_missing,
+            richness_include_missing_zp,
+            richness_include_missing_rs,
+            applied_filters,
         ):
             # Only update if render button has been clicked at least once
             if n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update
+
+            # Filters change the plot only via Apply filters: redraw display options
+            # with the filter values of the last render, not the controls' pending values
+            if applied_filters:
+                matching_clusters = applied_filters.get("matching-clusters-switch", matching_clusters)
+                snr_range_pzwav = applied_filters.get("snr-range-slider-pzwav", snr_range_pzwav)
+                snr_range_amico = applied_filters.get("snr-range-slider-amico", snr_range_amico)
+                redshift_range = applied_filters.get("redshift-range-slider", redshift_range)
+                richness_range_zp = applied_filters.get("richness-range-slider-zp", richness_range_zp)
+                richness_range_rs = applied_filters.get("richness-range-slider-rs", richness_range_rs)
+                flag_quality_zp = applied_filters.get("flag-quality-zp-checklist", flag_quality_zp)
+                flag_quality_rs = applied_filters.get("flag-quality-rs-checklist", flag_quality_rs)
+                richness_mode = applied_filters.get("richness-mode-radio", richness_mode)
+                snr_include_missing_pzwav = applied_filters.get(
+                    "snr-include-missing-pzwav", snr_include_missing_pzwav
+                )
+                snr_include_missing_amico = applied_filters.get(
+                    "snr-include-missing-amico", snr_include_missing_amico
+                )
+                redshift_include_missing = applied_filters.get(
+                    "redshift-include-missing", redshift_include_missing
+                )
+                richness_include_missing_zp = applied_filters.get(
+                    "richness-include-missing-zp", richness_include_missing_zp
+                )
+                richness_include_missing_rs = applied_filters.get(
+                    "richness-include-missing-rs", richness_include_missing_rs
+                )
+                if applied_filters.get("idcluster-upload") is None:
+                    idcluster_upload_contents = None
 
             try:
                 # Extract SNR values from range sliders (separate for PZWAV and AMICO)
@@ -1269,7 +1277,7 @@ class MainPlotCallbacks:
             """
             function(relayoutData) {
                 if (!relayoutData) {
-                    return ['Zoom in, then click Re-render', {'color': '#6c757d'}];
+                    return ['Zoom in, then press Apply filters', {'color': '#6c757d'}];
                 }
 
                 var raRange = null, decRange = null;
@@ -1287,14 +1295,14 @@ class MainPlotCallbacks:
                 }
 
                 if (raRange === null || decRange === null) {
-                    return ['Zoom in, then click Re-render', {'color': '#6c757d'}];
+                    return ['Zoom in, then press Apply filters', {'color': '#6c757d'}];
                 }
 
                 var label = raRange.toFixed(1) + '\u00b0 \u00d7 ' + decRange.toFixed(1) + '\u00b0';
                 var maxDim = Math.max(raRange, decRange);
 
                 if (maxDim < 5.0) {
-                    return ['\u2713 ' + label + ' \u2014 ready to render ovals', {'color': '#198754'}];
+                    return ['\u2713 ' + label + ' \u2014 ovals draw on Apply filters', {'color': '#198754'}];
                 } else if (maxDim < 15.0) {
                     return ['\u26a0 ' + label + ' \u2014 zoom in for fewer ovals', {'color': '#fd7e14'}];
                 } else {
@@ -1461,7 +1469,7 @@ class MainPlotCallbacks:
             [
                 html.H6("Ready to render", className="mb-1"),
                 html.P(
-                    "Click 'Render clusters' to begin. Display options then update live and keep your zoom; filters take effect when you press Apply.",
+                    "Click 'Render clusters' to begin. Display options then update live and keep your zoom; filters take effect when you press Apply filters.",
                     className="mb-0",
                 ),
             ],
