@@ -18,6 +18,7 @@ import hashlib
 import json
 import os
 import pickle
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, cast
@@ -140,17 +141,21 @@ class DiskCache:
         cache_key = self._get_cache_key(key, source_files)
         cache_path = self._get_cache_path(cache_key)
 
+        # Unique per process/thread so concurrent writers never share a temp file
+        temp_path = cache_path.with_name(
+            f"{cache_path.stem}.{os.getpid()}.{threading.get_ident()}.tmp"
+        )
+
         try:
             # Ensure cache directory exists
             self.cache_dir.mkdir(parents=True, exist_ok=True)
 
             # Write to temporary file first (atomic operation)
-            temp_path = cache_path.with_suffix(".tmp")
             with open(temp_path, "wb") as f:
                 pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
 
             # Rename to final path (atomic on POSIX)
-            temp_path.rename(cache_path)
+            os.replace(temp_path, cache_path)
 
             cache_size_mb = cache_path.stat().st_size / (1024 * 1024)
             print(f"✓ Saved to cache: {key} ({cache_size_mb:.2f} MB)")

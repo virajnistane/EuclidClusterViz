@@ -15,6 +15,7 @@ import logging
 import os
 import pdb
 import pickle
+import threading
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -79,6 +80,8 @@ class DataLoader:
         """
         self.config = config
         self.data_cache = {}  # In-memory cache
+        # Dash callbacks run in parallel threads; serialize loads so each runs once
+        self._load_lock = threading.RLock()
         self.paths = {}
 
         # Initialize memory manager
@@ -109,6 +112,11 @@ class DataLoader:
             raise ImportError(f"Failed to import utilities: {e}")
 
     def load_data(self, select_algorithm: str = "PZWAV") -> Dict[str, Any]:
+        """Load data for an algorithm; concurrent callers wait and reuse the first load."""
+        with self._load_lock:
+            return self._load_data_locked(select_algorithm)
+
+    def _load_data_locked(self, select_algorithm: str = "PZWAV") -> Dict[str, Any]:
         """
         Load and prepare all data for visualization.
 
