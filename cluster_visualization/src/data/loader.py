@@ -177,7 +177,8 @@ class DataLoader:
         data_detcluster_by_cltile = self._load_data_detcluster_by_cltile(paths, select_algorithm)
         has_individual_cltile_data = bool(data_detcluster_by_cltile)
 
-        data_gluematchcat_members = self._load_data_gluematchcat_members(paths)
+        # Members FITS is large (~1 GB) and only used by the members modal: load lazily
+        data_gluematchcat_members = None
         catred_fileinfo_df = self._load_catred_info(paths)
         catred_dsr = self.config.get_catred_dsr() if self.config else None
         effcovmask_fileinfo_df = self._load_effcovmask_info(paths)
@@ -221,6 +222,7 @@ class DataLoader:
         data = {
             "data_detcluster_mergedcat": data_detcluster_mergedcat,
             "data_gluematchcat_members": data_gluematchcat_members,
+            "members_lazy": True,
             "data_detcluster_by_cltile": data_detcluster_by_cltile,
             "has_individual_cltile_data": has_individual_cltile_data,
             "individual_cltile_data_message": (
@@ -886,6 +888,18 @@ class DataLoader:
             data_members = np.array(hdul[1].data)
         print(f"Loaded {len(data_members)} member galaxy entries")
         return data_members
+
+    def get_gluematchcat_members(self, data: Dict[str, Any]) -> Optional[np.ndarray]:
+        """Return member galaxies for a loaded dataset, reading the FITS on first use."""
+        if data.get("data_gluematchcat_members") is not None or not data.get("members_lazy"):
+            return data.get("data_gluematchcat_members")
+        with self._load_lock:
+            if data.get("members_lazy"):
+                data["data_gluematchcat_members"] = self._load_data_gluematchcat_members(
+                    data["paths"]
+                )
+                data["members_lazy"] = False
+        return data["data_gluematchcat_members"]
 
     def _load_catred_info(self, paths: Dict[str, str]) -> pd.DataFrame:
         """Load CATRED file information and polygon data."""

@@ -67,20 +67,16 @@ DEPS_START=$(date +%s.%N)
 
 # Check other critical modules
 IMPORT_START=$(date +%s.%N)
+# Cheap presence check (no heavy imports); the app itself imports them right after
 python -c "
-try:
-    import plotly
-    import pandas
-    import numpy
-    import astropy
-    import shapely
-    import dash
-    print('✓ All core dependencies available')
-except ImportError as e:
-    print(f'✗ Missing dependency: {e}')
-    print('   Installing missing dependencies...')
-    exit(1)
-" 2>/dev/null
+import importlib.util, sys
+mods = ['plotly', 'pandas', 'numpy', 'astropy', 'shapely', 'dash']
+missing = [m for m in mods if importlib.util.find_spec(m) is None]
+if missing:
+    print('✗ Missing dependency: ' + ', '.join(missing))
+    sys.exit(1)
+print('✓ All core dependencies available')
+"
 
 if [ $? -ne 0 ]; then
     echo "Installing missing dependencies from pyproject.toml..."

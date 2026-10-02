@@ -395,18 +395,6 @@ def main():
 
     app = ClusterVisualizationApp()
 
-    # # Pre-warm disk cache in background so first render is fast
-    # def _prewarm():
-    #     try:
-    #         for algo in ("PZWAV", "AMICO", "BOTH"):
-    #             app.data_loader.load_data(select_algorithm=algo)
-    #             print(f"✓ Pre-warm complete: {algo}")
-    #     except Exception as e:
-    #         print(f"⚠️  Pre-warm failed: {e}")
-
-    # threading.Thread(target=_prewarm, daemon=True).start()
-    # print("🔥 Background data pre-warm started")
-
     # Derive per-user ports from UID so multiple users on same node never collide.
     # UID is stable across all cluster nodes (set at account creation).
     uid_offset = os.getuid() % 1000
@@ -415,6 +403,30 @@ def main():
         8050 + uid_offset + 1000,
         8050 + uid_offset + 2000,
     ]
+
+    # Preload the default algorithm once the server accepts connections, so startup
+    # is not slowed down; load_data is lock-protected, so early requests just wait.
+    def _preload_default_data():
+        import socket
+
+        deadline = time.time() + 120
+        while time.time() < deadline:
+            for port in user_ports:
+                with socket.socket() as sock:
+                    sock.settimeout(0.2)
+                    if sock.connect_ex(("127.0.0.1", port)) == 0:
+                        break
+            else:
+                time.sleep(0.1)
+                continue
+            break
+        try:
+            app.data_loader.load_data(select_algorithm="PZWAV")
+            print("✓ Preloaded default data (PZWAV)")
+        except Exception as e:
+            print(f"⚠️  Preload failed (will load on first request): {e}")
+
+    threading.Thread(target=_preload_default_data, daemon=True).start()
 
     if app.core:
         app.core.try_multiple_ports(

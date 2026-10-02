@@ -2325,7 +2325,7 @@ class ClusterModalCallbacks:
                 data = self.data_loader.load_data(select_algorithm=algorithm)
             except Exception as exc:
                 return None, None, f"Failed to load data: {exc}"
-            members = data.get("data_gluematchcat_members")
+            members = self.data_loader.get_gluematchcat_members(data)
             if members is None:
                 return None, None, "Members catalog not available. Set gluematchcat_members in config.ini."
             if "ID_UNIQUE_CLUSTER" not in members.dtype.names:
