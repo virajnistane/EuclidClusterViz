@@ -6,6 +6,7 @@
 # Usage:
 #   ./launch.sh                              # Launch Dash app (default)
 #   ./launch.sh --config /path/to/custom.ini # Launch with custom config
+#   ./launch.sh --clear-cache                # Clear cached data, then launch
 #   ./launch.sh --test-dependencies          # Test dependencies only
 #   ./launch.sh --help                       # Show help message
 
@@ -15,6 +16,7 @@ echo "=== Cluster Visualization Project ==="
 CONFIG_ARG=""
 TEST_DEPENDENCIES=false
 SHOW_HELP=false
+CLEAR_CACHE=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -25,6 +27,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --test-dependencies)
             TEST_DEPENDENCIES=true
+            shift
+            ;;
+        --clear-cache)
+            CLEAR_CACHE=true
             shift
             ;;
         --help|-h)
@@ -51,6 +57,7 @@ if [ "$SHOW_HELP" = true ]; then
     echo ""
     echo "OPTIONS:"
     echo "  --config FILE            Use custom configuration file"
+    echo "  --clear-cache            Clear on-disk caches (~/.cache/clusterviz*) before launching"
     echo "  --test-dependencies      Test all dependencies and exit"
     echo "  --help, -h               Show this help message"
     echo "  --debug                  Run the app in debug mode with hot-reloading"
@@ -61,6 +68,9 @@ if [ "$SHOW_HELP" = true ]; then
     echo ""
     echo "  ./launch.sh --config /path/to/custom.ini"
     echo "    Launch with a custom configuration file"
+    echo ""
+    echo "  ./launch.sh --clear-cache"
+    echo "    Remove cached data, then launch the Dash application"
     echo ""
     echo "  ./launch.sh --test-dependencies"
     echo "    Test all Python dependencies and project structure"
@@ -83,6 +93,17 @@ if [ "$SHOW_HELP" = true ]; then
     echo "    - Cluster analysis tools (cutouts, PHZ plots)"
     echo ""
     exit 0
+fi
+
+if [ "$CLEAR_CACHE" = true ]; then
+    CACHE_ROOT="${HOME}/.cache"
+    echo "Clearing ClusterViz caches in $CACHE_ROOT..."
+    for cache_dir in "$CACHE_ROOT"/clusterviz "$CACHE_ROOT"/clusterviz_bg "$CACHE_ROOT"/clusterviz_state; do
+        if [ -d "$cache_dir" ]; then
+            rm -rf -- "$cache_dir" && echo "  ✓ Removed $cache_dir"
+        fi
+    done
+    echo ""
 fi
 
 echo "Launching cluster visualization tools..."
