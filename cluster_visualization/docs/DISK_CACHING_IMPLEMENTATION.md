@@ -140,7 +140,7 @@ Add these methods at the end of the DataLoader class (around line 905):
 
 ```bash
 cd /pbs/home/v/vnistane/ClusterViz
-source venv/bin/activate
+source .venv/bin/activate
 python -c "
 from cluster_visualization.utils.disk_cache import DiskCache
 import numpy as np

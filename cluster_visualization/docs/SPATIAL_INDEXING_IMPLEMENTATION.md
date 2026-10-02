@@ -87,7 +87,7 @@ else:
 
 ```bash
 cd /pbs/home/v/vnistane/ClusterViz
-source venv/bin/activate
+source .venv/bin/activate
 python test_spatial_index_performance.py
 ```
 

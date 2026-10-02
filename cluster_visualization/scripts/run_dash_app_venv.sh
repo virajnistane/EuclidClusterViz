@@ -69,6 +69,13 @@ source "$VENV_DIR/bin/activate"
 VENV_END=$(date +%s.%N)
 VENV_TIME=$(echo "$VENV_END - $VENV_START" | bc)
 
+# Reject stale environments created before the Python 3.14 minimum.
+if ! python -c "import sys; sys.exit(sys.version_info < (3, 14))"; then
+    echo "✗ Python 3.14 or newer is required in $VENV_DIR"
+    echo "   Remove the old virtual environment and rerun setup_venv.sh"
+    exit 1
+fi
+
 # Verify activation
 if [[ "$VIRTUAL_ENV" == "$VENV_DIR" ]]; then
     echo "✓ Virtual environment activated: $VIRTUAL_ENV"

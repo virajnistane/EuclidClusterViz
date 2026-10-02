@@ -24,7 +24,7 @@ If you prefer to install manually or the automatic fix doesn't work:
 
 ```bash
 # Activate your virtual environment first
-source venv/bin/activate
+source .venv/bin/activate
 
 # Install healpy specifically
 pip install "healpy>=1.16.0"
@@ -72,7 +72,7 @@ You should see:
 
 ### If healpy installation fails:
 
-1. **Check your Python version**: Healpy requires Python 3.7+
+1. **Check your Python version**: The application requires Python 3.14 or newer, even though healpy supports older Python versions.
    ```bash
    python --version
    ```

@@ -72,18 +72,19 @@ case $choice in
         PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
         
         # Check for virtual environment
-        if [ -d "$PROJECT_ROOT/venv" ]; then
+        if [ -d "$PROJECT_ROOT/.venv" ]; then
             echo "Using virtual environment..."
             cd "$PROJECT_ROOT"
-            source venv/bin/activate
-            python cluster_visualization/src/cluster_dash_app.py $CONFIG_ARG
-        elif [ -f "$PROJECT_ROOT/cluster_visualization/src/cluster_dash_app.py" ]; then
-            echo "Using EDEN environment..."
-            cd "$PROJECT_ROOT"
+            source .venv/bin/activate
+            if ! python -c "import sys; sys.exit(sys.version_info < (3, 14))"; then
+                echo "Error: Python 3.14 or newer is required in .venv"
+                echo "Run ./setup_venv.sh after removing the old virtual environment"
+                exit 1
+            fi
             python cluster_visualization/src/cluster_dash_app.py $CONFIG_ARG
         else
-            echo "Error: Cannot find cluster_dash_app.py"
-            echo "Project root: $PROJECT_ROOT"
+            echo "Error: Python 3.14+ virtual environment not found: $PROJECT_ROOT/.venv"
+            echo "Run ./setup_venv.sh before launching the app"
             exit 1
         fi
         ;;
@@ -109,21 +110,19 @@ case $choice in
         PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
         
         # Check for virtual environment
-        if [ -d "$PROJECT_ROOT/venv" ]; then
+        if [ -d "$PROJECT_ROOT/.venv" ]; then
             echo "Using virtual environment..."
             cd "$PROJECT_ROOT"
-            source venv/bin/activate
-            python cluster_visualization/src/cluster_dash_app.py --external $CONFIG_ARG
-        elif [ -f "$PROJECT_ROOT/cluster_visualization/src/cluster_dash_app.py" ]; then
-            echo "Using EDEN environment..."
-            cd "$PROJECT_ROOT"
+            source .venv/bin/activate
+            if ! python -c "import sys; sys.exit(sys.version_info < (3, 14))"; then
+                echo "Error: Python 3.14 or newer is required in .venv"
+                echo "Run ./setup_venv.sh after removing the old virtual environment"
+                exit 1
+            fi
             python cluster_visualization/src/cluster_dash_app.py --external $CONFIG_ARG
         else
-            echo "Error: Cannot find cluster_dash_app.py"
-            echo "Checking paths:"
-            echo "  Virtual env: $(ls -la "$PROJECT_ROOT/venv" 2>/dev/null || echo 'not found')"
-            echo "  App file: $(ls -la "$PROJECT_ROOT/cluster_visualization/src/cluster_dash_app.py" 2>/dev/null || echo 'not found')"
-            echo "  Project root: $PROJECT_ROOT"
+            echo "Error: Python 3.14+ virtual environment not found: $PROJECT_ROOT/.venv"
+            echo "Run ./setup_venv.sh before launching the app"
             exit 1
         fi
         ;;

@@ -175,6 +175,8 @@ This tool provides a professional-grade visualization solution for Euclid cluste
 
 **Modern Package Management**: Uses `pyproject.toml` with optional `uv` for 10-100x faster installations
 
+**Python requirement**: Python 3.14. If `uv` is missing, the setup script installs it in `$HOME/.local/bin` and uses it to download and manage Python 3.14.
+
 The EDEN-3.1 environment lacks several critical modules (`healpy`, `dash`, `plotly`, etc.), so a virtual environment is required:
 
 ```bash
@@ -183,7 +185,7 @@ The EDEN-3.1 environment lacks several critical modules (`healpy`, `dash`, `plot
 
 # The script will:
 # 1. Create virtual environment (.venv)
-# 2. Auto-install uv for faster package management
+# 2. Install uv in user scope if needed, then create the Python environment
 # 3. Install cluster-visualization package from pyproject.toml
 # 4. Install all dependencies (10-100x faster with uv)
 ```
@@ -320,13 +322,14 @@ build-backend = "hatchling.build"
 cluster-viz = "cluster_visualization.src.cluster_dash_app:main"
 cluster-viz-test = "cluster_visualization.tests.run_all_tests:main"
 
-# Dependencies managed in pyproject.toml
+# Dependencies managed in pyproject.toml (Python 3.14+)
 [project]
-dependencies = ["plotly==5.17.0", "pandas==2.1.4", ...]
+requires-python = ">=3.14"
+dependencies = ["plotly==5.17.0", "pandas>=2.3.3,<3.0", "numpy>=2.3.0,<3.0", ...]
 
 # Optional development dependencies
 [project.optional-dependencies]
-dev = ["pytest>=7.0", "black>=22.0", "mypy>=1.0", ...]
+dev = ["pytest>=8.4.2", "black>=25.9.0", "mypy>=1.18.1", ...]
 ```
 
 **Installation Commands**:
@@ -772,7 +775,7 @@ UI_CONFIG = {
 ### **Modern Package Management**
 ```bash
 # 🚀 Fast Setup with uv (10-100x faster than pip)
-./setup_venv.sh  # Auto-installs uv in venv
+./setup_venv.sh  # Installs uv in user scope if missing
 
 # Package installed in editable mode
 pip install -e .          # Standard (slower)
@@ -794,6 +797,9 @@ mypy cluster_visualization/
 ```
 
 ### **Supported Deployments**
+
+The application and its virtual environment require Python 3.14 or newer. EDEN-3.1 may still be activated for its system tools, but its Python interpreter is not used to create the application environment.
+
 ```bash
 # Production Environment (EUCLID systems)
 source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
@@ -890,7 +896,7 @@ cluster_visualization/src/
 
 ### **Build & Installation Performance**
 - **uv Package Manager**: 10-100x faster than pip for package installation
-  - Automatic installation in virtual environment by `setup_venv.sh`
+  - Automatic installation in user scope by `setup_venv.sh`
   - Parallel downloads and installations
   - Shared package cache across environments
   - Example: Full dependency install ~10s with uv vs ~5min with pip
@@ -959,7 +965,7 @@ If you can't access the application:
 ### **Environment & Dependencies**
 ```bash
 # Full reinstallation (recommended)
-./setup_venv.sh  # Recreates .venv with uv and all dependencies
+./setup_venv.sh  # Installs uv in user scope if needed and sets up .venv
 
 # Manual dependency installation
 pip install -e .              # Install from pyproject.toml
@@ -1003,7 +1009,7 @@ export PYTHONPATH="${PYTHONPATH}:/path/to/cluster_visualization"
 ```
 
 ### **Performance Optimization**
-- **Slow Installation**: Install uv: `pip install uv`, then reinstall: `uv pip install -e .`
+- **Slow Installation**: Run `./setup_venv.sh`; it installs uv in user scope if needed and syncs the locked dependencies.
 - **Slow Loading**: Start with Basic View, enable Detailed View only when needed
 - **Memory Issues**: Narrow filters and zoom in before enabling unmerged clusters or matched ovals
 - **Large Datasets**: Enable CATRED sparse mode for NSIDE=16384 data

@@ -66,8 +66,8 @@ class DiskCache:
 
         This ensures cache is invalidated when source data changes.
         """
-        # Start with the base key
-        key_components = [key]
+        # NumPy 2 pickle paths differ from the legacy cache format.
+        key_components = [f"v2:{key}"]
 
         # Add modification times of source files
         if source_files:

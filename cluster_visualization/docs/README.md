@@ -116,6 +116,8 @@ This tool provides a professional-grade visualization solution for Euclid cluste
 
 ## 🔧 Environment Requirements
 
+**Python requirement**: Python 3.14. If `uv` is missing, the setup script installs it in `$HOME/.local/bin` and uses it to download and manage Python 3.14.
+
 **Required Setup**: Virtual environment with all dependencies
 
 The EDEN-3.1 environment lacks several critical modules (`healpy`, `dash`, `plotly`, etc.), so a virtual environment is required:
@@ -123,8 +125,10 @@ The EDEN-3.1 environment lacks several critical modules (`healpy`, `dash`, `plot
 ```bash
 # Set up virtual environment with all dependencies
 ./setup_venv.sh
-source venv/bin/activate
+source .venv/bin/activate
 ```
+
+The virtual environment uses Python 3.14 managed by `uv`, independently of the EDEN-3.1 interpreter.
 
 **Note**: While EDEN-3.1 provides base astronomical libraries, the application requires additional packages:
 - `healpy` - HEALPix operations for masked CATRED data
@@ -260,7 +264,7 @@ cluster_visualization/
 ```bash
 # Required: Set up and activate virtual environment
 ./setup_venv.sh
-source venv/bin/activate
+source .venv/bin/activate
 
 # Note: EDEN-3.1 alone is insufficient (missing healpy, dash, etc.)
 # The setup script will install all required dependencies
@@ -650,12 +654,15 @@ UI_CONFIG = {
 ## 🛠️ Development Environment
 
 ### **Supported Deployments**
+
+The application requires Python 3.14 or newer. EDEN-3.1 may still be activated for its system tools, but its Python interpreter is not used to create the application environment.
+
 ```bash
 # Production Environment (EUCLID systems)
 source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 
 # Development Environment (Universal)
-./setup_venv.sh && source venv/bin/activate
+./setup_venv.sh && source .venv/bin/activate
 
 # Container Deployment (Future)
 docker build -t euclid-cluster-viz .

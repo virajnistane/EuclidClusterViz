@@ -12,7 +12,7 @@ version = "1.4.0"
 description = "Advanced interactive web-based visualization platform for astronomical cluster detection data from the ESA Euclid Mission"
 authors = [{name = "Viraj Nistane", email = "nato.viraj@gmail.com"}]
 readme = "README.md"
-requires-python = ">=3.9,<3.12"  # Restrict to tested Python versions
+requires-python = ">=3.14"
 license = {text = "MIT"}
 keywords = ["astronomy", "euclid", "visualization", "cluster-detection", "dash", "plotly"]
 classifiers = [
@@ -21,19 +21,18 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Astronomy",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
 ]
 
 # Runtime dependencies
 dependencies = [
     "plotly==5.17.0",
-    "pandas==2.1.4",
-    "numpy>=1.26.0,<2.0",  # Compatible range for pandas 2.1.4
+    "pandas>=2.3.3,<3.0",
+    "numpy>=2.3.0,<3.0",
     "astropy>=5.0",
     "healpy>=1.16.0",
-    "shapely==2.0.2",
+    "scipy>=1.16.0",
+    "matplotlib>=3.10.0",
+    "shapely>=2.1.2,<3.0",
     "dash[diskcache]==2.14.1",
     "dash-bootstrap-components==1.5.0",
     "Pillow>=9.2.0",
@@ -46,18 +45,18 @@ dependencies = [
 [project.optional-dependencies]
 # Development dependencies
 dev = [
-    "pytest>=7.0",
-    "black>=22.0",
-    "flake8>=4.0",
-    "mypy>=1.0",
-    "pylint>=2.15",
+    "pytest>=8.4.2",
+    "black>=25.9.0",
+    "flake8>=7.3.0",
+    "mypy>=1.18.1",
+    "pylint>=4.0.0",
     "isort>=6.1.0",
     "ipykernel>=6.31.0",
 ]
 
 # Testing dependencies
 test = [
-    "pytest>=7.0",
+    "pytest>=8.4.2",
     "pytest-cov>=4.0",
     "pytest-mock>=3.10",
 ]
@@ -71,11 +70,11 @@ docs = [
 
 # All optional dependencies combined
 all = [
-    "pytest>=7.0",
-    "black>=22.0",
-    "flake8>=4.0",
-    "mypy>=1.0",
-    "pylint>=2.15",
+    "pytest>=8.4.2",
+    "black>=25.9.0",
+    "flake8>=7.3.0",
+    "mypy>=1.18.1",
+    "pylint>=4.0.0",
     "pytest-cov>=4.0",
     "pytest-mock>=3.10",
     "sphinx>=5.0",
@@ -120,7 +119,7 @@ packages = ["cluster_visualization"]
 
 [tool.black]
 line-length = 100
-target-version = ['py39', 'py310', 'py311']
+target-version = ['py314']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
@@ -156,7 +155,7 @@ markers = [
 ]
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.14"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
