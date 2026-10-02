@@ -6,7 +6,7 @@
 # Usage:
 #   ./launch.sh                              # Launch Dash app (default)
 #   ./launch.sh --config /path/to/custom.ini # Launch with custom config
-#   ./launch.sh --clear-cache                # Clear cached data, then launch
+#   ./launch.sh --clear-cache                # Clear cached data and exit
 #   ./launch.sh --test-dependencies          # Test dependencies only
 #   ./launch.sh --help                       # Show help message
 
@@ -57,7 +57,7 @@ if [ "$SHOW_HELP" = true ]; then
     echo ""
     echo "OPTIONS:"
     echo "  --config FILE            Use custom configuration file"
-    echo "  --clear-cache            Clear on-disk caches (~/.cache/clusterviz*) before launching"
+    echo "  --clear-cache            Clear on-disk caches (~/.cache/clusterviz*) and exit (does not launch)"
     echo "  --test-dependencies      Test all dependencies and exit"
     echo "  --help, -h               Show this help message"
     echo "  --debug                  Run the app in debug mode with hot-reloading"
@@ -70,7 +70,7 @@ if [ "$SHOW_HELP" = true ]; then
     echo "    Launch with a custom configuration file"
     echo ""
     echo "  ./launch.sh --clear-cache"
-    echo "    Remove cached data, then launch the Dash application"
+    echo "    Remove cached data and exit without launching the app"
     echo ""
     echo "  ./launch.sh --test-dependencies"
     echo "    Test all Python dependencies and project structure"
@@ -103,7 +103,8 @@ if [ "$CLEAR_CACHE" = true ]; then
             rm -rf -- "$cache_dir" && echo "  ✓ Removed $cache_dir"
         fi
     done
-    echo ""
+    echo "Cache cleared."
+    exit 0
 fi
 
 echo "Launching cluster visualization tools..."
