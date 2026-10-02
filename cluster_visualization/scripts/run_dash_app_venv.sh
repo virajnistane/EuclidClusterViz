@@ -84,6 +84,7 @@ except ImportError as e:
 
 if [ $? -ne 0 ]; then
     echo "Installing missing dependencies from pyproject.toml..."
+    export UV_LINK_MODE=copy
     uv pip install -e "$PROJECT_DIR"
     if [ $? -ne 0 ]; then
         echo "✗ Failed to install dependencies"

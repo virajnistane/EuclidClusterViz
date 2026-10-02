@@ -37,6 +37,7 @@ fi
 cd "$PROJECT_DIR"
 export UV_PROJECT_ENVIRONMENT="$VENV_DIR"
 export UV_PYTHON_DOWNLOADS=automatic
+export UV_LINK_MODE=copy
 
 echo "Project directory: $PROJECT_DIR"
 echo "Virtual environment: $VENV_DIR"
