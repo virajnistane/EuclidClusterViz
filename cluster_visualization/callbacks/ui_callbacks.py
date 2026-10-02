@@ -204,6 +204,41 @@ class UICallbacks:
             ],
         )
 
+        # Render button: a Re-render with the algorithm already on screen only needs the
+        # cluster traces rebuilt (incremental patch); first render, algorithm changes and
+        # renders after a configuration change run the full background render.
+        self.app.clientside_callback(
+            """
+            function(n, algorithm, rendered, traceIndex, fullCount, patchCount) {
+                var NO = window.dash_clientside.no_update;
+                if (!n) { return [NO, NO]; }
+                var canPatch = !!(rendered && rendered.algorithm === algorithm &&
+                                  traceIndex && traceIndex.n > 0);
+                return canPatch ? [NO, (patchCount || 0) + 1] : [(fullCount || 0) + 1, NO];
+            }
+            """,
+            [Output("render-full-request", "data"), Output("render-patch-request", "data")],
+            Input("render-button", "n_clicks"),
+            [
+                State("algorithm-dropdown", "value"),
+                State("rendered-meta-store", "data"),
+                State("cluster-trace-index-store", "data"),
+                State("render-full-request", "data"),
+                State("render-patch-request", "data"),
+            ],
+            prevent_initial_call=True,
+        )
+
+        # A new catalog file invalidates the figure on screen: next Render is a full one
+        self.app.clientside_callback(
+            """
+            function(n) { return n ? null : window.dash_clientside.no_update; }
+            """,
+            Output("rendered-meta-store", "data", allow_duplicate=True),
+            Input("apply-file-config-button", "n_clicks"),
+            prevent_initial_call=True,
+        )
+
         # Where the filter-dependent cluster traces sit in the figure (for incremental Apply).
         # Name rules mirror TraceRegistry: CLUSTER, MATCHED_PAIR and SELECTED_CLUSTER types.
         self.app.clientside_callback(

@@ -310,7 +310,8 @@ class MainPlotCallbacks:
                 Output("rendered-meta-store", "data"),
             ],
             [
-                Input("render-button", "n_clicks"),
+                # Full renders only; same-algorithm Re-renders are routed to the patch path
+                Input("render-full-request", "data"),
             ],
             [
                 State("algorithm-dropdown", "value"),
@@ -406,10 +407,10 @@ class MainPlotCallbacks:
                 set_progress((20, f"Loading {algorithm} catalog..."))
                 data = self.load_data(algorithm)
 
-                # Keep CATRED / mosaic / mask overlays across renders
+                # Keep CATRED / mosaic / mask overlays and cluster members across renders
                 preserved = TraceRegistry.extract_traces(
                     current_figure,
-                    {TraceType.CATRED, TraceType.MOSAIC, TraceType.MASK_OVERLAY},
+                    {TraceType.CATRED, TraceType.MOSAIC, TraceType.MASK_OVERLAY, TraceType.MEMBERS},
                 )
 
                 set_progress((55, "Creating visualization traces..."))
@@ -429,6 +430,8 @@ class MainPlotCallbacks:
                     show_cltile_info=show_cltile_info,
                     **kw,
                 )
+                # Members stay the top layer, as after "Show members"
+                traces = list(traces) + list(preserved[TraceType.MEMBERS])
 
                 # Create figure
                 set_progress((80, "Building figure..."))
@@ -645,7 +648,11 @@ class MainPlotCallbacks:
                 Output("status-info", "children", allow_duplicate=True),
                 Output("rendered-meta-store", "data", allow_duplicate=True),
             ],
-            Input("apply-filters-button", "n_clicks"),
+            [
+                Input("apply-filters-button", "n_clicks"),
+                # Re-render with an unchanged algorithm takes the same incremental path
+                Input("render-patch-request", "data"),
+            ],
             [
                 State("algorithm-dropdown", "value"),
                 State("matching-clusters-switch", "value"),
@@ -679,6 +686,7 @@ class MainPlotCallbacks:
         )
         def apply_filters(
             n_clicks,
+            patch_request,
             algorithm,
             matching_clusters,
             snr_range_pzwav,
@@ -707,7 +715,7 @@ class MainPlotCallbacks:
             rendered_meta,
             trace_index,
         ):
-            if not n_clicks:
+            if not n_clicks and not patch_request:
                 return dash.no_update, dash.no_update, dash.no_update
 
             _t_total = time.perf_counter()

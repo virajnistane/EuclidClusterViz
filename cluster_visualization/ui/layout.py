@@ -390,6 +390,9 @@ class AppLayout:
                                 # so "Apply filters" can patch only those traces
                                 dcc.Store(id="rendered-meta-store", data=None),
                                 dcc.Store(id="cluster-trace-index-store", data=None),
+                                # Render button routing: full background render vs incremental patch
+                                dcc.Store(id="render-full-request", data=0),
+                                dcc.Store(id="render-patch-request", data=0),
                             ],
                             xs=12,
                             className="main-col",

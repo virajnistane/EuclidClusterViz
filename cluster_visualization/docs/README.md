@@ -900,7 +900,8 @@ The application now supports independent control of multiple overlay layers:
 - ✅ **Single Apply Filters Button**: One sticky "Apply filters" bar replaces the per-filter Apply buttons and the ovals "Render" button; it lists changed filters and pending controls show a "Not applied" tag
 - ✅ **Range Filter Readouts**: Selected-range readout plus synced Min/Max inputs; SNR shows only the selected algorithm's filter
 - ✅ **Incremental Apply**: `TraceCreator.create_cluster_traces` + `MainPlotCallbacks._setup_apply_filters_callback` rebuild only cluster traces in the main process and patch them with `dash.Patch`; overlays and polygons stay in the browser
-- ✅ **Overlay Preservation on Render**: Full Re-render keeps CATRED, mosaic and mask overlay traces
+- ✅ **Overlay Preservation on Render**: Full Re-render keeps CATRED, mosaic and mask overlay traces and cluster members
+- ✅ **Incremental Re-render**: Re-render with the algorithm already on screen takes the same patch path as Apply filters (cluster traces only); first render, algorithm changes and renders after "Use this file" stay full background renders
 - ✅ **Quiet, Responsive UI**: No gradients, emoji or perpetual animations; fixed-width sidebar column on desktop, stacked below 992 px
 - ✅ **Figure-Size Logging Opt-In**: `CLUSTERVIZ_LOG_FIGURE_SIZE=1`
 

@@ -1150,7 +1150,8 @@ The application now supports independent control of multiple overlay layers:
 - ✅ **Single Apply Filters Button**: One sticky "Apply filters" bar replaces the per-filter Apply buttons and the ovals "Render" button; it lists changed filters and pending controls show a "Not applied" tag. Filter switches, the richness radio and quality flags no longer redraw live
 - ✅ **Range Filter Readouts**: Selected-range readout plus synced Min/Max inputs on every range slider; SNR shows only the selected algorithm's filter
 - ✅ **Incremental Apply**: "Apply filters" runs in the main server process, rebuilds only the cluster traces (`TraceCreator.create_cluster_traces`) and patches them into the figure with `dash.Patch` (`MainPlotCallbacks._setup_apply_filters_callback`). Polygons, CATRED, mosaic and mask overlays stay in the browser. Tile colours and richness hover text are cached per loaded catalog
-- ✅ **Overlay Preservation on Render**: Full **Re-render** now keeps CATRED, mosaic and mask overlay traces
+- ✅ **Overlay Preservation on Render**: Full **Re-render** now keeps CATRED, mosaic and mask overlay traces and cluster members
+- ✅ **Incremental Re-render**: Re-render with the algorithm already on screen takes the same patch path as Apply filters (cluster traces only); first render, algorithm changes and renders after "Use this file" stay full background renders
 - ✅ **Live Display Options Use Applied Filters**: Toggling a Display option no longer applies pending filter changes
 - ✅ **Quiet, Responsive UI**: Gradients, emoji and perpetual animations removed; fixed-width sidebar column on desktop that stacks below 992 px
 - ✅ **Figure-Size Logging Opt-In**: The full-figure JSON size log now runs only with `CLUSTERVIZ_LOG_FIGURE_SIZE=1`

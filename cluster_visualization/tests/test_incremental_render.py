@@ -146,5 +146,27 @@ class TestIncrementalRender(unittest.TestCase):
         self.assertEqual([op["location"] for op in ops[:3]], [["data", 7], ["data", 5], ["data", 3]])
 
 
+
+class TestRenderPreservesOverlays(unittest.TestCase):
+    """Full renders carry overlays (incl. cluster members) over; cluster traces are rebuilt."""
+
+    def test_members_catred_mask_extracted_clusters_not(self):
+        from cluster_visualization.src.visualization.trace_registry import TraceRegistry, TraceType
+
+        figure = {"data": [
+            {"type": "scattergl", "name": "Merged PZWAV", "x": [1], "y": [1]},
+            {"type": "scattergl", "name": "CATRED Masked - MER Tile", "x": [1], "y": [1]},
+            {"type": "scatter", "name": "Mask overlay bin 0", "x": [1], "y": [1]},
+            {"type": "scatter", "name": "Members (ID 42)", "x": [1], "y": [1]},
+        ]}
+        kept = TraceRegistry.extract_traces(
+            figure, {TraceType.CATRED, TraceType.MOSAIC, TraceType.MASK_OVERLAY, TraceType.MEMBERS}
+        )
+        self.assertEqual(len(kept[TraceType.MEMBERS]), 1)
+        self.assertEqual(len(kept[TraceType.CATRED]), 1)
+        self.assertEqual(len(kept[TraceType.MASK_OVERLAY]), 1)
+        names = [getattr(t, "name", None) or t.get("name") for ts in kept.values() for t in ts]
+        self.assertNotIn("Merged PZWAV", names)
+
 if __name__ == "__main__":
     unittest.main()
