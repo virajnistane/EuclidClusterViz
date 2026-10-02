@@ -141,9 +141,10 @@ If you're setting up the application for multiple users:
    pip install -r requirements.txt
    ```
 
-3. **Verify EDEN environment includes healpy**:
+3. **Verify healpy is installed in the project virtual environment**:
    ```bash
-   module load <appropriate-healpy-module>
+   source .venv/bin/activate
+   python -c "import healpy; print(healpy.__version__)"
    ```
 
 The application now handles missing dependencies gracefully and provides clear instructions for resolution.

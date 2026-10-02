@@ -75,13 +75,13 @@ cd ~/ClusterViz
 ./setup_venv.sh       # recreates .venv with all dependencies
 ```
 
-### EDEN environment not detected
+### Python environment not found or too old
 
 ```bash
-source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
-# or use the venv launcher which handles this automatically:
-./launch.sh
+./setup_venv.sh
 ```
+
+The launcher uses the project `.venv` managed by `uv`; EDEN-3.1 activation is not required.
 
 ### Verify installed packages
 

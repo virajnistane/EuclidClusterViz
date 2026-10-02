@@ -8,33 +8,6 @@ SCRIPT_START=$(date +%s.%N)
 
 echo "=== Cluster Visualization Dash App (Virtual Environment) ==="
 
-# Check and activate EDEN environment if needed
-check_eden_environment() {
-    local start=$(date +%s.%N)
-    if [[ ":$PATH:" != *":/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/"* ]]; then
-        echo "⚠️  EDEN environment not detected!"
-        echo "   Attempting to activate EDEN environment..."
-        
-        if [ -f "/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate" ]; then
-            source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
-            echo "✓ EDEN environment activated"
-        else
-            echo "✗ EDEN environment not available at /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/"
-            echo "   Please ensure CVMFS is mounted and EDEN is available"
-            echo "   Or manually activate: source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate"
-            exit 1
-        fi
-    else
-        echo "✓ EDEN environment already active"
-    fi
-    local end=$(date +%s.%N)
-    local elapsed=$(echo "$end - $start" | bc)
-    echo "   [Time: ${elapsed}s]"
-}
-
-# Activate EDEN environment
-check_eden_environment
-
 # Get project directory (go up two levels from scripts directory)
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VENV_DIR="$PROJECT_DIR/.venv"
@@ -134,7 +107,6 @@ TOTAL_TIME=$(echo "$SCRIPT_END - $SCRIPT_START" | bc)
 echo ""
 echo "=== Startup Performance Summary ==="
 echo "Total startup time: ${TOTAL_TIME}s"
-echo "  - EDEN check: ${elapsed}s"
 echo "  - Venv activation: ${VENV_TIME}s"
 echo "  - Dependency checks: ${DEPS_TIME}s"
 echo ""

@@ -57,6 +57,16 @@ fi
 echo "Installing locked project dependencies with uv..."
 "$UV_BIN" sync --project "$PROJECT_DIR" --python 3.14 --locked
 
+COMPLETION_DIR="$HOME/.local/share/bash-completion/completions"
+COMPLETION_FILE="$COMPLETION_DIR/clusterviz-launch"
+mkdir -p "$COMPLETION_DIR"
+install -m 0644 "$PROJECT_DIR/cluster_visualization/scripts/launch_completion.bash" "$COMPLETION_FILE"
+
+touch "$HOME/.bashrc"
+if ! grep -Fq 'bash-completion/completions/clusterviz-launch' "$HOME/.bashrc"; then
+    printf '\n# ClusterViz launch.sh argument completion\nsource "$HOME/.local/share/bash-completion/completions/clusterviz-launch"\n' >> "$HOME/.bashrc"
+fi
+
 if [ "$(whoami)" = "vnistane" ]; then
     read -r -p "Install development dependencies (pytest, black, mypy, etc.)? [Y/n] " answer
     if [[ -z "$answer" || "$answer" =~ ^[Yy]$ ]]; then
@@ -87,5 +97,6 @@ echo ""
 echo "=== Setup Complete ==="
 echo "Python: $("$VENV_DIR/bin/python" --version)"
 echo "Virtual environment: $VENV_DIR"
+echo "Bash completion: $COMPLETION_FILE"
 echo ""
 echo "Run the application with ./launch.sh or activate .venv/bin/activate."

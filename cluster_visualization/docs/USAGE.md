@@ -2,9 +2,9 @@
 
 ## 🔧 Prerequisites
 
-**REQUIRED**: Activate EDEN-3.1 environment before using any tools:
+**Required**: Python 3.14, managed automatically by `uv` in the project virtual environment. EDEN-3.1 activation is not required.
 ```bash
-source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
+./setup_venv.sh
 ```
 
 **Remote Access**: The app assigns each user a personal port automatically. The exact `ssh -L` tunnel command is printed at startup. See [Quick Remote Access Setup](https://github.com/virajnistane/EuclidClusterViz/blob/main/README.md#quick-remote-access-setup).
@@ -17,7 +17,6 @@ source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 
 ### 1. **NEW: Interactive Dash App** (Recommended)
 ```bash
-source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
 ./cluster_visualization/scripts/run_dash_app_venv.sh
 ```
 - 🆕 **Real-time interactive web application**

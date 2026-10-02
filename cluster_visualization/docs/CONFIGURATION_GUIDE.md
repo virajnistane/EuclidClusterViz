@@ -27,9 +27,9 @@ This interactive script will:
 
 The launcher will:
 - Automatically load your configuration
-- Check and activate the EDEN environment
+- Activate the Python 3.14 virtual environment
 - Launch the Dash app directly (no interactive prompts)
-- Handle all environment setup automatically
+- Set up dependencies automatically when needed
 
 **Command-Line Options:**
 ```bash
@@ -236,16 +236,9 @@ if not is_valid:
    is_valid, issues = validate_environment()
    ```
 
-3. **EDEN environment not found**:
+3. **Python environment not found or too old**:
    ```bash
-   # Test dependencies and see environment status
-   ./launch.sh --test-dependencies
-   
-   # The launcher will automatically activate EDEN environment
-   ./launch.sh
-   
-   # Or manually activate:
-   source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
+   ./setup_venv.sh
    ```
 
 ### Fallback Behavior

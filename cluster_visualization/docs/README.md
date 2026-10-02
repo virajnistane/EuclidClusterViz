@@ -655,13 +655,10 @@ UI_CONFIG = {
 
 ### **Supported Deployments**
 
-The application requires Python 3.14 or newer. EDEN-3.1 may still be activated for its system tools, but its Python interpreter is not used to create the application environment.
+The application requires Python 3.14 or newer and runs from the `uv`-managed `.venv`. EDEN-3.1 activation is not required.
 
 ```bash
-# Production Environment (EUCLID systems)
-source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
-
-# Development Environment (Universal)
+# Create and activate the environment (uv manages Python and dependencies)
 ./setup_venv.sh && source .venv/bin/activate
 
 # Container Deployment (Future)

@@ -12,14 +12,18 @@
 echo "=== Cluster Visualization Launcher ==="
 
 # Parse command line arguments
-CONFIG_ARG=""
+APP_ARGS=()
 TEST_DEPENDENCIES=false
 SHOW_HELP=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --config)
-            CONFIG_ARG="--config $2"
+            if [ "$#" -lt 2 ]; then
+                echo "Error: --config requires a file path"
+                exit 1
+            fi
+            APP_ARGS+=("--config" "$2")
             echo "Using custom config: $2"
             shift 2
             ;;
@@ -32,7 +36,11 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --debug)
-            CONFIG_ARG="$CONFIG_ARG --debug"
+            APP_ARGS+=("--debug")
+            shift
+            ;;
+        --external|--remote)
+            APP_ARGS+=("$1")
             shift
             ;;
         *)
@@ -54,6 +62,8 @@ if [ "$SHOW_HELP" = true ]; then
     echo "  --test-dependencies      Test all dependencies and exit"
     echo "  --help, -h               Show this help message"
     echo "  --debug                  Run the app in debug mode with hot-reloading"
+    echo "  --external               Allow external network access"
+    echo "  --remote                 Alias for --external"
     echo ""
     echo "EXAMPLES:"
     echo "  ./launch.sh"
@@ -87,39 +97,23 @@ fi
 
 # If testing dependencies, run tests and exit
 if [ "$TEST_DEPENDENCIES" = true ]; then
-    echo "Testing available solutions..."
-    
-    # Check and activate EDEN environment if needed
-    check_eden_environment() {
-        if [[ ":$PATH:" != *":/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/"* ]]; then
-            echo "⚠️  EDEN environment not detected!"
-            echo "   Attempting to activate EDEN environment..."
-            
-            if [ -f "/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate" ]; then
-                source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
-                echo "✓ EDEN environment activated"
-            else
-                echo "✗ EDEN environment not available at /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/"
-                echo "   Please ensure CVMFS is mounted and EDEN is available"
-                echo "   Or manually activate: source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate"
-                return 1
-            fi
-        else
-            echo "✓ EDEN environment already active"
-        fi
-        return 0
-    }
+    echo "Testing the application virtual environment..."
 
-    # Activate environment
-    if ! check_eden_environment; then
-        echo "Warning: Continuing without EDEN environment - some features may not work"
-    fi
-    echo ""
-    
-    # Get the script directory and move to project root
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
     cd "$PROJECT_DIR"
+
+    if [ ! -f "$PROJECT_DIR/.venv/bin/activate" ]; then
+        echo "✗ Application virtual environment not found."
+        echo "   Run ./setup_venv.sh first."
+        exit 1
+    fi
+    source "$PROJECT_DIR/.venv/bin/activate"
+    if ! python -c "import sys; sys.exit(sys.version_info < (3, 14))"; then
+        echo "✗ Python 3.14 or newer is required in .venv."
+        echo "   Run ./setup_venv.sh to recreate the environment."
+        exit 1
+    fi
     
     # Test all dependencies
     echo "Testing all dependencies..."
@@ -183,33 +177,6 @@ fi
 
 echo "Launching Dash application..."
 
-# Check and activate EDEN environment if needed
-check_eden_environment() {
-    if [[ ":$PATH:" != *":/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/"* ]]; then
-        echo "⚠️  EDEN environment not detected!"
-        echo "   Attempting to activate EDEN environment..."
-        
-        if [ -f "/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate" ]; then
-            source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
-            echo "✓ EDEN environment activated"
-        else
-            echo "✗ EDEN environment not available at /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/"
-            echo "   Please ensure CVMFS is mounted and EDEN is available"
-            echo "   Or manually activate: source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate"
-            return 1
-        fi
-    else
-        echo "✓ EDEN environment already active"
-    fi
-    return 0
-}
-
-# Activate environment
-if ! check_eden_environment; then
-    echo "Warning: Continuing without EDEN environment - some features may not work"
-fi
-echo ""
-
 # Get the script directory and move to project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
@@ -222,4 +189,4 @@ if [ -n "$CONFIG_ARG" ]; then
     echo "Config: $CONFIG_ARG"
 fi
 echo ""
-./cluster_visualization/scripts/run_dash_app_venv.sh $CONFIG_ARG
+./cluster_visualization/scripts/run_dash_app_venv.sh "${APP_ARGS[@]}"

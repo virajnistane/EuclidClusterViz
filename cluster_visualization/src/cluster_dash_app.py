@@ -14,10 +14,6 @@ Features:
 - Responsive plot sizing with 1200x900 dimensions
 - Custom configuration file support via command-line argument
 
-REQUIREMENTS:
-- Must activate EDEN environment first: source /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1/bin/activate
-- This provides required packages: astropy, plotly, pandas, numpy, shapely, dash
-
 USAGE:
 - Default config: python cluster_dash_app.py
 - Custom config:  python cluster_dash_app.py --config /path/to/custom_config.ini
@@ -47,14 +43,8 @@ from flask import request
 
 
 def check_environment():
-    """Check EDEN environment activation and required package versions."""
+    """Check required package availability."""
     import importlib.metadata
-
-    eden_path = "/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1"
-    if eden_path not in os.environ.get("PATH", "") and not os.environ.get("CLUSTERVIZ_SKIP_EDEN_CHECK"):
-        print("⚠️  WARNING: EDEN environment not detected!")
-        print(f"   source {eden_path}/bin/activate")
-        print("")
 
     required = ["dash", "dash-bootstrap-components", "plotly", "numpy", "pandas", "astropy", "shapely"]
     missing = []
