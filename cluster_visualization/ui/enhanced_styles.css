@@ -961,3 +961,22 @@ body {
     }
 }
 
+
+/* Thin bar under the sky plot while a viewport request is in flight */
+.viewport-busy {
+  position: relative;
+  height: 3px;
+  margin-top: -3px;
+  z-index: 5;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--cv-accent, #2b5797), transparent);
+  background-size: 200% 100%;
+  animation: cv-viewport-busy 1.1s linear infinite;
+}
+@keyframes cv-viewport-busy {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .viewport-busy { animation: none; background: var(--cv-accent, #2b5797); opacity: 0.6; }
+}

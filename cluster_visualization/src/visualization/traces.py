@@ -94,6 +94,7 @@ class TraceCreator:
         show_unmerged_clusters: bool = False,
         matching_clusters: bool = False,
         show_cltile_info: bool = True,
+        view_bounds: Optional[Tuple[float, float, float, float]] = None,
     ) -> List:
         """
         Create all Plotly traces for the visualization.
@@ -177,14 +178,17 @@ class TraceCreator:
             show_unmerged_clusters=show_unmerged_clusters,
             matching_clusters=matching_clusters,
             show_cltile_info=show_cltile_info,
+            view_bounds=view_bounds,
         )
 
-        # Create CL-tile polygons (filter-independent)
+        # Create CL-tile polygons (filter-independent), merged into a few traces
+        tile_polygons: List = []
         for tile_key, value in data["data_detcluster_by_cltile"].items():
             tileid = value.get("tile_id", tile_key)
             self._create_cltile_polygons(
-                traces, data, tileid, value, show_polygons, show_mer_tiles, legendgroup=None
+                tile_polygons, data, tileid, value, show_polygons, show_mer_tiles, legendgroup=None
             )
+        traces.extend(self._merge_polygon_traces(tile_polygons))
 
         # Prepare mosaic traces (preserve existing ones)
         mosaic_traces = existing_mosaic_traces or []
@@ -224,6 +228,89 @@ class TraceCreator:
         self._profiler.tick_render()
         return _result
 
+    VIEW_MARGIN = 1.0  # fraction of the view added on each side when culling (keep in sync with ui_callbacks)
+
+    # Sky map culling settings; set from config.ini [view] by configure_view() at startup
+    VIEW_SETTINGS = {"cull_min_clusters": 5000, "max_points_sent": 50000, "density_threshold": 50000}
+
+    @classmethod
+    def configure_view(cls, cull_min_clusters=None, max_points_sent=None, density_threshold=None):
+        """Set the [view] settings (None keeps the current value)."""
+        for key, value in (
+            ("cull_min_clusters", cull_min_clusters),
+            ("max_points_sent", max_points_sent),
+            ("density_threshold", density_threshold),
+        ):
+            if value is not None:
+                cls.VIEW_SETTINGS[key] = int(value)
+
+    @classmethod
+    def max_points_sent(cls) -> int:
+        """Most clusters sent per request; the margin around the view shrinks to fit."""
+        return cls.VIEW_SETTINGS["max_points_sent"]
+
+    @classmethod
+    def density_threshold(cls) -> int:
+        """Above this many clusters in the visible area, a density grid replaces markers."""
+        return cls.VIEW_SETTINGS["density_threshold"]
+
+    @classmethod
+    def cull_min_clusters(cls) -> int:
+        """Catalogs at or below this size are sent whole (no culling)."""
+        return cls.VIEW_SETTINGS["cull_min_clusters"]
+
+    # Margins tried in turn until the clusters fit the point budget (see create_cluster_traces)
+    CULL_MARGINS = (VIEW_MARGIN, 0.25, 0.0)
+
+    @classmethod
+    def _cull_to_view(cls, arr: np.ndarray, view_bounds, margin: Optional[float] = None) -> np.ndarray:
+        """Rows within the view (plus margin, a fraction of the view on each side; default
+        VIEW_MARGIN). RA is compared modulo 360° around the view centre, so a field
+        crossing RA 0°/360° keeps the right clusters."""
+        if arr is None or len(arr) == 0:
+            return arr
+        return arr[cls._cull_mask(arr, view_bounds, margin)]
+
+    @classmethod
+    def _cull_mask(cls, arr: np.ndarray, view_bounds, margin: Optional[float] = None) -> np.ndarray:
+        """Boolean mask behind _cull_to_view (cheap to count; no row copies)."""
+        margin = cls.VIEW_MARGIN if margin is None else margin
+        ra_min, ra_max, dec_min, dec_max = view_bounds
+        ra_lo, ra_hi = sorted((float(ra_min), float(ra_max)))
+        dec_lo, dec_hi = sorted((float(dec_min), float(dec_max)))
+        half_ra = (ra_hi - ra_lo) / 2 * (1 + 2 * margin)
+        pad_dec = (dec_hi - dec_lo) * margin
+        centre = (ra_lo + ra_hi) / 2
+        ra = np.asarray(arr["RIGHT_ASCENSION_CLUSTER"], dtype=float)
+        dec = np.asarray(arr["DECLINATION_CLUSTER"], dtype=float)
+        d_ra = (ra - centre + 180.0) % 360.0 - 180.0
+        return (np.abs(d_ra) <= half_ra) & (dec >= dec_lo - pad_dec) & (dec <= dec_hi + pad_dec)
+
+    def _density_trace(self, arr: np.ndarray, view_bounds, bins: int = 120):
+        """Cluster counts on a grid over the view (empty cells transparent)."""
+        ra_lo, ra_hi = sorted((float(view_bounds[0]), float(view_bounds[1])))
+        dec_lo, dec_hi = sorted((float(view_bounds[2]), float(view_bounds[3])))
+        pad_ra = (ra_hi - ra_lo) * self.VIEW_MARGIN
+        pad_dec = (dec_hi - dec_lo) * self.VIEW_MARGIN
+        counts, xedges, yedges = np.histogram2d(
+            np.asarray(arr["RIGHT_ASCENSION_CLUSTER"], dtype=float),
+            np.asarray(arr["DECLINATION_CLUSTER"], dtype=float),
+            bins=bins,
+            range=[[ra_lo - pad_ra, ra_hi + pad_ra], [dec_lo - pad_dec, dec_hi + pad_dec]],
+        )
+        z = counts.T.astype(float)
+        z[z == 0] = np.nan
+        return go.Heatmap(
+            x=(xedges[:-1] + xedges[1:]) / 2,
+            y=(yedges[:-1] + yedges[1:]) / 2,
+            z=z,
+            name="Merged clusters (density)",
+            colorscale=[[0, "rgba(43,87,151,0.15)"], [1, "rgba(43,87,151,0.95)"]],
+            colorbar=dict(title=dict(text="Clusters"), thickness=10, len=0.5),
+            hovertemplate="RA %{x:.2f}°, Dec %{y:.2f}°<br>%{z:.0f} clusters<extra>Zoom in for individual clusters</extra>",
+            showscale=True,
+        )
+
     def create_cluster_traces(
         self,
         data: Dict[str, Any],
@@ -248,6 +335,7 @@ class TraceCreator:
         show_unmerged_clusters: bool = False,
         matching_clusters: bool = False,
         show_cltile_info: bool = True,
+        view_bounds: Optional[Tuple[float, float, float, float]] = None,
     ) -> List:
         """Build only the filter-dependent traces: merged clusters (+ near-CATRED variants),
         matched-pair ovals and unmerged clusters.
@@ -280,7 +368,58 @@ class TraceCreator:
                 "Debug: ID-cluster based filtering skipped - either not using gluematchcat or idcluster_list is None"
             )
 
+        # Viewport culling: only clusters in (or near) the visible window are sent.
+        # - More than density_threshold clusters in the visible area: a density grid.
+        # - Otherwise markers, with the widest margin around the view (CULL_MARGINS) that
+        #   keeps the count within max_points_sent (no margin if none fits).
+        # The margin used and whether the result is a density grid travel to the browser
+        # in each trace's `meta`; the viewport tracker in ui_callbacks uses them to decide
+        # when the next request is needed.
+        budget = self.max_points_sent()
+        cull_margin = None
+        if view_bounds is not None:
+            full = datamod_detcluster_mergedcat
+            # Count with masks; copy rows only once, for the margin chosen
+            view_count = int(self._cull_mask(full, view_bounds, 0.0).sum())
+            show_density = view_count > self.density_threshold()
+            if show_density:
+                cull_margin = self.VIEW_MARGIN  # the grid has a fixed size, so cover the margin
+                keep = self._cull_mask(full, view_bounds, cull_margin)
+            else:
+                for cull_margin in self.CULL_MARGINS:
+                    keep = self._cull_mask(full, view_bounds, cull_margin)
+                    if int(keep.sum()) <= budget:
+                        break
+            datamod_detcluster_mergedcat = full[keep]
+        else:
+            view_count = len(datamod_detcluster_mergedcat)
+            show_density = view_count > self.density_threshold()
+
+        self.last_cull = {
+            "density": bool(show_density),
+            "margin": cull_margin,
+            "clusters": int(len(datamod_detcluster_mergedcat)),
+        }
         cluster_traces: List = []
+        if show_density:
+            bounds = view_bounds or (
+                float(np.nanmin(datamod_detcluster_mergedcat["RIGHT_ASCENSION_CLUSTER"])),
+                float(np.nanmax(datamod_detcluster_mergedcat["RIGHT_ASCENSION_CLUSTER"])),
+                float(np.nanmin(datamod_detcluster_mergedcat["DECLINATION_CLUSTER"])),
+                float(np.nanmax(datamod_detcluster_mergedcat["DECLINATION_CLUSTER"])),
+            )
+            density = self._density_trace(datamod_detcluster_mergedcat, bounds)
+            # view_count / density_threshold let the browser estimate when a zoom-in
+            # brings the view under the threshold, i.e. when to ask for markers
+            density.update(meta={
+                "cull_margin": cull_margin,
+                "density": True,
+                "view_count": view_count,
+                "density_threshold": self.density_threshold(),
+            })
+            cluster_traces.append(density)
+            return cluster_traces
+
         self._active_rows = self._row_cache_for(data)
         try:
             _t = time.perf_counter()
@@ -323,6 +462,8 @@ class TraceCreator:
             )
             self._profiler.record("create_traces:unmerged_traces", time.perf_counter() - _t)
 
+        for trace in cluster_traces:
+            trace.update(meta={"cull_margin": cull_margin, "density": False})
         return cluster_traces
 
     # ------------------------------------------------------------------
@@ -362,7 +503,6 @@ class TraceCreator:
             "sorted_ids": sorted_ids,
             "colors": None,  # built lazily: only needed when CL-tile info is shown
             "tile_ids": None,
-            "richness": tuple(np.asarray(col, dtype=object) for col in self._richness_arrays(merged)),
         }
         data["_render_row_cache"] = cache
         self._profiler.record("row_cache:build", time.perf_counter() - _t)
@@ -971,6 +1111,131 @@ class TraceCreator:
 
         return oval_trace
 
+    MAX_OVALS = 20000  # one trace for all ovals, so the cap is about points, not traces
+
+    def _matched_pair_trace(self, pzwav_data, amico_data, relayout_data, n_points=48):
+        """All matched PZWAV↔AMICO pairs in the view as ONE filled Scatter trace.
+
+        Pairs are found with an ID lookup (CROSS_ID_CLUSTER → AMICO ID_UNIQUE_CLUSTER)
+        and each ellipse (centre = pair midpoint, semi-major = half separation + 0.01°,
+        semi-minor = half of that, rotated along the pair) is joined with NaN gaps so
+        Plotly fills them independently.
+        """
+        if len(pzwav_data) == 0 or len(amico_data) == 0:
+            return None
+
+        # Only clusters with a cross-match ID can be paired
+        p = pzwav_data[np.isfinite(np.asarray(pzwav_data["CROSS_ID_CLUSTER"], dtype=float))]
+        if relayout_data and "xaxis.range[0]" in relayout_data:
+            ra_lo, ra_hi = sorted((relayout_data.get("xaxis.range[0]", 0), relayout_data.get("xaxis.range[1]", 360)))
+            dec_lo, dec_hi = sorted((relayout_data.get("yaxis.range[0]", -90), relayout_data.get("yaxis.range[1]", 90)))
+            ra, dec = p["RIGHT_ASCENSION_CLUSTER"], p["DECLINATION_CLUSTER"]
+            p = p[(ra >= ra_lo) & (ra <= ra_hi) & (dec >= dec_lo) & (dec <= dec_hi)]
+        if len(p) == 0:
+            return None
+
+        amico_ids = np.asarray(amico_data["ID_UNIQUE_CLUSTER"])
+        order = np.argsort(amico_ids, kind="stable")
+        sorted_ids = amico_ids[order]
+        wanted = np.asarray(p["CROSS_ID_CLUSTER"]).astype(amico_ids.dtype, copy=False)
+        idx = np.searchsorted(sorted_ids, wanted)
+        idx_clip = np.minimum(idx, len(sorted_ids) - 1)
+        found = sorted_ids[idx_clip] == wanted
+        if not np.any(found):
+            return None
+        p = p[found]
+        a = amico_data[order[idx_clip[found]]]
+
+        if len(p) > self.MAX_OVALS:
+            top = np.argsort(np.asarray(p["SNR_CLUSTER"]))[-self.MAX_OVALS:]
+            p, a = p[top], a[top]
+
+        ra1 = np.asarray(p["RIGHT_ASCENSION_CLUSTER"], dtype=float)
+        dec1 = np.asarray(p["DECLINATION_CLUSTER"], dtype=float)
+        ra2 = np.asarray(a["RIGHT_ASCENSION_CLUSTER"], dtype=float)
+        dec2 = np.asarray(a["DECLINATION_CLUSTER"], dtype=float)
+        center_ra, center_dec = (ra1 + ra2) / 2, (dec1 + dec2) / 2
+        semi_major = np.hypot(ra2 - ra1, dec2 - dec1) / 2 + 0.01
+        semi_minor = semi_major * 0.5
+        angle = np.where(ra2 != ra1, np.arctan2(dec2 - dec1, ra2 - ra1), np.pi / 2)
+
+        theta = np.linspace(0, 2 * np.pi, n_points)
+        ex = semi_major[:, None] * np.cos(theta)[None, :]
+        ey = semi_minor[:, None] * np.sin(theta)[None, :]
+        cos_a, sin_a = np.cos(angle)[:, None], np.sin(angle)[:, None]
+        xs = center_ra[:, None] + ex * cos_a - ey * sin_a
+        ys = center_dec[:, None] + ex * sin_a + ey * cos_a
+        gap = np.full((len(p), 1), np.nan)
+        x = np.hstack([xs, gap]).ravel()
+        y = np.hstack([ys, gap]).ravel()
+
+        return go.Scatter(
+            x=x,
+            y=y,
+            mode="lines",
+            fill="toself",
+            fillcolor="rgba(0, 255, 0, 0.3)",
+            line=dict(color="green", width=1, dash="dot"),
+            name="Matched Pair",
+            showlegend=False,
+            hoverinfo="skip",
+        )
+
+    @staticmethod
+    def _line_colors(colors, width: int = 2) -> Dict[str, Any]:
+        """Marker outline colours, one per point, as palette indices plus a discrete
+        colorscale. A list of colour strings is validated element by element by Plotly
+        (most of the build time for big traces) and sent as text; indices go as one
+        byte per point in binary."""
+        if isinstance(colors, str):
+            return dict(width=width, color=colors)
+        names = np.asarray(colors, dtype=object).astype(str)
+        if len(names) == 0:
+            return dict(width=width, color="gray")
+        palette, index = np.unique(names, return_inverse=True)
+        if len(palette) == 1:
+            return dict(width=width, color=str(palette[0]))
+        last = len(palette) - 1
+        return dict(
+            width=width,
+            color=index.astype(np.uint8 if last < 256 else np.float32),
+            colorscale=[[i / last, str(c)] for i, c in enumerate(palette)],
+            cmin=0,
+            cmax=last,
+            autocolorscale=False,
+        )
+
+    @staticmethod
+    def _cluster_customdata(subset, det_codes, tile_ids):
+        """Numeric per-point data [snr, z, det_code, id, tile_id] as one float array.
+
+        Numeric arrays are sent to the browser as compact binary (Plotly 6) instead of
+        per-point lists; richness details are shown in the selected-cluster card.
+        Indices 0, 1 and 3 (SNR, z, ID) are read by the cluster click handler.
+        """
+        n = len(subset)
+        tiles = np.asarray(tile_ids, dtype=object)
+        tile_num = np.full(n, np.nan)
+        for i, t in enumerate(tiles):
+            try:
+                tile_num[i] = float(t)
+            except (TypeError, ValueError):
+                pass
+        det = np.broadcast_to(np.asarray(det_codes, dtype=float), (n,)) if n else np.zeros(0)
+        if not n:
+            return np.zeros((0, 5), dtype=np.float32)
+        ids = np.asarray(subset["ID_UNIQUE_CLUSTER"], dtype=float)
+        # float32 halves the payload; it holds integers exactly only below 2**24, so IDs
+        # beyond that keep float64 (the click handler reads the ID back from index 3)
+        exact32 = bool(np.all(~np.isfinite(ids) | (np.abs(ids) < 2**24)))
+        return np.column_stack([
+            np.asarray(subset["SNR_CLUSTER"], dtype=float),
+            np.asarray(subset["Z_CLUSTER"], dtype=float),
+            det,
+            ids,
+            tile_num,
+        ]).astype(np.float32 if exact32 else np.float64)
+
     def _add_merged_cluster_trace(
         self,
         data_traces: List,
@@ -1017,113 +1282,12 @@ class TraceCreator:
                     snr_include_missing_amico,
                 )
 
-                if matching_clusters: # has_det_code & algorithm=BOTH
-                    # Apply matching logic for clusters
-                    pzwav_data = pzwav_data[
-                        np.logical_not(np.isnan(pzwav_data["CROSS_ID_CLUSTER"]))
-                    ]
-                    amico_data = amico_data[
-                        np.logical_not(np.isnan(amico_data["CROSS_ID_CLUSTER"]))
-                    ]
-
-                    # ZOOM-BASED OVAL RENDERING: Only show ovals in current viewport
-                    if relayout_data and "xaxis.range[0]" in relayout_data:
-                        # Extract zoom window bounds
-                        ra_min = min(
-                            relayout_data.get("xaxis.range[0]", 0),
-                            relayout_data.get("xaxis.range[1]", 360),
-                        )
-                        ra_max = max(
-                            relayout_data.get("xaxis.range[0]", 0),
-                            relayout_data.get("xaxis.range[1]", 360),
-                        )
-                        dec_min = min(
-                            relayout_data.get("yaxis.range[0]", -90),
-                            relayout_data.get("yaxis.range[1]", 90),
-                        )
-                        dec_max = max(
-                            relayout_data.get("yaxis.range[0]", -90),
-                            relayout_data.get("yaxis.range[1]", 90),
-                        )
-
-                        # Filter clusters within viewport (use PZWAV positions)
-                        in_viewport = (
-                            (pzwav_data["RIGHT_ASCENSION_CLUSTER"] >= ra_min)
-                            & (pzwav_data["RIGHT_ASCENSION_CLUSTER"] <= ra_max)
-                            & (pzwav_data["DECLINATION_CLUSTER"] >= dec_min)
-                            & (pzwav_data["DECLINATION_CLUSTER"] <= dec_max)
-                        )
-                        pzwav_viewport = pzwav_data[in_viewport]
-
-                        print(f"🔍 Zoom-based oval rendering:")
-                        print(
-                            f"   Viewport: RA [{ra_min:.2f}, {ra_max:.2f}], Dec [{dec_min:.2f}, {dec_max:.2f}]"
-                        )
-                        print(
-                            f"   PZWAV clusters in view: {len(pzwav_viewport)} / {len(pzwav_data)}"
-                        )
-
-                        # Create pairs only for visible clusters
-                        match_cluster_pairs = [
-                            [
-                                cluster,
-                                amico_data[
-                                    amico_data["ID_UNIQUE_CLUSTER"] == cluster["CROSS_ID_CLUSTER"]
-                                ],
-                            ]
-                            for cluster in pzwav_viewport
-                        ]
-                    else:
-                        # No zoom info - show all pairs (with safety limit)
-                        print(f"⚠️  No zoom window detected - press Apply filters after zooming")
-                        match_cluster_pairs = [
-                            [
-                                cluster,
-                                amico_data[
-                                    amico_data["ID_UNIQUE_CLUSTER"] == cluster["CROSS_ID_CLUSTER"]
-                                ],
-                            ]
-                            for cluster in pzwav_data
-                        ]
-
-                    # Safety limit to prevent browser crash
-                    MAX_OVALS = 2000  # Increased since we're filtering by viewport
-                    num_matches = len(match_cluster_pairs)
-
-                    if num_matches > MAX_OVALS:
-                        print(f"⚠️  {num_matches} pairs in viewport is still too many!")
-                        print(f"   Limiting to highest SNR {MAX_OVALS} pairs.")
-                        print(f"   💡 Tip: Zoom in further or apply SNR/redshift filters")
-
-                        # Filter to highest SNR clusters
-                        pzwav_snr = [p["SNR_CLUSTER"] for p, _ in match_cluster_pairs]
-                        top_indices = np.argsort(pzwav_snr)[-MAX_OVALS:]
-                        match_cluster_pairs = [match_cluster_pairs[i] for i in top_indices]
-                        print(
-                            f"   ↳ Showing top {len(match_cluster_pairs)} pairs (SNR >= {min([p['SNR_CLUSTER'] for p, _ in match_cluster_pairs]):.2f})"
-                        )
-
-                    # Create oval traces for matched pairs
-                    if num_matches > 0:
-                        print(f"🎯 Creating {len(match_cluster_pairs)} ovals for matched pairs...")
-
-                        created_count = 0
-                        for i, (pzwav_cluster, amico_match) in enumerate(match_cluster_pairs):
-                            if len(amico_match) > 0:
-                                oval_trace = self._create_oval_for_cluster_pair(
-                                    pzwav_cluster, amico_match
-                                )
-                                if oval_trace:
-                                    data_traces.append(oval_trace)
-                                    created_count += 1
-
-                            # Progress indicator every 500 ovals
-                            if (i + 1) % 500 == 0:
-                                print(f"   ↳ Progress: {i + 1}/{len(match_cluster_pairs)} ovals...")
-
-                        print(f"   ✓ Created {created_count} oval traces")
-                    else:
-                        print(f"   ℹ️  No matched pairs in current viewport")
+                if matching_clusters:  # has_det_code & algorithm=BOTH
+                    pzwav_data = pzwav_data[np.logical_not(np.isnan(pzwav_data["CROSS_ID_CLUSTER"]))]
+                    amico_data = amico_data[np.logical_not(np.isnan(amico_data["CROSS_ID_CLUSTER"]))]
+                    oval_trace = self._matched_pair_trace(pzwav_data, amico_data, relayout_data)
+                    if oval_trace is not None:
+                        data_traces.append(oval_trace)
 
                 # PZWAV trace - has_det_code & algorithm=BOTH 
                 if len(pzwav_data) > 0:
@@ -1137,33 +1301,19 @@ class TraceCreator:
                         y=pzwav_data["DECLINATION_CLUSTER"],
                         mode="markers",
                         marker=dict(
-                            size=10, symbol="x-thin", line=dict(width=2, color=pzwav_colors)
+                            size=10, symbol="x-thin", line=self._line_colors(pzwav_colors)
                         ),
                         name=f"Merged PZWAV",
                         legendgroup="merged_pzwav",
                         showlegend=True,
-                        customdata=[
-                            [snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs]
-                            for snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs in zip(
-                                pzwav_data["SNR_CLUSTER"],
-                                pzwav_data["Z_CLUSTER"],
-                                pzwav_data["DET_CODE_NB"],
-                                pzwav_data["ID_UNIQUE_CLUSTER"],
-                                pzwav_tile_ids,
-                                *self._richness_for(pzwav_data),
-                            )
-                        ],
+                        customdata=self._cluster_customdata(pzwav_data, pzwav_data["DET_CODE_NB"], pzwav_tile_ids),
                         hovertemplate=(
-                            ("<b>Cluster (PZWAV - Tile %{customdata[4]})</b><br>" if show_cltile_info else "<b>Cluster (PZWAV)</b><br>")
-                            + "ID: %{customdata[3]}<br>"
+                            ("<b>Cluster (PZWAV - Tile %{customdata[4]:d})</b><br>" if show_cltile_info else "<b>Cluster (PZWAV)</b><br>")
+                            + "ID: %{customdata[3]:d}<br>"
                             + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
                             + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
                             + "Z: %{customdata[1]:.2f}<br>"
                             + "SNR: %{customdata[0]:.2f}<br>"
-                            + "Richness ZP: %{customdata[5]}<br>"
-                            + "Flag ZP: %{customdata[6]}<br>"
-                            + "Richness RS: %{customdata[7]}<br>"
-                            + "Flag RS: %{customdata[8]}<br>"
                             + "<extra></extra>"
                         ),
                         hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
@@ -1182,33 +1332,19 @@ class TraceCreator:
                         y=amico_data["DECLINATION_CLUSTER"],
                         mode="markers",
                         marker=dict(
-                            size=10, symbol="cross-thin", line=dict(width=2, color=amico_colors)
+                            size=10, symbol="cross-thin", line=self._line_colors(amico_colors)
                         ),
                         name=f"Merged AMICO",
                         legendgroup="merged_amico",
                         showlegend=True,
-                        customdata=[
-                            [snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs]
-                            for snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs in zip(
-                                amico_data["SNR_CLUSTER"],
-                                amico_data["Z_CLUSTER"],
-                                amico_data["DET_CODE_NB"],
-                                amico_data["ID_UNIQUE_CLUSTER"],
-                                amico_tile_ids,
-                                *self._richness_for(amico_data),
-                            )
-                        ],
+                        customdata=self._cluster_customdata(amico_data, amico_data["DET_CODE_NB"], amico_tile_ids),
                         hovertemplate=(
-                            ("<b>Cluster (AMICO - Tile %{customdata[4]})</b><br>" if show_cltile_info else "<b>Cluster (AMICO)</b><br>")
-                            + "ID: %{customdata[3]}<br>"
+                            ("<b>Cluster (AMICO - Tile %{customdata[4]:d})</b><br>" if show_cltile_info else "<b>Cluster (AMICO)</b><br>")
+                            + "ID: %{customdata[3]:d}<br>"
                             + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
                             + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
                             + "Z: %{customdata[1]:.2f}<br>"
                             + "SNR: %{customdata[0]:.2f}<br>"
-                            + "Richness ZP: %{customdata[5]}<br>"
-                            + "Flag ZP: %{customdata[6]}<br>"
-                            + "Richness RS: %{customdata[7]}<br>"
-                            + "Flag RS: %{customdata[8]}<br>"
                             + "<extra></extra>"
                         ),
                         hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
@@ -1251,30 +1387,16 @@ class TraceCreator:
                     x=datamod_detcluster_mergedcat["RIGHT_ASCENSION_CLUSTER"],
                     y=datamod_detcluster_mergedcat["DECLINATION_CLUSTER"],
                     mode="markers",
-                    marker=dict(size=10, symbol=symbol, line=dict(width=2, color=merged_colors)),
+                    marker=dict(size=10, symbol=symbol, line=self._line_colors(merged_colors)),
                     name=f"Merged {algorithm}",
-                    customdata=[
-                        [snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs]
-                        for snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs in zip(
-                            datamod_detcluster_mergedcat["SNR_CLUSTER"],
-                            datamod_detcluster_mergedcat["Z_CLUSTER"],
-                            det_code_values_customdata,
-                            datamod_detcluster_mergedcat["ID_UNIQUE_CLUSTER"],
-                            merged_tile_ids,
-                            *self._richness_for(datamod_detcluster_mergedcat),
-                        )
-                    ],
+                    customdata=self._cluster_customdata(datamod_detcluster_mergedcat, det_code_values_customdata, merged_tile_ids),
                     hovertemplate=(
-                        (f"<b>Cluster ({algorithm} - Tile %{{customdata[4]}})</b><br>" if show_cltile_info else f"<b>Cluster ({algorithm})</b><br>")
-                        + "ID: %{customdata[3]}<br>"
+                        (f"<b>Cluster ({algorithm} - Tile %{{customdata[4]:d}})</b><br>" if show_cltile_info else f"<b>Cluster ({algorithm})</b><br>")
+                        + "ID: %{customdata[3]:d}<br>"
                         + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
                         + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
                         + "Z: %{customdata[1]:.2f}<br>"
                         + "SNR: %{customdata[0]:.2f}<br>"
-                            + "Richness ZP: %{customdata[5]}<br>"
-                            + "Flag ZP: %{customdata[6]}<br>"
-                            + "Richness RS: %{customdata[7]}<br>"
-                            + "Flag RS: %{customdata[8]}<br>"
                         + "<extra></extra>"
                     ),
                     hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
@@ -1328,33 +1450,19 @@ class TraceCreator:
                             y=pzwav_away["DECLINATION_CLUSTER"],
                             mode="markers",
                             marker=dict(
-                                size=10, symbol="x-thin", line=dict(width=2, color=pzwav_away_colors)
+                                size=10, symbol="x-thin", line=self._line_colors(pzwav_away_colors)
                             ),
                             name=f"PZWAV (Merged)",  # - {len(pzwav_away)} clusters',
                             legendgroup="merged_pzwav",
                             showlegend=True,
-                            customdata=[
-                                [snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs]
-                                for snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs in zip(
-                                    pzwav_away["SNR_CLUSTER"],
-                                    pzwav_away["Z_CLUSTER"],
-                                    pzwav_away["DET_CODE_NB"],
-                                    pzwav_away["ID_UNIQUE_CLUSTER"],
-                                    pzwav_away_tile_ids,
-                                    *self._richness_for(pzwav_away),
-                                )
-                            ],
+                            customdata=self._cluster_customdata(pzwav_away, pzwav_away["DET_CODE_NB"], pzwav_away_tile_ids),
                             hovertemplate=(
-                                ("<b>Cluster (PZWAV - Tile %{customdata[4]})</b><br>" if show_cltile_info else "<b>Cluster (PZWAV)</b><br>")
-                                + "ID: %{customdata[3]}<br>"
+                                ("<b>Cluster (PZWAV - Tile %{customdata[4]:d})</b><br>" if show_cltile_info else "<b>Cluster (PZWAV)</b><br>")
+                                + "ID: %{customdata[3]:d}<br>"
                                 + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
                                 + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
                                 + "Z: %{customdata[1]:.2f}<br>"
                                 + "SNR: %{customdata[0]:.2f}<br>"
-                            + "Richness ZP: %{customdata[5]}<br>"
-                            + "Flag ZP: %{customdata[6]}<br>"
-                            + "Richness RS: %{customdata[7]}<br>"
-                            + "Flag RS: %{customdata[8]}<br>"
                                 + "<extra></extra>"
                             ),
                             hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
@@ -1375,33 +1483,19 @@ class TraceCreator:
                             y=amico_away["DECLINATION_CLUSTER"],
                             mode="markers",
                             marker=dict(
-                                size=10, symbol="cross-thin", line=dict(width=2, color=amico_away_colors)
+                                size=10, symbol="cross-thin", line=self._line_colors(amico_away_colors)
                             ),
                             name=f"AMICO (Merged)",  # - {len(amico_away)} clusters',
                             legendgroup="merged_amico",
                             showlegend=True,
-                            customdata=[
-                                [snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs]
-                                for snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs in zip(
-                                    amico_away["SNR_CLUSTER"],
-                                    amico_away["Z_CLUSTER"],
-                                    amico_away["DET_CODE_NB"],
-                                    amico_away["ID_UNIQUE_CLUSTER"],
-                                    amico_away_tile_ids,
-                                    *self._richness_for(amico_away),
-                                )
-                            ],
+                            customdata=self._cluster_customdata(amico_away, amico_away["DET_CODE_NB"], amico_away_tile_ids),
                             hovertemplate=(
-                                ("<b>Cluster (AMICO - Tile %{customdata[4]})</b><br>" if show_cltile_info else "<b>Cluster (AMICO)</b><br>")
-                                + "ID: %{customdata[3]}<br>"
+                                ("<b>Cluster (AMICO - Tile %{customdata[4]:d})</b><br>" if show_cltile_info else "<b>Cluster (AMICO)</b><br>")
+                                + "ID: %{customdata[3]:d}<br>"
                                 + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
                                 + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
                                 + "Z: %{customdata[1]:.2f}<br>"
                                 + "SNR: %{customdata[0]:.2f}<br>"
-                            + "Richness ZP: %{customdata[5]}<br>"
-                            + "Flag ZP: %{customdata[6]}<br>"
-                            + "Richness RS: %{customdata[7]}<br>"
-                            + "Flag RS: %{customdata[8]}<br>"
                                 + "<extra></extra>"
                             ),
                             hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
@@ -1444,32 +1538,18 @@ class TraceCreator:
                         x=away_from_catred_data["RIGHT_ASCENSION_CLUSTER"],
                         y=away_from_catred_data["DECLINATION_CLUSTER"],
                         mode="markers",
-                        marker=dict(size=10, symbol=symbol, line=dict(width=2, color=away_colors)),
+                        marker=dict(size=10, symbol=symbol, line=self._line_colors(away_colors)),
                         name=f"{algorithm} (Merged)",
                         legendgroup=f"merged_{algorithm.lower()}",
                         showlegend=True,
-                        customdata=[
-                            [snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs]
-                            for snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs in zip(
-                                away_from_catred_data["SNR_CLUSTER"],
-                                away_from_catred_data["Z_CLUSTER"],
-                                det_code_values_customdata,
-                                away_from_catred_data["ID_UNIQUE_CLUSTER"],
-                                away_tile_ids,
-                                *self._richness_for(away_from_catred_data),
-                            )
-                        ],
+                        customdata=self._cluster_customdata(away_from_catred_data, det_code_values_customdata, away_tile_ids),
                         hovertemplate=(
-                            (f"<b>Cluster ({algorithm} - Tile %{{customdata[4]}})</b><br>" if show_cltile_info else f"<b>Cluster ({algorithm})</b><br>")
-                            + "ID: %{customdata[3]}<br>"
+                            (f"<b>Cluster ({algorithm} - Tile %{{customdata[4]:d}})</b><br>" if show_cltile_info else f"<b>Cluster ({algorithm})</b><br>")
+                            + "ID: %{customdata[3]:d}<br>"
                             + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
                             + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
                             + "Z: %{customdata[1]:.2f}<br>"
                             + "SNR: %{customdata[0]:.2f}<br>"
-                            + "Richness ZP: %{customdata[5]}<br>"
-                            + "Flag ZP: %{customdata[6]}<br>"
-                            + "Richness RS: %{customdata[7]}<br>"
-                            + "Flag RS: %{customdata[8]}<br>"
                             + "<extra></extra>"
                         ),
                         hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
@@ -1508,28 +1588,14 @@ class TraceCreator:
                             if (show_cltile_info and data_detcluster_by_cltile)
                             else (["royalblue"] * len(pzwav_near), ["?"] * len(pzwav_near))
                         )
-                        _pzwav_near_customdata = [
-                            [snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs]
-                            for snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs in zip(
-                                pzwav_near["SNR_CLUSTER"],
-                                pzwav_near["Z_CLUSTER"],
-                                pzwav_near["DET_CODE_NB"],
-                                pzwav_near["ID_UNIQUE_CLUSTER"],
-                                pzwav_near_tile_ids,
-                                *self._richness_for(pzwav_near),
-                            )
-                        ]
+                        _pzwav_near_customdata = self._cluster_customdata(pzwav_near, pzwav_near["DET_CODE_NB"], pzwav_near_tile_ids)
                         _pzwav_near_hovertemplate = (
-                            ("<b>Cluster (PZWAV - Tile %{customdata[4]})</b><br>" if show_cltile_info else "<b>Cluster (PZWAV)</b><br>")
-                            + "ID: %{customdata[3]}<br>"
+                            ("<b>Cluster (PZWAV - Tile %{customdata[4]:d})</b><br>" if show_cltile_info else "<b>Cluster (PZWAV)</b><br>")
+                            + "ID: %{customdata[3]:d}<br>"
                             + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
                             + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
                             + "Z: %{customdata[1]:.2f}<br>"
                             + "SNR: %{customdata[0]:.2f}<br>"
-                            + "Richness ZP: %{customdata[5]}<br>"
-                            + "Flag ZP: %{customdata[6]}<br>"
-                            + "Richness RS: %{customdata[7]}<br>"
-                            + "Flag RS: %{customdata[8]}<br>"
                             + "<extra></extra>"
                         )
                         glow_trace_pzwav = create_glow_trace(
@@ -1556,7 +1622,7 @@ class TraceCreator:
                             marker=dict(
                                 size=10,
                                 symbol="x-thin",
-                                line=dict(width=2, color=pzwav_near_colors),
+                                line=self._line_colors(pzwav_near_colors),
                                 opacity=1.0,
                             ),
                             name=f"PZWAV (Merged, near CATRED) - {len(pzwav_near)} clusters",
@@ -1577,28 +1643,14 @@ class TraceCreator:
                             if (show_cltile_info and data_detcluster_by_cltile)
                             else (["tomato"] * len(amico_near), ["?"] * len(amico_near))
                         )
-                        _amico_near_customdata = [
-                            [snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs]
-                            for snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs in zip(
-                                amico_near["SNR_CLUSTER"],
-                                amico_near["Z_CLUSTER"],
-                                amico_near["DET_CODE_NB"],
-                                amico_near["ID_UNIQUE_CLUSTER"],
-                                amico_near_tile_ids,
-                                *self._richness_for(amico_near),
-                            )
-                        ]
+                        _amico_near_customdata = self._cluster_customdata(amico_near, amico_near["DET_CODE_NB"], amico_near_tile_ids)
                         _amico_near_hovertemplate = (
-                            ("<b>Cluster (AMICO - Tile %{customdata[4]})</b><br>" if show_cltile_info else "<b>Cluster (AMICO)</b><br>")
-                            + "ID: %{customdata[3]}<br>"
+                            ("<b>Cluster (AMICO - Tile %{customdata[4]:d})</b><br>" if show_cltile_info else "<b>Cluster (AMICO)</b><br>")
+                            + "ID: %{customdata[3]:d}<br>"
                             + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
                             + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
                             + "Z: %{customdata[1]:.2f}<br>"
                             + "SNR: %{customdata[0]:.2f}<br>"
-                            + "Richness ZP: %{customdata[5]}<br>"
-                            + "Flag ZP: %{customdata[6]}<br>"
-                            + "Richness RS: %{customdata[7]}<br>"
-                            + "Flag RS: %{customdata[8]}<br>"
                             + "<extra></extra>"
                         )
                         glow_trace_amico = create_glow_trace(
@@ -1625,7 +1677,7 @@ class TraceCreator:
                             marker=dict(
                                 size=10,
                                 symbol="cross-thin",
-                                line=dict(width=2, color=amico_near_colors),
+                                line=self._line_colors(amico_near_colors),
                                 opacity=1.0,
                             ),
                             name=f"AMICO (Merged, near CATRED) - {len(amico_near)} clusters",
@@ -1666,32 +1718,14 @@ class TraceCreator:
                         if (show_cltile_info and data_detcluster_by_cltile)
                         else (["royalblue" if algorithm.lower() == "pzwav" else "tomato"] * len(near_catred_data), ["?"] * len(near_catred_data))
                     )
-                    _near_customdata = [
-                        [snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs]
-                        for snr, z, det_code, cluster_id, tid, rzp, fzp, rrs, frs in zip(  # type: ignore[misc]
-                            near_catred_data["SNR_CLUSTER"],
-                            near_catred_data["Z_CLUSTER"],
-                            (
-                                near_catred_data["DET_CODE_NB"]
-                                if has_det_code
-                                else [2 if algorithm.lower() == "pzwav" else 1] * len(near_catred_data)
-                            ),
-                            near_catred_data["ID_UNIQUE_CLUSTER"],
-                            near_tile_ids,
-                            *self._richness_for(near_catred_data),
-                        )
-                    ]
+                    _near_customdata = self._cluster_customdata(near_catred_data, ( near_catred_data["DET_CODE_NB"] if has_det_code else [2 if algorithm.lower() == "pzwav" else 1] * len(near_catred_data) ), near_tile_ids)
                     _near_hovertemplate = (
-                        (f"<b>Cluster ({algorithm} - Tile %{{customdata[4]}})</b><br>" if show_cltile_info else f"<b>Cluster ({algorithm})</b><br>")
-                        + "ID: %{customdata[3]}<br>"
+                        (f"<b>Cluster ({algorithm} - Tile %{{customdata[4]:d}})</b><br>" if show_cltile_info else f"<b>Cluster ({algorithm})</b><br>")
+                        + "ID: %{customdata[3]:d}<br>"
                         + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
                         + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
                         + "Z: %{customdata[1]:.2f}<br>"
                         + "SNR: %{customdata[0]:.2f}<br>"
-                            + "Richness ZP: %{customdata[5]}<br>"
-                            + "Flag ZP: %{customdata[6]}<br>"
-                            + "Richness RS: %{customdata[7]}<br>"
-                            + "Flag RS: %{customdata[8]}<br>"
                         + "<extra></extra>"
                     )
 
@@ -1721,7 +1755,7 @@ class TraceCreator:
                         marker=dict(
                             size=10,
                             symbol=symbol,
-                            line=dict(width=2, color=near_colors),
+                            line=self._line_colors(near_colors),
                             opacity=1.0,
                         ),
                         name=f"{algorithm.upper()} (Merged, near CATRED) - {len(near_catred_data)} clusters",
@@ -1874,11 +1908,26 @@ class TraceCreator:
         m_dec = np.asarray(merged_alg["DECLINATION_CLUSTER"], dtype=float)
         m_z = np.asarray(merged_alg["Z_CLUSTER"], dtype=float)
 
-        d2 = (t_ra[:, None] - m_ra[None, :]) ** 2 + (t_dec[:, None] - m_dec[None, :]) ** 2
-        ang_ok = np.sqrt(d2) <= tol_deg
-        z_ok = np.abs(t_z[:, None] - m_z[None, :]) <= z_tolerance
-        keep: np.ndarray = np.any(ang_ok & z_ok, axis=1)
-        return ~keep
+        try:
+            from scipy.spatial import cKDTree
+
+            # Only pairs within the angular tolerance are materialised (no dense N×M);
+            # same raw (RA, Dec) metric as the dense fallback below
+            pairs = cKDTree(np.column_stack([t_ra, t_dec])).sparse_distance_matrix(
+                cKDTree(np.column_stack([m_ra, m_dec])), tol_deg, output_type="ndarray"
+            )
+            keep = np.zeros(len(t_ra), dtype=bool)
+            if len(pairs):
+                ti, mi = pairs["i"], pairs["j"]
+                z_close = np.abs(t_z[ti] - m_z[mi]) <= z_tolerance
+                keep[ti[z_close]] = True
+            return ~keep
+        except ImportError:
+            d2 = (t_ra[:, None] - m_ra[None, :]) ** 2 + (t_dec[:, None] - m_dec[None, :]) ** 2
+            ang_ok = np.sqrt(d2) <= tol_deg
+            z_ok = np.abs(t_z[:, None] - m_z[None, :]) <= z_tolerance
+            keep_dense: np.ndarray = np.any(ang_ok & z_ok, axis=1)
+            return ~keep_dense
 
     def _add_unmerged_cluster_traces(
         self,
@@ -2072,16 +2121,10 @@ class TraceCreator:
         legendgroup: Optional[str] = None,
     ) -> None:
         """Create MER tile polygon traces for a cluster tile."""
+        mer_polygons = self._mer_polygon_lookup(data)
         for mertileid in tile["LEV1"]["ID_INTERSECTED"]:
-            if mertileid in data["catred_info"]["mertileid"].values:
-                merpoly = (
-                    data["catred_info"]
-                    .loc[
-                        (data["catred_info"]["mertileid"] == mertileid)
-                        & (data["catred_info"]["dataset_release"] == data["catred_dsr"])
-                    ]
-                    .squeeze()["polygon"]
-                )
+            if mertileid in mer_polygons:
+                merpoly = mer_polygons[mertileid]
                 try:
                     if merpoly is not None:
                         x, y = merpoly.exterior.xy
@@ -2102,6 +2145,60 @@ class TraceCreator:
                         polygon_traces.append(mertile_trace)
                 except Exception as e:
                     print(f"Debug: merpoly = {merpoly}, type={type(merpoly)}")
+
+    def _mer_polygon_lookup(self, data: Dict[str, Any]) -> Dict[Any, Any]:
+        """mertileid -> polygon for the catalog's dataset release, built once per catalog."""
+        info = data["catred_info"]
+        key = (id(info), data.get("catred_dsr"))
+        cached = getattr(self, "_mer_polygon_cache", None)
+        if cached is not None and cached[0] == key:
+            return cached[1]
+        rows = info[info["dataset_release"] == data.get("catred_dsr")]
+        lookup = dict(zip(rows["mertileid"].tolist(), rows["polygon"].tolist()))
+        self._mer_polygon_cache = (key, lookup)
+        return lookup
+
+    @staticmethod
+    def _merge_polygon_traces(traces: List) -> List:
+        """Join per-tile outline traces that look the same into one trace each.
+
+        Tiles sharing a type (LEV1 / CORE / MER) and style (colour, dash, fill) become
+        one trace, with NaN gaps between polygons so lines and fills stay separate.
+        Names keep "Tile" + LEV1/CORE, or the "MER-Tile" prefix, which the polygon
+        classifiers elsewhere rely on. Fills draw first and dashed LEV1 lines last.
+        """
+        groups: Dict[tuple, List] = {}
+        for trace in traces:
+            name = trace.name or ""
+            kind = "MER" if name.startswith("MER-Tile") else ("LEV1" if "LEV1" in name else "CORE")
+            line = trace.line
+            key = (kind, line.color, line.dash, line.width, trace.fill, trace.fillcolor)
+            groups.setdefault(key, []).append(trace)
+
+        merged = []
+        for kind in ("CORE", "MER", "LEV1"):
+            for key, group in groups.items():
+                if key[0] != kind:
+                    continue
+                if len(group) == 1:
+                    merged.append(group[0])
+                    continue
+                xs, ys, texts = [], [], []
+                for trace in group:
+                    x = np.asarray(trace.x, dtype=float)
+                    xs.extend([x, [np.nan]])
+                    ys.extend([np.asarray(trace.y, dtype=float), [np.nan]])
+                    texts.extend([trace.text] * len(x) + [None])
+                label = "MER-Tile outlines" if kind == "MER" else f"Tile {kind} outlines"
+                merged.append(
+                    group[0].update(
+                        x=np.concatenate(xs),
+                        y=np.concatenate(ys),
+                        text=texts,
+                        name=f"{label} ({len(group)})",
+                    )
+                )
+        return merged
 
     def _get_default_colors(self) -> List[str]:
         """Get default color list for tile traces."""

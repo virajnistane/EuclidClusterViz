@@ -342,6 +342,7 @@ class MainPlotCallbacks:
                 State("cluster-plot", "relayoutData"),
                 State("cluster-plot", "figure"),
                 State("selected-cluster-box-coords", "data"),
+                State("view-bounds-store", "data"),
             ],
             background=True,
             running=[
@@ -384,6 +385,7 @@ class MainPlotCallbacks:
             relayout_data,
             current_figure,
             box_coords,
+            view_store,
         ):
             # Only render once the button has been clicked
             if not n_clicks:
@@ -406,6 +408,7 @@ class MainPlotCallbacks:
                 # Load data for selected algorithm
                 set_progress((20, f"Loading {algorithm} catalog..."))
                 data = self.load_data(algorithm)
+                view_bounds, cull = self._cull_settings(data, view_store)
 
                 # Keep CATRED / mosaic / mask overlays and cluster members across renders
                 preserved = TraceRegistry.extract_traces(
@@ -428,6 +431,7 @@ class MainPlotCallbacks:
                     show_unmerged_clusters=show_unmerged_clusters,
                     matching_clusters=matching_clusters,
                     show_cltile_info=show_cltile_info,
+                    view_bounds=view_bounds,
                     **kw,
                 )
                 # Members stay the top layer, as after "Show members"
@@ -475,7 +479,7 @@ class MainPlotCallbacks:
                     fig.add_trace(self._selected_cluster_marker(box_coords))
 
                 self._log_figure_size(fig, data)
-                return fig, empty_phz_fig, status, {"algorithm": algorithm}
+                return fig, empty_phz_fig, status, {"algorithm": algorithm, "cull": cull}
 
             except Exception as e:
                 return (*self._create_error_plots(str(e)), dash.no_update)
@@ -483,6 +487,23 @@ class MainPlotCallbacks:
     # ------------------------------------------------------------------
     # Shared render helpers
     # ------------------------------------------------------------------
+
+    def _cull_settings(self, data, view_store):
+        """(view_bounds, cull) for a render.
+
+        Culling is on for catalogs above [view] cull_min_clusters merged clusters
+        (config.ini, default 5000); smaller catalogs are sent whole so zooming never
+        needs a server trip.
+        The bounds are the window the browser recorded as sent (view-bounds-store).
+        """
+        merged = data.get("data_detcluster_mergedcat") if isinstance(data, dict) else None
+        n = len(merged) if merged is not None else 0
+        # From the app's TraceCreator (configured from config.ini at startup)
+        cull_min = self.trace_creator.cull_min_clusters() if self.trace_creator is not None else 5000
+        cull = n > cull_min
+        sent = (view_store or {}).get("sent") if cull else None
+        bounds = tuple(float(v) for v in sent) if sent and len(sent) == 4 else None
+        return bounds, cull
 
     @staticmethod
     def _resolve_filter_kwargs(
@@ -647,11 +668,16 @@ class MainPlotCallbacks:
                 Output("cluster-plot", "figure", allow_duplicate=True),
                 Output("status-info", "children", allow_duplicate=True),
                 Output("rendered-meta-store", "data", allow_duplicate=True),
+                # Tells the browser's viewport tracker this answer has arrived (always a
+                # new value, so the tracker runs even when the figure summary is unchanged)
+                Output("viewport-ack", "data"),
             ],
             [
                 Input("apply-filters-button", "n_clicks"),
                 # Re-render with an unchanged algorithm takes the same incremental path
                 Input("render-patch-request", "data"),
+                # Zoom/pan left the area whose clusters were sent: re-cull
+                Input("viewport-request", "data"),
             ],
             [
                 State("algorithm-dropdown", "value"),
@@ -681,12 +707,14 @@ class MainPlotCallbacks:
                 State("selected-cluster-box-coords", "data"),
                 State("rendered-meta-store", "data"),
                 State("cluster-trace-index-store", "data"),
+                State("view-bounds-store", "data"),
             ],
             prevent_initial_call=True,
         )
         def apply_filters(
             n_clicks,
             patch_request,
+            viewport_request,
             algorithm,
             matching_clusters,
             snr_range_pzwav,
@@ -714,9 +742,10 @@ class MainPlotCallbacks:
             box_coords,
             rendered_meta,
             trace_index,
+            view_store,
         ):
-            if not n_clicks and not patch_request:
-                return dash.no_update, dash.no_update, dash.no_update
+            if not n_clicks and not patch_request and not viewport_request:
+                return dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
             _t_total = time.perf_counter()
             try:
@@ -729,7 +758,10 @@ class MainPlotCallbacks:
                     richness_mode, flag_quality_zp, flag_quality_rs,
                     idcluster_upload_contents, idcluster_upload_filename,
                 )
+                _t_load = time.perf_counter()
                 data = self.load_data(algorithm)
+                view_bounds, cull = self._cull_settings(data, view_store)
+                _dt_load = time.perf_counter() - _t_load
 
                 can_patch = bool(
                     self.trace_creator is not None
@@ -751,6 +783,7 @@ class MainPlotCallbacks:
                         show_unmerged_clusters=show_unmerged_clusters,
                         matching_clusters=matching_clusters,
                         show_cltile_info=show_cltile_info,
+                        view_bounds=view_bounds,
                         **kw,
                     )
                     fig = (
@@ -765,7 +798,7 @@ class MainPlotCallbacks:
                     status = self._filtered_status(
                         algorithm, data, kw, show_polygons, show_mer_tiles, free_aspect_ratio
                     )
-                    return fig, status, {"algorithm": algorithm}
+                    return fig, status, {"algorithm": algorithm, "cull": cull}, time.time()
 
                 # Incremental: rebuild only the cluster traces
                 self.trace_creator.proximity_detector.clear_bounds_cache()
@@ -779,11 +812,13 @@ class MainPlotCallbacks:
                     show_unmerged_clusters=show_unmerged_clusters,
                     matching_clusters=matching_clusters,
                     show_cltile_info=show_cltile_info,
+                    view_bounds=view_bounds,
                     **kw,
                 )
                 if box_coords:
                     cluster_traces.append(self._selected_cluster_marker(box_coords))
-                self.trace_creator._profiler.record("apply:cluster_traces", time.perf_counter() - _t)
+                _dt_traces = time.perf_counter() - _t
+                self.trace_creator._profiler.record("apply:cluster_traces", _dt_traces)
 
                 # Replace the old cluster traces: remove from the end so indices stay valid,
                 # then append, keeping clusters as the top layer like a full render
@@ -791,22 +826,30 @@ class MainPlotCallbacks:
                 patch = Patch()
                 for index in sorted(trace_index.get("cluster", []), reverse=True):
                     patch["data"].__delitem__(index)
-                patch["data"].extend([trace.to_plotly_json() for trace in cluster_traces])
-                self.trace_creator._profiler.record("apply:patch", time.perf_counter() - _t)
+                # Via Figure.to_dict so numpy arrays are sent as typed binary (Plotly 6);
+                # a bare trace.to_plotly_json() would serialise them as JSON lists
+                patch["data"].extend(go.Figure(data=cluster_traces).to_dict()["data"])
+                _dt_patch = time.perf_counter() - _t
+                self.trace_creator._profiler.record("apply:patch", _dt_patch)
 
                 status = self._filtered_status(
                     algorithm, data, kw, show_polygons, show_mer_tiles, free_aspect_ratio
                 )
                 self.trace_creator._profiler.record("apply:total", time.perf_counter() - _t_total)
+                cull_info = getattr(self.trace_creator, "last_cull", None) or {}
+                shown = (
+                    "density map" if cull_info.get("density")
+                    else f"{cull_info.get('clusters', '?')} clusters, margin {cull_info.get('margin')}"
+                ) if view_bounds is not None else "whole catalog"
                 print(
-                    f"Debug: Apply filters - patched {len(cluster_traces)} cluster traces "
-                    f"in {time.perf_counter() - _t_total:.3f}s"
+                    f"Patch ({shown}): {len(cluster_traces)} traces in {time.perf_counter() - _t_total:.2f}s "
+                    f"[load {_dt_load:.2f}s, traces {_dt_traces:.2f}s, encode {_dt_patch:.2f}s]"
                 )
-                return patch, status, dash.no_update
+                return patch, status, dash.no_update, time.time()
 
             except Exception as e:
                 _fig, _phz, status = self._create_error_plots(str(e))
-                return dash.no_update, status, dash.no_update
+                return dash.no_update, status, dash.no_update, time.time()
 
     def _setup_options_update_callback(self):
         """Setup real-time options update callback (preserves zoom)"""
@@ -851,6 +894,7 @@ class MainPlotCallbacks:
                 State("richness-include-missing-zp", "value"),
                 State("richness-include-missing-rs", "value"),
                 State("applied-filters-store", "data"),
+                State("view-bounds-store", "data"),
             ],
             prevent_initial_call=True,
         )
@@ -885,6 +929,7 @@ class MainPlotCallbacks:
             richness_include_missing_zp,
             richness_include_missing_rs,
             applied_filters,
+            view_store,
         ):
             # Only update if render button has been clicked at least once
             if n_clicks == 0:
@@ -978,6 +1023,7 @@ class MainPlotCallbacks:
 
                 # Load data for selected algorithm
                 data = self.load_data(algorithm)
+                view_bounds, cull = self._cull_settings(data, view_store)
 
                 # Extract existing traces to preserve across re-render
                 _preserved = TraceRegistry.extract_traces(
@@ -1024,6 +1070,7 @@ class MainPlotCallbacks:
                     show_unmerged_clusters=show_unmerged_clusters,
                     matching_clusters=matching_clusters,
                     show_cltile_info=show_cltile_info,
+                    view_bounds=view_bounds,
                 )
 
                 # Create figure
@@ -1132,7 +1179,7 @@ class MainPlotCallbacks:
 
                 self._log_figure_size(fig, data)
 
-                return fig, empty_phz_fig, status, {"algorithm": algorithm}
+                return fig, empty_phz_fig, status, {"algorithm": algorithm, "cull": cull}
 
             except Exception as e:
                 error_status = dbc.Alert(f"Error updating: {str(e)}", color="warning")
@@ -1624,6 +1671,7 @@ class MainPlotCallbacks:
         show_unmerged_clusters=False,
         matching_clusters=False,
         show_cltile_info=True,
+        view_bounds=None,
     ):
         """Create traces using modular or fallback method"""
         if self.trace_creator:
@@ -1658,6 +1706,7 @@ class MainPlotCallbacks:
                 show_unmerged_clusters=show_unmerged_clusters,
                 matching_clusters=matching_clusters,
                 show_cltile_info=show_cltile_info,
+                view_bounds=view_bounds,
             )
         else:
             # Fallback to inline trace creation

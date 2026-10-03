@@ -464,6 +464,25 @@ class Config:
         raw_value = str(self._get_mosaic_option("select_best_local_file", "false")).strip().lower()
         return raw_value in {"1", "true", "yes", "on"}
 
+    def _get_view_int(self, option_name: str, default: int, minimum: int = 0) -> int:
+        """Integer from the [view] section; default when missing or invalid."""
+        if not self.config_parser.has_option("view", option_name):
+            return default
+        try:
+            return max(minimum, int(str(self.config_parser.get("view", option_name)).strip()))
+        except ValueError:
+            print(f"Warning: [view] {option_name} is not an integer; using {default}")
+            return default
+
+    def get_view_settings(self) -> Dict[str, int]:
+        """Sky map culling settings ([view] section), as keyword arguments for
+        TraceCreator.configure_view."""
+        return {
+            "cull_min_clusters": self._get_view_int("cull_min_clusters", 5000),
+            "max_points_sent": self._get_view_int("max_points_sent", 50000, minimum=1),
+            "density_threshold": self._get_view_int("density_threshold", 50000, minimum=1),
+        }
+
     def validate_paths(self):
         """Validate that critical paths exist and return status"""
         issues = []

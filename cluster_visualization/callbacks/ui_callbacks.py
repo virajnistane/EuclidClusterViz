@@ -230,6 +230,193 @@ class UICallbacks:
             prevent_initial_call=True,
         )
 
+        # Viewport culling (big catalogs only). The browser tracks the zoom window and the
+        # window the server last sent ("sent"); the server extends it by VIEW_MARGIN on each
+        # side. A request goes out only when the view leaves that coverage, so pans and
+        # zoom-outs inside it cost nothing and zoom-in never needs one.
+        # One request is in flight at a time. Moves made meanwhile are held as "want" and
+        # served when the server's answer arrives (viewport-ack changes), so gestures queue
+        # instead of racing. viewport-busy shows a thin bar while a request is pending.
+        viewport_helpers = """
+        var PENDING_TIMEOUT_MS = 5000;  // stop waiting for an answer that never arrives
+        // Margin the server actually used (it shrinks it to fit the point budget)
+        var VIEW_MARGIN = (traceIndex && traceIndex.cull_margin != null) ? traceIndex.cull_margin : 0;
+        // A density grid is on screen: zooming in to half the sent span or less may now
+        // fit the point budget, so ask for markers
+        var DENSITY = !!(traceIndex && traceIndex.density);
+        var REQUEST_AHEAD = 0.5;  // fraction of the margin used up before the next request
+
+        function axisRange(rel, name, fallback) {
+            var r = rel[name + '.range'];
+            if (!r && (name + '.range[0]') in rel) {
+                r = [rel[name + '.range[0]'], rel[name + '.range[1]']];
+            }
+            if (!r) { return fallback; }
+            return [Math.min(r[0], r[1]), Math.max(r[0], r[1])];
+        }
+
+        function needsRequest(view, sent) {
+            if (!view) { return !!sent; }
+            if (!sent) { return true; }
+            var sw = sent[1] - sent[0], sh = sent[3] - sent[2];
+            // Density grid on screen: ask for markers once the view probably holds no more
+            // than the density threshold, estimated from the count the server saw for the
+            // sent view and the area ratio. Zooming in on markers never needs data.
+            if (DENSITY) {
+                var vc = traceIndex && traceIndex.view_count, thr = traceIndex && traceIndex.density_threshold;
+                if (vc != null && thr) {
+                    var areaRatio = ((view[1] - view[0]) * (view[3] - view[2])) / ((sw * sh) || 1e-9);
+                    if (vc * areaRatio <= thr) { return true; }
+                } else if ((view[1] - view[0]) <= sw / 2) {
+                    return true;
+                }
+            }
+            // Request ahead: ask once the view is halfway into the margin, so the new
+            // clusters arrive while the screen is still covered by the old ones
+            var lead = VIEW_MARGIN * REQUEST_AHEAD;
+            var inside = view[0] >= sent[0] - lead * sw && view[1] <= sent[1] + lead * sw &&
+                         view[2] >= sent[2] - lead * sh && view[3] <= sent[3] + lead * sh;
+            return !inside;
+        }
+
+        function busyStyle(on) { return {display: on ? 'block' : 'none'}; }
+
+        // One line per decision to tmp/browser_debug.log (server /log endpoint)
+        function logDecision(what, view, sent) {
+            try {
+                var r = function(b) { return b ? b.map(function(v) { return +(+v).toFixed(3); }).join(',') : 'all'; };
+                var msg = 'viewport ' + what + ' view=[' + r(view) + '] sent=[' + r(sent) + '] margin=' +
+                          VIEW_MARGIN + (DENSITY ? ' density(view_count=' + (traceIndex && traceIndex.view_count) + ')' : '');
+                if (navigator.sendBeacon) { navigator.sendBeacon('/log', msg); }
+            } catch (e) {}
+        }
+        """
+
+        viewport_relayout_js = (
+            "function(relayout, store, count, rendered, traceIndex) {\n"
+            "    var NO = window.dash_clientside.no_update;\n"
+            "    if (!relayout) { return [NO, NO, NO]; }\n"
+            + viewport_helpers
+            + """
+            var autorange = !!(relayout['xaxis.autorange'] || relayout['yaxis.autorange']);
+            var touched = ('xaxis.range' in relayout) || ('xaxis.range[0]' in relayout) ||
+                          ('yaxis.range' in relayout) || ('yaxis.range[0]' in relayout);
+            if (!autorange && !touched) { return [NO, NO, NO]; }  // legend, dragmode, ...
+            var st = store || {};
+            var view = null;
+            if (!autorange) {
+                // relayoutData only lists the axes changed by this event: with a locked
+                // aspect ratio Plotly often reports RA alone and moves Dec itself. Read the
+                // ranges actually on screen from the plot; relayoutData is the fallback.
+                var gd = document.querySelector('#cluster-plot .js-plotly-plot');
+                var fl = gd && gd._fullLayout;
+                var x = null, y = null;
+                if (fl && fl.xaxis && fl.yaxis && fl.xaxis.range && fl.yaxis.range) {
+                    x = [Math.min(fl.xaxis.range[0], fl.xaxis.range[1]), Math.max(fl.xaxis.range[0], fl.xaxis.range[1])];
+                    y = [Math.min(fl.yaxis.range[0], fl.yaxis.range[1]), Math.max(fl.yaxis.range[0], fl.yaxis.range[1])];
+                } else {
+                    var prev = st.view || [null, null, null, null];
+                    x = axisRange(relayout, 'xaxis', [prev[0], prev[1]]);
+                    y = axisRange(relayout, 'yaxis', [prev[2], prev[3]]);
+                }
+                if (!x || !y || x[0] == null || y[0] == null || !isFinite(x[0]) || !isFinite(y[0])) {
+                    return [NO, NO, NO];
+                }
+                view = [x[0], x[1], y[0], y[1]];
+            }
+            // After a zoom reset the view is "everything" (null), not the last zoom window
+            var latest = autorange ? null : view;
+            var sent = st.sent || null;
+            var pending = !!st.pending && (Date.now() - (st.pendingAt || 0)) < PENDING_TIMEOUT_MS;
+            if (!(rendered && rendered.cull)) {
+                return [{view: latest, sent: latest, pending: false, pendingAt: 0, want: null},
+                        NO, busyStyle(false)];
+            }
+            if (!needsRequest(latest, sent)) {
+                logDecision('covered', latest, sent);
+                return [{view: latest, sent: sent, pending: pending,
+                         pendingAt: pending ? st.pendingAt : 0, want: null},
+                        NO, busyStyle(pending)];
+            }
+            if (pending) {
+                // Patch still in flight: remember where the user is; it is served on arrival
+                logDecision('held (request in flight)', latest, sent);
+                return [{view: latest, sent: sent, pending: true, pendingAt: st.pendingAt, want: latest},
+                        NO, busyStyle(true)];
+            }
+            logDecision('REQUEST', latest, sent);
+            return [{view: latest, sent: latest, pending: true, pendingAt: Date.now(), want: null},
+                    (count || 0) + 1, busyStyle(true)];
+        }
+        """
+        )
+
+        viewport_index_js = (
+            "function(ack, store, count, rendered, figure) {\n"
+            "    var NO = window.dash_clientside.no_update;\n"
+            # Culling info of the answer that just landed, straight from the figure (the
+            # trace-index store may not be recomputed yet)
+            "    var traceIndex = {cull_margin: null, density: false, view_count: null, density_threshold: null};\n"
+            "    ((figure && figure.data) || []).forEach(function(t) {\n"
+            "        var m = t && t.meta;\n"
+            "        if (m && typeof m === 'object' && 'cull_margin' in m) {\n"
+            "            if (m.cull_margin != null) { traceIndex.cull_margin = m.cull_margin; }\n"
+            "            if (m.density) { traceIndex.density = true; traceIndex.view_count = m.view_count;\n"
+            "                             traceIndex.density_threshold = m.density_threshold; }\n"
+            "        }\n"
+            "    });\n"
+            + viewport_helpers
+            + """
+            var st = store || {};
+            if (!st.pending) { return [NO, NO, busyStyle(false)]; }
+            // The patch for the in-flight request has landed
+            var target = st.want || null;
+            if (target && rendered && rendered.cull && needsRequest(target, st.sent || null)) {
+                logDecision('REQUEST (held move)', target, st.sent || null);
+                return [{view: st.view, sent: target, pending: true, pendingAt: Date.now(), want: null},
+                        (count || 0) + 1, busyStyle(true)];
+            }
+            logDecision('patch landed', st.view, st.sent || null);
+            return [{view: st.view, sent: st.sent || null, pending: false, pendingAt: 0, want: null},
+                    NO, busyStyle(false)];
+        }
+        """
+        )
+
+        self.app.clientside_callback(
+            viewport_relayout_js,
+            [
+                Output("view-bounds-store", "data"),
+                Output("viewport-request", "data"),
+                Output("viewport-busy", "style"),
+            ],
+            Input("cluster-plot", "relayoutData"),
+            [
+                State("view-bounds-store", "data"),
+                State("viewport-request", "data"),
+                State("rendered-meta-store", "data"),
+                State("cluster-trace-index-store", "data"),
+            ],
+            prevent_initial_call=True,
+        )
+
+        self.app.clientside_callback(
+            viewport_index_js,
+            [
+                Output("view-bounds-store", "data", allow_duplicate=True),
+                Output("viewport-request", "data", allow_duplicate=True),
+                Output("viewport-busy", "style", allow_duplicate=True),
+            ],
+            Input("viewport-ack", "data"),
+            [
+                State("view-bounds-store", "data"),
+                State("viewport-request", "data"),
+                State("rendered-meta-store", "data"),
+                State("cluster-plot", "figure"),
+            ],
+            prevent_initial_call=True,
+        )
+
         # A new catalog file invalidates the figure on screen: next Render is a full one
         self.app.clientside_callback(
             """
@@ -248,16 +435,29 @@ class UICallbacks:
                 const data = (figure && figure.data) || [];
                 const cluster = [];
                 let hasCatred = false;
+                // Culling info the server put on the cluster traces (TraceCreator.create_cluster_traces)
+                let density = false, cullMargin = null, viewCount = null, densityThreshold = null;
                 data.forEach((trace, i) => {
                     const name = trace.name || '';
                     if (name.startsWith('CATRED')) { hasCatred = true; }
+                    const meta = trace.meta;
+                    if (meta && typeof meta === 'object' && 'cull_margin' in meta) {
+                        if (meta.density) {
+                            density = true;
+                            viewCount = meta.view_count != null ? meta.view_count : null;
+                            densityThreshold = meta.density_threshold != null ? meta.density_threshold : null;
+                        }
+                        if (meta.cull_margin != null) { cullMargin = meta.cull_margin; }
+                    }
                     if (name.includes('Merged') || name.includes('Unmerged')
                         || name.includes('(Enhanced)') || name.includes('Cluster in Proximity')
                         || name === 'Matched Pair' || name === '__selected_cluster__') {
                         cluster.push(i);
                     }
                 });
-                return {cluster: cluster, has_catred: hasCatred, n: data.length};
+                return {cluster: cluster, has_catred: hasCatred, n: data.length,
+                        density: density, cull_margin: cullMargin,
+                        view_count: viewCount, density_threshold: densityThreshold};
             }
             """,
             Output("cluster-trace-index-store", "data"),

@@ -243,7 +243,10 @@ class PHZCallbacks:
                         print(f"Debug: Checking trace: '{trace_name}'")
 
                         # Check if this is a CATRED or Members trace
-                        if "CATRED" in trace_name or "Members" in trace_name:
+                        # Only the clicked trace can supply the point (see guard above)
+                        if trace_name == clicked_trace_name and (
+                            "CATRED" in trace_name or "Members" in trace_name
+                        ):
                             print(
                                 f"Debug: Found CATRED trace '{trace_name}' with {len(catred_data['ra'])} points"
                             )

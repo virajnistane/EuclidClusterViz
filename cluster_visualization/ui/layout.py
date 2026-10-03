@@ -120,10 +120,18 @@ class AppLayout:
                                                                 )
                                                             ],
                                                             type="circle",
+                                                            # Keep the plot drawn while its figure updates
+                                                            # (viewport patches take ~0.2 s); the spinner
+                                                            # only appears for slow updates
+                                                            overlay_style={"visibility": "visible"},
+                                                            delay_show=800,
                                                         )
                                                     ],
                                                     id="plotly-view-container",
                                                 ),
+                                                # Thin bar while a viewport request is in flight
+                                                html.Div(id="viewport-busy", className="viewport-busy",
+                                                         style={"display": "none"}),
                                                 # Aladin Lite view (hidden until mode switch)
                                                 create_aladin_view(),
                                             ],
@@ -393,6 +401,11 @@ class AppLayout:
                                 # Render button routing: full background render vs incremental patch
                                 dcc.Store(id="render-full-request", data=0),
                                 dcc.Store(id="render-patch-request", data=0),
+                                # Viewport culling: current zoom window and the window whose
+                                # clusters were last sent; a counter asks for a re-cull patch
+                                dcc.Store(id="view-bounds-store", data=None),
+                                dcc.Store(id="viewport-request", data=0),
+                                dcc.Store(id="viewport-ack", data=0),
                             ],
                             xs=12,
                             className="main-col",

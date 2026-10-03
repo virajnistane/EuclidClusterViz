@@ -155,6 +155,9 @@ from visualization.figures import FigureManager
 # Import visualization modules
 from visualization.traces import TraceCreator
 
+# Before any background worker forks, so they inherit the settings
+TraceCreator.configure_view(**config.get_view_settings())
+
 print("✓ Visualization modules loaded successfully")
 
 # Import callback modules

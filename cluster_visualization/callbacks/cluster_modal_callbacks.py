@@ -77,10 +77,10 @@ class ClusterModalCallbacks:
             ],
             [Input("cluster-plot", "clickData"),
              Input("aladin-click-store", "data")],
-            [State("algorithm-dropdown", "value")],
+            [State("algorithm-dropdown", "value"), State("cluster-plot", "figure")],
             prevent_initial_call=True,
         )
-        def handle_cluster_click(clickData, aladin_click, algorithm):
+        def handle_cluster_click(clickData, aladin_click, algorithm, figure):
             """Handle cluster point clicks from Plotly figure or Aladin Lite."""
             ctx = callback_context
             triggered_id = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
@@ -116,7 +116,8 @@ class ClusterModalCallbacks:
                 snr_str = f"{snr:.2f}" if isinstance(snr, float) else str(snr)
                 z_str = f"{redshift:.2f}" if isinstance(redshift, float) else str(redshift)
                 tab_content = self._build_cluster_tab_content(
-                    ra, dec, snr_str, z_str, algorithm, merged_cluster_id, resolution_note
+                    ra, dec, snr_str, z_str, algorithm, merged_cluster_id, resolution_note,
+                    merged_record=merged_record,
                 )
                 return (
                     {"display": "none"}, {"display": "block"},
@@ -130,50 +131,58 @@ class ClusterModalCallbacks:
             point = clickData["points"][0]
             curve_number = point.get("curveNumber", 0)
 
-            if "customdata" in point and point["customdata"]:
-                customdata = point.get("customdata", [])
-                customdata = [customdata] if not isinstance(customdata, list) else customdata
+            # Only cluster traces open the card. The clicked trace is looked up in the figure
+            # by curve number; CATRED, members, ovals and polygons are handled elsewhere.
+            traces = figure.get("data", []) if isinstance(figure, dict) else []
+            clicked_trace = traces[curve_number] if 0 <= curve_number < len(traces) else {}
+            if TraceRegistry.classify_trace(clicked_trace) != TraceType.CLUSTER:
+                return no_change
 
-                if len(customdata) >= 2:
-                    ra = point.get("x", "N/A")
-                    dec = point.get("y", "N/A")
-                    snr = customdata[0] if len(customdata) > 0 else "N/A"
-                    redshift = customdata[1] if len(customdata) > 1 else "N/A"
-                    merged_record, resolution_note = self._resolve_merged_record_for_click(
-                        point, algorithm
-                    )
-                    merged_cluster_id = (
-                        merged_record.get("ID_UNIQUE_CLUSTER") if merged_record is not None else None
-                    )
+            ra, dec = point.get("x"), point.get("y")
+            if ra is None or dec is None:
+                return no_change
 
-                    trace_name = f"Curve {curve_number}"
-                    if "text" in point and point["text"] and "Tile" in str(point["text"]):
-                        trace_name = "Individual Tile Cluster"
+            # customdata is trusted only as a numeric row. Binary-encoded 2-D arrays can reach
+            # the browser in other shapes, so the merged catalogue (matched by RA/Dec, then
+            # SNR/z) is the fallback.
+            row = point.get("customdata")
+            if isinstance(row, dict):
+                row = [row[k] for k in sorted(row, key=int)]
+            if not isinstance(row, (list, tuple)):
+                row = []
+            point = dict(point, customdata=row)
 
-                    self.selected_cluster = {
-                        "ra": ra, "dec": dec, "snr": snr, "redshift": redshift,
-                        "algorithm": algorithm, "trace_name": trace_name,
-                        "curve_number": curve_number, "point_data": point,
-                        "merged_record": merged_record, "merged_cluster_id": merged_cluster_id,
-                        "resolution_note": resolution_note,
-                    }
+            merged_record, resolution_note = self._resolve_merged_record_for_click(point, algorithm)
+            merged_cluster_id = (
+                merged_record.get("ID_UNIQUE_CLUSTER") if merged_record is not None else None
+            )
+            snr = row[0] if len(row) > 0 else (merged_record.get("SNR_CLUSTER", "N/A") if merged_record else "N/A")
+            redshift = row[1] if len(row) > 1 else (merged_record.get("Z_CLUSTER", "N/A") if merged_record else "N/A")
 
-                    print(
-                        f"🎯 Cluster clicked: RA={ra:.3f}, Dec={dec:.3f}, SNR={snr:.2f}, z={redshift:.2f}"
-                    )
+            trace_name = f"Curve {curve_number}"
+            if "text" in point and point["text"] and "Tile" in str(point["text"]):
+                trace_name = "Individual Tile Cluster"
 
-                    snr_str = f"{snr:.2f}" if isinstance(snr, float) else str(snr)
-                    z_str = f"{redshift:.2f}" if isinstance(redshift, float) else str(redshift)
-                    tab_content = self._build_cluster_tab_content(
-                        ra, dec, snr_str, z_str, algorithm, merged_cluster_id, resolution_note
-                    )
-                    return (
-                        {"display": "none"}, {"display": "block"},
-                        tab_content, "cluster-tab", merged_record,
-                        {"ra": ra, "dec": dec},
-                    )
+            self.selected_cluster = {
+                "ra": ra, "dec": dec, "snr": snr, "redshift": redshift,
+                "algorithm": algorithm, "trace_name": trace_name,
+                "curve_number": curve_number, "point_data": point,
+                "merged_record": merged_record, "merged_cluster_id": merged_cluster_id,
+                "resolution_note": resolution_note,
+            }
+            print(f"Cluster clicked: RA={ra}, Dec={dec}, merged ID={merged_cluster_id}")
 
-            return no_change
+            snr_str = f"{snr:.2f}" if isinstance(snr, float) else str(snr)
+            z_str = f"{redshift:.2f}" if isinstance(redshift, float) else str(redshift)
+            tab_content = self._build_cluster_tab_content(
+                ra, dec, snr_str, z_str, algorithm, merged_cluster_id, resolution_note,
+                merged_record=merged_record,
+            )
+            return (
+                {"display": "none"}, {"display": "block"},
+                tab_content, "cluster-tab", merged_record,
+                {"ra": ra, "dec": dec},
+            )
 
     MEMBER_FILTER_IDS = [
         "tab-members-filter-mode",
@@ -293,8 +302,30 @@ class ClusterModalCallbacks:
         }
         return quick.get(trigger_id, selected_tag)
 
+    @staticmethod
+    def _richness_text(record, estimate):
+        """'12.34 (flag 0)' for RICHNESS_<estimate>, or 'N/A'."""
+        if not record:
+            return "N/A"
+        value = record.get(f"RICHNESS_{estimate}")
+        flag = record.get(f"FLAG_QUALITY_{estimate}")
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return "N/A"
+        if value != value:  # NaN
+            return "N/A"
+        text = f"{value:.2f}"
+        if flag is not None:
+            try:
+                text += f" (flag {int(flag)})"
+            except (TypeError, ValueError):
+                pass
+        return text
+
     def _build_cluster_tab_content(
-        self, ra, dec, snr_str, z_str, algorithm, merged_cluster_id, resolution_note
+        self, ra, dec, snr_str, z_str, algorithm, merged_cluster_id, resolution_note,
+        merged_record=None,
     ):
         """Build the selected-cluster summary (shared by Plotly and Aladin clicks)."""
         is_number = isinstance(ra, (int, float)) and isinstance(dec, (int, float))
@@ -324,7 +355,9 @@ class ClusterModalCallbacks:
                 + item(
                     "Merged ID",
                     str(merged_cluster_id) if merged_cluster_id is not None else "Not resolved",
-                ),
+                )
+                + item("Richness ZP", self._richness_text(merged_record, "ZP"))
+                + item("Richness RS", self._richness_text(merged_record, "RS")),
                 className="tool-facts",
             ),
             html.Small(resolution_note, className="control-help"),
