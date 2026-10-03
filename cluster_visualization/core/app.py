@@ -221,10 +221,12 @@ class ClusterVisualizationCore:
             print("Connection monitoring started - will warn if no users connect within 1 minute")
             print("")
 
-        # Dash's run() lets the HOST env var override the host argument. Conda compiler
-        # activation (e.g. EDEN) sets HOST=x86_64-conda-linux-gnu, which does not resolve
-        # and makes werkzeug exit with "Name or service not known". Pin it to our choice.
+        # Dash >= 2.16 lets the HOST / PORT environment variables override the arguments.
+        # Conda toolchains export HOST=x86_64-conda-linux-gnu (not a resolvable name),
+        # which made every bind fail with "Name or service not known". Pin both to the
+        # values chosen here (process-local; the user's shell is unaffected).
         _os.environ["HOST"] = host
+        _os.environ["PORT"] = str(port)
 
         try:
             # use_reloader=False: Werkzeug's file-watcher restart forks a second process that
@@ -282,34 +284,44 @@ class ClusterVisualizationCore:
         return freed
 
     @staticmethod
-    def _port_in_use(port) -> bool:
-        """True if something is listening on port on this host."""
-        with socket.socket() as sock:
-            sock.settimeout(0.2)
-            return sock.connect_ex(("127.0.0.1", port)) == 0
+    def _port_in_use(host, port) -> bool:
+        """True if (host, port) cannot be bound because something already listens there."""
+        import errno
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            # Same option werkzeug sets, so TIME_WAIT leftovers don't count as busy
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                s.bind((host, port))
+            except OSError as e:
+                if e.errno == errno.EADDRINUSE:
+                    return True
+                raise  # any other bind problem is a real error, not a busy port
+        return False
 
     def try_multiple_ports(self, ports=[8050, 8051, 8052], **kwargs):
-        """Try to run on multiple ports if default is busy"""
+        """Run on the first free port. Only a port that is really in use is skipped;
+        any other startup failure is raised instead of being reported as busy."""
+        bind_host = "0.0.0.0" if kwargs.get("external_access") else kwargs.get("host", "localhost")
         for port in ports:
             if self._free_port_if_stale(port):
                 time.sleep(0.5)  # allow socket to leave TIME_WAIT after SIGTERM
+            if self._port_in_use(bind_host, port):
+                print(f"Port {port} is busy, trying next port...")
+                continue
             try:
                 self.run(port=port, **kwargs)
                 break
             except SystemExit:
-                # werkzeug prints the error and calls sys.exit(1) on any bind failure,
-                # not only EADDRINUSE; only fall through to the next port if it's really taken.
-                if not self._port_in_use(port):
-                    print(f"Could not start server on port {port} (see error above)")
-                    raise
-                print(f"Port {port} is busy, trying next port...")
-                continue
-            except OSError as e:
-                if "Address already in use" in str(e):
-                    print(f"Port {port} is busy, trying next port...")
+                # werkzeug prints the error and calls sys.exit(1) on bind failure. Only a
+                # port taken in the meantime is worth retrying; anything else is fatal.
+                if self._port_in_use(bind_host, port):
+                    print(f"Port {port} was taken during startup, trying next port...")
                     continue
-                else:
-                    raise e
+                print(f"Server failed to start on {bind_host}:{port} (see the error above)")
+                raise
+        else:
+            print(f"No free port among {list(ports)}")
 
     @staticmethod
     def check_command_line_args():
