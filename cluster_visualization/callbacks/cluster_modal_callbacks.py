@@ -2488,6 +2488,8 @@ class ClusterModalCallbacks:
             color = marker_color or "#000000"
             size = int(marker_size) if marker_size is not None else 10
             fig = go.Figure(current_figure)
+            # Replace, don't stack: drop any members trace already plotted for this cluster
+            fig.data = tuple(t for t in fig.data if not (getattr(t, "name", "") or "").startswith(trace_name))
             fig.add_trace(self._build_members_trace(ra, dec, cluster_id, color=color, size=size, pmem_zp=pmem_zp, pmem_rs=pmem_rs))
             existing_shapes = (current_figure or {}).get("layout", {}).get("shapes") or []
             fig.update_layout(shapes=self._build_radius_shapes(existing_shapes))
@@ -2515,10 +2517,13 @@ class ClusterModalCallbacks:
                 State("tab-members-pmem-slider", "value"),
                 State("tab-members-mag-filter-switch", "value"),
                 State("tab-members-radius-filter-mode", "value"),
+                State("tab-members-marker-color-picker", "value"),
+                State("tab-members-marker-size", "value"),
             ],
             prevent_initial_call=True,
         )
-        def apply_members_filter(n_clicks, current_figure, filter_mode, pmem_threshold, mag_filter_on, radius_filter_mode):
+        def apply_members_filter(n_clicks, current_figure, filter_mode, pmem_threshold, mag_filter_on,
+                                 radius_filter_mode, marker_color, marker_size):
             if not n_clicks or not self.selected_cluster:
                 return dash.no_update, dash.no_update
             cluster_id = self.selected_cluster.get("merged_cluster_id")
@@ -2592,9 +2597,17 @@ class ClusterModalCallbacks:
                         else:
                             ra = np.array([])
             fig = go.Figure(current_figure)
-            fig.data = tuple(t for t in fig.data if not (getattr(t, "name", "") or "").startswith(trace_name))
+            old_traces = [t for t in fig.data if (getattr(t, "name", "") or "").startswith(trace_name)]
+            # Keep the plotted trace's colour/size; fall back to the pickers if it's gone
+            # (e.g. the previous filter left no members).
+            old_marker = old_traces[0].marker if old_traces else None
+            color = (old_marker.color if old_marker is not None else None) or marker_color or "#000000"
+            size = (old_marker.size if old_marker is not None else None) or marker_size or 10
+            fig.data = tuple(t for t in fig.data if all(t is not o for o in old_traces))
             if len(ra) > 0:
-                fig.add_trace(self._build_members_trace(ra, dec, cluster_id, pmem_zp=pmem_zp, pmem_rs=pmem_rs))
+                fig.add_trace(self._build_members_trace(
+                    ra, dec, cluster_id, color=color, size=int(size), pmem_zp=pmem_zp, pmem_rs=pmem_rs
+                ))
             n_total = len(entry["ra"])
             alert = _members_alert(n_total, len(ra), cluster_id)
             return fig.to_dict(), alert

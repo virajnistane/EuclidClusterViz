@@ -88,6 +88,7 @@ class UICallbacks:
         self._setup_catred_visibility_callback()
         self._setup_catred_render_color_callback()
         self._setup_catred_box_color_callback()
+        self._setup_members_color_callback()
         self._setup_collapsible_callbacks()
         self._setup_config_display_callback()
         self._setup_file_configuration_callback()
@@ -591,6 +592,51 @@ class UICallbacks:
             """,
             Output("cluster-plot", "figure", allow_duplicate=True),
             Input("tab-catred-marker-color-picker", "value"),
+            State("cluster-plot", "figure"),
+            prevent_initial_call=True,
+        )
+
+    def _setup_members_color_callback(self):
+        """Clientside callback: update cluster members marker color and size without re-render.
+
+        Mirrors _setup_catred_box_color_callback for traces named 'Members (ID ...)'.
+        Members markers are open symbols coloured by both marker.color and line.color.
+        """
+        self.app.clientside_callback(
+            """
+            function(markerColor, markerSize, figure) {
+                if (!figure || !figure.data) {
+                    return window.dash_clientside.no_update;
+                }
+                var size = Number(markerSize);
+                var hasSize = markerSize !== null && markerSize !== undefined &&
+                              markerSize !== '' && isFinite(size) && size > 0;
+                if (!markerColor && !hasSize) {
+                    return window.dash_clientside.no_update;
+                }
+                var changed = false;
+                var newData = figure.data.map(function(trace) {
+                    if (trace.name && trace.name.indexOf('Members (ID') === 0) {
+                        changed = true;
+                        var marker = Object.assign({}, trace.marker);
+                        if (markerColor) {
+                            marker.color = markerColor;
+                            marker.line = Object.assign({}, marker.line, {color: markerColor});
+                        }
+                        if (hasSize) {
+                            marker.size = size;
+                        }
+                        return Object.assign({}, trace, {marker: marker});
+                    }
+                    return trace;
+                });
+                if (!changed) return window.dash_clientside.no_update;
+                return Object.assign({}, figure, {data: newData});
+            }
+            """,
+            Output("cluster-plot", "figure", allow_duplicate=True),
+            Input("tab-members-marker-color-picker", "value"),
+            Input("tab-members-marker-size", "value"),
             State("cluster-plot", "figure"),
             prevent_initial_call=True,
         )
