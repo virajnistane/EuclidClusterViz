@@ -173,6 +173,14 @@ class PHZCallbacks:
 
                 print(f"Debug: Clicked trace name: '{clicked_trace_name}'")
 
+                # Clicks on cluster markers or other non-CATRED traces are handled elsewhere
+                # (cluster modal); don't hijack the analysis tabs for them. Match by exact
+                # trace name: substring checks fail on cluster traces like
+                # "PZWAV (Merged, near CATRED)".
+                if clicked_trace_name != "Unknown" and clicked_trace_name not in current_catred_data:
+                    print("Debug: Click was not on a CATRED trace")
+                    return dash.no_update, dash.no_update, dash.no_update
+
                 # Get coordinates for matching
                 clicked_x = clicked_point.get("x")
                 clicked_y = clicked_point.get("y")
@@ -240,15 +248,9 @@ class PHZCallbacks:
                                 f"Debug: Found CATRED trace '{trace_name}' with {len(catred_data['ra'])} points"
                             )
 
-                            # Method 1: Use pointNumber if available (most reliable)
-                            if point_number is not None and point_number < len(catred_data["ra"]):
-                                found_catred_data = catred_data
-                                point_index = point_number
-                                print(f"Debug: Using pointNumber as index: {point_index}")
-                                break
-
-                            # Method 2: Match coordinates with relaxed tolerance (fallback)
-                            elif clicked_x is not None and clicked_y is not None:
+                            # Match by coordinates only: pointNumber indexes the clicked trace,
+                            # which is not this one, so it can't be used as a row index here.
+                            if clicked_x is not None and clicked_y is not None:
                                 print(
                                     f"Debug: Attempting coordinate matching for ({clicked_x}, {clicked_y})"
                                 )

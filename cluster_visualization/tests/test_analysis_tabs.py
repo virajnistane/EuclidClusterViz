@@ -4,10 +4,13 @@ Analysis-tab behaviour that can be checked without a browser.
 - Quick-tag buttons carry their own tag; the panel button uses the selected tag.
 - The p(z) plot states its assumed redshift grid and marks mode and median with
   labelled lines (not colour alone); the error plot builds without raising.
+- Plot clicks switch to the p(z) tab only for stored CATRED/Members traces, not for
+  cluster markers whose trace name happens to mention CATRED.
 """
 
 import unittest
 
+import dash
 import numpy as np
 
 from cluster_visualization.callbacks.cluster_modal_callbacks import ClusterModalCallbacks
@@ -67,6 +70,55 @@ class TestPhzPlot(unittest.TestCase):
         fig = self.phz._create_error_phz_plot("boom")
         self.assertIn("boom", fig.layout.annotations[0].text)
         self.assertFalse(fig.layout.xaxis.visible)
+
+
+class _CapturingApp:
+    """Stand-in for dash.Dash that keeps registered callbacks by function name."""
+
+    def __init__(self):
+        self.callbacks = {}
+
+    def callback(self, *args, **kwargs):
+        def register(func):
+            self.callbacks[func.__name__] = func
+            return func
+
+        return register
+
+
+class TestPhzClickRouting(unittest.TestCase):
+    """Only clicks on stored CATRED/Members traces switch to the p(z) tab."""
+
+    CATRED_TRACE = "CATRED Masked - MER Tile"
+    # Real cluster trace name: contains "CATRED" but is not a CATRED trace
+    CLUSTER_TRACE = "PZWAV (Merged, near CATRED)"
+
+    def setUp(self):
+        catred = {
+            "ra": [46.1466, 46.20],
+            "dec": [-56.0432, -56.10],
+            "phz_pdf": [list(np.ones(301)), list(np.ones(301))],
+            "phz_mode_1": [1.0, 0.5],
+            "phz_median": [1.0, 0.5],
+        }
+        handler = type("Handler", (), {"current_catred_data": {self.CATRED_TRACE: catred}})()
+        app = _CapturingApp()
+        PHZCallbacks(app, catred_handler=handler)
+        self.on_click = app.callbacks["update_phz_pdf_plot"]
+        self.figure = {"data": [{"name": self.CATRED_TRACE}, {"name": self.CLUSTER_TRACE}]}
+
+    def _click(self, curve_number, point_number, x, y):
+        point = {"curveNumber": curve_number, "pointNumber": point_number, "x": x, "y": y}
+        return self.on_click({"points": [point]}, self.figure)
+
+    def test_cluster_click_near_catred_source_leaves_tabs(self):
+        # Cluster marker ~1 arcsec from a CATRED source, pointNumber valid as a CATRED row
+        result = self._click(1, 0, 46.146886, -56.043191)
+        self.assertTrue(all(value is dash.no_update for value in result))
+
+    def test_catred_click_switches_to_pz_tab(self):
+        _figure, tab, subtab = self._click(0, 1, 46.20, -56.10)
+        self.assertEqual((tab, subtab), ("phz-tab", "phz-catred-subtab"))
 
 
 if __name__ == "__main__":
