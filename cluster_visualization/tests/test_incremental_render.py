@@ -302,6 +302,18 @@ class TestViewportCulling(unittest.TestCase):
         TraceCreator.configure_view(cull_min_clusters=10000)
         self.assertEqual(cb._cull_settings(big, store), (None, False))
 
+    def test_viewport_ack_ids(self):
+        from cluster_visualization.callbacks.main_plot import MainPlotCallbacks
+
+        # A viewport-triggered patch acks its request number; Apply / Re-render runs ack
+        # with no id, so they never end a pending viewport request in the browser
+        ack = MainPlotCallbacks._viewport_ack("viewport-request", 12)
+        self.assertEqual(ack["id"], 12)
+        self.assertIsNone(MainPlotCallbacks._viewport_ack("apply-filters-button", 12)["id"])
+        self.assertIsNone(MainPlotCallbacks._viewport_ack("render-patch-request", 12)["id"])
+        # A timestamp makes every ack a new value, so the browser tracker always fires
+        self.assertIsInstance(ack["t"], float)
+
     def test_view_settings_from_config(self):
         import os
         import tempfile

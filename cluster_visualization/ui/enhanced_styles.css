@@ -977,6 +977,36 @@ body {
   from { background-position: 100% 0; }
   to { background-position: -100% 0; }
 }
+/* "Updating clusters…" pill over the bottom of the plot, above the x-axis title */
+.viewport-busy-pill {
+  position: absolute;
+  left: 50%;
+  bottom: 64px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border: 1px solid var(--cv-border, #dde1e6);
+  border-radius: 999px;
+  background: var(--cv-surface, #ffffff);
+  color: var(--cv-text, #1d2127);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(29, 33, 39, 0.12);
+}
+.viewport-busy-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--cv-accent-soft, rgba(43, 87, 151, 0.12));
+  border-top-color: var(--cv-accent, #2b5797);
+  border-radius: 50%;
+  animation: cv-viewport-spin 0.8s linear infinite;
+}
+@keyframes cv-viewport-spin {
+  to { transform: rotate(360deg); }
+}
 @media (prefers-reduced-motion: reduce) {
-  .viewport-busy { animation: none; background: var(--cv-accent, #2b5797); opacity: 0.6; }
+  .viewport-busy { animation: none; background: rgba(43, 87, 151, 0.6); }
+  .viewport-busy-spinner { animation: none; border-color: var(--cv-accent, #2b5797); }
 }

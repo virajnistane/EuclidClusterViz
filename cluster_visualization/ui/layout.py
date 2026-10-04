@@ -129,9 +129,21 @@ class AppLayout:
                                                     ],
                                                     id="plotly-view-container",
                                                 ),
-                                                # Thin bar while a viewport request is in flight
-                                                html.Div(id="viewport-busy", className="viewport-busy",
-                                                         style={"display": "none"}),
+                                                # Bar + "Updating clusters" pill while a viewport
+                                                # request is in flight (callbacks toggle display)
+                                                html.Div(
+                                                    html.Div(
+                                                        [
+                                                            html.Span(className="viewport-busy-spinner",
+                                                                      **{"aria-hidden": "true"}),
+                                                            "Updating clusters…",
+                                                        ],
+                                                        className="viewport-busy-pill",
+                                                        role="status",
+                                                    ),
+                                                    id="viewport-busy", className="viewport-busy",
+                                                    style={"display": "none"},
+                                                ),
                                                 # Aladin Lite view (hidden until mode switch)
                                                 create_aladin_view(),
                                             ],
@@ -406,6 +418,9 @@ class AppLayout:
                                 dcc.Store(id="view-bounds-store", data=None),
                                 dcc.Store(id="viewport-request", data=0),
                                 dcc.Store(id="viewport-ack", data=0),
+                                # Ticks only while a viewport request is pending or a held move
+                                # is due: sends held moves and retries unanswered requests
+                                dcc.Interval(id="viewport-watchdog", interval=500, disabled=True),
                             ],
                             xs=12,
                             className="main-col",

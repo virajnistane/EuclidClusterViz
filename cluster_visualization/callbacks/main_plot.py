@@ -488,6 +488,14 @@ class MainPlotCallbacks:
     # Shared render helpers
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _viewport_ack(triggered_id, viewport_request):
+        """viewport-ack payload. `id` is the viewport request this run answers (None for
+        Apply / Re-render runs), so the browser only ends the request it is waiting for.
+        `t` makes every ack a new value, so the tracker always runs."""
+        req_id = viewport_request if triggered_id == "viewport-request" else None
+        return {"id": req_id, "t": time.time()}
+
     def _cull_settings(self, data, view_store):
         """(view_bounds, cull) for a render.
 
@@ -747,6 +755,8 @@ class MainPlotCallbacks:
             if not n_clicks and not patch_request and not viewport_request:
                 return dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
+            ack = self._viewport_ack(dash.callback_context.triggered_id, viewport_request)
+            tag = f"viewport #{ack['id']}" if ack["id"] is not None else "apply"
             _t_total = time.perf_counter()
             try:
                 kw = self._resolve_filter_kwargs(
@@ -798,7 +808,7 @@ class MainPlotCallbacks:
                     status = self._filtered_status(
                         algorithm, data, kw, show_polygons, show_mer_tiles, free_aspect_ratio
                     )
-                    return fig, status, {"algorithm": algorithm, "cull": cull}, time.time()
+                    return fig, status, {"algorithm": algorithm, "cull": cull}, ack
 
                 # Incremental: rebuild only the cluster traces
                 self.trace_creator.proximity_detector.clear_bounds_cache()
@@ -842,14 +852,19 @@ class MainPlotCallbacks:
                     else f"{cull_info.get('clusters', '?')} clusters, margin {cull_info.get('margin')}"
                 ) if view_bounds is not None else "whole catalog"
                 print(
-                    f"Patch ({shown}): {len(cluster_traces)} traces in {time.perf_counter() - _t_total:.2f}s "
+                    f"Patch [{tag}] ({shown}): {len(cluster_traces)} traces in {time.perf_counter() - _t_total:.2f}s "
                     f"[load {_dt_load:.2f}s, traces {_dt_traces:.2f}s, encode {_dt_patch:.2f}s]"
                 )
-                return patch, status, dash.no_update, time.time()
+                return patch, status, dash.no_update, ack
 
             except Exception as e:
+                import traceback
+
+                print(f"❌ Patch [{tag}] failed: {e}")
+                traceback.print_exc()
                 _fig, _phz, status = self._create_error_plots(str(e))
-                return dash.no_update, status, dash.no_update, time.time()
+                # Still acknowledge, so the browser stops waiting for this request
+                return dash.no_update, status, dash.no_update, ack
 
     def _setup_options_update_callback(self):
         """Setup real-time options update callback (preserves zoom)"""

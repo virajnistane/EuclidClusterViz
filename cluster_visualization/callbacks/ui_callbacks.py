@@ -238,7 +238,10 @@ class UICallbacks:
         # served when the server's answer arrives (viewport-ack changes), so gestures queue
         # instead of racing. viewport-busy shows a thin bar while a request is pending.
         viewport_helpers = """
-        var PENDING_TIMEOUT_MS = 5000;  // stop waiting for an answer that never arrives
+        // Stop waiting for an answer after this long; the watchdog then retries. Marker
+        // patches on large catalogs take several seconds, so keep this well above that.
+        var PENDING_TIMEOUT_MS = 20000;
+        var MAX_RETRIES = 2;
         // Margin the server actually used (it shrinks it to fit the point budget)
         var VIEW_MARGIN = (traceIndex && traceIndex.cull_margin != null) ? traceIndex.cull_margin : 0;
         // A density grid is on screen: zooming in to half the sent span or less may now
@@ -295,13 +298,13 @@ class UICallbacks:
         viewport_relayout_js = (
             "function(relayout, store, count, rendered, traceIndex) {\n"
             "    var NO = window.dash_clientside.no_update;\n"
-            "    if (!relayout) { return [NO, NO, NO]; }\n"
+            "    if (!relayout) { return [NO, NO, NO, NO]; }\n"
             + viewport_helpers
             + """
             var autorange = !!(relayout['xaxis.autorange'] || relayout['yaxis.autorange']);
             var touched = ('xaxis.range' in relayout) || ('xaxis.range[0]' in relayout) ||
                           ('yaxis.range' in relayout) || ('yaxis.range[0]' in relayout);
-            if (!autorange && !touched) { return [NO, NO, NO]; }  // legend, dragmode, ...
+            if (!autorange && !touched) { return [NO, NO, NO, NO]; }  // legend, dragmode, ...
             var st = store || {};
             var view = null;
             if (!autorange) {
@@ -320,7 +323,7 @@ class UICallbacks:
                     y = axisRange(relayout, 'yaxis', [prev[2], prev[3]]);
                 }
                 if (!x || !y || x[0] == null || y[0] == null || !isFinite(x[0]) || !isFinite(y[0])) {
-                    return [NO, NO, NO];
+                    return [NO, NO, NO, NO];
                 }
                 view = [x[0], x[1], y[0], y[1]];
             }
@@ -329,24 +332,26 @@ class UICallbacks:
             var sent = st.sent || null;
             var pending = !!st.pending && (Date.now() - (st.pendingAt || 0)) < PENDING_TIMEOUT_MS;
             if (!(rendered && rendered.cull)) {
-                return [{view: latest, sent: latest, pending: false, pendingAt: 0, want: null},
-                        NO, busyStyle(false)];
+                return [{view: latest, sent: latest, pending: false, pendingAt: 0, want: null, retries: 0},
+                        NO, busyStyle(false), true];
             }
             if (!needsRequest(latest, sent)) {
                 logDecision('covered', latest, sent);
                 return [{view: latest, sent: sent, pending: pending,
-                         pendingAt: pending ? st.pendingAt : 0, want: null},
-                        NO, busyStyle(pending)];
+                         pendingAt: pending ? st.pendingAt : 0, want: null, retries: st.retries || 0},
+                        NO, busyStyle(pending), !pending];
             }
             if (pending) {
                 // Patch still in flight: remember where the user is; it is served on arrival
+                // (or by the watchdog if the answer never comes)
                 logDecision('held (request in flight)', latest, sent);
-                return [{view: latest, sent: sent, pending: true, pendingAt: st.pendingAt, want: latest},
-                        NO, busyStyle(true)];
+                return [{view: latest, sent: sent, pending: true, pendingAt: st.pendingAt, want: latest,
+                         retries: st.retries || 0},
+                        NO, busyStyle(true), false];
             }
-            logDecision('REQUEST', latest, sent);
-            return [{view: latest, sent: latest, pending: true, pendingAt: Date.now(), want: null},
-                    (count || 0) + 1, busyStyle(true)];
+            logDecision('REQUEST #' + ((count || 0) + 1), latest, sent);
+            return [{view: latest, sent: latest, pending: true, pendingAt: Date.now(), want: null, retries: 0},
+                    (count || 0) + 1, busyStyle(true), false];
         }
         """
         )
@@ -368,17 +373,64 @@ class UICallbacks:
             + viewport_helpers
             + """
             var st = store || {};
-            if (!st.pending) { return [NO, NO, busyStyle(false)]; }
+            if (!st.pending) { return [NO, NO, busyStyle(false), true]; }
+            // Only the answer to the request we are waiting for ends it. Apply / Re-render
+            // runs ack with id null; answers to superseded (retried) requests carry an old id.
+            var ackId = (ack && typeof ack === 'object') ? ack.id : null;
+            if (ackId == null || ackId !== count) {
+                return [NO, NO, NO, NO];
+            }
             // The patch for the in-flight request has landed
             var target = st.want || null;
             if (target && rendered && rendered.cull && needsRequest(target, st.sent || null)) {
-                logDecision('REQUEST (held move)', target, st.sent || null);
-                return [{view: st.view, sent: target, pending: true, pendingAt: Date.now(), want: null},
-                        (count || 0) + 1, busyStyle(true)];
+                // Don't request from here: this callback runs in the chain started by the
+                // server's answer, and a request fired inside that chain re-triggers the same
+                // server callback and was being dropped. Mark it due; the watchdog tick
+                // (outside the chain) sends it.
+                logDecision('held move due', target, st.sent || null);
+                return [{view: st.view, sent: st.sent || null, pending: false, pendingAt: 0, want: null,
+                         retries: 0, due: target},
+                        NO, busyStyle(true), false];
             }
-            logDecision('patch landed', st.view, st.sent || null);
-            return [{view: st.view, sent: st.sent || null, pending: false, pendingAt: 0, want: null},
-                    NO, busyStyle(false)];
+            logDecision('patch landed #' + ackId, st.view, st.sent || null);
+            return [{view: st.view, sent: st.sent || null, pending: false, pendingAt: 0, want: null, retries: 0},
+                    NO, busyStyle(false), true];
+        }
+        """
+        )
+
+        # Watchdog: while a request is pending, check once a second whether its answer is
+        # overdue. If so, ask again for where the user is now (held move, else current view);
+        # after MAX_RETRIES give up so the map never stays stuck waiting.
+        viewport_watchdog_js = (
+            "function(n, store, count, rendered, traceIndex) {\n"
+            "    var NO = window.dash_clientside.no_update;\n"
+            + viewport_helpers
+            + """
+            var st = store || {};
+            if (!st.pending && st.due) {
+                // A held move marked due when the last answer landed
+                if (!(rendered && rendered.cull) || !needsRequest(st.due, st.sent || null)) {
+                    return [Object.assign({}, st, {due: null}), NO, busyStyle(false), true];
+                }
+                logDecision('REQUEST #' + ((count || 0) + 1) + ' (held move)', st.due, st.sent || null);
+                return [{view: st.view, sent: st.due, pending: true, pendingAt: Date.now(), want: null,
+                         retries: 0, due: null},
+                        (count || 0) + 1, busyStyle(true), false];
+            }
+            if (!st.pending) { return [NO, NO, busyStyle(false), true]; }
+            if (Date.now() - (st.pendingAt || 0) < PENDING_TIMEOUT_MS) { return [NO, NO, NO, NO]; }
+            var retries = st.retries || 0;
+            var target = st.want || st.view || null;
+            if (retries >= MAX_RETRIES || !(rendered && rendered.cull)) {
+                logDecision('GAVE UP after ' + retries + ' retries', target, st.sent || null);
+                return [{view: st.view, sent: st.sent || null, pending: false, pendingAt: 0, want: null, retries: 0},
+                        NO, busyStyle(false), true];
+            }
+            logDecision('RETRY #' + ((count || 0) + 1) + ' (no answer to #' + count + ')', target, st.sent || null);
+            return [{view: st.view, sent: target, pending: true, pendingAt: Date.now(), want: null,
+                     retries: retries + 1},
+                    (count || 0) + 1, busyStyle(true), false];
         }
         """
         )
@@ -389,6 +441,7 @@ class UICallbacks:
                 Output("view-bounds-store", "data"),
                 Output("viewport-request", "data"),
                 Output("viewport-busy", "style"),
+                Output("viewport-watchdog", "disabled"),
             ],
             Input("cluster-plot", "relayoutData"),
             [
@@ -406,6 +459,7 @@ class UICallbacks:
                 Output("view-bounds-store", "data", allow_duplicate=True),
                 Output("viewport-request", "data", allow_duplicate=True),
                 Output("viewport-busy", "style", allow_duplicate=True),
+                Output("viewport-watchdog", "disabled", allow_duplicate=True),
             ],
             Input("viewport-ack", "data"),
             [
@@ -413,6 +467,24 @@ class UICallbacks:
                 State("viewport-request", "data"),
                 State("rendered-meta-store", "data"),
                 State("cluster-plot", "figure"),
+            ],
+            prevent_initial_call=True,
+        )
+
+        self.app.clientside_callback(
+            viewport_watchdog_js,
+            [
+                Output("view-bounds-store", "data", allow_duplicate=True),
+                Output("viewport-request", "data", allow_duplicate=True),
+                Output("viewport-busy", "style", allow_duplicate=True),
+                Output("viewport-watchdog", "disabled", allow_duplicate=True),
+            ],
+            Input("viewport-watchdog", "n_intervals"),
+            [
+                State("view-bounds-store", "data"),
+                State("viewport-request", "data"),
+                State("rendered-meta-store", "data"),
+                State("cluster-trace-index-store", "data"),
             ],
             prevent_initial_call=True,
         )
