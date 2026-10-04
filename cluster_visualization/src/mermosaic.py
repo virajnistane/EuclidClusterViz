@@ -17,7 +17,6 @@ from urllib.request import urlopen
 
 import base64
 
-import matplotlib.pyplot as plt
 import numpy as np
 import plotly.graph_objs as go
 from astropy import wcs
@@ -30,8 +29,6 @@ try:
     from cluster_visualization.src.config import Config
 except ImportError:
     raise ImportError("Config module not found in cluster_visualization.src.config")
-
-config = Config()
 
 try:
     from cluster_visualization.src.data.loader import DataLoader
@@ -1529,11 +1526,14 @@ class MOSAICHandler:
         traces: List[go.Scatter] = []
         white_alpha_mode = colorscale == "white_alpha"
         if not white_alpha_mode:
+            # Imported here, not at module top: matplotlib is slow to load on a cold start
+            from matplotlib import colormaps
+
             try:
-                colormap = getattr(plt.cm, colorscale)
-            except AttributeError:
+                colormap = colormaps[colorscale]
+            except KeyError:
                 print(f"Warning: Invalid colorscale '{colorscale}', defaulting to 'viridis'")
-                colormap = plt.get_cmap("viridis")
+                colormap = colormaps["viridis"]
 
         for bin_idx in range(n_bins):
             if grouped_count[bin_idx] == 0:

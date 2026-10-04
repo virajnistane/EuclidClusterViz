@@ -31,6 +31,13 @@ import time
 import webbrowser
 # from datetime import datetime, timedelta
 
+_T0 = time.perf_counter()
+
+# dash._jupyter imports IPython/ipykernel when installed (dev extra); the app never runs in
+# Jupyter. On a cold Ceph page cache that chain costs ~20 s. None in sys.modules makes the
+# import raise ImportError, which dash catches and disables Jupyter mode.
+sys.modules.setdefault("IPython", None)
+
 import dash
 import dash_bootstrap_components as dbc
 import diskcache
@@ -185,6 +192,7 @@ from cluster_visualization.utils.myutils import get_xml_element
 from cluster_visualization.utils.magnitude import RichCLMagLimHandler
 
 print(f"✓ Utilities loaded from: {utils_path}")
+print(f"⏱  Imports done in {time.perf_counter() - _T0:.1f}s")
 
 
 class ClusterVisualizationApp:
@@ -394,6 +402,7 @@ def main():
         print("🔒 Local access only (binding to 127.0.0.1)")
 
     app = ClusterVisualizationApp()
+    print(f"⏱  App initialized {time.perf_counter() - _T0:.1f}s after start")
 
     # Derive per-user ports from UID so multiple users on same node never collide.
     # UID is stable across all cluster nodes (set at account creation).

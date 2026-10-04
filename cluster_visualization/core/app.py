@@ -221,6 +221,11 @@ class ClusterVisualizationCore:
             print("Connection monitoring started - will warn if no users connect within 1 minute")
             print("")
 
+        # Dash's run() lets the HOST env var override the host argument. Conda compiler
+        # activation (e.g. EDEN) sets HOST=x86_64-conda-linux-gnu, which does not resolve
+        # and makes werkzeug exit with "Name or service not known". Pin it to our choice.
+        _os.environ["HOST"] = host
+
         try:
             # use_reloader=False: Werkzeug's file-watcher restart forks a second process that
             # reruns all module-level init (data loading, port selection) and fights
@@ -276,6 +281,13 @@ class ClusterVisualizationCore:
             pass  # lsof unavailable — fall through to normal port-busy error
         return freed
 
+    @staticmethod
+    def _port_in_use(port) -> bool:
+        """True if something is listening on port on this host."""
+        with socket.socket() as sock:
+            sock.settimeout(0.2)
+            return sock.connect_ex(("127.0.0.1", port)) == 0
+
     def try_multiple_ports(self, ports=[8050, 8051, 8052], **kwargs):
         """Try to run on multiple ports if default is busy"""
         for port in ports:
@@ -285,7 +297,11 @@ class ClusterVisualizationCore:
                 self.run(port=port, **kwargs)
                 break
             except SystemExit:
-                # werkzeug prints the error and calls sys.exit(1) on EADDRINUSE
+                # werkzeug prints the error and calls sys.exit(1) on any bind failure,
+                # not only EADDRINUSE; only fall through to the next port if it's really taken.
+                if not self._port_in_use(port):
+                    print(f"Could not start server on port {port} (see error above)")
+                    raise
                 print(f"Port {port} is busy, trying next port...")
                 continue
             except OSError as e:

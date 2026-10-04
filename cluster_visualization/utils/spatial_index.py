@@ -10,7 +10,6 @@ This module provides efficient spatial indexing using KD-trees for:
 from typing import List, Optional, Tuple
 
 import numpy as np
-from scipy.spatial import cKDTree
 
 
 class SpatialIndex:
@@ -59,7 +58,10 @@ class SpatialIndex:
 
         self.coords = np.column_stack([x, y, z])
 
-        # Build KD-tree for fast spatial queries
+        # Build KD-tree for fast spatial queries. scipy imported here, not at module top:
+        # utils/__init__ imports this module at app startup, and scipy is slow to load cold.
+        from scipy.spatial import cKDTree
+
         print(f"Building spatial index for {self.n_points:,} points...")
         self.tree = cKDTree(self.coords)
         print(f"Spatial index built successfully")
