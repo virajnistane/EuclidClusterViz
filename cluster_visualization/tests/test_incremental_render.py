@@ -302,6 +302,19 @@ class TestViewportCulling(unittest.TestCase):
         TraceCreator.configure_view(cull_min_clusters=10000)
         self.assertEqual(cb._cull_settings(big, store), (None, False))
 
+    def test_tile_id_for(self):
+        ids = np.array([30, 10, 20])
+        order = np.argsort(ids, kind="stable")
+        data = {"_render_row_cache": {
+            "sorted_ids": ids[order], "order": order,
+            "tile_ids": np.array(["T3", "T1", "?"], dtype=object),
+        }}
+        self.assertEqual(TraceCreator.tile_id_for(data, 30), "T3")
+        self.assertEqual(TraceCreator.tile_id_for(data, 10.0), "T1")
+        self.assertIsNone(TraceCreator.tile_id_for(data, 20))   # unknown tile
+        self.assertIsNone(TraceCreator.tile_id_for(data, 99))   # not in catalogue
+        self.assertIsNone(TraceCreator.tile_id_for({}, 30))     # cache never built
+
     def test_viewport_ack_ids(self):
         from cluster_visualization.callbacks.main_plot import MainPlotCallbacks
 
@@ -337,10 +350,14 @@ class TestViewportCulling(unittest.TestCase):
         traces = self.creator.create_cluster_traces(make_data(n=200))
         merged = [t for t in traces if t.name and t.name.startswith("Merged")]
         self.assertTrue(merged)
+        # Markers carry only the cluster ID (SNR / z / tile are looked up on click)
         cd = np.asarray(merged[0].customdata)
-        self.assertEqual(cd.shape[1], 5)
+        self.assertEqual(cd.ndim, 1)
         self.assertEqual(cd.dtype, np.float32)  # test IDs are small, so float32 is exact
-        np.testing.assert_array_equal(cd[:, 3].astype(np.int64) % 1, 0)
+        self.assertNotIn("customdata[", merged[0].hovertemplate)
+        # Positions travel as float32 (half the bytes of float64)
+        self.assertEqual(np.asarray(merged[0].x).dtype, np.float32)
+        self.assertEqual(np.asarray(merged[0].y).dtype, np.float32)
         # Sent through a Figure (as both the full render and the Apply patch do),
         # positions and customdata travel as typed binary
         data = go.Figure(data=merged).to_dict()["data"][0]
@@ -355,7 +372,7 @@ class TestCompactTraceData(unittest.TestCase):
         arr["ID_UNIQUE_CLUSTER"] = [2**24 + 1, 5]
         cd = TraceCreator._cluster_customdata(arr, [2, 2], [1, 1])
         self.assertEqual(cd.dtype, np.float64)
-        self.assertEqual(int(cd[0, 3]), 2**24 + 1)
+        self.assertEqual(int(cd[0]), 2**24 + 1)
 
     def test_line_colors_palette(self):
         spec = TraceCreator._line_colors(["red", "blue", "red", "green"])

@@ -1206,35 +1206,45 @@ class TraceCreator:
         )
 
     @staticmethod
-    def _cluster_customdata(subset, det_codes, tile_ids):
-        """Numeric per-point data [snr, z, det_code, id, tile_id] as one float array.
+    def _cluster_customdata(subset, det_codes=None, tile_ids=None):
+        """Per-point cluster ID (ID_UNIQUE_CLUSTER) as a 1-D numeric array.
 
-        Numeric arrays are sent to the browser as compact binary (Plotly 6) instead of
-        per-point lists; richness details are shown in the selected-cluster card.
-        Indices 0, 1 and 3 (SNR, z, ID) are read by the cluster click handler.
+        Viewport patches are limited by transfer through the SSH tunnel, so markers carry
+        only the ID: the hover shows ID and RA/Dec, and the cluster click handler resolves
+        the merged row by ID for SNR, z and tile. (det_codes / tile_ids are accepted for
+        older call sites and ignored.)
         """
-        n = len(subset)
-        tiles = np.asarray(tile_ids, dtype=object)
-        tile_num = np.full(n, np.nan)
-        for i, t in enumerate(tiles):
-            try:
-                tile_num[i] = float(t)
-            except (TypeError, ValueError):
-                pass
-        det = np.broadcast_to(np.asarray(det_codes, dtype=float), (n,)) if n else np.zeros(0)
-        if not n:
-            return np.zeros((0, 5), dtype=np.float32)
+        if not len(subset):
+            return np.zeros(0, dtype=np.float32)
         ids = np.asarray(subset["ID_UNIQUE_CLUSTER"], dtype=float)
         # float32 halves the payload; it holds integers exactly only below 2**24, so IDs
-        # beyond that keep float64 (the click handler reads the ID back from index 3)
+        # beyond that keep float64
         exact32 = bool(np.all(~np.isfinite(ids) | (np.abs(ids) < 2**24)))
-        return np.column_stack([
-            np.asarray(subset["SNR_CLUSTER"], dtype=float),
-            np.asarray(subset["Z_CLUSTER"], dtype=float),
-            det,
-            ids,
-            tile_num,
-        ]).astype(np.float32 if exact32 else np.float64)
+        return ids.astype(np.float32 if exact32 else np.float64)
+
+    @staticmethod
+    def _coords32(values):
+        """Marker positions as float32: half the bytes of float64, ~0.1 arcsec resolution
+        at RA 360° (display only; clicks resolve clusters by ID)."""
+        return np.asarray(values, dtype=np.float32)
+
+    @staticmethod
+    def tile_id_for(data: Dict[str, Any], cluster_id) -> Optional[str]:
+        """CL tile of a merged cluster, from the per-row render cache (None if the tile
+        colours were never computed, i.e. CL-tile info has not been shown)."""
+        cache = data.get("_render_row_cache") if isinstance(data, dict) else None
+        if not cache or cache.get("tile_ids") is None or cluster_id is None:
+            return None
+        try:
+            cid = float(cluster_id)
+        except (TypeError, ValueError):
+            return None
+        sorted_ids = cache["sorted_ids"]
+        i = int(np.searchsorted(sorted_ids, cid))
+        if i >= len(sorted_ids) or float(sorted_ids[i]) != cid:
+            return None
+        tile = cache["tile_ids"][cache["order"][i]]
+        return None if tile in (None, "?") else str(tile)
 
     def _add_merged_cluster_trace(
         self,
@@ -1297,8 +1307,8 @@ class TraceCreator:
                         else (["royalblue"] * len(pzwav_data), ["?"] * len(pzwav_data))
                     )
                     pzwav_trace = go.Scattergl(
-                        x=pzwav_data["RIGHT_ASCENSION_CLUSTER"],
-                        y=pzwav_data["DECLINATION_CLUSTER"],
+                        x=self._coords32(pzwav_data["RIGHT_ASCENSION_CLUSTER"]),
+                        y=self._coords32(pzwav_data["DECLINATION_CLUSTER"]),
                         mode="markers",
                         marker=dict(
                             size=10, symbol="x-thin", line=self._line_colors(pzwav_colors)
@@ -1308,12 +1318,10 @@ class TraceCreator:
                         showlegend=True,
                         customdata=self._cluster_customdata(pzwav_data, pzwav_data["DET_CODE_NB"], pzwav_tile_ids),
                         hovertemplate=(
-                            ("<b>Cluster (PZWAV - Tile %{customdata[4]:d})</b><br>" if show_cltile_info else "<b>Cluster (PZWAV)</b><br>")
-                            + "ID: %{customdata[3]:d}<br>"
+                            "<b>Cluster (PZWAV)</b><br>"
+                            + "ID: %{customdata:d}<br>"
                             + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
                             + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
-                            + "Z: %{customdata[1]:.2f}<br>"
-                            + "SNR: %{customdata[0]:.2f}<br>"
                             + "<extra></extra>"
                         ),
                         hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
@@ -1328,8 +1336,8 @@ class TraceCreator:
                         else (["tomato"] * len(amico_data), ["?"] * len(amico_data))
                     )
                     amico_trace = go.Scattergl(
-                        x=amico_data["RIGHT_ASCENSION_CLUSTER"],
-                        y=amico_data["DECLINATION_CLUSTER"],
+                        x=self._coords32(amico_data["RIGHT_ASCENSION_CLUSTER"]),
+                        y=self._coords32(amico_data["DECLINATION_CLUSTER"]),
                         mode="markers",
                         marker=dict(
                             size=10, symbol="cross-thin", line=self._line_colors(amico_colors)
@@ -1339,12 +1347,10 @@ class TraceCreator:
                         showlegend=True,
                         customdata=self._cluster_customdata(amico_data, amico_data["DET_CODE_NB"], amico_tile_ids),
                         hovertemplate=(
-                            ("<b>Cluster (AMICO - Tile %{customdata[4]:d})</b><br>" if show_cltile_info else "<b>Cluster (AMICO)</b><br>")
-                            + "ID: %{customdata[3]:d}<br>"
+                            "<b>Cluster (AMICO)</b><br>"
+                            + "ID: %{customdata:d}<br>"
                             + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
                             + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
-                            + "Z: %{customdata[1]:.2f}<br>"
-                            + "SNR: %{customdata[0]:.2f}<br>"
                             + "<extra></extra>"
                         ),
                         hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
@@ -1384,19 +1390,17 @@ class TraceCreator:
                     else (["royalblue" if algorithm.lower() == "pzwav" else "tomato"] * len(datamod_detcluster_mergedcat), ["?"] * len(datamod_detcluster_mergedcat))
                 )
                 merged_trace = go.Scattergl(
-                    x=datamod_detcluster_mergedcat["RIGHT_ASCENSION_CLUSTER"],
-                    y=datamod_detcluster_mergedcat["DECLINATION_CLUSTER"],
+                    x=self._coords32(datamod_detcluster_mergedcat["RIGHT_ASCENSION_CLUSTER"]),
+                    y=self._coords32(datamod_detcluster_mergedcat["DECLINATION_CLUSTER"]),
                     mode="markers",
                     marker=dict(size=10, symbol=symbol, line=self._line_colors(merged_colors)),
                     name=f"Merged {algorithm}",
                     customdata=self._cluster_customdata(datamod_detcluster_mergedcat, det_code_values_customdata, merged_tile_ids),
                     hovertemplate=(
-                        (f"<b>Cluster ({algorithm} - Tile %{{customdata[4]:d}})</b><br>" if show_cltile_info else f"<b>Cluster ({algorithm})</b><br>")
-                        + "ID: %{customdata[3]:d}<br>"
+                        f"<b>Cluster ({algorithm})</b><br>"
+                        + "ID: %{customdata:d}<br>"
                         + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
                         + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
-                        + "Z: %{customdata[1]:.2f}<br>"
-                        + "SNR: %{customdata[0]:.2f}<br>"
                         + "<extra></extra>"
                     ),
                     hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
@@ -1446,8 +1450,8 @@ class TraceCreator:
                             else (["royalblue"] * len(pzwav_away), ["?"] * len(pzwav_away))
                         )
                         normal_trace_pzwav = go.Scattergl(
-                            x=pzwav_away["RIGHT_ASCENSION_CLUSTER"],
-                            y=pzwav_away["DECLINATION_CLUSTER"],
+                            x=self._coords32(pzwav_away["RIGHT_ASCENSION_CLUSTER"]),
+                            y=self._coords32(pzwav_away["DECLINATION_CLUSTER"]),
                             mode="markers",
                             marker=dict(
                                 size=10, symbol="x-thin", line=self._line_colors(pzwav_away_colors)
@@ -1457,12 +1461,10 @@ class TraceCreator:
                             showlegend=True,
                             customdata=self._cluster_customdata(pzwav_away, pzwav_away["DET_CODE_NB"], pzwav_away_tile_ids),
                             hovertemplate=(
-                                ("<b>Cluster (PZWAV - Tile %{customdata[4]:d})</b><br>" if show_cltile_info else "<b>Cluster (PZWAV)</b><br>")
-                                + "ID: %{customdata[3]:d}<br>"
+                                "<b>Cluster (PZWAV)</b><br>"
+                                + "ID: %{customdata:d}<br>"
                                 + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
                                 + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
-                                + "Z: %{customdata[1]:.2f}<br>"
-                                + "SNR: %{customdata[0]:.2f}<br>"
                                 + "<extra></extra>"
                             ),
                             hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
@@ -1479,8 +1481,8 @@ class TraceCreator:
                             else (["tomato"] * len(amico_away), ["?"] * len(amico_away))
                         )
                         normal_trace_amico = go.Scattergl(
-                            x=amico_away["RIGHT_ASCENSION_CLUSTER"],
-                            y=amico_away["DECLINATION_CLUSTER"],
+                            x=self._coords32(amico_away["RIGHT_ASCENSION_CLUSTER"]),
+                            y=self._coords32(amico_away["DECLINATION_CLUSTER"]),
                             mode="markers",
                             marker=dict(
                                 size=10, symbol="cross-thin", line=self._line_colors(amico_away_colors)
@@ -1490,12 +1492,10 @@ class TraceCreator:
                             showlegend=True,
                             customdata=self._cluster_customdata(amico_away, amico_away["DET_CODE_NB"], amico_away_tile_ids),
                             hovertemplate=(
-                                ("<b>Cluster (AMICO - Tile %{customdata[4]:d})</b><br>" if show_cltile_info else "<b>Cluster (AMICO)</b><br>")
-                                + "ID: %{customdata[3]:d}<br>"
+                                "<b>Cluster (AMICO)</b><br>"
+                                + "ID: %{customdata:d}<br>"
                                 + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
                                 + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
-                                + "Z: %{customdata[1]:.2f}<br>"
-                                + "SNR: %{customdata[0]:.2f}<br>"
                                 + "<extra></extra>"
                             ),
                             hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
@@ -1535,8 +1535,8 @@ class TraceCreator:
                         else (["royalblue" if algorithm.lower() == "pzwav" else "tomato"] * len(away_from_catred_data), ["?"] * len(away_from_catred_data))
                     )
                     normal_trace = go.Scattergl(
-                        x=away_from_catred_data["RIGHT_ASCENSION_CLUSTER"],
-                        y=away_from_catred_data["DECLINATION_CLUSTER"],
+                        x=self._coords32(away_from_catred_data["RIGHT_ASCENSION_CLUSTER"]),
+                        y=self._coords32(away_from_catred_data["DECLINATION_CLUSTER"]),
                         mode="markers",
                         marker=dict(size=10, symbol=symbol, line=self._line_colors(away_colors)),
                         name=f"{algorithm} (Merged)",
@@ -1544,12 +1544,10 @@ class TraceCreator:
                         showlegend=True,
                         customdata=self._cluster_customdata(away_from_catred_data, det_code_values_customdata, away_tile_ids),
                         hovertemplate=(
-                            (f"<b>Cluster ({algorithm} - Tile %{{customdata[4]:d}})</b><br>" if show_cltile_info else f"<b>Cluster ({algorithm})</b><br>")
-                            + "ID: %{customdata[3]:d}<br>"
+                            f"<b>Cluster ({algorithm})</b><br>"
+                            + "ID: %{customdata:d}<br>"
                             + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
                             + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
-                            + "Z: %{customdata[1]:.2f}<br>"
-                            + "SNR: %{customdata[0]:.2f}<br>"
                             + "<extra></extra>"
                         ),
                         hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial", font_color="black"),
@@ -1590,12 +1588,10 @@ class TraceCreator:
                         )
                         _pzwav_near_customdata = self._cluster_customdata(pzwav_near, pzwav_near["DET_CODE_NB"], pzwav_near_tile_ids)
                         _pzwav_near_hovertemplate = (
-                            ("<b>Cluster (PZWAV - Tile %{customdata[4]:d})</b><br>" if show_cltile_info else "<b>Cluster (PZWAV)</b><br>")
-                            + "ID: %{customdata[3]:d}<br>"
+                            "<b>Cluster (PZWAV)</b><br>"
+                            + "ID: %{customdata:d}<br>"
                             + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
                             + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
-                            + "Z: %{customdata[1]:.2f}<br>"
-                            + "SNR: %{customdata[0]:.2f}<br>"
                             + "<extra></extra>"
                         )
                         glow_trace_pzwav = create_glow_trace(
@@ -1616,8 +1612,8 @@ class TraceCreator:
                         data_traces.append(glow_trace_pzwav)
 
                         enhanced_trace_pzwav = go.Scattergl(
-                            x=pzwav_near["RIGHT_ASCENSION_CLUSTER"],
-                            y=pzwav_near["DECLINATION_CLUSTER"],
+                            x=self._coords32(pzwav_near["RIGHT_ASCENSION_CLUSTER"]),
+                            y=self._coords32(pzwav_near["DECLINATION_CLUSTER"]),
                             mode="markers",
                             marker=dict(
                                 size=10,
@@ -1645,12 +1641,10 @@ class TraceCreator:
                         )
                         _amico_near_customdata = self._cluster_customdata(amico_near, amico_near["DET_CODE_NB"], amico_near_tile_ids)
                         _amico_near_hovertemplate = (
-                            ("<b>Cluster (AMICO - Tile %{customdata[4]:d})</b><br>" if show_cltile_info else "<b>Cluster (AMICO)</b><br>")
-                            + "ID: %{customdata[3]:d}<br>"
+                            "<b>Cluster (AMICO)</b><br>"
+                            + "ID: %{customdata:d}<br>"
                             + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
                             + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
-                            + "Z: %{customdata[1]:.2f}<br>"
-                            + "SNR: %{customdata[0]:.2f}<br>"
                             + "<extra></extra>"
                         )
                         glow_trace_amico = create_glow_trace(
@@ -1671,8 +1665,8 @@ class TraceCreator:
                         data_traces.append(glow_trace_amico)
 
                         enhanced_trace_amico = go.Scattergl(
-                            x=amico_near["RIGHT_ASCENSION_CLUSTER"],
-                            y=amico_near["DECLINATION_CLUSTER"],
+                            x=self._coords32(amico_near["RIGHT_ASCENSION_CLUSTER"]),
+                            y=self._coords32(amico_near["DECLINATION_CLUSTER"]),
                             mode="markers",
                             marker=dict(
                                 size=10,
@@ -1720,12 +1714,10 @@ class TraceCreator:
                     )
                     _near_customdata = self._cluster_customdata(near_catred_data, ( near_catred_data["DET_CODE_NB"] if has_det_code else [2 if algorithm.lower() == "pzwav" else 1] * len(near_catred_data) ), near_tile_ids)
                     _near_hovertemplate = (
-                        (f"<b>Cluster ({algorithm} - Tile %{{customdata[4]:d}})</b><br>" if show_cltile_info else f"<b>Cluster ({algorithm})</b><br>")
-                        + "ID: %{customdata[3]:d}<br>"
+                        f"<b>Cluster ({algorithm})</b><br>"
+                        + "ID: %{customdata:d}<br>"
                         + "<span style='color:red'>RA: %{x:.2f}°</span><br>"
                         + "<span style='color:red'>Dec: %{y:.2f}°</span><br>"
-                        + "Z: %{customdata[1]:.2f}<br>"
-                        + "SNR: %{customdata[0]:.2f}<br>"
                         + "<extra></extra>"
                     )
 
@@ -1749,8 +1741,8 @@ class TraceCreator:
 
                     # Add main enhanced trace (foreground)
                     enhanced_trace = go.Scattergl(
-                        x=near_catred_data["RIGHT_ASCENSION_CLUSTER"],
-                        y=near_catred_data["DECLINATION_CLUSTER"],
+                        x=self._coords32(near_catred_data["RIGHT_ASCENSION_CLUSTER"]),
+                        y=self._coords32(near_catred_data["DECLINATION_CLUSTER"]),
                         mode="markers",
                         marker=dict(
                             size=10,

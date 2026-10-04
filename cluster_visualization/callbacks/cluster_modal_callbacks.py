@@ -142,13 +142,18 @@ class ClusterModalCallbacks:
             if ra is None or dec is None:
                 return no_change
 
-            # customdata is trusted only as a numeric row. Binary-encoded 2-D arrays can reach
-            # the browser in other shapes, so the merged catalogue (matched by RA/Dec, then
-            # SNR/z) is the fallback.
-            row = point.get("customdata")
-            if isinstance(row, dict):
-                row = [row[k] for k in sorted(row, key=int)]
-            if not isinstance(row, (list, tuple)):
+            # Cluster markers carry only the cluster ID as customdata (TraceCreator
+            # ._cluster_customdata). Normalise it to the [snr, z, det, id] row the resolver
+            # reads; older list rows still work. Without an ID the merged catalogue is
+            # matched by RA/Dec.
+            raw = point.get("customdata")
+            if isinstance(raw, dict):
+                raw = [raw[k] for k in sorted(raw, key=int)]
+            if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+                row = [None, None, None, raw]
+            elif isinstance(raw, (list, tuple)):
+                row = list(raw)
+            else:
                 row = []
             point = dict(point, customdata=row)
 
@@ -156,8 +161,12 @@ class ClusterModalCallbacks:
             merged_cluster_id = (
                 merged_record.get("ID_UNIQUE_CLUSTER") if merged_record is not None else None
             )
-            snr = row[0] if len(row) > 0 else (merged_record.get("SNR_CLUSTER", "N/A") if merged_record else "N/A")
-            redshift = row[1] if len(row) > 1 else (merged_record.get("Z_CLUSTER", "N/A") if merged_record else "N/A")
+            # SNR / z from the resolved catalogue row (no longer sent with each marker)
+            snr = merged_record.get("SNR_CLUSTER", "N/A") if merged_record else (
+                row[0] if len(row) > 0 and row[0] is not None else "N/A")
+            redshift = merged_record.get("Z_CLUSTER", "N/A") if merged_record else (
+                row[1] if len(row) > 1 and row[1] is not None else "N/A")
+            tile = self._tile_for_cluster(algorithm, merged_cluster_id)
 
             trace_name = f"Curve {curve_number}"
             if "text" in point and point["text"] and "Tile" in str(point["text"]):
@@ -176,13 +185,23 @@ class ClusterModalCallbacks:
             z_str = f"{redshift:.2f}" if isinstance(redshift, float) else str(redshift)
             tab_content = self._build_cluster_tab_content(
                 ra, dec, snr_str, z_str, algorithm, merged_cluster_id, resolution_note,
-                merged_record=merged_record,
+                merged_record=merged_record, tile=tile,
             )
             return (
                 {"display": "none"}, {"display": "block"},
                 tab_content, "cluster-tab", merged_record,
                 {"ra": ra, "dec": dec},
             )
+
+    def _tile_for_cluster(self, algorithm, cluster_id):
+        """CL tile of a merged cluster (shown in the card; markers no longer carry it)."""
+        trace_creator = getattr(self, "trace_creator", None)
+        if cluster_id is None or not self.data_loader or trace_creator is None:
+            return None
+        try:
+            return trace_creator.tile_id_for(self.data_loader.load_data(algorithm), cluster_id)
+        except Exception:
+            return None
 
     MEMBER_FILTER_IDS = [
         "tab-members-filter-mode",
@@ -325,7 +344,7 @@ class ClusterModalCallbacks:
 
     def _build_cluster_tab_content(
         self, ra, dec, snr_str, z_str, algorithm, merged_cluster_id, resolution_note,
-        merged_record=None,
+        merged_record=None, tile=None,
     ):
         """Build the selected-cluster summary (shared by Plotly and Aladin clicks)."""
         is_number = isinstance(ra, (int, float)) and isinstance(dec, (int, float))
@@ -356,6 +375,7 @@ class ClusterModalCallbacks:
                     "Merged ID",
                     str(merged_cluster_id) if merged_cluster_id is not None else "Not resolved",
                 )
+                + (item("CL tile", tile) if tile else [])
                 + item("Richness ZP", self._richness_text(merged_record, "ZP"))
                 + item("Richness RS", self._richness_text(merged_record, "RS")),
                 className="tool-facts",

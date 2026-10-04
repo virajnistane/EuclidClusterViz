@@ -216,10 +216,21 @@ class ClusterVisualizationApp:
         _bg_cache = diskcache.Cache(_bg_cache_dir)
         bg_callback_manager = DiskcacheManager(_bg_cache)
 
+        # gzip responses: viewport marker patches are ~1 MB of base64 JSON and the SSH
+        # tunnel is the bottleneck. Needs flask-compress (dash[compress]); without it the
+        # app still runs, uncompressed.
+        import importlib.util
+
+        compress = importlib.util.find_spec("flask_compress") is not None
+        if not compress:
+            print("⚠️  flask-compress not installed: responses are not gzipped "
+                  "(run: uv pip install -e . to get dash[compress])")
+
         self.app = dash.Dash(
             __name__,
             external_stylesheets=external_stylesheets,
             background_callback_manager=bg_callback_manager,
+            compress=compress,
         )
 
         # Serve HiPS tiles directory as static files so Aladin Lite can load them via HTTP.
