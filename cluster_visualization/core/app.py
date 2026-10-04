@@ -121,6 +121,25 @@ class ClusterVisualizationCore:
                     _f.write(f"[{ts}] {msg}\n")
                 return jsonify(ok=True)
 
+            # Large callback responses (e.g. viewport marker patches): size and server time,
+            # including Dash's JSON serialisation, next to the browser's network timings
+            @app.server.before_request
+            def _time_callback_start():
+                from flask import g as _g
+                _g._cv_t0 = _dt.datetime.now()
+
+            @app.server.after_request
+            def _time_callback_end(response):
+                from flask import g as _g, request as _req
+                t0 = getattr(_g, "_cv_t0", None)
+                size = response.calculate_content_length() or 0
+                if t0 is not None and _req.path.endswith("_dash-update-component") and size > 50_000:
+                    ms = (_dt.datetime.now() - t0).total_seconds() * 1000
+                    ts = _dt.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                    with open(_log_path, "a") as _f:
+                        _f.write(f"[{ts}] server HTTP {size}B in {ms:.0f}ms\n")
+                return response
+
             app.server._debug_log_setup = True
             print(f"📝 Debug log → {_log_path}")
 

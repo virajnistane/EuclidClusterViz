@@ -293,6 +293,44 @@ class UICallbacks:
                 if (navigator.sendBeacon) { navigator.sendBeacon('/log', msg); }
             } catch (e) {}
         }
+
+        // Diagnostics: network timing of large callback responses (once per page)
+        var BIG_RESPONSE = 50000;
+        function isBigCallbackResponse(e) {
+            return e.name.indexOf('_dash-update-component') >= 0 &&
+                   (e.encodedBodySize || e.transferSize || 0) >= BIG_RESPONSE;
+        }
+        if (!window.__cvNetLog && typeof PerformanceObserver !== 'undefined') {
+            window.__cvNetLog = true;
+            try {
+                new PerformanceObserver(function(list) {
+                    list.getEntries().forEach(function(e) {
+                        if (!isBigCallbackResponse(e)) { return; }
+                        window.__cvLastBig = e;
+                        if (!navigator.sendBeacon) { return; }
+                        navigator.sendBeacon('/log', 'net size=' + (e.encodedBodySize || e.transferSize) +
+                            'B wait=' + Math.round(e.responseStart - e.requestStart) +
+                            'ms download=' + Math.round(e.responseEnd - e.responseStart) +
+                            'ms total=' + Math.round(e.responseEnd - e.startTime) + 'ms');
+                    });
+                    // The browser stops recording after ~250 entries (beacons included)
+                    if (performance.getEntriesByType('resource').length > 200) {
+                        performance.clearResourceTimings();
+                    }
+                }).observe({type: 'resource'});
+            } catch (e) {}
+        }
+        // Time from the last large response arriving to now (Dash + Plotly applying it)
+        function applyNote() {
+            try {
+                var last = window.__cvLastBig || null;
+                performance.getEntriesByType('resource').forEach(function(e) {
+                    if (isBigCallbackResponse(e) && (!last || e.responseEnd > last.responseEnd)) { last = e; }
+                });
+                if (!last) { return ''; }
+                return ' apply=' + Math.round(performance.now() - last.responseEnd) + 'ms';
+            } catch (e) { return ''; }
+        }
         """
 
         viewport_relayout_js = (
@@ -387,12 +425,12 @@ class UICallbacks:
                 // server's answer, and a request fired inside that chain re-triggers the same
                 // server callback and was being dropped. Mark it due; the watchdog tick
                 // (outside the chain) sends it.
-                logDecision('held move due', target, st.sent || null);
+                logDecision('held move due (#' + ackId + ' landed' + applyNote() + ')', target, st.sent || null);
                 return [{view: st.view, sent: st.sent || null, pending: false, pendingAt: 0, want: null,
                          retries: 0, due: target},
                         NO, busyStyle(true), false];
             }
-            logDecision('patch landed #' + ackId, st.view, st.sent || null);
+            logDecision('patch landed #' + ackId + applyNote(), st.view, st.sent || null);
             return [{view: st.view, sent: st.sent || null, pending: false, pendingAt: 0, want: null, retries: 0},
                     NO, busyStyle(false), true];
         }
