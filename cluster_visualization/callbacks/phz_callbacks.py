@@ -91,85 +91,26 @@ class PHZCallbacks:
                 print("Debug: No clickData received")
                 return dash.no_update, dash.no_update, dash.no_update
 
-            # Get current CATRED data from handler or fallback
-            current_catred_data = None
-            data_source = "none"
+            # Name of the clicked trace (Scattergl clickData has no traceName)
+            clicked_trace_name = self._clicked_trace_name(clickData, current_figure)
 
-            if (
-                self.catred_handler
-                and hasattr(self.catred_handler, "current_catred_data")
-                and self.catred_handler.current_catred_data
-            ):
-                current_catred_data = self.catred_handler.current_catred_data
-                data_source = "catred_handler"
-                print("Debug: Using current_catred_data from catred_handler")
-            elif (
-                hasattr(self, "trace_creator")
-                and self.trace_creator
-                and hasattr(self.trace_creator, "current_catred_data")
-                and self.trace_creator.current_catred_data
-            ):
-                current_catred_data = self.trace_creator.current_catred_data
-                data_source = "trace_creator"
-                print("Debug: Using current_catred_data from trace_creator")
-            elif hasattr(self, "current_catred_data") and self.current_catred_data:
-                current_catred_data = self.current_catred_data
-                data_source = "self"
-                print("Debug: Using current_catred_data from self")
-
-            # Fallback: read from cross-process diskcache written by background callback worker
-            if not current_catred_data:
-                try:
-                    import diskcache as _dc
-                    import os as _os
-                    _state_dir = _os.path.join(_os.path.expanduser("~"), ".cache", "clusterviz_state")
-                    with _dc.Cache(_state_dir) as _sc:
-                        _cached = _sc.get("catred_click_data")
-                    if _cached:
-                        current_catred_data = _cached
-                        data_source = "diskcache"
-                        print("Debug: Using current_catred_data from cross-process diskcache")
-                except Exception as _exc:
-                    print(f"Warning: Could not read CATRED data from state cache: {_exc}")
-
-            print(
-                f"Debug: Data source: {data_source}, data available: {current_catred_data is not None}"
-            )
+            # CATRED click data lives in several places: tile/box traces built by the
+            # background render worker are only in the shared diskcache, while Members
+            # traces are added to catred_handler in this process. Use the source that
+            # holds the clicked trace.
+            current_catred_data, data_source = self._catred_data_for_trace(clicked_trace_name)
+            print(f"Debug: Data source: {data_source}, data available: {current_catred_data is not None}")
             if current_catred_data:
                 print(f"Debug: Data keys: {list(current_catred_data.keys())}")
-                print(f"Debug: Data memory id: {id(current_catred_data)}")
 
             if not current_catred_data:
-                print(f"Debug: No current_catred_data available from any source")
-                print(f"Debug: catred_handler available: {self.catred_handler is not None}")
-                print(
-                    f"Debug: trace_creator available: {hasattr(self, 'trace_creator') and self.trace_creator is not None}"
-                )
-                print(
-                    f"Debug: self.current_catred_data available: {hasattr(self, 'current_catred_data')}"
-                )
+                print("Debug: No current_catred_data available from any source")
                 return dash.no_update, dash.no_update, dash.no_update
 
             try:
                 # Extract click information
                 clicked_point = clickData["points"][0]
                 print(f"Debug: Clicked point: {clicked_point}")
-
-                # Get the trace name using curveNumber (Scattergl doesn't provide traceName)
-                curve_number = clicked_point.get("curveNumber", None)
-                clicked_trace_name = "Unknown"
-
-                # Retrieve trace name from figure state using curveNumber
-                if current_figure and curve_number is not None:
-                    try:
-                        traces = current_figure.get("data", [])
-                        if curve_number < len(traces):
-                            clicked_trace_name = traces[curve_number].get("name", "Unknown")
-                            print(
-                                f"Debug: Retrieved trace name from figure using curveNumber {curve_number}: '{clicked_trace_name}'"
-                            )
-                    except Exception as e:
-                        print(f"Warning: Could not retrieve trace name from figure: {e}")
 
                 print(f"Debug: Clicked trace name: '{clicked_trace_name}'")
 
@@ -319,6 +260,60 @@ class PHZCallbacks:
                 print(f"Debug: Traceback: {traceback.format_exc()}")
 
                 return self._create_error_phz_plot(str(e)), dash.no_update, dash.no_update
+
+    @staticmethod
+    def _clicked_trace_name(clickData, current_figure):
+        """Trace name of the clicked point, from the figure via curveNumber."""
+        try:
+            curve_number = clickData["points"][0].get("curveNumber")
+            traces = (current_figure or {}).get("data", [])
+            if curve_number is not None and curve_number < len(traces):
+                name = traces[curve_number].get("name", "Unknown")
+                print(f"Debug: Retrieved trace name from figure using curveNumber {curve_number}: '{name}'")
+                return name
+        except Exception as e:
+            print(f"Warning: Could not retrieve trace name from figure: {e}")
+        return "Unknown"
+
+    def _catred_click_sources(self):
+        """Candidate CATRED click-data dicts ({trace name: data}), in priority order."""
+        handler = self.catred_handler
+        if handler is not None and getattr(handler, "current_catred_data", None):
+            yield "catred_handler", handler.current_catred_data
+        trace_creator = getattr(self, "trace_creator", None)
+        if trace_creator is not None and getattr(trace_creator, "current_catred_data", None):
+            yield "trace_creator", trace_creator.current_catred_data
+        if getattr(self, "current_catred_data", None):
+            yield "self", self.current_catred_data
+        # Written by the background render worker (a separate process)
+        try:
+            import diskcache as _dc
+            import os as _os
+
+            state_dir = _os.path.join(_os.path.expanduser("~"), ".cache", "clusterviz_state")
+            with _dc.Cache(state_dir) as cache:
+                cached = cache.get("catred_click_data")
+            if cached:
+                yield "diskcache", cached
+        except Exception as exc:
+            print(f"Warning: Could not read CATRED data from state cache: {exc}")
+
+    def _catred_data_for_trace(self, trace_name):
+        """(data dict, source label) for the source holding ``trace_name``.
+
+        With an unknown trace name, the first non-empty source is returned, as
+        before. When no source holds the trace, the first source is returned so
+        the caller's "not a CATRED trace" check rejects the click.
+        """
+        first = (None, "none")
+        for label, data in self._catred_click_sources():
+            if first[0] is None:
+                first = (data, label)
+                if trace_name == "Unknown":
+                    break
+            if trace_name in data:
+                return data, label
+        return first
 
     def _create_phz_pdf_plot(self, phz_pdf, ra, dec, phz_mode_1, phz_median):
         """Create PHZ_PDF plot for a given CATRED point"""

@@ -9,6 +9,7 @@ Analysis-tab behaviour that can be checked without a browser.
 """
 
 import unittest
+from unittest import mock
 
 import dash
 import numpy as np
@@ -86,6 +87,22 @@ class _CapturingApp:
         return register
 
 
+class _FakeCache:
+    """diskcache.Cache stand-in backed by a dict."""
+
+    def __init__(self, store):
+        self.store = store
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def get(self, key, default=None):
+        return self.store.get(key, default)
+
+
 class TestPhzClickRouting(unittest.TestCase):
     """Only clicks on stored CATRED/Members traces switch to the p(z) tab."""
 
@@ -101,11 +118,17 @@ class TestPhzClickRouting(unittest.TestCase):
             "phz_mode_1": [1.0, 0.5],
             "phz_median": [1.0, 0.5],
         }
-        handler = type("Handler", (), {"current_catred_data": {self.CATRED_TRACE: catred}})()
+        self.catred = catred
+        self.handler = type("Handler", (), {"current_catred_data": {self.CATRED_TRACE: catred}})()
         app = _CapturingApp()
-        PHZCallbacks(app, catred_handler=handler)
+        PHZCallbacks(app, catred_handler=self.handler)
         self.on_click = app.callbacks["update_phz_pdf_plot"]
         self.figure = {"data": [{"name": self.CATRED_TRACE}, {"name": self.CLUSTER_TRACE}]}
+        # Shared state cache written by the background render worker; never the real one
+        self.state_cache = {}
+        patcher = mock.patch("diskcache.Cache", side_effect=lambda *_a, **_k: _FakeCache(self.state_cache))
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def _click(self, curve_number, point_number, x, y):
         point = {"curveNumber": curve_number, "pointNumber": point_number, "x": x, "y": y}
@@ -117,6 +140,15 @@ class TestPhzClickRouting(unittest.TestCase):
         self.assertTrue(all(value is dash.no_update for value in result))
 
     def test_catred_click_switches_to_pz_tab(self):
+        _figure, tab, subtab = self._click(0, 1, 46.20, -56.10)
+        self.assertEqual((tab, subtab), ("phz-tab", "phz-catred-subtab"))
+
+    def test_catred_tile_click_after_members_loaded(self):
+        # Tile CATRED built by the render worker is only in the shared cache; loading
+        # members puts a Members entry into this process's handler
+        members = dict(self.catred)
+        self.handler.current_catred_data = {"Members (ID 109926)": members}
+        self.state_cache["catred_click_data"] = {self.CATRED_TRACE: self.catred}
         _figure, tab, subtab = self._click(0, 1, 46.20, -56.10)
         self.assertEqual((tab, subtab), ("phz-tab", "phz-catred-subtab"))
 
