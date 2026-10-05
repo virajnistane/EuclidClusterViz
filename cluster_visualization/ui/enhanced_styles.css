@@ -1010,3 +1010,19 @@ body {
   .viewport-busy { animation: none; background: rgba(43, 87, 151, 0.6); }
   .viewport-busy-spinner { animation: none; border-color: var(--cv-accent, #2b5797); }
 }
+
+/* Globe overview: message shown until a catalog is rendered (callbacks hide it) */
+.globe-view-container {
+  position: relative;
+}
+
+.sky-overview-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cv-text-muted, #59616b);
+  font-size: 0.875rem;
+  pointer-events: none;
+}

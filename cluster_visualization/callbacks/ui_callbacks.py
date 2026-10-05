@@ -1651,7 +1651,7 @@ class UICallbacks:
         # Toggle button clicks → update view-mode-store
         self.app.clientside_callback(
             """
-            function(plotlyClicks, aladinClicks, currentMode) {
+            function(plotlyClicks, aladinClicks, globeClicks, currentMode) {
                 const triggered = window.dash_clientside.callback_context.triggered;
                 if (!triggered || triggered.length === 0) {
                     return window.dash_clientside.no_update;
@@ -1660,6 +1660,7 @@ class UICallbacks:
                 var next = window.dash_clientside.no_update;
                 if (prop.includes('view-mode-plotly-btn')) next = 'plotly';
                 if (prop.includes('view-mode-aladin-btn')) next = 'aladin';
+                if (prop.includes('view-mode-globe-btn')) next = 'globe';
                 if (next !== window.dash_clientside.no_update) {
                     try { fetch('/log', {method:'POST', body:'[view-toggle] ' + currentMode + ' → ' + next}); } catch(e) {}
                 }
@@ -1668,7 +1669,8 @@ class UICallbacks:
             """,
             Output("view-mode-store", "data"),
             [Input("view-mode-plotly-btn", "n_clicks"),
-             Input("view-mode-aladin-btn", "n_clicks")],
+             Input("view-mode-aladin-btn", "n_clicks"),
+             Input("view-mode-globe-btn", "n_clicks")],
             State("view-mode-store", "data"),
             prevent_initial_call=True,
         )
@@ -1693,21 +1695,28 @@ class UICallbacks:
             function(mode) {
                 const isPlotly = mode === 'plotly';
                 const isAladin = mode === 'aladin';
+                const isGlobe = mode === 'globe';
                 const plotlyStyle = {display: isPlotly ? 'block' : 'none'};
                 const aladinStyle = {display: isAladin ? 'block' : 'none'};
+                const globeStyle = {display: isGlobe ? 'block' : 'none', position: 'relative'};
                 const plotlyOutline = !isPlotly;
                 const aladinOutline = !isAladin;
+                const globeOutline = !isGlobe;
                 const aladinIntervalDisabled = !isAladin;
-                const merControlsStyle = {display: isAladin ? 'none' : 'block'};
+                // Mosaics only draw on the 2-D map
+                const merControlsStyle = {display: (isAladin || isGlobe) ? 'none' : 'block'};
                 const surveyDropdownStyle = {display: isAladin ? 'block' : 'none'};
-                const radioVal = isAladin ? 'aladin' : 'mosaic';
+                // Leave the image-source radio alone on the globe: setting it to 'mosaic'
+                // would switch the view back to the 2-D map
+                const radioVal = isGlobe ? window.dash_clientside.no_update
+                                         : (isAladin ? 'aladin' : 'mosaic');
                 // Show skeleton immediately when switching to Aladin; JS bridge hides it on init
                 const skeletonStyle = isAladin
                     ? {display: 'flex', position: 'absolute', inset: '0', zIndex: '10', borderRadius: '8px'}
                     : {display: 'none'};
                 return [plotlyStyle, aladinStyle, plotlyOutline, aladinOutline,
                         aladinIntervalDisabled, merControlsStyle, surveyDropdownStyle, radioVal,
-                        skeletonStyle];
+                        skeletonStyle, globeStyle, globeOutline];
             }
             """,
             [Output("plotly-view-container", "style"),
@@ -1718,7 +1727,9 @@ class UICallbacks:
              Output("mer-mosaic-controls", "style"),
              Output("aladin-survey-dropdown", "style"),
              Output("image-source-radio", "value"),
-             Output("aladin-skeleton", "style")],
+             Output("aladin-skeleton", "style"),
+             Output("globe-view-container", "style"),
+             Output("view-mode-globe-btn", "outline")],
             Input("view-mode-store", "data"),
         )
 

@@ -144,6 +144,46 @@ class AppLayout:
                                                     id="viewport-busy", className="viewport-busy",
                                                     style={"display": "none"},
                                                 ),
+                                                # Globe overview: HEALPix density + CL-tile outlines
+                                                # (hidden until the Globe view is chosen)
+                                                html.Div(
+                                                    [
+                                                        dcc.Loading(
+                                                            dcc.Graph(
+                                                                id="sky-overview",
+                                                                figure={},
+                                                                style={
+                                                                    "height": "75vh",
+                                                                    "width": "100%",
+                                                                    "min-height": "500px",
+                                                                },
+                                                                config={
+                                                                    "displaylogo": False,
+                                                                    "scrollZoom": True,
+                                                                    "responsive": True,
+                                                                    "modeBarButtonsToRemove": [
+                                                                        "lasso2d",
+                                                                        "select2d",
+                                                                    ],
+                                                                },
+                                                            ),
+                                                            type="circle",
+                                                            overlay_style={"visibility": "visible"},
+                                                            delay_show=600,
+                                                        ),
+                                                        html.Div(
+                                                            "Render a catalog to see it on the globe.",
+                                                            id="sky-overview-empty",
+                                                            className="sky-overview-empty",
+                                                        ),
+                                                        # Bumped by the browser when a globe zoom/rotation
+                                                        # needs finer, coarser or other cells
+                                                        dcc.Store(id="globe-request", data=None),
+                                                    ],
+                                                    id="globe-view-container",
+                                                    className="globe-view-container",
+                                                    style={"display": "none"},
+                                                ),
                                                 # Aladin Lite view (hidden until mode switch)
                                                 create_aladin_view(),
                                             ],

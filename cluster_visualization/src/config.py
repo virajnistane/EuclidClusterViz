@@ -483,6 +483,14 @@ class Config:
             "density_threshold": self._get_view_int("density_threshold", 50000, minimum=1),
         }
 
+    def get_globe_settings(self) -> Dict[str, int]:
+        """Globe overview settings ([view] section), as keyword arguments for
+        sky_overview.configure_globe."""
+        return {
+            "nside_max": self._get_view_int("nside_max", 1024, minimum=8),
+            "globe_max_cells": self._get_view_int("globe_max_cells", 3000, minimum=100),
+        }
+
     def validate_paths(self):
         """Validate that critical paths exist and return status"""
         issues = []

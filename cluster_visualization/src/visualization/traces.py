@@ -262,6 +262,9 @@ class TraceCreator:
     # Margins tried in turn until the clusters fit the point budget (see create_cluster_traces)
     CULL_MARGINS = (VIEW_MARGIN, 0.25, 0.0)
 
+    # Density grid colours (2-D map and globe)
+    DENSITY_COLORSCALE = [[0, "rgba(43,87,151,0.15)"], [1, "rgba(43,87,151,0.95)"]]
+
     @classmethod
     def _cull_to_view(cls, arr: np.ndarray, view_bounds, margin: Optional[float] = None) -> np.ndarray:
         """Rows within the view (plus margin, a fraction of the view on each side; default
@@ -305,7 +308,7 @@ class TraceCreator:
             y=(yedges[:-1] + yedges[1:]) / 2,
             z=z,
             name="Merged clusters (density)",
-            colorscale=[[0, "rgba(43,87,151,0.15)"], [1, "rgba(43,87,151,0.95)"]],
+            colorscale=self.DENSITY_COLORSCALE,
             colorbar=dict(title=dict(text="Clusters"), thickness=10, len=0.5),
             hovertemplate="RA %{x:.2f}°, Dec %{y:.2f}°<br>%{z:.0f} clusters<extra>Zoom in for individual clusters</extra>",
             showscale=True,
@@ -343,30 +346,19 @@ class TraceCreator:
         Used by create_traces for full renders and directly by the incremental
         "Apply filters" path, which replaces just these traces in the figure.
         """
-        merged_full = data["data_detcluster_mergedcat"]
-        datamod_detcluster_mergedcat = self._apply_redshift_filtering(
-            merged_full, z_threshold_lower, z_threshold_upper, z_include_missing
-        )
-
-        datamod_detcluster_mergedcat = self._apply_richness_filtering(
-            datamod_detcluster_mergedcat,
-            richness_threshold_lower,
-            richness_threshold_upper,
-            richness_mode,
+        datamod_detcluster_mergedcat = self._prefilter_merged(
+            data,
+            z_threshold_lower=z_threshold_lower,
+            z_threshold_upper=z_threshold_upper,
+            z_include_missing=z_include_missing,
+            richness_threshold_lower=richness_threshold_lower,
+            richness_threshold_upper=richness_threshold_upper,
+            richness_mode=richness_mode,
+            richness_include_missing=richness_include_missing,
             flag_quality_zp=flag_quality_zp,
             flag_quality_rs=flag_quality_rs,
-            include_missing=richness_include_missing,
+            idcluster_list=idcluster_list,
         )
-
-        try:
-            assert data["paths"]["use_gluematchcat"] == True and idcluster_list is not None
-            datamod_detcluster_mergedcat = self._apply_idcluster_filtering(
-                datamod_detcluster_mergedcat, idcluster_list
-            )
-        except:
-            print(
-                "Debug: ID-cluster based filtering skipped - either not using gluematchcat or idcluster_list is None"
-            )
 
         # Viewport culling: only clusters in (or near) the visible window are sent.
         # - More than density_threshold clusters in the visible area: a density grid.
@@ -465,6 +457,108 @@ class TraceCreator:
         for trace in cluster_traces:
             trace.update(meta={"cull_margin": cull_margin, "density": False})
         return cluster_traces
+
+    def _prefilter_merged(
+        self,
+        data: Dict[str, Any],
+        z_threshold_lower: Optional[float] = None,
+        z_threshold_upper: Optional[float] = None,
+        z_include_missing: bool = True,
+        richness_threshold_lower: Optional[float] = None,
+        richness_threshold_upper: Optional[float] = None,
+        richness_mode: Optional[str] = None,
+        richness_include_missing: bool = True,
+        flag_quality_zp: Optional[List[int]] = None,
+        flag_quality_rs: Optional[List[int]] = None,
+        idcluster_list: Optional[List[int]] = None,
+    ) -> np.ndarray:
+        """Merged catalog after the algorithm-independent filters (redshift, richness,
+        uploaded ID list). SNR thresholds differ per algorithm and are applied later."""
+        merged = self._apply_redshift_filtering(
+            data["data_detcluster_mergedcat"], z_threshold_lower, z_threshold_upper, z_include_missing
+        )
+        merged = self._apply_richness_filtering(
+            merged,
+            richness_threshold_lower,
+            richness_threshold_upper,
+            richness_mode,
+            flag_quality_zp=flag_quality_zp,
+            flag_quality_rs=flag_quality_rs,
+            include_missing=richness_include_missing,
+        )
+        try:
+            assert data["paths"]["use_gluematchcat"] == True and idcluster_list is not None
+            merged = self._apply_idcluster_filtering(merged, idcluster_list)
+        except:
+            print(
+                "Debug: ID-cluster based filtering skipped - either not using gluematchcat or idcluster_list is None"
+            )
+        return merged
+
+    def selected_clusters(
+        self,
+        data: Dict[str, Any],
+        snr_threshold_lower_pzwav: Optional[float] = None,
+        snr_threshold_upper_pzwav: Optional[float] = None,
+        snr_threshold_lower_amico: Optional[float] = None,
+        snr_threshold_upper_amico: Optional[float] = None,
+        snr_include_missing_pzwav: bool = True,
+        snr_include_missing_amico: bool = True,
+        matching_clusters: bool = False,
+        **prefilter_kw,
+    ) -> np.ndarray:
+        """Merged clusters passing all filters, whole sky (no culling): the rows the
+        sky map would show as markers. Used by the globe overview's density."""
+        merged = self._prefilter_merged(data, **prefilter_kw)
+        algorithm = str(data.get("algorithm", "")).lower()
+        names = merged.dtype.names or ()
+        snr = {
+            "pzwav": (snr_threshold_lower_pzwav, snr_threshold_upper_pzwav, snr_include_missing_pzwav),
+            "amico": (snr_threshold_lower_amico, snr_threshold_upper_amico, snr_include_missing_amico),
+        }
+        if "DET_CODE_NB" in names and algorithm == "both":
+            parts = []
+            for det_code, alg in ((2, "pzwav"), (1, "amico")):
+                part = self._apply_snr_filtering(merged[merged["DET_CODE_NB"] == det_code], *snr[alg])
+                if matching_clusters and "CROSS_ID_CLUSTER" in names:
+                    part = part[~np.isnan(part["CROSS_ID_CLUSTER"])]
+                parts.append(part)
+            return np.concatenate(parts)
+        if algorithm in snr:
+            return self._apply_snr_filtering(merged, *snr[algorithm])
+        return merged
+
+    def tile_ids_for_rows(self, data: Dict[str, Any], subset: np.ndarray) -> List[str]:
+        """CL tile ID of each row of ``subset`` ("?" when unknown), via the per-row cache."""
+        by_cltile = data.get("data_detcluster_by_cltile")
+        if not by_cltile or len(subset) == 0:
+            return ["?"] * len(subset)
+        self._active_rows = self._row_cache_for(data)
+        try:
+            return self._tile_colors_for(subset, by_cltile)[1]
+        finally:
+            self._active_rows = None
+
+    def row_column(self, data: Dict[str, Any], subset: np.ndarray, key: str, build) -> np.ndarray:
+        """Per-row values of ``subset`` for a derived column ``key``.
+
+        ``build(rows)`` computes the column for any rows; on first use it runs over the
+        whole catalog and is kept in the row cache, later calls only slice it.
+        """
+        cache = self._row_cache_for(data)
+        if cache is not None:
+            self._active_rows = cache
+            try:
+                pos = self._row_positions(subset)
+            finally:
+                self._active_rows = None
+            if pos is not None:
+                if cache.get(key) is None:
+                    _t = time.perf_counter()
+                    cache[key] = build(cache["merged"])
+                    self._profiler.record(f"row_cache:{key}", time.perf_counter() - _t)
+                return cache[key][pos]
+        return build(subset)
 
     # ------------------------------------------------------------------
     # Per-row cache: tile colours and richness strings are row-independent,

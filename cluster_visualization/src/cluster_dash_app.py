@@ -153,10 +153,13 @@ print("✓ Data modules loaded successfully")
 from visualization.figures import FigureManager
 
 # Import visualization modules
+# Same module path the globe callbacks import, so they see these settings
+from cluster_visualization.src.visualization.sky_overview import configure_globe
 from visualization.traces import TraceCreator
 
 # Before any background worker forks, so they inherit the settings
 TraceCreator.configure_view(**config.get_view_settings())
+configure_globe(**config.get_globe_settings())
 
 print("✓ Visualization modules loaded successfully")
 
@@ -168,6 +171,7 @@ from callbacks.cluster_modal_callbacks import ClusterModalCallbacks
 from callbacks.main_plot import MainPlotCallbacks
 from callbacks.mosaic_callback import MOSAICCallbacks
 from callbacks.phz_callbacks import PHZCallbacks
+from callbacks.sky_overview_callbacks import SkyOverviewCallbacks
 from callbacks.ui_callbacks import UICallbacks
 
 print("✓ Callback modules loaded successfully")
@@ -371,6 +375,11 @@ class ClusterVisualizationApp:
                 app=self.app,
                 data_loader=self.data_loader,
                 catred_handler=self.catred_handler,
+            )
+
+            # Globe overview (HEALPix density + CL-tile outlines)
+            self.sky_overview_callbacks = SkyOverviewCallbacks(
+                self.app, self.data_loader, self.trace_creator
             )
 
             print("✓ All modular callbacks initialized")
