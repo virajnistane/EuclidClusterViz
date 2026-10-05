@@ -19,6 +19,9 @@ from dash import dcc, html
 # on the white plot background
 MEMBERS_MARKER_DEFAULT = "#f76707"
 
+# Colour scales offered for the mosaic cutout (Plotly names)
+CUTOUT_COLORSCALES = ("viridis", "gray", "plasma")
+
 
 def _pending(control_id):
     """'Not applied' tag shown while a member filter differs from the shown members."""
@@ -116,7 +119,7 @@ class TabContent:
                         "Colour scale",
                         dbc.Select(
                             id="tab-cutout-colorscale",
-                            options=[{"label": c, "value": c} for c in ("viridis", "gray", "plasma")],
+                            options=[{"label": c, "value": c} for c in CUTOUT_COLORSCALES],
                             value="viridis",
                             size="sm",
                         ),

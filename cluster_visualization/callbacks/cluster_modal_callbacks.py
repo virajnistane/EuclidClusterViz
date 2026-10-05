@@ -8,12 +8,15 @@ like cutout generation, PHZ analysis, and data export.
 import dash  # type: ignore[import]
 from dash import Input, Output, State, callback_context, dcc, html
 import dash_bootstrap_components as _dbc  # type: ignore[import]
+import json
 import numpy as np
 import os
 import pandas as pd
+import plotly.colors as pc  # type: ignore[import]
 import plotly.graph_objs as go  # type: ignore[import]
 from typing import Any, Dict, List, Optional, Tuple, cast
 from cluster_visualization.src.visualization.trace_registry import TraceRegistry, TraceType
+from cluster_visualization.ui.tabs import CUTOUT_COLORSCALES
 from cluster_visualization.utils.magnitude import Magnitude
 
 # NOTE: Pylance can resolve dbc component symbols (Alert/Card/Row/...) as modules in some
@@ -1783,51 +1786,47 @@ class ClusterModalCallbacks:
     def _setup_trace_management_callbacks(self):
         """Setup callbacks for managing cluster modal traces (visibility and clear)"""
 
-        # Mosaic Cutout visibility toggle
-        @self.app.callback(
+        # Mosaic Cutout visibility toggle (clientside)
+        self.app.clientside_callback(
+            """
+            function(n_clicks, figure) {
+                const noUpdate = window.dash_clientside.no_update;
+                if (!figure || !figure.data) {
+                    return [noUpdate, noUpdate, noUpdate];
+                }
+                const isCutout = function(trace) {
+                    const name = (trace && trace.name) ? trace.name : '';
+                    return name.indexOf('MER-Mosaic cutout') >= 0;
+                };
+                const cutouts = figure.data.filter(isCutout);
+                if (cutouts.length === 0) {
+                    return [noUpdate, noUpdate, true];
+                }
+
+                const allVisible = cutouts.every(function(trace) {
+                    return trace.visible !== false && trace.visible !== 'legendonly';
+                });
+                const visible = !allVisible;
+                const data = figure.data.map(function(trace) {
+                    return isCutout(trace) ? Object.assign({}, trace, {visible: visible}) : trace;
+                });
+
+                const label = [
+                    {namespace: 'dash_html_components', type: 'I', props: {className: 'fas fa-eye me-1'}},
+                    visible ? 'Hide' : 'Show'
+                ];
+                return [Object.assign({}, figure, {data: data}), label, false];
+            }
+            """,
             [
                 Output("cluster-plot", "figure", allow_duplicate=True),
                 Output("tab-cutout-toggle-visibility", "children"),
                 Output("tab-cutout-toggle-visibility", "disabled"),
             ],
-            [Input("tab-cutout-toggle-visibility", "n_clicks")],
-            [State("cluster-plot", "figure")],
+            Input("tab-cutout-toggle-visibility", "n_clicks"),
+            State("cluster-plot", "figure"),
             prevent_initial_call=True,
         )
-        def toggle_cutout_visibility(n_clicks, current_figure):
-            """Toggle visibility of mosaic cutout traces"""
-            if not current_figure or "data" not in current_figure:
-                return dash.no_update, dash.no_update, dash.no_update
-
-            # Find cutout traces
-            cutout_traces_exist = False
-            all_cutouts_visible = True
-
-            for trace in current_figure["data"]:
-                trace_name = trace.get("name", "")
-                if "MER-Mosaic cutout" in trace_name:
-                    cutout_traces_exist = True
-                    if trace.get("visible", True) == False or trace.get("visible") == "legendonly":
-                        all_cutouts_visible = False
-
-            if not cutout_traces_exist:
-                return dash.no_update, dash.no_update, True
-
-            # Toggle visibility
-            new_visibility = False if all_cutouts_visible else True
-
-            for trace in current_figure["data"]:
-                trace_name = trace.get("name", "")
-                if "MER-Mosaic cutout" in trace_name:
-                    trace["visible"] = new_visibility
-
-            # Update button text
-            button_text = [
-                html.I(className="fas fa-eye me-1"),
-                "Hide" if new_visibility else "Show",
-            ]
-
-            return current_figure, button_text, False
 
         # Mosaic Cutout clear (clientside)
         self.app.clientside_callback(
@@ -1855,6 +1854,50 @@ class ClusterModalCallbacks:
                 Output("tab-cutout-clear", "disabled"),
             ],
             Input("tab-cutout-clear", "n_clicks"),
+            State("cluster-plot", "figure"),
+            prevent_initial_call=True,
+        )
+
+        # Mosaic Cutout opacity and colour scale (clientside): restyle the cutouts
+        # already on the map without a server round trip. Plotly.js lacks some of
+        # the offered names (plasma, gray), so the scales are sent as explicit lists.
+        cutout_scales = {name: pc.get_colorscale(name) for name in CUTOUT_COLORSCALES}
+        self.app.clientside_callback(
+            """
+            function(opacity, colorscale, figure) {
+                const noUpdate = window.dash_clientside.no_update;
+                if (!figure || !figure.data) {
+                    return noUpdate;
+                }
+                const scales = %s;
+                const alpha = (opacity === null || opacity === undefined || opacity === '')
+                    ? NaN : Number(opacity);
+                let changed = false;
+                const data = figure.data.map(function(trace) {
+                    const name = (trace && trace.name) ? trace.name : '';
+                    if (name.indexOf('MER-Mosaic cutout') < 0) {
+                        return trace;
+                    }
+                    const restyled = Object.assign({}, trace);
+                    if (!isNaN(alpha)) {
+                        restyled.opacity = Math.min(1, Math.max(0, alpha));
+                    }
+                    if (colorscale) {
+                        restyled.colorscale = scales[colorscale] || colorscale;
+                    }
+                    changed = true;
+                    return restyled;
+                });
+                if (!changed) {
+                    return noUpdate;
+                }
+                return Object.assign({}, figure, {data: data});
+            }
+            """
+            % json.dumps(cutout_scales),
+            Output("cluster-plot", "figure", allow_duplicate=True),
+            Input("tab-cutout-opacity", "value"),
+            Input("tab-cutout-colorscale", "value"),
             State("cluster-plot", "figure"),
             prevent_initial_call=True,
         )
