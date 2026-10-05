@@ -1367,6 +1367,69 @@ class MOSAICHandler:
                     "wcs_original": mosaic_wcs,
                 }
 
+    def _tile_radec_bounds(
+        self, mosaic_wcs: wcs.WCS, orig_shape: Tuple[int, int], samples: int = 64
+    ) -> Dict[str, float]:
+        """RA/Dec box enclosing a whole tile.
+
+        Samples the WCS along all four pixel-edge borders, not only the corners:
+        lines of constant Dec curve between the corners. RA is unwrapped around
+        CRVAL1 so tiles crossing RA 0/360 give a continuous range.
+        """
+        ny, nx = orig_shape
+        xs = np.linspace(-0.5, nx - 0.5, samples)
+        ys = np.linspace(-0.5, ny - 0.5, samples)
+        px = np.concatenate([xs, xs, np.full(samples, -0.5), np.full(samples, nx - 0.5)])
+        py = np.concatenate([np.full(samples, -0.5), np.full(samples, ny - 0.5), ys, ys])
+        ra, dec = mosaic_wcs.wcs_pix2world(px, py, 0)
+        ra0 = float(mosaic_wcs.wcs.crval[0])
+        ra = ra0 + (ra - ra0 + 180.0) % 360.0 - 180.0
+        bounds = {
+            "ra_min": float(np.min(ra)),
+            "ra_max": float(np.max(ra)),
+            "dec_min": float(np.min(dec)),
+            "dec_max": float(np.max(dec)),
+        }
+        bounds["ra_size_deg"] = bounds["ra_max"] - bounds["ra_min"]
+        bounds["dec_size_deg"] = bounds["dec_max"] - bounds["dec_min"]
+        return bounds
+
+    def _resample_to_radec_grid(
+        self,
+        image: np.ndarray,
+        mosaic_wcs: wcs.WCS,
+        orig_shape: Tuple[int, int],
+        bounds: Dict[str, float],
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Resample a downscaled tile onto a regular RA/Dec grid.
+
+        A gnomonic tile is a trapezoid in RA/Dec, so stretching its pixel grid
+        over the RA/Dec box misplaces sources (about 10 arcsec at the corners of
+        a MER tile at Dec -50). Each output pixel is looked up through the WCS.
+
+        ``image`` is the downscaled tile with column 0 at FITS x = 0 and row 0 at
+        FITS y = 0; ``orig_shape`` is the full-resolution (ny, nx) the WCS
+        describes. Returns the resampled image (row 0 = dec_max, column 0 =
+        ra_max, same size as ``image``) and a mask of pixels inside the tile.
+        """
+        from scipy.ndimage import map_coordinates
+
+        h, w = image.shape
+        ny, nx = orig_shape
+        ra = bounds["ra_max"] - (np.arange(w) + 0.5) * (bounds["ra_size_deg"] / w)
+        dec = bounds["dec_max"] - (np.arange(h) + 0.5) * (bounds["dec_size_deg"] / h)
+        ra_grid, dec_grid = np.meshgrid(ra, dec)
+        x, y = mosaic_wcs.wcs_world2pix(ra_grid, dec_grid, 0)
+        del ra_grid, dec_grid
+
+        inside = (x >= -0.5) & (x <= nx - 0.5) & (y >= -0.5) & (y <= ny - 0.5)
+        # Full-resolution pixel -> downscaled pixel (pixel centres)
+        col = (x + 0.5) * (w / nx) - 0.5
+        row = (y + 0.5) * (h / ny) - 0.5
+        out = map_coordinates(image, [row, col], order=1, mode="nearest")
+        out[~inside] = 0.0
+        return out.astype(np.float32, copy=False), inside
+
     def _calculate_image_bounds_direct(
         self, mosaic_wcs: wcs.WCS, processed_image: np.ndarray
     ) -> Dict[str, float]:
@@ -1406,8 +1469,8 @@ class MOSAICHandler:
 
             print(f"Debug: Scale factors: scale_x={scale_x:.3f}, scale_y={scale_y:.3f}")
 
-            # Scale corners back to original image coordinates
-            corners_original = corners * [scale_x, scale_y]
+            # Scale corner pixel centres back to original image coordinates
+            corners_original = (corners + 0.5) * [scale_x, scale_y] - 0.5
 
             # Convert to world coordinates using original WCS
             ra_coords, dec_coords = mosaic_wcs.wcs_pix2world(
@@ -1674,11 +1737,19 @@ class MOSAICHandler:
                     "ra_size_deg": abs(tile_bounds[1] - tile_bounds[0]),
                     "dec_size_deg": abs(tile_bounds[3] - tile_bounds[2]),
                 }
+            # Row 0 = dec_max, column 0 = ra_max (screen-left on the reversed RA axis)
+            png_pixels = processed_image[::-1, ::-1]
+            inside = None
         else:
             processed_image = self._process_mosaic_image(
                 mosaic_info["data"], target_scale_factor=self.img_scale_factor
             )
-            bounds = self._calculate_image_bounds_direct(mosaic_info["wcs"], processed_image)
+            orig_shape = mosaic_info["data"].shape
+            bounds = self._tile_radec_bounds(mosaic_info["wcs"], orig_shape)
+            # _process_mosaic_image flips left-right; undo so column 0 is FITS x = 0
+            png_pixels, inside = self._resample_to_radec_grid(
+                processed_image[:, ::-1], mosaic_info["wcs"], orig_shape, bounds
+            )
 
         height, width = processed_image.shape
 
@@ -1690,19 +1761,19 @@ class MOSAICHandler:
         print(f"       - Dec range: {bounds['dec_min']:.6f}° to {bounds['dec_max']:.6f}°")
         print(f"       - Image shape: {height} × {width} pixels")
 
-        # layout.images placement (data coordinates):
-        #   xanchor="right": right data edge of image = x
-        #   x=ra_max, sizex=ra_max-ra_min → data span [ra_min, ra_max] ✓
-        #   yanchor="top": top data edge = y
-        #   y=dec_max, sizey=dec_max-dec_min → data span [dec_min, dec_max] ✓
-        #
-        # On reversed RA axis, ra_max=screen-left, ra_min=screen-right.
-        # xanchor="right" pins right edge at ra_max (screen-left); image extends screen-right.
-        # After FLIP_LEFT_RIGHT, col-last = ra_max pixels → right edge correct ✓
-        #
-        # row-0 of PNG maps to top data edge (dec_max). After [::-1] row-0 = dec_max pixels ✓
-        img_uint8 = np.clip(processed_image[::-1, ::-1] * 255, 0, 255).astype(np.uint8)
-        pil_img = Image.fromarray(img_uint8, mode="L")
+        # layout.images placement (data coordinates), default anchors left/top:
+        #   x=ra_max, sizex=ra_max-ra_min: on the reversed RA axis the image's
+        #   screen-left edge is ra_max and it extends to ra_min.
+        #   y=dec_max, sizey=dec_max-dec_min: PNG row 0 is the dec_max edge.
+        # The image is stretched linearly over this box, so its pixels must lie on
+        # a regular RA/Dec grid (see _resample_to_radec_grid).
+        img_uint8 = np.clip(png_pixels * 255, 0, 255).astype(np.uint8)
+        if inside is not None and not inside.all():
+            # Transparent outside the tile footprint (corners of the RA/Dec box)
+            alpha = np.where(inside, 255, 0).astype(np.uint8)
+            pil_img = Image.fromarray(np.dstack([img_uint8, alpha]), mode="LA")
+        else:
+            pil_img = Image.fromarray(img_uint8, mode="L")
         buf = BytesIO()
         pil_img.save(buf, format="PNG", optimize=True, compress_level=6)
         b64 = base64.b64encode(buf.getvalue()).decode("ascii")
