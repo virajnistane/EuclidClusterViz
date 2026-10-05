@@ -7,6 +7,8 @@ Includes zoom-dependent MER-Mosaic and mask button state management.
 
 from dash import Input, Output, State
 
+from cluster_visualization.src.visualization.trace_registry import CUTOUT_MASK_PREFIX
+
 
 class MOSAICCallbacks:
     """Handles MER-Mosaic data-related callbacks"""
@@ -486,6 +488,7 @@ class MOSAICCallbacks:
                                 catred_traces = []
                                 cluster_traces = []
                                 mosaic_cutout_traces = []
+                                mask_cutout_traces = []
                                 mosaic_traces = []
                                 other_traces = []
 
@@ -502,6 +505,9 @@ class MOSAICCallbacks:
                                         polygon_traces.append(trace)
                                     elif "MER-Mosaic cutout" in trace_name:
                                         mosaic_cutout_traces.append(trace)
+                                    elif trace_name.startswith(CUTOUT_MASK_PREFIX):
+                                        # Cluster modal's mask cutout: separate layer, kept
+                                        mask_cutout_traces.append(trace)
                                     elif trace_name.startswith("Mosaic"):
                                         mosaic_traces.append(trace)
                                     elif "CATRED" in trace_name:
@@ -519,6 +525,7 @@ class MOSAICCallbacks:
                                     polygon_traces
                                     + mosaic_traces
                                     + mosaic_cutout_traces
+                                    + mask_cutout_traces
                                     + mask_footprint_traces
                                     + catred_traces
                                     + other_traces

@@ -30,6 +30,8 @@ try:
 except ImportError:
     raise ImportError("Config module not found in cluster_visualization.src.config")
 
+from cluster_visualization.src.visualization.trace_registry import CUTOUT_MASK_PREFIX
+
 try:
     from cluster_visualization.src.data.loader import DataLoader
 except ImportError:
@@ -1501,6 +1503,7 @@ class MOSAICHandler:
         weight_max: float,
         colorscale: str = "viridis",
         title: str = "Weight",
+        name: str = "Mask Colorbar",
     ) -> go.Scatter:
         """
         Create a standalone colorbar trace for HEALPix mask overlays.
@@ -1517,7 +1520,7 @@ class MOSAICHandler:
             mode="markers",
             showlegend=False,
             hoverinfo="skip",
-            name="Mask Colorbar",
+            name=name,
             marker=dict(
                 colorscale=colorscale,
                 showscale=True,
@@ -1841,12 +1844,14 @@ class MOSAICHandler:
         tile_bounds: Optional[Tuple[float, float, float, float]] = None,
         mask_type: str = "corrected",
         binary_inverted: bool = False,
+        name_prefix: str = "",
     ) -> Optional[List]:
         """Create Plotly scatter traces for a mask overlay.
 
         Args:
             mask_type: ``'corrected'`` (default) uses the global combined mask;
                 ``'effcov'`` uses the per-tile effective coverage mask.
+            name_prefix: Put in front of every trace name (see CUTOUT_MASK_PREFIX).
         """
         trace_start = time.time()
 
@@ -1907,7 +1912,7 @@ class MOSAICHandler:
                 weights=display_weights,
                 opacity=opacity,
                 colorscale=active_colorscale,
-                name_prefix="Inverted mask overlay" if binary_inverted else "Mask overlay",
+                name_prefix=name_prefix + ("Inverted mask overlay" if binary_inverted else "Mask overlay"),
                 n_bins=12,
                 weight_min=weight_min,
                 weight_max=weight_max,
@@ -1929,7 +1934,8 @@ class MOSAICHandler:
             active_colorscale = "Greys_r"
             colorbar_title = "Inv. Coverage<br>Weight" if binary_inverted else "Coverage<br>Weight"
             colorbar_trace = self._create_mask_colorbar_trace(
-                weight_min, weight_max, active_colorscale, title=colorbar_title
+                weight_min, weight_max, active_colorscale, title=colorbar_title,
+                name=name_prefix + "Mask Colorbar",
             )
             footprint_traces.append(colorbar_trace)
 
@@ -2058,99 +2064,28 @@ class MOSAICHandler:
         data: Dict[str, Any],
         clickdata: Dict[str, Any],
         opacity: float = 0.6,
-        colorscale: str = "viridis",
-        add_colorbar: bool = True,
         mask_type: str = "corrected",
-    ) -> Optional[List[go.Scatter]]:
-        """Create Plotly scatter traces for a mask overlay cutout.
+        binary_inverted: bool = False,
+    ) -> List[go.Scatter]:
+        """HEALPix mask overlay for a size x size arcmin box around a cluster.
 
-        Args:
-            mask_type: ``'corrected'`` (default) uses the global combined mask;
-                ``'effcov'`` uses the per-tile effective coverage mask.
+        Same mechanism as the sidebar's viewport mask (mask_overlay_traces_for_box),
+        with trace names prefixed by CUTOUT_MASK_PREFIX so it forms its own layer.
         """
-
-        ra_cen, dec_cen = clickdata["cluster_ra"], clickdata["cluster_dec"]
-
-        ra_min, ra_max = ra_cen - 1e-4, ra_cen + 1e-4  # Small box around click
-        dec_min, dec_max = dec_cen - 1e-4, dec_cen + 1e-4  # Small box around click
-
-        # Find which MER tiles intersect with the cutout region
-        mertiles_to_load = self._find_intersecting_tiles(data, ra_min, ra_max, dec_min, dec_max)
-        if len(mertiles_to_load) != 1:
-            print("Warning: Multiple MER tiles intersect with cutout region, returning empty list")
-            return []
-        else:
-            mertileid = mertiles_to_load[0]
-
-        # Load mosaic data for this tile
-        try:
-            data_cutout, wcs_cutout, hdr_cutout = self.get_mosaic_cutout(
-                mertileid=mertileid,
-                racen=ra_cen,
-                deccen=dec_cen,
-                size=clickdata.get("mask_cutout_size", 1),  # size in arcmin
-            )
-        except Exception as e:
-            print(f"Warning: Exception while getting cutout for MER tile {mertileid}: {e}")
-            return None
-
-        if data_cutout is None:
-            print(f"Warning: Could not get cutout for MER tile {mertileid}")
-            print("Returning full mask overlay traces instead")
-            # Create mask overlay traces for full tile instead
-            mask_traces = self.create_mask_overlay_trace(
-                mertileid=mertileid, opacity=opacity, mask_type=mask_type
-            )
-            return mask_traces
-
-        # Get the full mosaic WCS and shape
-        print(f"Full mask overlay array shape: {data_cutout.shape}")
-
-        # Get RA/Dec limits from the cutout WCS
-        ny, nx = data_cutout.shape
-        corners = wcs_cutout.pixel_to_world([0, nx - 1, nx - 1, 0], [0, 0, ny - 1, ny - 1])
-        ra_min_mosaic, ra_max_mosaic = corners.ra.deg.min(), corners.ra.deg.max()
-        dec_min_mosaic, dec_max_mosaic = corners.dec.deg.min(), corners.dec.deg.max()
-
-        print(f"RA range: {ra_min_mosaic:.4f} to {ra_max_mosaic:.4f}")
-        print(f"Dec range: {dec_min_mosaic:.4f} to {dec_max_mosaic:.4f}")
-
-        # Load footprint pixels filtered to the cutout viewport.
-        pix_arr, wt_arr = self._get_mask_footprint_in_viewport(
-            ra_min_mosaic, ra_max_mosaic, dec_min_mosaic, dec_max_mosaic,
+        ra_cen, dec_cen = float(clickdata["cluster_ra"]), float(clickdata["cluster_dec"])
+        half_dec = float(clickdata.get("mask_cutout_size") or 1) / 120.0  # arcmin -> half-size, deg
+        half_ra = half_dec / max(np.cos(np.radians(dec_cen)), 1e-6)
+        return self.mask_overlay_traces_for_box(
+            data,
+            ra_cen - half_ra,
+            ra_cen + half_ra,
+            dec_cen - half_dec,
+            dec_cen + half_dec,
+            opacity=opacity,
             mask_type=mask_type,
-            mertileid=mertileid,
+            binary_inverted=binary_inverted,
+            name_prefix=CUTOUT_MASK_PREFIX,
         )
-        n_pix = len(pix_arr)
-        print(f"Footprint pixels in cutout area ({mask_type}): {n_pix}")
-        if n_pix > 0:
-            print(f"Weight range: {wt_arr.min():.3f} to {wt_arr.max():.3f}")
-
-        # Create grouped traces for HEALPix footprint polygons
-        footprint_traces: List[go.Scatter] = []
-        weight_min, weight_max = 0.85, 1.0
-
-        if n_pix > 0:
-            print(f"Creating grouped traces for {n_pix} HEALPix cutout polygons...")
-            footprint_traces = self._create_grouped_mask_traces(
-                pixels=pix_arr,
-                weights=wt_arr,
-                opacity=opacity,
-                colorscale=colorscale,
-                name_prefix="Mask overlay (cutout)",
-                n_bins=12,
-                weight_min=weight_min,
-                weight_max=weight_max,
-            )
-
-        # Add a colorbar trace (invisible heatmap that only shows the colorbar)
-        if footprint_traces and add_colorbar:
-            colorbar_trace = self._create_mask_colorbar_trace(
-                weight_min, weight_max, colorscale, title="Coverage<br>Weight"
-            )
-            footprint_traces.append(colorbar_trace)
-
-        return footprint_traces
 
     def load_mosaic_traces_in_zoom(
         self,
@@ -2293,7 +2228,6 @@ class MOSAICHandler:
             binary_inverted: When True, render zero-weight (uncovered) pixels
                 instead of covered pixels.
         """
-        start_time = time.time()
         mask_traces: List[go.Scatter] = []
         provider_norm = self._normalize_provider(provider)
         if not relayout_data:
@@ -2317,7 +2251,46 @@ class MOSAICHandler:
             f"Dec({dec_min:.3f}, {dec_max:.3f}), mask_type={mask_type}, "
             f"provider={provider_norm}, source={source_id}"
         )
+        return self.mask_overlay_traces_for_box(
+            data, ra_min, ra_max, dec_min, dec_max,
+            opacity=opacity,
+            mask_type=mask_type,
+            binary_inverted=binary_inverted,
+            provider=provider_norm,
+            source_id=source_id,
+        )
 
+    def mask_overlay_traces_for_box(
+        self,
+        data: Dict[str, Any],
+        ra_min: float,
+        ra_max: float,
+        dec_min: float,
+        dec_max: float,
+        opacity: float = 0.6,
+        mask_type: str = "corrected",
+        binary_inverted: bool = False,
+        provider: Optional[str] = None,
+        source_id: Optional[str] = None,
+        name_prefix: str = "",
+    ) -> List[go.Scatter]:
+        """HEALPix mask overlay traces for an RA/Dec box.
+
+        Shared by the sidebar's viewport mask and the cluster modal's mask cutout.
+
+        Args:
+            mask_type: ``'corrected'`` loads the combined corrected mask in a
+                single pass. ``'effcov'`` loops over intersecting MER tiles and
+                loads per-tile effective coverage masks.
+            binary_inverted: When True, render zero-weight (uncovered) pixels
+                instead of covered pixels.
+            name_prefix: Put in front of every trace name; the modal cutout uses
+                CUTOUT_MASK_PREFIX to keep its traces apart from the viewport mask.
+        """
+        start_time = time.time()
+        mask_traces: List[go.Scatter] = []
+        provider_norm = self._normalize_provider(provider)
+        colorscale = "viridis"
         weight_min, weight_max = 0.85, 1.0
 
         if mask_type == "corrected":
@@ -2338,13 +2311,15 @@ class MOSAICHandler:
                     nonzero = display_weights > 0.85
                     pix_arr, display_weights = pix_arr[nonzero], display_weights[nonzero]
                 active_colorscale = "white_alpha"
-                outline_name_prefix = "Inverted mask aladin moc" if binary_inverted else "Mask aladin moc"
+                outline_name_prefix = name_prefix + (
+                    "Inverted mask aladin moc" if binary_inverted else "Mask aladin moc"
+                )
                 mask_traces = self._create_grouped_mask_traces(
                     pixels=pix_arr,
                     weights=display_weights,
                     opacity=opacity,
                     colorscale=active_colorscale,
-                    name_prefix="Inverted mask overlay" if binary_inverted else "Mask overlay",
+                    name_prefix=name_prefix + ("Inverted mask overlay" if binary_inverted else "Mask overlay"),
                     n_bins=12,
                     weight_min=weight_min,
                     weight_max=weight_max,
@@ -2396,6 +2371,7 @@ class MOSAICHandler:
                         tile_bounds=tile_bounds,
                         mask_type="effcov",
                         binary_inverted=binary_inverted,
+                        name_prefix=name_prefix,
                     )
                     trace_time = time.time() - trace_start
                     tile_processing_time_total += trace_time
@@ -2418,7 +2394,8 @@ class MOSAICHandler:
         if mask_traces:
             colorbar_title = "Inv. Coverage<br>Weight" if binary_inverted else "Coverage<br>Weight"
             colorbar_trace = self._create_mask_colorbar_trace(
-                weight_min, weight_max, "Greys_r", title=colorbar_title
+                weight_min, weight_max, "Greys_r", title=colorbar_title,
+                name=name_prefix + "Mask Colorbar",
             )
             mask_traces.append(colorbar_trace)
 

@@ -15,7 +15,11 @@ import pandas as pd
 import plotly.colors as pc  # type: ignore[import]
 import plotly.graph_objs as go  # type: ignore[import]
 from typing import Any, Dict, List, Optional, Tuple, cast
-from cluster_visualization.src.visualization.trace_registry import TraceRegistry, TraceType
+from cluster_visualization.src.visualization.trace_registry import (
+    CUTOUT_MASK_PREFIX,
+    TraceRegistry,
+    TraceType,
+)
 from cluster_visualization.ui.tabs import CUTOUT_COLORSCALES
 from cluster_visualization.utils.magnitude import Magnitude
 
@@ -532,6 +536,9 @@ class ClusterModalCallbacks:
                 #
                 State("tab-mask-cutout-size", "value"),
                 State("tab-mask-cutout-opacity", "value"),
+                # Mask type and inverted come from the sidebar's HEALPix mask controls
+                State("mask-type-selector", "value"),
+                State("mask-binary-inverted-toggle", "value"),
                 #
                 State("catred-mode-switch", "value"),
                 State("catred-threshold-slider", "value"),
@@ -583,6 +590,8 @@ class ClusterModalCallbacks:
             catred_marker_color,
             mask_cutout_size,
             mask_cutout_opacity,
+            mask_type,
+            mask_binary_inverted,
             catred_masked,
             threshold,
             maglim,
@@ -949,113 +958,32 @@ class ClusterModalCallbacks:
                 }
 
                 set_progress((65, "Creating mask overlay..."))
-                if self.mosaic_handler:
-                    mask_cutout_traces = []
-                    if current_figure and "data" in current_figure:
-                        mask_overlay_traces = [
-                            trace
-                            for trace in current_figure["data"]
-                            if trace.get("name", "").startswith("Mask overlay")
-                            and not "(cutout)" in trace.get("name", "")
-                        ]
-
-                        if len(mask_overlay_traces) > 0:
-                            print(
-                                f"✓ Preserving {len(mask_overlay_traces)} existing Mask overlay traces"
-                            )
-                        else:
-                            print("✓ No existing Mask overlay traces to preserve")
-                            mask_cutout_traces = (
-                                self.mosaic_handler.create_mask_overlay_cutout_trace(
-                                    data, clickdata, opacity=mask_cutout_opacity
-                                )
-                            )
-
-                        # Add mask overlay traces to current figure with proper layering
-                        if mask_cutout_traces:
-                            # Remove existing mask overlay traces first
-                            existing_traces = [
-                                trace
-                                for trace in current_figure["data"]
-                                if not (trace.get("name", "").startswith("Mask overlay (cutout)"))
-                            ]
-
-                            # Separate traces by type to maintain proper layering order
-                            polygon_traces = []
-                            mosaic_traces = []
-                            mosaic_cutout_traces = []
-                            mask_overlay_traces = []
-                            catred_traces = []
-                            cluster_traces = []
-                            other_traces = []
-
-                            for trace in existing_traces:
-                                trace_name = trace.get("name", "")
-                                if "MER-Tile" in trace_name or (
-                                    "Tile" in trace_name
-                                    and (
-                                        "CORE" in trace_name
-                                        or "LEV1" in trace_name
-                                        or "MerTile" in trace_name
-                                    )
-                                ):
-                                    polygon_traces.append(trace)
-                                elif "Mosaic" in trace_name and not trace_name.startswith(
-                                    "MER-Mosaic cutout"
-                                ):
-                                    mosaic_traces.append(trace)
-                                elif "Mosaic" in trace_name and trace_name.startswith(
-                                    "MER-Mosaic cutout"
-                                ):
-                                    mosaic_cutout_traces.append(trace)
-                                elif "Mask overlay" in trace_name:
-                                    mask_overlay_traces.append(trace)
-                                elif "CATRED" in trace_name:
-                                    catred_traces.append(trace)
-                                elif any(
-                                    keyword in trace_name
-                                    for keyword in ["Merged", "Tile", "clusters"]
-                                ):
-                                    cluster_traces.append(trace)
-                                else:
-                                    other_traces.append(trace)
-
-                            if len(mask_overlay_traces) > 0:
-                                print(
-                                    f"✓ Kept {len(mask_overlay_traces)} existing Mask overlay traces"
-                                )
-                            else:
-                                print("✓ No existing Mask overlay traces to preserve")
-                                mask_overlay_traces.extend(mask_cutout_traces)
-
-                            # Layer order: polygons (bottom) → mosaic → CATRED → other → cluster traces (top)
-                            new_data = (
-                                polygon_traces
-                                + mosaic_traces
-                                + mosaic_cutout_traces
-                                + mask_overlay_traces
-                                + catred_traces
-                                + other_traces
-                                + cluster_traces
-                            )
-                            current_figure["data"] = new_data
-
-                            print(f"✓ Added mask overlay cutout trace as 4th layer from bottom")
-                            print(
-                                f"   -> Layer order: {len(polygon_traces)} polygons, "
-                                f"{len(mosaic_traces)} mosaics, {len(mosaic_cutout_traces)} mosaic cutouts, "
-                                f"{len(mask_overlay_traces)} Mask overlay, {len(catred_traces)} CATRED, "
-                                f"{len(other_traces)} other, {len(cluster_traces)} clusters (top)"
-                            )
-
-                        else:
-                            print("ℹ️  No mask overlay found for current selected cluster")
-
-                    else:
-                        print("⚠️  No current figure data to update")
-
-                else:
+                if not self.mosaic_handler:
                     print("❌ No mosaic handler available")
+                elif not (current_figure and "data" in current_figure):
+                    print("⚠️  No current figure data to update")
+                else:
+                    # Same mechanism as the sidebar's viewport mask, over a box
+                    # around the cluster; its own layer (CUTOUT_MASK_PREFIX names)
+                    mask_cutout_traces = self.mosaic_handler.create_mask_overlay_cutout_trace(
+                        data,
+                        clickdata,
+                        opacity=mask_cutout_opacity if mask_cutout_opacity is not None else 0.3,
+                        mask_type=mask_type or "corrected",
+                        binary_inverted=bool(mask_binary_inverted),
+                    )
+                    if mask_cutout_traces:
+                        categorized: dict[TraceType, list] = {tt: [] for tt in TraceType}
+                        for trace in current_figure["data"]:
+                            if trace.get("name", "").startswith(CUTOUT_MASK_PREFIX):
+                                continue  # replaced by the new cutout
+                            classified = TraceRegistry.classify_trace(trace)
+                            categorized.setdefault(classified, []).append(trace)
+                        categorized[TraceType.MASK_OVERLAY].extend(mask_cutout_traces)
+                        current_figure["data"] = TraceRegistry.assemble_in_layer_order(categorized)
+                        print(f"✓ Added {len(mask_cutout_traces)} mask cutout traces")
+                    else:
+                        print("ℹ️  No mask overlay found for current selected cluster")
 
                 empty_phz_fig = self._create_empty_phz_plot()
 
@@ -2023,7 +1951,7 @@ class ClusterModalCallbacks:
 
             for trace in current_figure["data"]:
                 trace_name = trace.get("name", "")
-                if "Mask overlay (cutout)" in trace_name or "Mask Colorbar" in trace_name:
+                if trace_name.startswith(CUTOUT_MASK_PREFIX):
                     mask_cutout_traces_exist = True
                     if trace.get("visible", True) == False or trace.get("visible") == "legendonly":
                         all_masks_visible = False
@@ -2036,7 +1964,7 @@ class ClusterModalCallbacks:
 
             for trace in current_figure["data"]:
                 trace_name = trace.get("name", "")
-                if "Mask overlay (cutout)" in trace_name or "Mask Colorbar" in trace_name:
+                if trace_name.startswith(CUTOUT_MASK_PREFIX):
                     trace["visible"] = new_visibility
 
             # Update button text
@@ -2060,7 +1988,7 @@ class ClusterModalCallbacks:
 
                 const filtered = (figure.data || []).filter(function(trace) {
                     const name = (trace && trace.name) ? trace.name : '';
-                    return !(name.indexOf('Mask overlay (cutout)') >= 0 || name.indexOf('Mask Colorbar') >= 0);
+                    return name.indexOf('Cutout ') !== 0;  // CUTOUT_MASK_PREFIX
                 });
 
                 const newFigure = Object.assign({}, figure, {data: filtered});
@@ -2198,7 +2126,7 @@ class ClusterModalCallbacks:
                     has_cutouts = True
                 if "CATRED" in trace_name and "Boxed" in trace_name:
                     has_catred_boxes = True
-                if "Mask overlay (cutout)" in trace_name:
+                if trace_name.startswith(CUTOUT_MASK_PREFIX):
                     has_mask_cutouts = True
 
             return (

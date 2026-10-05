@@ -1815,7 +1815,9 @@ class UICallbacks:
                 (figure.data || []).forEach(function(trace) {
                     var name = (trace.name || '');
                     var isCatred = name.indexOf('CATRED') === 0;
-                    var isMask = name.indexOf('Mask overlay') === 0 || name.indexOf('Inverted mask overlay') === 0;
+                    // Modal mask cutout traces carry a 'Cutout ' prefix (CUTOUT_MASK_PREFIX)
+                    var maskName = name.indexOf('Cutout ') === 0 ? name.slice(7) : name;
+                    var isMask = maskName.indexOf('Mask overlay') === 0 || maskName.indexOf('Inverted mask overlay') === 0;
                     var isMembers = name.indexOf('Members (ID') === 0;
                     var isCluster = !isCatred && !isMask && !isMembers && (
                         name.indexOf('Merged') >= 0 || name.indexOf('PZWAV') >= 0 || name.indexOf('AMICO') >= 0
@@ -1866,7 +1868,7 @@ class UICallbacks:
                             }
                         }
                         if (poly.length > 1) maskPolygons.push(poly);
-                    } else if (name.indexOf('Mask aladin moc') === 0 || name.indexOf('Inverted mask aladin moc') === 0) {
+                    } else if (maskName.indexOf('Mask aladin moc') === 0 || maskName.indexOf('Inverted mask aladin moc') === 0) {
                         // Invisible trace carrying comma-separated HEALPix pixel IDs
                         var txt = (typeof trace.text === 'string') ? trace.text : '';
                         if (txt) {

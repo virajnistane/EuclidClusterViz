@@ -11,6 +11,11 @@ from typing import Callable, Optional
 
 import plotly.graph_objs as go
 
+# Name prefix of the cluster modal's HEALPix mask cutout traces. They are built
+# like the sidebar's viewport mask (same names after the prefix) but form a
+# separate layer with its own Hide/Clear controls.
+CUTOUT_MASK_PREFIX = "Cutout "
+
 
 class TraceType(Enum):
     """All known trace types in the visualization, ordered by layer."""
@@ -71,6 +76,8 @@ def _match_mosaic(trace) -> bool:
 
 def _match_mask_overlay(trace) -> bool:
     name = _get_trace_name(trace)
+    if name.startswith(CUTOUT_MASK_PREFIX):
+        name = name[len(CUTOUT_MASK_PREFIX):]
     return (
         "Mask overlay" in name
         or "Inverted mask" in name
