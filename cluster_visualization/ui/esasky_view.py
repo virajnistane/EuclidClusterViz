@@ -47,7 +47,7 @@ def create_view_mode_toggle() -> html.Div:
                 placement="bottom",
             ),
             dbc.Tooltip(
-                "Whole-survey overview: cluster density and CL tiles on the sky sphere",
+                "Whole-sky view: cluster density and CL tiles (also reached by zooming the map out)",
                 target="view-mode-globe-btn",
                 placement="bottom",
             ),

@@ -19,6 +19,7 @@ import pandas as pd  # type: ignore[import]
 import plotly.graph_objs as go  # type: ignore[import]
 from dash import Input, Output, Patch, State, html
 
+from cluster_visualization.src.visualization.sky_overview import catalog_span_deg
 from cluster_visualization.src.visualization.trace_registry import TraceRegistry, TraceType
 
 try:
@@ -479,7 +480,12 @@ class MainPlotCallbacks:
                     fig.add_trace(self._selected_cluster_marker(box_coords))
 
                 self._log_figure_size(fig, data)
-                return fig, empty_phz_fig, status, {"algorithm": algorithm, "cull": cull}
+                # rendered_at marks a full Render: the globe/map switcher picks the
+                # starting view only then, from the catalog's span
+                return fig, empty_phz_fig, status, {
+                    "algorithm": algorithm, "cull": cull, "rendered_at": time.time(),
+                    "span": catalog_span_deg(data),
+                }
 
             except Exception as e:
                 return (*self._create_error_plots(str(e)), dash.no_update)
@@ -1194,7 +1200,11 @@ class MainPlotCallbacks:
 
                 self._log_figure_size(fig, data)
 
-                return fig, empty_phz_fig, status, {"algorithm": algorithm, "cull": cull}
+                # Options change: same catalog, so no rendered_at (the view stays where it is)
+                return fig, empty_phz_fig, status, {
+                    "algorithm": algorithm, "cull": cull,
+                    "span": catalog_span_deg(data),
+                }
 
             except Exception as e:
                 error_status = dbc.Alert(f"Error updating: {str(e)}", color="warning")

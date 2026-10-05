@@ -489,7 +489,22 @@ class Config:
         return {
             "nside_max": self._get_view_int("nside_max", 1024, minimum=8),
             "globe_max_cells": self._get_view_int("globe_max_cells", 3000, minimum=100),
+            "map_enter_fov": self._get_view_float("map_enter_fov", 8.0),
+            "globe_enter_fov": self._get_view_float("globe_enter_fov", 15.0),
         }
+
+    def _get_view_float(self, option_name: str, default: float) -> float:
+        """Positive number from the [view] section; default when missing or invalid."""
+        if not self.config_parser.has_option("view", option_name):
+            return default
+        try:
+            value = float(str(self.config_parser.get("view", option_name)).strip())
+        except ValueError:
+            value = -1.0
+        if value <= 0:
+            print(f"Warning: [view] {option_name} is not a positive number; using {default}")
+            return default
+        return value
 
     def validate_paths(self):
         """Validate that critical paths exist and return status"""

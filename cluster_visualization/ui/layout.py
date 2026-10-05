@@ -14,6 +14,7 @@ from .modals import Modals
 from .tabs import TabContent
 from .esasky_view import create_view_mode_toggle
 from .aladin_view import create_aladin_view
+from cluster_visualization.src.visualization.sky_overview import GLOBE_SETTINGS
 
 
 class AppLayout:
@@ -179,6 +180,14 @@ class AppLayout:
                                                         # Bumped by the browser when a globe zoom/rotation
                                                         # needs finer, coarser or other cells
                                                         dcc.Store(id="globe-request", data=None),
+                                                        # Globe <-> map handoff thresholds (config.ini [view])
+                                                        dcc.Store(
+                                                            id="sky-view-settings",
+                                                            data={
+                                                                k: GLOBE_SETTINGS[k]
+                                                                for k in ("map_enter_fov", "globe_enter_fov")
+                                                            },
+                                                        ),
                                                     ],
                                                     id="globe-view-container",
                                                     className="globe-view-container",

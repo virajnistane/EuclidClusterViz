@@ -1714,6 +1714,17 @@ class UICallbacks:
                 const skeletonStyle = isAladin
                     ? {display: 'flex', position: 'absolute', inset: '0', zIndex: '10', borderRadius: '8px'}
                     : {display: 'none'};
+                // A graph drawn or updated while hidden can keep a 0x0 size: resize the one
+                // now shown once the browser has laid it out
+                var shownId = isGlobe ? 'sky-overview' : (isPlotly ? 'cluster-plot' : null);
+                if (shownId && window.Plotly && window.Plotly.Plots) {
+                    requestAnimationFrame(function() {
+                        var host = document.getElementById(shownId);
+                        var gd = host && (host.classList.contains('js-plotly-plot') ? host
+                                          : host.querySelector('.js-plotly-plot'));
+                        if (gd && gd._fullLayout) { try { window.Plotly.Plots.resize(gd); } catch (e) {} }
+                    });
+                }
                 return [plotlyStyle, aladinStyle, plotlyOutline, aladinOutline,
                         aladinIntervalDisabled, merControlsStyle, surveyDropdownStyle, radioVal,
                         skeletonStyle, globeStyle, globeOutline];

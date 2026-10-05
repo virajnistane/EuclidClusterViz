@@ -213,15 +213,196 @@ class TestGlobeFigure(unittest.TestCase):
         cfg = Config.__new__(Config)
         cfg.config_parser = configparser.ConfigParser()
         cfg.config_parser.read_string("[view]\nnside_max = 512\nglobe_max_cells = x\n")
-        self.assertEqual(cfg.get_globe_settings(), {"nside_max": 512, "globe_max_cells": 3000})
+        got = cfg.get_globe_settings()
+        self.assertEqual((got["nside_max"], got["globe_max_cells"]), (512, 3000))
 
         saved = dict(so.GLOBE_SETTINGS)
         try:
             so.configure_globe(nside_max=1000, globe_max_cells=50)
-            self.assertEqual(so.GLOBE_SETTINGS, {"nside_max": 1024, "globe_max_cells": 100})
+            self.assertEqual((so.GLOBE_SETTINGS["nside_max"], so.GLOBE_SETTINGS["globe_max_cells"]), (1024, 100))
         finally:
             so.GLOBE_SETTINGS.update(saved)
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestHandoffHelpers(unittest.TestCase):
+    def test_fov_scale_round_trip(self):
+        for fov in (0.5, 5, 8, 15, 60, 120, 179):
+            self.assertAlmostEqual(so.fov_for_scale(so.scale_for_fov(fov)), fov, places=6)
+        self.assertEqual(so.fov_for_scale(0.5), 180.0)
+        self.assertEqual(so.scale_for_fov(200), 1.0)
+
+    def test_fov_thresholds_keep_hysteresis(self):
+        saved = dict(so.GLOBE_SETTINGS)
+        try:
+            so.configure_globe(map_enter_fov=10, globe_enter_fov=11)
+            self.assertEqual(so.GLOBE_SETTINGS["map_enter_fov"], 10.0)
+            self.assertEqual(so.GLOBE_SETTINGS["globe_enter_fov"], 15.0)
+            so.configure_globe(map_enter_fov=8, globe_enter_fov=20)
+            self.assertEqual(so.GLOBE_SETTINGS["globe_enter_fov"], 20.0)
+        finally:
+            so.GLOBE_SETTINGS.clear()
+            so.GLOBE_SETTINGS.update(saved)
+
+    def test_fov_settings_from_config(self):
+        import configparser
+
+        from cluster_visualization.src.config import Config
+
+        cfg = Config.__new__(Config)
+        cfg.config_parser = configparser.ConfigParser()
+        cfg.config_parser.read_string("[view]\nmap_enter_fov = 5\nglobe_enter_fov = -1\n")
+        got = cfg.get_globe_settings()
+        self.assertEqual((got["map_enter_fov"], got["globe_enter_fov"]), (5.0, 15.0))
+
+    def test_catalog_span(self):
+        data = make_data(n=300)  # RA 50-54, Dec -30..-26
+        span = so.catalog_span_deg(data)
+        self.assertTrue(3.0 < span < 6.0, span)
+        self.assertEqual(so.catalog_span_deg(data), span)  # cached
+
+    @unittest.skipUnless(HAVE_HEALPY, "healpy not installed")
+    def test_requested_view_goes_into_layout(self):
+        fig, _ = so.build_sky_overview(make_data(n=200), TraceCreator(), {},
+                                       view={"lon": 10.0, "lat": -20.0, "scale": 7.5}, uirevision="globe-X")
+        proj = fig.layout.geo.projection
+        self.assertEqual((proj.rotation.lon, proj.rotation.lat, proj.scale), (10.0, -20.0, 7.5))
+        self.assertEqual(fig.layout.uirevision, "globe-X")
+        self.assertEqual(fig.layout.meta["view"], {"lon": 10.0, "lat": -20.0, "scale": 7.5})
+
+
+HANDOFF_HARNESS = r"""
+const cases = JSON.parse(process.argv[process.argv.length - 1]);
+const out = [];
+for (const c of cases) {
+    const calls = [];
+    const gds = {};
+    function gd(id, fl) { return {classList: {contains: () => true}, _fullLayout: fl}; }
+    if (c.mapRanges) gds['cluster-plot'] = gd('cluster-plot', {xaxis: {range: c.mapRanges[0]}, yaxis: {range: c.mapRanges[1]}});
+    if (c.globe) gds['sky-overview'] = gd('sky-overview', {geo: {projection: {rotation: {lon: c.globe.lon, lat: c.globe.lat}, scale: c.globe.scale}}});
+    global.document = {getElementById: (id) => gds[id] || null};
+    global.fetch = () => {};
+    global.window = {
+        _cvHandoffUntil: c.settling ? Date.now() + 10000 : 0,
+        _cvLastRender: c.lastRender || null,
+        Plotly: {Plots: {resize: () => {}}, relayout: (g, r) => calls.push(['relayout', r])},
+        dash_clientside: {
+            no_update: 'NU',
+            callback_context: {triggered: [{prop_id: c.trigger}]},
+            set_props: (id, p) => {
+                calls.push([id, p]);
+                if (id === 'cluster-plot' && gds['cluster-plot']) {
+                    gds['cluster-plot']._fullLayout = {xaxis: {range: p.figure.layout.xaxis.range},
+                                                       yaxis: {range: p.figure.layout.yaxis.range}};
+                }
+            },
+        },
+    };
+    const f = eval('(' + HANDOFF + ')');
+    const mapFig = c.noMap ? null : {data: [{}], layout: {xaxis: {range: c.figRanges ? c.figRanges[0] : undefined},
+                                                          yaxis: {range: c.figRanges ? c.figRanges[1] : undefined}}};
+    const globeFig = {data: [{}], layout: {geo: {projection: {rotation: {lon: 0, lat: 0}, scale: 1}}, meta: {}}};
+    const res = f(null, c.mapRelayout || null, c.meta || {algorithm: 'PZWAV'}, 1, c.mode,
+                  {map_enter_fov: 8, globe_enter_fov: 15}, mapFig, globeFig);
+    out.push({res: res, calls: calls});
+}
+setTimeout(() => console.log(JSON.stringify(out)), 50);
+"""
+
+
+@unittest.skipUnless(__import__("shutil").which("node"), "node not installed")
+class TestHandoffJS(unittest.TestCase):
+    def run_cases(self, cases):
+        import subprocess
+
+        from cluster_visualization.callbacks.sky_overview_callbacks import HANDOFF_JS
+
+        script = "const HANDOFF = " + json.dumps(HANDOFF_JS) + ";\n" + HANDOFF_HARNESS
+        out = subprocess.run(["node", "-e", script, json.dumps(cases)], capture_output=True, text=True, timeout=60)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        return json.loads(out.stdout)
+
+    def props(self, result, target):
+        return [p for name, p in (c for c in result["calls"] if c[0] != "relayout") if name == target]
+
+    def test_globe_zoom_in_hands_over_to_map(self):
+        (r,) = self.run_cases([{"mode": "globe", "trigger": "sky-overview.relayoutData",
+                                "globe": {"lon": -52.0, "lat": -28.0, "scale": 20.0},
+                                "mapRanges": [[60, 40], [-35, -20]]}])
+        self.assertEqual(r["res"], "plotly")
+        fig = self.props(r, "cluster-plot")[0]["figure"]
+        xr, yr = fig["layout"]["xaxis"]["range"], fig["layout"]["yaxis"]["range"]
+        self.assertGreater(xr[0], xr[1])  # RA axis reversed
+        self.assertAlmostEqual((xr[0] + xr[1]) / 2, 52.0, places=6)
+        self.assertAlmostEqual((yr[0] + yr[1]) / 2, -28.0, places=6)
+        self.assertAlmostEqual(yr[1] - yr[0], so.fov_for_scale(20.0), places=6)
+        self.assertTrue(fig["layout"]["uirevision"].startswith("handoff-"))
+        # The new ranges are replayed as a relayout for the viewport tracker
+        self.assertTrue(any(c[0] == "relayout" for c in r["calls"]))
+
+    def test_globe_wide_stays_globe(self):
+        (r,) = self.run_cases([{"mode": "globe", "trigger": "sky-overview.relayoutData",
+                                "globe": {"lon": -52.0, "lat": -28.0, "scale": 5.0}}])
+        self.assertEqual(r["res"], "NU")
+
+    def test_map_zoom_out_hands_back_with_hysteresis(self):
+        wide, mid = self.run_cases([
+            {"mode": "plotly", "trigger": "cluster-plot.relayoutData", "mapRanges": [[70, 40], [-40, -18]]},
+            {"mode": "plotly", "trigger": "cluster-plot.relayoutData", "mapRanges": [[57, 47], [-33, -23]]},
+        ])
+        self.assertEqual(wide["res"], "globe")
+        req = self.props(wide, "globe-request")[0]["data"]
+        self.assertAlmostEqual(req["lon"], -55.0, places=6)
+        self.assertAlmostEqual(req["lat"], -29.0, places=6)
+        # span = max(dRA cos(dec), dDec) = max(30 cos 29deg, 22)
+        self.assertAlmostEqual(so.fov_for_scale(req["scale"]), 30 * math.cos(math.radians(29)), places=6)
+        self.assertEqual(req["uirevision"], "globe-PZWAV")
+        proj = self.props(wide, "sky-overview")[0]["figure"]["layout"]["geo"]["projection"]
+        self.assertAlmostEqual(proj["scale"], req["scale"])
+        self.assertEqual(mid["res"], "NU")  # 10 deg: between 8 and 15
+
+    def test_ra_wrap(self):
+        (r,) = self.run_cases([{"mode": "plotly", "trigger": "cluster-plot.relayoutData",
+                                "mapRanges": [[369, 349], [-5, 15]]}])
+        req = self.props(r, "globe-request")[0]["data"]
+        self.assertAlmostEqual(req["lon"], 1.0, places=6)  # RA 359 -> lon +1
+
+    def test_guards(self):
+        settling, aladin, nomap = self.run_cases([
+            {"mode": "globe", "trigger": "sky-overview.relayoutData", "settling": True,
+             "globe": {"lon": 0, "lat": 0, "scale": 50}, "mapRanges": [[1, 0], [0, 1]]},
+            {"mode": "aladin", "trigger": "cluster-plot.relayoutData", "mapRanges": [[90, 0], [-40, 40]]},
+            {"mode": "globe", "trigger": "sky-overview.relayoutData", "noMap": True,
+             "globe": {"lon": 0, "lat": 0, "scale": 50}},
+        ])
+        for r in (settling, aladin, nomap):
+            self.assertEqual(r["res"], "NU")
+            self.assertEqual(r["calls"], [])
+
+    def test_render_starting_view(self):
+        wide, narrow, zoomed, seen = self.run_cases([
+            {"mode": "plotly", "trigger": "rendered-meta-store.data",
+             "meta": {"algorithm": "PZWAV", "rendered_at": 1, "span": 40}},
+            {"mode": "globe", "trigger": "rendered-meta-store.data",
+             "meta": {"algorithm": "PZWAV", "rendered_at": 2, "span": 4}},
+            {"mode": "plotly", "trigger": "rendered-meta-store.data",
+             "meta": {"algorithm": "PZWAV", "rendered_at": 3, "span": 40}, "figRanges": [[55, 50], [-30, -25]]},
+            {"mode": "plotly", "trigger": "rendered-meta-store.data", "lastRender": 4,
+             "meta": {"algorithm": "PZWAV", "rendered_at": 4, "span": 40}},
+        ])
+        self.assertEqual(wide["res"], "globe")
+        self.assertTrue(self.props(wide, "globe-request")[0]["data"]["fit"])
+        self.assertEqual(narrow["res"], "plotly")
+        self.assertEqual(zoomed["res"], "NU")  # kept zoom of 5 deg: stay on the map
+        self.assertEqual(seen["res"], "NU")  # patch updates of the same render
+
+    def test_globe_button_uses_map_view(self):
+        (r,) = self.run_cases([{"mode": "plotly", "trigger": "view-mode-globe-btn.n_clicks",
+                                "mapRanges": [[54, 50], [-30, -26]]}])
+        self.assertEqual(r["res"], "globe")
+        req = self.props(r, "globe-request")[0]["data"]
+        self.assertAlmostEqual(req["lon"], -52.0, places=6)
+        self.assertAlmostEqual(so.fov_for_scale(req["scale"]), 15.0, places=6)

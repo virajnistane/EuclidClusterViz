@@ -14,7 +14,16 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import plotly.graph_objects as go
 
-GLOBE_SETTINGS = {"nside_max": 1024, "globe_max_cells": 3000}
+GLOBE_SETTINGS = {
+    "nside_max": 1024,
+    "globe_max_cells": 3000,
+    # Field of view (deg) below which zooming the globe hands over to the 2-D map,
+    # and above which zooming the map out hands back to the globe
+    "map_enter_fov": 8.0,
+    "globe_enter_fov": 15.0,
+}
+# globe_enter_fov stays at least this factor above map_enter_fov, so the views never flip-flop
+FOV_HYSTERESIS = 1.5
 
 # Coarsest cells drawn (nside 8 = 7.3 deg cells)
 MIN_NSIDE = 8
@@ -27,13 +36,38 @@ DENSITY_TRACE = "Cluster density"
 DENSITY_COLORSCALE = [[0, "rgba(43,87,151,0.15)"], [1, "rgba(43,87,151,0.95)"]]
 
 
-def configure_globe(nside_max: Optional[int] = None, globe_max_cells: Optional[int] = None) -> None:
+def configure_globe(
+    nside_max: Optional[int] = None,
+    globe_max_cells: Optional[int] = None,
+    map_enter_fov: Optional[float] = None,
+    globe_enter_fov: Optional[float] = None,
+) -> None:
     """Set the globe settings (config.ini [view]); values are rounded to valid ones."""
     if nside_max is not None:
         nside = 2 ** int(round(math.log2(max(MIN_NSIDE, min(int(nside_max), 8192)))))
         GLOBE_SETTINGS["nside_max"] = nside
     if globe_max_cells is not None:
         GLOBE_SETTINGS["globe_max_cells"] = max(100, int(globe_max_cells))
+    if map_enter_fov is not None:
+        GLOBE_SETTINGS["map_enter_fov"] = min(max(float(map_enter_fov), 0.1), 90.0)
+    if globe_enter_fov is not None:
+        GLOBE_SETTINGS["globe_enter_fov"] = float(globe_enter_fov)
+    GLOBE_SETTINGS["globe_enter_fov"] = min(180.0, max(
+        GLOBE_SETTINGS["globe_enter_fov"], GLOBE_SETTINGS["map_enter_fov"] * FOV_HYSTERESIS
+    ))
+
+
+def fov_for_scale(scale: float) -> float:
+    """Full field of view (deg) of the orthographic globe at a projection scale
+    (whole hemisphere, 180 deg, at scale <= 1). Mirrored in the browser handoff."""
+    scale = float(scale or 1.0)
+    return 180.0 if scale <= 1.0 else 2.0 * math.degrees(math.asin(1.0 / scale))
+
+
+def scale_for_fov(fov: float) -> float:
+    """Inverse of fov_for_scale."""
+    fov = float(fov)
+    return 1.0 if fov >= 180.0 else 1.0 / math.sin(math.radians(max(fov, 1e-3) / 2.0))
 
 
 def _healpy():
@@ -145,20 +179,42 @@ def _circular_mean_deg(values: np.ndarray) -> float:
     return float(np.degrees(np.arctan2(np.nanmean(np.sin(rad)), np.nanmean(np.cos(rad)))) % 360.0)
 
 
-def default_view(ra: np.ndarray, dec: np.ndarray) -> Dict[str, float]:
-    """Rotation centred on the catalog (lon = -RA) and a scale that fits nearly all of it."""
+def _extent_deg(ra: np.ndarray, dec: np.ndarray) -> Tuple[float, float, float]:
+    """Catalog centre (RA, Dec) and angular radius (deg) holding 99% of the positions."""
     ra = np.asarray(ra, dtype=float)
     dec = np.asarray(dec, dtype=float)
     ok = np.isfinite(ra) & np.isfinite(dec)
     if not ok.any():
-        return {"lon": 0.0, "lat": 0.0, "scale": 1.0}
+        return 0.0, 0.0, 0.0
     ra, dec = ra[ok], dec[ok]
     ra_c = _circular_mean_deg(ra)
     dec_c = float(np.clip(np.mean(dec), -89.0, 89.0))
-    # Angular distance of each cluster from the centre
     r1, d1, r2, d2 = map(np.radians, (ra, dec, ra_c, dec_c))
     cosd = np.sin(d1) * np.sin(d2) + np.cos(d1) * np.cos(d2) * np.cos(r1 - r2)
-    extent = float(np.degrees(np.arccos(np.clip(np.percentile(cosd, 1), -1, 1))))
+    radius = float(np.degrees(np.arccos(np.clip(np.percentile(cosd, 1), -1, 1))))
+    return ra_c, dec_c, radius
+
+
+def catalog_span_deg(data: Dict[str, Any]) -> float:
+    """Angular diameter (deg) of the merged catalog; cached on ``data``. The browser
+    starts on the globe when this exceeds globe_enter_fov."""
+    merged = data.get("data_detcluster_mergedcat")
+    cached = data.get("_catalog_span")
+    if cached is not None and cached[0] is merged:
+        return cached[1]
+    span = 0.0
+    if merged is not None and len(merged):
+        span = 2.0 * _extent_deg(merged["RIGHT_ASCENSION_CLUSTER"], merged["DECLINATION_CLUSTER"])[2]
+    data["_catalog_span"] = (merged, round(span, 3))
+    return round(span, 3)
+
+
+def default_view(ra: np.ndarray, dec: np.ndarray) -> Dict[str, float]:
+    """Rotation centred on the catalog (lon = -RA) and a scale that fits nearly all of it."""
+    ok = np.isfinite(np.asarray(ra, dtype=float)) & np.isfinite(np.asarray(dec, dtype=float))
+    if not ok.any():
+        return {"lon": 0.0, "lat": 0.0, "scale": 1.0}
+    ra_c, dec_c, extent = _extent_deg(ra, dec)
     extent = max(extent * 1.3, 2.0)
     scale = 1.0 if extent >= 90.0 else 1.0 / math.sin(math.radians(extent))
     lon = (-ra_c + 180.0) % 360.0 - 180.0
@@ -282,6 +338,9 @@ def build_sky_overview(
     initial = default_view(merged["RIGHT_ASCENSION_CLUSTER"], merged["DECLINATION_CLUSTER"])
     if not (view and all(view.get(k) is not None for k in ("lon", "lat", "scale"))):
         view = initial
+    # The requested view is the browser's current one (after a user zoom or a map -> globe
+    # handoff): put it in the layout so the new figure keeps the globe where it is
+    view = {k: float(view[k]) for k in ("lon", "lat", "scale")}
 
     fine = trace_creator.row_column(
         data, rows, f"hpx{nside_max}",
@@ -309,12 +368,12 @@ def build_sky_overview(
         # (what these cells were computed for) to decide when to ask again
         meta={"globe": True, "nside": nside, "nside_max": nside_max,
               "max_cells": GLOBE_SETTINGS["globe_max_cells"], "uirevision": uirevision,
-              "view": {k: float(view[k]) for k in ("lon", "lat", "scale")}},
+              "view": view},
         geo=dict(
             projection=dict(
                 type="orthographic",
-                rotation=dict(lon=initial["lon"], lat=initial["lat"]),
-                scale=initial["scale"],
+                rotation=dict(lon=view["lon"], lat=view["lat"]),
+                scale=view["scale"],
             ),
             showland=False,
             showocean=False,
