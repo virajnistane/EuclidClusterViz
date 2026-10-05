@@ -1741,6 +1741,30 @@ class UICallbacks:
                 var NO_UPDATE = window.dash_clientside.no_update;
                 if (!figure || !figure.layout) return [true, NO_UPDATE, NO_UPDATE];
 
+                // Plotly 6 sends numpy arrays as typed binary ({dtype, bdata, shape});
+                // the figure held by Dash keeps that form, so decode before indexing
+                var TYPED = {f8: Float64Array, f4: Float32Array, i4: Int32Array, u4: Uint32Array,
+                             i2: Int16Array, u2: Uint16Array, i1: Int8Array, u1: Uint8Array,
+                             u1c: Uint8ClampedArray};
+                function arr(v) {
+                    if (v == null) return [];
+                    if (Array.isArray(v) || ArrayBuffer.isView(v)) return v;
+                    if (typeof v === 'object' && typeof v.bdata === 'string' && TYPED[v.dtype]) {
+                        var bin = atob(v.bdata);
+                        var bytes = new Uint8Array(bin.length);
+                        for (var b = 0; b < bin.length; b++) bytes[b] = bin.charCodeAt(b);
+                        return new TYPED[v.dtype](bytes.buffer);
+                    }
+                    return [];
+                }
+                // 1-D customdata is the cluster ID (2-D customdata: no per-point ID)
+                function ids(v) {
+                    var shape = (v && typeof v === 'object' && v.shape != null) ? String(v.shape) : '';
+                    if (shape.indexOf(',') >= 0) return [];
+                    var a = arr(v);
+                    return (a.length && !Array.isArray(a[0])) ? a : [];
+                }
+
                 // Resolve viewport: prefer relayoutData values, fall back to figure layout
                 var raMin, raMax, decMin, decMax;
                 if (relayoutData) {
@@ -1789,9 +1813,10 @@ class UICallbacks:
                     if (isCluster && name.indexOf('in CATRED region') >= 0) isCluster = false;
                     if (isCluster && name.indexOf('near CATRED') >= 0 && name.indexOf(' clusters') < 0) isCluster = false;
 
-                    var xs = trace.x || [];
-                    var ys = trace.y || [];
-                    var texts = trace.text || [];
+                    var xs = arr(trace.x);
+                    var ys = arr(trace.y);
+                    var texts = Array.isArray(trace.text) ? trace.text : [];
+                    var cids = isCluster ? ids(trace.customdata) : [];
 
                     if (isCluster) {
                         for (var i = 0; i < xs.length; i++) {
@@ -1803,7 +1828,8 @@ class UICallbacks:
                             var dra = (ra - raCtr) * cosD;
                             var ddec = dec - decCtr;
                             if (Math.sqrt(dra*dra + ddec*ddec) <= fov2) {
-                                var lbl = (typeof texts[i] === 'string') ? texts[i] : '';
+                                var lbl = (typeof texts[i] === 'string') ? texts[i]
+                                        : (cids[i] != null && isFinite(cids[i]) ? 'ID ' + Math.round(cids[i]) : '');
                                 clusterPts.push({ra: ra, dec: dec, name: lbl});
                             }
                         }
@@ -1821,7 +1847,7 @@ class UICallbacks:
                         // Split null-separated polygon segments
                         var poly = [];
                         for (var i = 0; i < xs.length; i++) {
-                            if (xs[i] == null) {
+                            if (xs[i] == null || Number.isNaN(xs[i])) {
                                 if (poly.length > 1) maskPolygons.push(poly);
                                 poly = [];
                             } else {
