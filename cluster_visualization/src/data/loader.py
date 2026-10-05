@@ -42,6 +42,10 @@ except ImportError:
     MEMORY_MANAGER_AVAILABLE = False
 
 
+# Member-catalog columns the app reads; the cache keeps only these
+MEMBER_COLUMNS = ("ID_UNIQUE_CLUSTER", "OBJECT_ID", "PMEM_ZP", "PMEM_RS")
+
+
 class DataLoader:
     """Handles loading and caching of cluster detection data."""
 
@@ -82,6 +86,7 @@ class DataLoader:
         self.data_cache = {}  # In-memory cache
         # Dash callbacks run in parallel threads; serialize loads so each runs once
         self._load_lock = threading.RLock()
+        self._members: Dict[str, np.ndarray] = {}  # members FITS path -> pruned, ID-sorted rows
         self.paths = {}
 
         # Initialize memory manager
@@ -177,7 +182,8 @@ class DataLoader:
         data_detcluster_by_cltile = self._load_data_detcluster_by_cltile(paths, select_algorithm)
         has_individual_cltile_data = bool(data_detcluster_by_cltile)
 
-        # Members FITS is large (~1 GB) and only used by the members modal: load lazily
+        # Members FITS is large (~1 GB) and only used by the members modal: loaded on first use,
+        # pruned and shared across algorithms (get_gluematchcat_members)
         data_gluematchcat_members = None
         catred_fileinfo_df = self._load_catred_info(paths)
         catred_dsr = self.config.get_catred_dsr() if self.config else None
@@ -222,7 +228,6 @@ class DataLoader:
         data = {
             "data_detcluster_mergedcat": data_detcluster_mergedcat,
             "data_gluematchcat_members": data_gluematchcat_members,
-            "members_lazy": True,
             "data_detcluster_by_cltile": data_detcluster_by_cltile,
             "has_individual_cltile_data": has_individual_cltile_data,
             "individual_cltile_data_message": (
@@ -506,12 +511,21 @@ class DataLoader:
             cache_key = f"merged_catalog_{algorithm}"
             source_files = self._get_merged_catalog_source_files(paths)
 
+            table = self.disk_cache.get_table(cache_key, source_files)
+            if table is not None:
+                arr, meta = table
+                return (arr, *meta["snr"])
+
             cached: Optional[
                 Tuple[
                     np.ndarray, Optional[float], Optional[float], Optional[float], Optional[float]
                 ]
             ] = self.disk_cache.get(cache_key, source_files)
             if cached is not None:
+                # Legacy pickle: rewrite once as Parquet so later starts take the fast path
+                self.disk_cache.set_table(
+                    cache_key, cached[0], source_files, {"snr": list(cached[1:])}
+                )
                 return cached  # Tuple of (data, snr_min_pzwav, snr_max_pzwav, snr_min_amico, snr_max_amico)
 
         # Cache miss - load data
@@ -663,7 +677,10 @@ class DataLoader:
         if self.use_disk_cache and self.disk_cache is not None:
             cache_key = f"merged_catalog_{algorithm}"
             source_files = self._get_merged_catalog_source_files(paths)
-            self.disk_cache.set(cache_key, result, source_files)
+            if not self.disk_cache.set_table(
+                cache_key, data_merged, source_files, {"snr": list(result[1:])}
+            ):
+                self.disk_cache.set(cache_key, result, source_files)
 
         return result
 
@@ -712,10 +729,15 @@ class DataLoader:
             cache_key = f"tile_data_{algorithm}"
             source_files = self._get_tile_data_source_files(paths)
 
+            tiles = self._get_tile_tables(algorithm, source_files)
+            if tiles is not None:
+                return tiles
+
             cached: Optional[Dict[str, Dict[str, Any]]] = self.disk_cache.get(
                 cache_key, source_files
             )
             if cached is not None:
+                self._set_tile_tables(algorithm, cached, source_files)
                 return cached
 
         # Cache miss - load data
@@ -855,12 +877,70 @@ class DataLoader:
         if self.use_disk_cache and self.disk_cache is not None:
             cache_key = f"tile_data_{algorithm}"
             source_files = self._get_tile_data_source_files(paths)
-            self.disk_cache.set(cache_key, data_by_tile, source_files)
+            if not self._set_tile_tables(algorithm, data_by_tile, source_files):
+                self.disk_cache.set(cache_key, data_by_tile, source_files)
 
         return data_by_tile
 
-    def _load_data_gluematchcat_members(self, paths: Dict[str, Any]) -> Optional[np.ndarray]:
-        """Load GlueMatchCat member galaxies FITS from XML path, or return None if not configured."""
+    def _set_tile_tables(
+        self, algorithm: str, data_by_tile: Dict[str, Dict[str, Any]], source_files: list
+    ) -> bool:
+        """Cache tile rows as Parquet (one file per column layout) plus a small pickled index."""
+        if self.disk_cache is None:
+            return False
+        groups: Dict[tuple, list] = {}
+        for key, entry in data_by_tile.items():
+            rows = entry.get("detfits_data")
+            names = getattr(getattr(rows, "dtype", None), "names", None)
+            if not names:
+                return False
+            layout = tuple((n, np.asarray(rows[n][:0]).dtype.str, np.asarray(rows[n][:0]).shape[1:]) for n in names)
+            groups.setdefault(layout, []).append(key)
+
+        index: Dict[str, Any] = {"groups": len(groups), "tiles": {}}
+        for g, (layout, keys) in enumerate(groups.items()):
+            dtype = np.dtype([(n, code, shape) for n, code, shape in layout])
+            sizes = [len(data_by_tile[k]["detfits_data"]) for k in keys]
+            rows = np.empty(sum(sizes), dtype=dtype)
+            start = 0
+            for key, size in zip(keys, sizes):
+                src = data_by_tile[key]["detfits_data"]
+                for n in dtype.names:
+                    rows[n][start:start + size] = src[n]
+                entry = {k: v for k, v in data_by_tile[key].items() if k != "detfits_data"}
+                entry["_rows"] = (g, start, start + size)
+                index["tiles"][key] = entry
+                start += size
+            if not self.disk_cache.set_table(f"tile_rows_{algorithm}_{g}", rows, source_files):
+                return False
+        self.disk_cache.set(f"tile_index_{algorithm}", index, source_files)
+        return True
+
+    def _get_tile_tables(
+        self, algorithm: str, source_files: list
+    ) -> Optional[Dict[str, Dict[str, Any]]]:
+        """Rebuild the per-tile dict from the Parquet tile cache, or None when absent."""
+        if self.disk_cache is None:
+            return None
+        index = self.disk_cache.get(f"tile_index_{algorithm}", source_files)
+        if index is None:
+            return None
+        groups = []
+        for g in range(index["groups"]):
+            table = self.disk_cache.get_table(f"tile_rows_{algorithm}_{g}", source_files)
+            if table is None:
+                return None
+            groups.append(table[0])
+        data_by_tile = {}
+        for key, entry in index["tiles"].items():
+            g, start, stop = entry["_rows"]
+            tile = {k: v for k, v in entry.items() if k != "_rows"}
+            tile["detfits_data"] = groups[g][start:stop]
+            data_by_tile[key] = tile
+        return data_by_tile
+
+    def _members_fits_path(self, paths: Dict[str, Any]) -> Optional[str]:
+        """Resolve the GlueMatchCat members FITS file, or None if not configured/found."""
         gluematchcat_members_xml = paths.get("gluematchcat_members_xml")
         if gluematchcat_members_xml is None:
             return None
@@ -882,24 +962,70 @@ class DataLoader:
         if not os.path.exists(fitsfile):
             print(f"Warning: Members FITS file not found: {fitsfile}")
             return None
+        return fitsfile
+
+    def _load_data_gluematchcat_members(
+        self, paths: Dict[str, Any], fitsfile: Optional[str] = None
+    ) -> Optional[np.ndarray]:
+        """Load the members catalog: only MEMBER_COLUMNS, sorted by ID_UNIQUE_CLUSTER.
+
+        The pruned table is disk-cached (Parquet, else pickle) keyed by the FITS and XML mtimes.
+        """
+        fitsfile = fitsfile or self._members_fits_path(paths)
+        if fitsfile is None:
+            return None
+        source_files = [fitsfile, paths["gluematchcat_members_xml"]]
+        if self.use_disk_cache and self.disk_cache is not None:
+            table = self.disk_cache.get_table("members", source_files, list(MEMBER_COLUMNS))
+            if table is not None:
+                return table[0]
+            cached = self.disk_cache.get("members_pruned", source_files)
+            if cached is not None:
+                return cached
 
         print(f"Loading cluster members from: {os.path.basename(fitsfile)}")
         with fits.open(fitsfile, mode="readonly", memmap=True) as hdul:
-            data_members = np.array(hdul[1].data)
-        print(f"Loaded {len(data_members)} member galaxy entries")
+            rows = hdul[1].data
+            names = [n for n in MEMBER_COLUMNS if n in rows.dtype.names]
+            cols = {n: np.asarray(rows[n]) for n in names}
+            data_members = np.empty(
+                len(rows), dtype=[(n, cols[n].dtype.newbyteorder("="), cols[n].shape[1:]) for n in names]
+            )
+            for n in names:
+                data_members[n] = cols[n]
+            del cols
+        if "ID_UNIQUE_CLUSTER" in names:
+            data_members = data_members[np.argsort(data_members["ID_UNIQUE_CLUSTER"], kind="stable")]
+        print(f"Loaded {len(data_members)} member galaxy entries ({len(names)} columns)")
+
+        if self.use_disk_cache and self.disk_cache is not None:
+            if not self.disk_cache.set_table("members", data_members, source_files):
+                self.disk_cache.set("members_pruned", data_members, source_files)
         return data_members
 
     def get_gluematchcat_members(self, data: Dict[str, Any]) -> Optional[np.ndarray]:
-        """Return member galaxies for a loaded dataset, reading the FITS on first use."""
-        if data.get("data_gluematchcat_members") is not None or not data.get("members_lazy"):
-            return data.get("data_gluematchcat_members")
+        """Return member galaxies (MEMBER_COLUMNS, ID-sorted), read once and shared by all algorithms."""
+        if data.get("data_gluematchcat_members") is not None:
+            return data["data_gluematchcat_members"]
+        fitsfile = self._members_fits_path(data.get("paths") or {})
+        if fitsfile is None:
+            return None
         with self._load_lock:
-            if data.get("members_lazy"):
-                data["data_gluematchcat_members"] = self._load_data_gluematchcat_members(
-                    data["paths"]
-                )
-                data["members_lazy"] = False
-        return data["data_gluematchcat_members"]
+            if fitsfile not in self._members:
+                members = self._load_data_gluematchcat_members(data["paths"], fitsfile)
+                if members is None:
+                    return None
+                self._members[fitsfile] = members
+        return self._members[fitsfile]
+
+    def members_for_cluster(self, members: np.ndarray, cluster_id: int) -> np.ndarray:
+        """Rows of ``members`` for one cluster: binary search on the shared sorted catalog."""
+        ids = members["ID_UNIQUE_CLUSTER"]
+        if any(members is m for m in self._members.values()):
+            lo = np.searchsorted(ids, cluster_id, side="left")
+            hi = np.searchsorted(ids, cluster_id, side="right")
+            return members[lo:hi]
+        return members[ids == cluster_id]
 
     def _load_catred_info(self, paths: Dict[str, str]) -> pd.DataFrame:
         """Load CATRED file information and polygon data."""

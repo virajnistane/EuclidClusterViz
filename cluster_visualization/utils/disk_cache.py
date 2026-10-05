@@ -25,6 +25,8 @@ from typing import Any, Callable, Dict, List, Optional, cast
 
 import numpy as np
 
+from . import columnar
+
 
 class DiskCache:
     """
@@ -166,6 +168,68 @@ class DiskCache:
             if temp_path.exists():
                 temp_path.unlink()
 
+    def _table_path(self, key: str, source_files: Optional[list] = None) -> Path:
+        """Path of the Parquet entry for ``key`` (same invalidation as pickle entries)."""
+        digest = self._get_cache_key("v3:" + key, source_files).rsplit("_", 1)[1]
+        return self.cache_dir / f"{key}_{digest}.parquet"
+
+    def get_table(
+        self, key: str, source_files: Optional[list] = None, columns: Optional[list] = None
+    ) -> Optional[tuple]:
+        """Return ``(structured array, meta)`` from a Parquet entry, or None.
+
+        ``columns`` reads only those fields. None also when pyarrow is missing.
+        """
+        if not columnar.HAVE_ARROW:
+            return None
+        path = self._table_path(key, source_files)
+        if not path.exists():
+            return None
+        age = time.time() - path.stat().st_mtime
+        if age > self.max_age_seconds:
+            print(f"Cache expired for {key} (age: {age/86400:.1f} days)")
+            path.unlink()
+            return None
+        try:
+            t0 = time.perf_counter()
+            arr, meta = columnar.read_structured(str(path), columns)
+            size_mb = path.stat().st_size / (1024 * 1024)
+            print(
+                f"✓ Loaded from cache: {key} [parquet, {len(arr.dtype.names)} cols] "
+                f"({size_mb:.2f} MB, {time.perf_counter() - t0:.2f} s, age: {age/3600:.1f} hours)"
+            )
+            return arr, meta
+        except Exception as e:
+            print(f"Warning: Failed to load parquet cache for {key}: {e}")
+            if path.exists():
+                path.unlink()
+            return None
+
+    def set_table(
+        self,
+        key: str,
+        arr: np.ndarray,
+        source_files: Optional[list] = None,
+        meta: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """Store a structured array as Parquet. False when it cannot (no pyarrow, odd dtype)."""
+        if not columnar.HAVE_ARROW:
+            return False
+        path = self._table_path(key, source_files)
+        try:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+            t0 = time.perf_counter()
+            columnar.write_structured(str(path), arr, meta)
+            size_mb = path.stat().st_size / (1024 * 1024)
+            print(
+                f"✓ Saved to cache: {key} [parquet] ({size_mb:.2f} MB, "
+                f"{time.perf_counter() - t0:.2f} s)"
+            )
+            return True
+        except Exception as e:
+            print(f"Note: parquet cache not used for {key} ({e}); falling back to pickle")
+            return False
+
     def get_or_compute(
         self, key: str, compute_func: Callable, source_files: Optional[list] = None, **kwargs
     ) -> Any:
@@ -214,6 +278,10 @@ class DiskCache:
 
         return data
 
+    def _cache_files(self, stem: str = "*") -> List[Path]:
+        """Cache entries of both formats (pickle and Parquet)."""
+        return [*self.cache_dir.glob(f"{stem}.pkl"), *self.cache_dir.glob(f"{stem}.parquet")]
+
     def clear(self, key: Optional[str] = None) -> None:
         """
         Clear cache entries.
@@ -223,14 +291,13 @@ class DiskCache:
         """
         if key is None:
             # Clear all cache
-            for cache_file in self.cache_dir.glob("*.pkl"):
+            for cache_file in self._cache_files():
                 cache_file.unlink()
             print(f"Cleared all cache entries")
         else:
             # Clear specific key (all versions with different timestamps)
-            pattern = f"{key}_*.pkl"
             deleted = 0
-            for cache_file in self.cache_dir.glob(pattern):
+            for cache_file in self._cache_files(f"{key}_*"):
                 cache_file.unlink()
                 deleted += 1
             print(f"Cleared {deleted} cache entries for {key}")
@@ -242,7 +309,7 @@ class DiskCache:
         Returns:
             Dict with cache statistics
         """
-        cache_files: List[Path] = list(self.cache_dir.glob("*.pkl"))
+        cache_files: List[Path] = self._cache_files()
         total_size = sum(f.stat().st_size for f in cache_files)
 
         entries: List[Dict[str, Any]] = []
@@ -278,7 +345,7 @@ class DiskCache:
         current_time = time.time()
         deleted = 0
 
-        for cache_file in self.cache_dir.glob("*.pkl"):
+        for cache_file in self._cache_files():
             age = current_time - cache_file.stat().st_mtime
             if age > max_age_seconds:
                 cache_file.unlink()

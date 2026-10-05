@@ -2384,7 +2384,7 @@ class ClusterModalCallbacks:
             if "ID_UNIQUE_CLUSTER" not in members.dtype.names:
                 return None, None, "Members catalog missing ID_UNIQUE_CLUSTER column."
             try:
-                matched = members[members["ID_UNIQUE_CLUSTER"] == int(cluster_id)]
+                matched = self.data_loader.members_for_cluster(members, int(cluster_id))
             except (TypeError, ValueError) as exc:
                 return None, None, f"Invalid cluster ID: {exc}"
             return matched, data, None
