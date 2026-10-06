@@ -15,24 +15,16 @@ VENV_DIR="$PROJECT_DIR/.venv"
 echo "Project directory: $PROJECT_DIR"
 echo ""
 
-# Check if virtual environment exists
-if [ ! -d "$VENV_DIR" ]; then
-    echo "Virtual environment not found. Setting it up..."
-    echo "This will only happen once and may take a few minutes."
-    echo ""
-    
-    if [ -f "$PROJECT_DIR/setup_venv.sh" ]; then
-        "$PROJECT_DIR/setup_venv.sh"
-        if [ $? -ne 0 ]; then
-            echo "✗ Virtual environment setup failed"
-            exit 1
-        fi
-    else
-        echo "✗ Setup script not found: $PROJECT_DIR/setup_venv.sh"
+# Create the environment, or re-sync it when uv.lock/pyproject.toml changed (a
+# fast no-op otherwise). CLUSTERVIZ_NO_AUTOSYNC=1 skips the check.
+if [ -z "${CLUSTERVIZ_NO_AUTOSYNC:-}" ]; then
+    if ! "$PROJECT_DIR/setup_venv.sh" --if-stale; then
+        echo "✗ Virtual environment setup failed"
         exit 1
     fi
-else
-    echo "✓ Virtual environment found"
+elif [ ! -d "$PROJECT_DIR/.venv" ]; then
+    echo "✗ Virtual environment not found (CLUSTERVIZ_NO_AUTOSYNC is set): run ./setup_venv.sh"
+    exit 1
 fi
 
 # Activate virtual environment

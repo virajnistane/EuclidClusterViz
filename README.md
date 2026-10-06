@@ -192,6 +192,26 @@ The EDEN-3.1 environment lacks several critical modules (`healpy`, `dash`, `plot
 # 4. Install all dependencies (10-100x faster with uv)
 ```
 
+**Keeping the environment up to date**: every launch (`./launch.sh`, `make run`) runs `./setup_venv.sh --if-stale` first. It does nothing when `.venv` still matches `uv.lock` and `pyproject.toml` (a hash is stored in `.venv/.clusterviz-sync`), and re-syncs once after a pull that changed them. Extras installed earlier (dev, docs) are kept. Set `CLUSTERVIZ_NO_AUTOSYNC=1` to skip the check (e.g. on an offline node).
+
+| Command | Effect |
+|---------|--------|
+| `./setup_venv.sh` | Create or update `.venv` (installs uv if needed) |
+| `./setup_venv.sh --dev` / `--docs` / `--test` | Also install that extra (pytest/black/mypy, Sphinx, coverage) |
+| `./setup_venv.sh --no-extras` | Drop all extras |
+| `./setup_venv.sh --recreate` | Delete `.venv` and rebuild it from scratch |
+
+The same tasks are available through `make` (run `make` for the list):
+
+| Target | Effect |
+|--------|--------|
+| `make setup` / `make setup-dev` | Create or update `.venv` (with dev tools) |
+| `make run` / `make run-debug` | Launch the app (`ARGS="--config my.ini"` passes options) |
+| `make test` | Run the test suite (installs the dev extra once) |
+| `make docs` | Build the Sphinx docs into `cluster_visualization/docs/_build/html` |
+| `make rebuild` | Delete `.venv` and rebuild it |
+| `make clear-cache` | Delete `~/.cache/clusterviz*` |
+
 The setup script registers Bash completion for `launch.sh` in `~/.bashrc`. Open a new Bash shell (or source the completion file directly) to complete launcher flags; after `--config`, file and directory names are completed.
 
 **Package Configuration**: Modern `pyproject.toml` setup with:
@@ -379,11 +399,12 @@ cd EuclidClusterViz
 ./setup_venv.sh
 
 # Setup process:
-# ✓ Creates .venv with EDEN integration
+# ✓ Creates .venv (Python 3.14 managed by uv)
 # ✓ Installs uv package manager (automatic)
 # ✓ Installs cluster-visualization package
 # ✓ Installs all dependencies (blazing fast with uv)
-# ✓ Optional: dev dependencies (pytest, black, mypy)
+# ✓ Optional: ./setup_venv.sh --dev for pytest, black, mypy (no prompt)
+# Later launches re-sync .venv automatically when uv.lock changes
 ```
 
 ### 2. **Launch Application** (Multiple Options)

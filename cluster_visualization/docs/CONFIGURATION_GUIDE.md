@@ -291,6 +291,11 @@ If configuration fails, tools fall back to hardcoded paths:
 ./launch.sh --clear-cache
 ```
 
+Each launch first runs `./setup_venv.sh --if-stale`, which re-syncs `.venv` only
+when `uv.lock` or `pyproject.toml` changed (skip with `CLUSTERVIZ_NO_AUTOSYNC=1`).
+The root `Makefile` wraps these commands: `make run`, `make test`, `make docs`,
+`make rebuild`, `make clear-cache` (run `make` for the list).
+
 ### When to Use Each Option
 
 - **Default launch** (`./launch.sh`): Normal use after initial setup

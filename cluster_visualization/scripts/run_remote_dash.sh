@@ -71,6 +71,18 @@ case $choice in
         SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
         PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
         
+        # Create the environment, or re-sync it when uv.lock/pyproject.toml changed (a
+        # fast no-op otherwise). CLUSTERVIZ_NO_AUTOSYNC=1 skips the check.
+        if [ -z "${CLUSTERVIZ_NO_AUTOSYNC:-}" ]; then
+            if ! "$PROJECT_ROOT/setup_venv.sh" --if-stale; then
+                echo "✗ Virtual environment setup failed"
+                exit 1
+            fi
+        elif [ ! -d "$PROJECT_ROOT/.venv" ]; then
+            echo "✗ Virtual environment not found (CLUSTERVIZ_NO_AUTOSYNC is set): run ./setup_venv.sh"
+            exit 1
+        fi
+
         # Check for virtual environment
         if [ -d "$PROJECT_ROOT/.venv" ]; then
             echo "Using virtual environment..."
@@ -109,6 +121,18 @@ case $choice in
         SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
         PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
         
+        # Create the environment, or re-sync it when uv.lock/pyproject.toml changed (a
+        # fast no-op otherwise). CLUSTERVIZ_NO_AUTOSYNC=1 skips the check.
+        if [ -z "${CLUSTERVIZ_NO_AUTOSYNC:-}" ]; then
+            if ! "$PROJECT_ROOT/setup_venv.sh" --if-stale; then
+                echo "✗ Virtual environment setup failed"
+                exit 1
+            fi
+        elif [ ! -d "$PROJECT_ROOT/.venv" ]; then
+            echo "✗ Virtual environment not found (CLUSTERVIZ_NO_AUTOSYNC is set): run ./setup_venv.sh"
+            exit 1
+        fi
+
         # Check for virtual environment
         if [ -d "$PROJECT_ROOT/.venv" ]; then
             echo "Using virtual environment..."

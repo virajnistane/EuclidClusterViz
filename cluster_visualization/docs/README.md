@@ -132,6 +132,27 @@ source .venv/bin/activate
 
 The virtual environment uses Python 3.14 managed by `uv`, independently of the EDEN-3.1 interpreter.
 
+**Keeping the environment up to date**: every launch (`./launch.sh`, `make run`) runs `./setup_venv.sh --if-stale` first. It does nothing when `.venv` still matches `uv.lock` and `pyproject.toml` (a hash is stored in `.venv/.clusterviz-sync`), and re-syncs once after a pull that changed them. Extras installed earlier (dev, docs) are kept. Set `CLUSTERVIZ_NO_AUTOSYNC=1` to skip the check (e.g. on an offline node).
+
+| Command | Effect |
+|---------|--------|
+| `./setup_venv.sh` | Create or update `.venv` (installs uv if needed) |
+| `./setup_venv.sh --dev` / `--docs` / `--test` | Also install that extra (pytest/black/mypy, Sphinx, coverage) |
+| `./setup_venv.sh --no-extras` | Drop all extras |
+| `./setup_venv.sh --recreate` | Delete `.venv` and rebuild it from scratch |
+
+The same tasks are available through `make` (run `make` for the list):
+
+| Target | Effect |
+|--------|--------|
+| `make setup` / `make setup-dev` | Create or update `.venv` (with dev tools) |
+| `make run` / `make run-debug` | Launch the app (`ARGS="--config my.ini"` passes options) |
+| `make test` | Run the test suite (installs the dev extra once) |
+| `make docs` | Build the Sphinx docs into `cluster_visualization/docs/_build/html` |
+| `make rebuild` | Delete `.venv` and rebuild it |
+| `make clear-cache` | Delete `~/.cache/clusterviz*` |
+
+
 **Note**: While EDEN-3.1 provides base astronomical libraries, the application requires additional packages:
 - `healpy` - HEALPix operations for masked CATRED data
 - `dash` & `plotly` - Interactive web application framework
@@ -806,7 +827,7 @@ pip install -r requirements.txt
 pip install healpy astropy
 
 # Virtual Environment Problems
-./setup_venv.sh  # Recreates venv with all dependencies
+./setup_venv.sh --recreate  # or: make rebuild — deletes .venv and rebuilds it
 ```
 
 ### **Data Access & Configuration**

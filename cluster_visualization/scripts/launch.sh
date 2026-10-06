@@ -103,9 +103,15 @@ if [ "$TEST_DEPENDENCIES" = true ]; then
     PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
     cd "$PROJECT_DIR"
 
-    if [ ! -f "$PROJECT_DIR/.venv/bin/activate" ]; then
-        echo "✗ Application virtual environment not found."
-        echo "   Run ./setup_venv.sh first."
+    # Create the environment, or re-sync it when uv.lock/pyproject.toml changed (a
+    # fast no-op otherwise). CLUSTERVIZ_NO_AUTOSYNC=1 skips the check.
+    if [ -z "${CLUSTERVIZ_NO_AUTOSYNC:-}" ]; then
+        if ! "$PROJECT_DIR/setup_venv.sh" --if-stale; then
+            echo "✗ Virtual environment setup failed"
+            exit 1
+        fi
+    elif [ ! -d "$PROJECT_DIR/.venv" ]; then
+        echo "✗ Virtual environment not found (CLUSTERVIZ_NO_AUTOSYNC is set): run ./setup_venv.sh"
         exit 1
     fi
     source "$PROJECT_DIR/.venv/bin/activate"

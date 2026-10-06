@@ -70,16 +70,29 @@ The app prints this if no browser has connected. Run the `ssh -L` command shown 
 
 ### Missing packages at startup
 
+Launches re-sync `.venv` automatically when `uv.lock` or `pyproject.toml`
+changed (`setup_venv.sh --if-stale`). If packages are still missing:
+
 ```bash
 cd ~/ClusterViz
-./setup_venv.sh       # recreates .venv with all dependencies
+./setup_venv.sh              # update .venv
+./setup_venv.sh --recreate   # or: make rebuild — delete .venv and rebuild it
 ```
+
+If the launcher prints "Environment up to date" but a package is broken, the
+stamp is stale: `--recreate` rebuilds regardless. `CLUSTERVIZ_NO_AUTOSYNC=1`
+disables the automatic check.
 
 ### Python environment not found or too old
 
 ```bash
-./setup_venv.sh
+./setup_venv.sh   # rebuilds .venv when it is missing or older than Python 3.14
 ```
+
+### pytest / sphinx disappeared after an update
+
+Extras are remembered in `.venv/.clusterviz-sync`; if they were installed with
+an older `setup_venv.sh`, add them once more: `./setup_venv.sh --dev --docs`.
 
 The launcher uses the project `.venv` managed by `uv`; EDEN-3.1 activation is not required.
 
