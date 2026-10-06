@@ -89,6 +89,26 @@ All methods provide comprehensive visualization with:
 
 ## 🆕 Recent UI Improvements
 
+### Globe View and Large Catalogs
+
+- **Globe** button in the header: whole-sky view with cluster density (HEALPix
+  cells) and CL-tile outlines. Zooming the globe in switches to the 2-D map at
+  the same place; zooming the map far out switches back.
+- Large catalogs are sent to the browser only around the current view; when the
+  view holds too many clusters a density map is shown until you zoom in. An
+  "Updating clusters…" pill shows while new clusters load.
+
+### Cluster Tools Overlays
+
+- **Image cutout**: Opacity and Colour scale restyle a cutout already on the map
+  immediately; Hide/Show and Clear run in the browser.
+- **Healpix mask cutout**: built like the sidebar mask, using the sidebar's Mask
+  type and "Show inverted" setting; works near MER tile edges and is its own layer
+  (its Hide/Clear do not touch the viewport mask, and vice versa).
+- The whole-tile MER mosaic now lines up with cutouts and CATRED.
+- Clicking CATRED or member points opens their p(z), also after members are
+  loaded; clicking a cluster no longer jumps to the p(z) tab.
+
 ### CL-tile Information Toggle
 
 Located in the **Merged Clusters** section:
@@ -116,6 +136,9 @@ For in-depth information on specific features:
 - **[Configuration](CONFIGURATION_GUIDE.md)** - Setup and configuration options
 - **[Tile Caching & Controls](TILE_CACHING_AND_CONTROLS.md)** - CL-tile toggle, tile definition caching, performance
 - **[Zoom-Based Oval Rendering](ZOOM_BASED_OVAL_RENDERING.md)** - Matched cluster rendering with viewport indicator
+- **[View Modes](VIEW_MODE_SWITCHING_GUIDE.md)** - Standard, Globe and Aladin views
+- **[Viewport Optimization](VIEWPORT_OPTIMIZATION.md)** - Cluster culling, density map, CATRED clipping
+- **[Disk Caching](DISK_CACHING_IMPLEMENTATION.md)** - Parquet catalog and members caches
 - **[Remote Access](https://github.com/virajnistane/EuclidClusterViz/blob/main/README.md#quick-remote-access-setup)** - SSH port forwarding setup
 
 ## 🎉 Problem Solved

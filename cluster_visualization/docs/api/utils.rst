@@ -19,6 +19,13 @@ disk\_cache
    :members:
    :show-inheritance:
 
+columnar
+--------
+
+.. automodule:: cluster_visualization.utils.columnar
+   :members:
+   :show-inheritance:
+
 myutils
 -------
 

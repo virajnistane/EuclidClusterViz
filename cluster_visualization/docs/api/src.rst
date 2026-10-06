@@ -52,6 +52,20 @@ visualization.traces
    :members:
    :show-inheritance:
 
+visualization.trace\_registry
+------------------------------
+
+.. automodule:: cluster_visualization.src.visualization.trace_registry
+   :members:
+   :show-inheritance:
+
+visualization.sky\_overview
+---------------------------
+
+.. automodule:: cluster_visualization.src.visualization.sky_overview
+   :members:
+   :show-inheritance:
+
 visualization.catred\_proximity
 --------------------------------
 

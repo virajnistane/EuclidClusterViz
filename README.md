@@ -26,7 +26,9 @@ An advanced interactive web-based visualization platform for astronomical cluste
   - [Cluster Analysis Workflow](#cluster-analysis-workflow)
   - [PHZ Analysis](#phz-photometric-redshift-analysis)
   - [Cluster Matching Visualization](#cluster-matching-visualization)
-  - [HEALPix Mask Overlay](#healpy-mask-overlay)
+  - [Globe Sky Overview](#globe-sky-overview)
+  - [Large Catalogs on the Sky Map](#large-catalogs-on-the-sky-map)
+  - [HEALPix Mask Overlay](#healpix-mask-overlay)
   - [Mosaic Image Background](#mosaic-image-background)
   - [Layer Management](#layer-management)
 - [Architecture & Technical Specifications](#️-architecture--technical-specifications)
@@ -212,12 +214,14 @@ The setup script registers Bash completion for `launch.sh` in `~/.bashrc`. Open 
 - **Mosaic Visualization**: Dynamic MER tile mosaic loading with opacity controls and ESA/local provider selection
 - **ESA Sky HiPS Integration**: Fetch cutouts from public CDS hips2fits service in FITS (32-bit) or JPEG format
 - **HEALPix Mask Overlay**: Effective coverage footprint visualization with configurable opacity
+- **Globe Sky Overview**: Whole-sky view with filtered cluster density as HEALPix cells and CL-tile outlines; zooming in hands over to the 2-D map at the same place and back
+- **Large Catalogs**: The sky map sends only the clusters around the current view and switches to a density map when the visible area holds too many
 - **PHZ Analysis**: Interactive photometric redshift probability distribution plots with improved click detection and a cluster-data sub-tab that follows algorithm, viewport, SNR, redshift, and uploaded ID filters
 
 ### 🎨 **Cluster Analysis Tools**
-- **Cutout Generation**: Create MER mosaic cutouts centered on selected clusters with configurable size and opacity
+- **Cutout Generation**: Create MER mosaic cutouts centered on selected clusters; opacity and colour scale restyle the cutout live in the browser
 - **CATRED Box Views**: Load high-resolution catalog data in a box around clusters with customizable parameters
-- **Mask Cutouts**: Generate HEALPix mask cutouts showing coverage around selected clusters
+- **Mask Cutouts**: The sidebar's HEALPix mask over a size × size arcmin box around the cluster, using the sidebar's mask type and "Show inverted" setting; works near MER tile edges and is a separate layer with its own Hide/Clear
 - **Trace Management**: Independent hide/show and clear controls for cutouts, CATRED boxes, and mask overlays
 - **Parameter Synchronization**: Unified controls between sidebar and cluster analysis tab
 - **Single-Section Expansion**: Only one options section visible at a time for cleaner interface
@@ -247,6 +251,11 @@ The setup script registers Bash completion for `launch.sh` in `~/.bashrc`. Open 
 
 ### ⚡ **Performance Optimization**
 - **Incremental Filtering**: Apply filters rebuilds only the cluster traces in the main server process and patches them into the figure
+- **Viewport Culling & Density Map**: Big catalogs are sent only around the view (with a margin so pans need no request); a density heatmap replaces markers when too many are visible
+- **Light Marker Payload**: gzip/brotli responses, ID-only customdata and float32 positions (~10× less data per zoom/pan update)
+- **Parquet Disk Cache**: Merged catalog, tile rows and members are cached as memory-mapped Parquet (pyarrow); pickle fallback without pyarrow
+- **Members Catalog on Demand**: Loaded on the first Members click with only the needed columns, sorted for binary-search lookup and shared by all algorithms
+- **Fast Cold Start**: Launcher prefetches startup packages to warm the page cache on network storage; default data preloads in the background once the port is open
 - **Background Callbacks**: Heavy data-loading operations run as true background tasks with real percentage progress bars (powered by `diskcache` and Dash `background=True`)
 - **Layered Rendering**: Optimized trace ordering (polygons → mosaics → mask overlays → CATRED → clusters)
 - **Preserved State**: Zoom levels and filter settings maintained during updates
@@ -405,6 +414,8 @@ python cluster_visualization/src/cluster_dash_app.py --help
 The app opens with a tabbed interface:
 
 #### **Main Visualization Tab**
+The header toggle switches between **Standard View** (the 2-D sky map), **Globe** (whole-sky density overview) and **Aladin View** (enabled when exactly one cluster is in view).
+
 The sidebar starts with the **Render clusters** button (later **Re-render · <algorithm>**), followed by collapsible sections:
 - **Catalog**: Detection algorithm (PZWAV, AMICO, or PZWAV and AMICO), CL-tile information, unmerged clusters
 - **Filters**: Redshift, SNR (only the selected algorithm's filter is shown), Richness (Off / ZP / RS with quality flags), Cluster-ID list upload (`.txt`, `.dat`, or `.csv`; for `.dat` files column 0 is used as the ID source; **Clear** removes the list), and Show matched clusters (CAT-CL)
@@ -419,15 +430,15 @@ The sidebar starts with the **Render clusters** button (later **Re-render · <al
 Interactive cluster-specific analysis:
 - 🎯 **Click-to-Select**: Click any cluster point on the main plot to select it
 - 🔬 **Generate Cutouts**: Create MER mosaic cutouts around selected clusters
-  - Configurable size (arcmin), opacity, and colorscale
-  - Hide/Show and Clear controls for trace management
+  - Configurable size (arcmin), opacity, and colour scale; opacity and colour scale restyle an existing cutout immediately
+  - Hide/Show and Clear controls for trace management (all in the browser)
 - 🔍 **CATRED Box Views**: Load high-resolution catalog data in a box
   - Box size, redshift bin width, mask threshold, magnitude limit
   - Marker size (constant or KRON radius) and color customization
   - Independent trace management controls
-- 🗺️ **Mask Cutouts**: Generate HEALPix coverage cutouts
-  - Configurable size and opacity
-  - Separate trace visibility controls
+- 🗺️ **Mask Cutouts**: The sidebar's HEALPix mask over a box around the cluster
+  - Configurable size (arcmin) and opacity; mask type and "Show inverted" follow the sidebar's Mask section
+  - Separate layer with its own Hide/Show and Clear
 - 📊 **Analysis Results**: Display analysis outcomes and statistics
 
 #### **PHZ Analysis**
@@ -516,6 +527,9 @@ python cluster_visualization/src/cluster_dash_app.py --help
 
 - **`[paths]`** - All data directories and file locations
 - **`[files]`** - Specific file and directory names for each algorithm
+- **`[view]`** - Sky map and globe: `cull_min_clusters`, `max_points_sent`, `density_threshold`, `nside_max`, `globe_max_cells`, `map_enter_fov`, `globe_enter_fov` (see the [Configuration Guide](cluster_visualization/docs/CONFIGURATION_GUIDE.md))
+
+Clear the on-disk caches (`~/.cache/clusterviz*`) with `./launch.sh --clear-cache` (clears and exits).
 
 ```bash
 pip install -r requirements.txt
@@ -531,6 +545,10 @@ pip install -r requirements.txt
 - `dash` - Web application framework
 - `dash-bootstrap-components` - Enhanced UI components
 - `diskcache` - Background callback task queue for progress reporting
+- `pyarrow` - Parquet disk cache for catalogs (optional: without it the cache uses pickle)
+- `flask-compress` (via `dash[compress]`) - gzip/brotli responses
+
+Versions: Plotly 6.3 and Dash 2.18 (Plotly 6 sends numpy arrays to the browser as typed binary).
 
 ## 🎛️ Command-Line Options
 
@@ -642,7 +660,7 @@ To view PHZ probability distributions:
    - Green dotted line shows PHZ_MEDIAN
 4. **Coordinate Matching**: Uses `pointNumber` from clickData for accurate point identification
 
-**Technical Note**: PHZ callback uses `pointNumber` instead of `customdata` for reliable point indexing, as `customdata` may contain coverage values in masked mode.
+**Technical Note**: PHZ callback uses `pointNumber` instead of `customdata` for reliable point indexing, as `customdata` may contain coverage values in masked mode. It finds the clicked trace's data in whichever store holds it, so CATRED clicks keep working after members are loaded. Clicks on cluster markers open the cluster details and leave the p(z) tab alone.
 
 ### **Cluster Matching Visualization**
 To visualize matched PZWAV-AMICO cluster pairs:
@@ -658,18 +676,34 @@ To visualize matched PZWAV-AMICO cluster pairs:
 
 **Note**: The matching switch is automatically disabled when using PZWAV or AMICO individually.
 
+### **Globe Sky Overview**
+A whole-sky view for orientation and wide catalogs:
+
+1. **Open it**: Click **Globe** in the header, or zoom the 2-D map out past `globe_enter_fov` (default 15°)
+2. **Read it**: Cells are HEALPix pixels coloured by the number of filtered clusters; CL-tile CORE outlines are drawn in a neutral colour; RA increases to the left as on the sky
+3. **Zoom and rotate**: Cells get finer as you zoom (at most `globe_max_cells` are drawn); the server sends only aggregated counts, never individual clusters
+4. **Hand over to the map**: Zooming in below `map_enter_fov` (default 8°) switches to the 2-D map at the same place
+5. **Filters**: The globe is rebuilt after each **Render** and **Apply filters**
+
+### **Large Catalogs on the Sky Map**
+For catalogs with more than `cull_min_clusters` merged clusters (default 5000):
+
+- Only the clusters in the view plus a margin are sent; pans inside the margin need no request, and zooming in never does
+- When the visible area holds more than `density_threshold` clusters, a density heatmap replaces the markers until you zoom in
+- An "Updating clusters…" pill and a thin bar show while new clusters load
+- Tune all three in `config.ini` `[view]` (see the [Viewport Optimization guide](cluster_visualization/docs/VIEWPORT_OPTIMIZATION.md))
+
 ### **HEALPix Mask Overlay**
 To visualize the effective survey coverage:
 
 1. **Zoom In**: Zoom to a region smaller than 2° × 2° (button becomes enabled)
-2. **Click "Load Healpix mask for this view"** in the **Mask** section: Loads footprint data for visible tiles
-3. **Adjust Opacity**: Use the opacity slider to control mask transparency (0.0-1.0)
-4. **Interpret Colors**: 
-   - **Yellow/Green**: High coverage (weight ≥ 0.95)
-   - **Blue/Purple**: Lower coverage (weight 0.80-0.95)
-5. **Independent Control**: Mask overlay is independent of mosaic images
+2. **Choose the mask**: **Corrected Mask** (global combined mask, one pass) or **Eff. Coverage Mask** (per MER tile); **Show inverted** draws the uncovered sky instead
+3. **Click "Load Healpix mask for this view"** in the **Mask** section
+4. **Adjust Opacity**: The opacity slider restyles the mask live (0.1-1.0)
+5. **Interpret the overlay**: White fill whose opacity follows the coverage weight (0.85–1.0), with a Greys colour bar
+6. **Independent Control**: Mask overlay is independent of mosaic images and of the cluster's mask cutout
 
-**Performance**: Limited to 5 tiles per zoom with 30-second timeout for responsiveness.
+**Performance**: Eff. Coverage loads at most 5 tiles per view with a 30-second limit.
 
 ### **Mosaic Image Background**
 To add astronomical background images:
@@ -690,6 +724,7 @@ To add astronomical background images:
 - ESA cutouts and local MER cutouts are LANCZOS-resized to a target matching the actual cutout pixel dimensions (capped at 512 px), preventing unnecessary upsampling overhead
 - Full-tile MER mosaics (sidebar render) use a configurable scale factor for display; cluster-centred cutouts adapt their output size automatically so the LANCZOS step remains fast regardless of zoom level
 - The ESA image resolution is ultimately limited by the HiPS pyramid order of the selected survey
+- Local MER tiles are resampled onto a regular RA/Dec grid before display, so the whole-tile image lines up with cluster cutouts and CATRED (a TAN tile is not a rectangle in RA/Dec; stretching it misplaced sources by up to ~10″ at the corners). Areas of the RA/Dec box outside the tile are transparent
 
 ### **Layer Management**
 The application maintains proper layering automatically:
@@ -715,7 +750,7 @@ Bottom → Top Layer Order:
 **Trace Management**: Independent controls for:
 - Mosaic cutouts: Hide/Show and Clear buttons in Cluster Analysis tab
 - CATRED boxes: Hide/Show and Clear buttons in Cluster Analysis tab
-- Mask cutouts: Hide/Show and Clear buttons in Cluster Analysis tab
+- Mask cutouts: Hide/Show and Clear buttons in Cluster Analysis tab (traces named `Cutout …`; sidebar mask controls leave them alone)
 - Global mosaics: Controls in main sidebar
 - Global masks: Controls in main sidebar
 - Global CATRED: Controls in main sidebar
@@ -1006,6 +1041,12 @@ ls /sps/euclid/OU-LE3/CL/ial_workspace/workdir/RR2_downloads/
 export PYTHONPATH="${PYTHONPATH}:/path/to/cluster_visualization"
 ```
 
+### **Browser & Updates**
+- **`IndexError` at `inputs_state[ind]` after an update**: the tab was opened before the server restarted with new code. Hard-reload the page (Ctrl+Shift+R).
+- **`Name or service not known` on bind**: conda sets `HOST=x86_64-conda-linux-gnu`; the app now pins `HOST`/`PORT` itself.
+- **Slow cold start on the cluster**: the launcher prefetches startup packages to warm the page cache on network storage (disable with `CLUSTERVIZ_NO_PREFETCH=1`).
+- **No `.parquet` files in `~/.cache/clusterviz`**: pyarrow is missing; the app falls back to pickle caching.
+
 ### **Performance Optimization**
 - **Slow Installation**: Run `./setup_venv.sh`; it installs uv in user scope if needed and syncs the locked dependencies.
 - **Slow Loading**: Start with Basic View, enable Detailed View only when needed
@@ -1160,6 +1201,19 @@ The application now supports independent control of multiple overlay layers:
 - ✅ **Quiet, Responsive UI**: Gradients, emoji and perpetual animations removed; fixed-width sidebar column on desktop that stacks below 992 px
 - ✅ **Figure-Size Logging Opt-In**: The full-figure JSON size log now runs only with `CLUSTERVIZ_LOG_FIGURE_SIZE=1`
 
+### **October 2026 (later): Scale, Globe, Caching & Overlay Fixes**
+- ✅ **Faster Startup**: Dependency presence check instead of imports, background preload of the default data, launcher prefetch for cold network storage (~80 s → ~5 s on a cold node), `--clear-cache` launcher flag
+- ✅ **Plotly 6.3 / Dash 2.18**: Numpy arrays travel to the browser as typed binary; `HOST`/`PORT` pinned against conda's `HOST`
+- ✅ **Viewport Culling & Density Map**: Big catalogs are sent only around the view; density heatmap above `density_threshold`; reliable request tracking with a watchdog and an "Updating clusters…" indicator; new `config.ini` `[view]` section
+- ✅ **~10× Lighter Marker Updates**: gzip/brotli (`dash[compress]`), ID-only customdata, float32 positions
+- ✅ **Globe Sky Overview**: HEALPix density cells and CL-tile CORE outlines on an orthographic globe, with automatic globe ↔ map handoff
+- ✅ **Parquet Disk Cache**: Merged catalog, tile rows and members cached as memory-mapped Parquet (pyarrow), old pickle entries migrated on first use
+- ✅ **Members Catalog on Demand**: Loaded on first use with four columns, sorted for binary-search lookup, shared by all algorithms
+- ✅ **Client-side Cutout Styling**: Cutout opacity, colour scale and Hide/Show update in the browser
+- ✅ **Mosaic Alignment**: Whole-tile MER mosaics resampled onto an RA/Dec grid; they now line up with cutouts and CATRED (was up to ~10″ off at tile corners)
+- ✅ **Mask Cutout = Viewport Mask**: The cluster's HEALPix mask cutout uses the sidebar mask mechanism and settings, works across MER tile edges and is a separate layer
+- ✅ **Click Fixes**: CATRED clicks work after loading members; cluster clicks no longer jump to the p(z) tab; members marker styling kept across filters
+
 ## 📊 Technical Specifications & Data Insights
 
 ### **Dataset Statistics**
@@ -1176,8 +1230,8 @@ The application now supports independent control of multiple overlay layers:
 
 ### **Technology Stack**
 ```yaml
-Core Framework: Dash 2.17+ with Plotly high-performance visualization
-Data Processing: astropy, healpy, pandas, numpy for astronomical data
+Core Framework: Dash 2.18 with Plotly 6.3 (typed-binary arrays)
+Data Processing: astropy, healpy, pandas, numpy for astronomical data; pyarrow (Parquet cache)
 Spatial Analysis: shapely for coordinate transformations and polygon operations
 UI Framework: Bootstrap 5 with custom responsive styling
 Performance: Client-side callbacks, lazy loading, smart caching
@@ -1195,7 +1249,11 @@ For in-depth documentation on specific features and recent improvements, see the
 - **[Tile Caching & CL-tile Controls](cluster_visualization/docs/TILE_CACHING_AND_CONTROLS.md)** — Tile definition caching (30-40% faster renders), toggle control for MER polygons and tile colors
 - **[Zoom-Based Oval Rendering](cluster_visualization/docs/ZOOM_BASED_OVAL_RENDERING.md)** — Matched cluster rendering with viewport zoom indicator, performance characteristics
 - **[Cluster Analysis Guide](cluster_visualization/docs/CLUSTER_ANALYSIS_GUIDE.md)** — Cutouts, CATRED boxes, mask overlays, trace management
-- **[Configuration Guide](cluster_visualization/docs/CONFIGURATION_GUIDE.md)** — Setup and configuration options
+- **[Configuration Guide](cluster_visualization/docs/CONFIGURATION_GUIDE.md)** — Setup and configuration options, including the `[view]` section
+- **[View Modes](cluster_visualization/docs/VIEW_MODE_SWITCHING_GUIDE.md)** — Standard, Globe and Aladin views, globe ↔ map handoff
+- **[Viewport Optimization](cluster_visualization/docs/VIEWPORT_OPTIMIZATION.md)** — Cluster culling, density map, CATRED clipping
+- **[Disk Caching](cluster_visualization/docs/DISK_CACHING_IMPLEMENTATION.md)** — Parquet catalog and members caches, clearing the cache
+- **[Mosaic Rendering](cluster_visualization/docs/MOSAIC_RENDERING_UPGRADE.md)** — Mosaic pipeline and RA/Dec resampling
 - **[Complete Documentation](cluster_visualization/docs/README.md)** — Full feature reference with all technical details
 - **[Usage Guide](cluster_visualization/docs/USAGE.md)** — Interactive feature walkthrough with current UI capabilities
 ```

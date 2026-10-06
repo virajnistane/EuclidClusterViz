@@ -143,6 +143,47 @@ Rendering a HEALPix mask requires loading FITS files and running healpy coordina
 
 ---
 
+## Cluster Marker Culling and Density Map
+
+Large merged catalogs are not sent to the browser whole. The server sends the
+clusters inside the view plus a margin, and a binned density map when even the
+visible area holds too many clusters.
+
+### Settings (`config.ini` `[view]`)
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `cull_min_clusters` | 5000 | Catalogs with more merged clusters than this are culled; smaller ones are sent whole, so zooming never needs the server |
+| `max_points_sent` | 50000 | Most clusters per request. The server picks the widest margin around the view (1.0, 0.25 or 0 view widths) that stays under this |
+| `density_threshold` | 50000 | Above this many clusters in the visible area, a density heatmap replaces the markers |
+
+Read by `Config.get_view_settings()`.
+
+### Server
+
+- `TraceCreator._cull_to_view` keeps clusters inside the view plus the margin;
+  RA wrap-safe, counted with masks.
+- `TraceCreator._density_trace` builds a 120 × 120 heatmap of the visible area.
+- Traces carry metadata (margin, density on/off, visible count) the browser uses
+  to decide when to ask again.
+- Marker payload: gzip/brotli via `dash[compress]` (flask-compress), only the
+  cluster ID as `customdata` (SNR, z and tile are looked up on click), float32
+  positions. A zoom/pan update dropped from ~1.3 MB to ~136 KB.
+
+### Browser tracker
+
+- Reads the real plot ranges (`view-bounds-store`), sends `viewport-request`
+  ahead of time once the view is halfway into the margin, and never for a
+  zoom-in that stays inside the sent area.
+- One request in flight at a time; moves made meanwhile are sent when the answer
+  (`viewport-ack`, which echoes the request id) lands.
+- A watchdog re-sends a request unanswered after 20 s, gives up after 2 retries
+  and clears the indicator.
+- An "Updating clusters…" pill and a thin bar show while a request is pending.
+- Decisions, response sizes and timings are logged to `tmp/browser_debug.log`.
+
+---
+
 ## Performance Impact
 
 The user observes the following behaviour differences compared to a naive full-sky render:
@@ -150,7 +191,7 @@ The user observes the following behaviour differences compared to a naive full-s
 - **Initial page load**: cluster catalog tiles load at normal speed; no CATRED data appears until the user zooms in and presses the render button.
 - **CATRED render**: only sources from tiles intersecting the current 2° × 2° (or smaller) window are serialized and sent to the browser. For a typical zoom window this is tens of thousands of sources rather than tens of millions.
 - **Pan/zoom after first render**: the figure re-renders with the existing CATRED trace in place (existing traces are extracted from the current figure and re-injected via `_extract_existing_catred_traces`). A new render button click is required only if the user wants sources from newly visible tiles.
-- **Subsequent application launches**: `DataLoader` loads merged catalogs and tile metadata from the diskcache (`~/.cache/clusterviz/`) rather than re-reading FITS files, reducing startup time by 5–10×.
+- **Subsequent application launches**: `DataLoader` loads merged catalogs and tile rows from the disk cache (`~/.cache/clusterviz/`, Parquet; see [DISK_CACHING_IMPLEMENTATION.md](DISK_CACHING_IMPLEMENTATION.md)) rather than re-reading FITS files.
 - **Mask overlay**: the HEALPix footprint is computed on the server for only the pixels that fall inside the current viewport (`_get_mask_footprint_in_viewport`), keeping the trace payload small even for high-resolution masks.
 
 ---
@@ -159,7 +200,9 @@ The user observes the following behaviour differences compared to a naive full-s
 
 - `cluster_visualization/callbacks/catred_callbacks.py` — CATRED render/clear/visibility callbacks
 - `cluster_visualization/src/data/catred_handler.py` — Tile intersection, FITS loading, masking logic
-- `cluster_visualization/src/visualization/traces.py` — Zoom gate, trace assembly, diskcache state write
+- `cluster_visualization/src/visualization/traces.py` — Zoom gate, trace assembly, diskcache state write, cluster culling (`_cull_to_view`) and density map (`_density_trace`)
+- `cluster_visualization/callbacks/main_plot.py` — Viewport patch callback (server side)
+- `cluster_visualization/callbacks/ui_callbacks.py` — Browser viewport tracker (clientside)
 - `cluster_visualization/callbacks/ui_callbacks.py` — CATRED controls visibility (clientside)
 - `cluster_visualization/callbacks/mosaic_callback.py` — Serverside mask overlay render and delete
 - `cluster_visualization/utils/disk_cache.py` — `DiskCache` class

@@ -40,6 +40,13 @@ phz\_callbacks
    :members:
    :show-inheritance:
 
+sky\_overview\_callbacks
+------------------------
+
+.. automodule:: cluster_visualization.callbacks.sky_overview_callbacks
+   :members:
+   :show-inheritance:
+
 cluster\_modal\_callbacks
 -------------------------
 

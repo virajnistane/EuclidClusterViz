@@ -117,11 +117,51 @@ Priority order: `--config` arg → `config_local.ini` → `config.ini`.
 
 ### Slow first render
 
-Normal — data loading (~30s for large catalogs). Subsequent renders use disk cache (~5–10x faster).
+Normal — data loading (~30s for large catalogs). Later starts read the catalogs
+from the Parquet disk cache (see [DISK_CACHING_IMPLEMENTATION.md](DISK_CACHING_IMPLEMENTATION.md)).
+If no `~/.cache/clusterviz/*.parquet` files appear, pyarrow is missing from the
+environment (`python -c "import pyarrow"`); the app then caches as pickle.
+
+### Slow cold start on the cluster (imports take a minute)
+
+On a node whose page cache is cold, the venv and stdlib are read file by file from
+network storage (Ceph). The launcher prefetches the startup packages in parallel
+to warm the cache; the app prints its real import/init timings. Prefetch can be
+turned off with `CLUSTERVIZ_NO_PREFETCH=1`.
+
+### Sky map is slow or shows a density map instead of clusters
+
+Large catalogs are culled to the view and replaced by a density map when the
+visible area holds more than `density_threshold` clusters; zoom in to get
+markers. Tune `[view]` in `config.ini` (see
+[VIEWPORT_OPTIMIZATION.md](VIEWPORT_OPTIMIZATION.md)).
 
 ### CATRED render button stays disabled
 
 Zoom in until the viewport is smaller than 2°×2° in both RA and Dec.
+
+---
+
+## Browser Errors
+
+### `IndexError: list index out of range` at `inputs_state[ind]` after an update
+
+**Symptom**: a button (e.g. Generate mask cutout) fails and the server log ends
+in Dash's `dispatch` with `inputs_state[ind]` → `IndexError`.
+
+**Cause**: the browser tab was opened before the server was restarted with new
+code. Dash loads each callback's list of inputs once, when the page loads; a stale
+tab sends the old, shorter list.
+
+**Fix**: hard-reload the page (Ctrl+Shift+R / Cmd+Shift+R) after every server
+update.
+
+### `Name or service not known` when the server binds its port
+
+Conda environments export `HOST=x86_64-conda-linux-gnu`, and Dash ≥ 2.16 lets the
+`HOST`/`PORT` environment variables override the bind address. The app now pins
+`HOST`/`PORT` to the chosen values; if you launch Dash code of your own, unset
+`HOST` first.
 
 ---
 

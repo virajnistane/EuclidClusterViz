@@ -22,15 +22,17 @@ Generate MER mosaic image cutouts centered on the selected cluster.
 
 #### **How to Use**
 1. Select a cluster in the main plot
-2. In Cluster Analysis tab, find the "Cutout Generation" section
-3. Click "Generate Cutout" to expand options (or generate with defaults)
-4. Configure parameters:
-   - **Size**: Cutout size in arcminutes (default: 5.0)
-   - **Opacity**: Image transparency 0.0-1.0 (default: 0.8)
-   - **Colorscale**: Choose from Greys, Viridis, Plasma, etc.
-5. Click "Generate Cutout" to create the overlay
-6. Use "Hide Cutouts"/"Show Cutouts" to toggle visibility
-7. Use "Clear All Cutouts" to remove all cutout traces
+2. In the **Cluster Tools** tab, open **Image cutout**
+3. Configure parameters:
+   - **Size**: Cutout size in arcminutes (default: 2.0)
+   - **Opacity**: Image transparency 0.0-1.0 (default: 1.0)
+   - **Colour scale**: viridis, gray or plasma
+4. Click **Generate cutout** to create the overlay
+5. Use **Hide**/**Show** to toggle visibility and **Clear** to remove the cutouts
+
+**Live styling**: once a cutout is on the map, changing **Opacity** or **Colour
+scale** restyles it immediately in the browser, without a server request or a new
+cutout. Hide/Show and Clear also run in the browser.
 
 #### **Use Cases**
 - Visual inspection of cluster environments
@@ -39,9 +41,14 @@ Generate MER mosaic image cutouts centered on the selected cluster.
 - Comparing multiple clusters by generating sequential cutouts
 
 #### **Technical Notes**
-- Cutouts are rendered as image overlays at cluster coordinates
-- Multiple cutouts can be displayed simultaneously
-- Traces are named 'MER-Mosaic cutout' for identification
+- Cutouts are `go.Heatmap` traces cut from the local MER mosaic FITS at the cluster position
+- Traces are named `MER-Mosaic cutout #<n>` for identification
+- Opacity, colour scale and Hide/Show are clientside callbacks in
+  `ClusterModalCallbacks._setup_trace_management_callbacks`; Plotly.js lacks some
+  of the offered scale names, so they are sent as explicit colour lists
+- The cutout lines up with CATRED and with the sidebar's whole-tile mosaic (the
+  tile image is resampled onto an RA/Dec grid; see
+  [MOSAIC_RENDERING_UPGRADE.md](MOSAIC_RENDERING_UPGRADE.md))
 - Cutouts persist across algorithm switches and data updates
 
 ### 2. **CATRED Box Views**
@@ -79,18 +86,21 @@ Load high-resolution catalog data (CATRED) in a box around the selected cluster.
 
 ### 3. **Mask Cutouts**
 
-Generate HEALPix effective coverage cutouts showing survey footprint around clusters.
+Show the HEALPix survey mask in a box around the selected cluster. The cutout is
+built by the **same mechanism as the sidebar's viewport mask** (Mask section →
+"Load Healpix mask for this view"), only over a small box instead of the view.
 
 #### **How to Use**
 1. Select a cluster in the main plot
-2. In Cluster Analysis tab, find the "Mask Cutout" section
-3. Click "Generate Mask Cutout" to expand options
-4. Configure parameters:
-   - **Size**: Cutout size in degrees (default: 0.2°)
-   - **Opacity**: Mask transparency 0.0-1.0 (default: 0.6)
-5. Click "Generate Mask Cutout" to create the overlay
-6. Use "Hide Mask Cutouts"/"Show Mask Cutouts" to toggle visibility
-7. Use "Clear All Mask Cutouts" to remove all mask traces
+2. In the **Cluster Tools** tab, open **Healpix mask cutout**
+3. Configure parameters:
+   - **Size**: Box size in arcminutes (default: 2.0); the box is size × size
+     around the cluster
+   - **Opacity**: Mask transparency 0.0-1.0 (default: 0.3)
+   - **Mask type** and **Show inverted** come from the sidebar's **Mask**
+     section (Corrected Mask / Eff. Coverage Mask; inverted shows uncovered sky)
+4. Click **Generate mask cutout** to create the overlay; generating again replaces it
+5. Use **Hide**/**Show** to toggle visibility and **Clear** to remove it
 
 #### **Use Cases**
 - Assessing survey coverage quality in cluster regions
@@ -99,10 +109,19 @@ Generate HEALPix effective coverage cutouts showing survey footprint around clus
 - Comparing coverage across different clusters
 
 #### **Technical Notes**
-- Displays HEALPix pixels (NSIDE=16384) showing effective weight
-- Color-coded by coverage quality (viridis colormap)
-- Traces are named 'Mask overlay (cutout)' for identification
-- Independent from global mask overlay controls
+- Displays HEALPix pixels (NSIDE=16384, NESTED) with the sidebar mask's look:
+  white fill whose alpha follows the weight, plus a Greys colour bar
+- Built by `MOSAICHandler.mask_overlay_traces_for_box`, the same function the
+  sidebar uses; `create_mask_overlay_cutout_trace` only computes the box
+  (Dec ± size/120°, RA widened by 1/cos Dec)
+- No MER mosaic FITS is loaded, and clusters near MER tile edges work (the
+  Eff. Coverage mask loops over every tile the box touches)
+- **Separate layer**: every cutout trace name starts with `Cutout `
+  (`CUTOUT_MASK_PREFIX` in `trace_registry.py`), e.g. `Cutout Mask overlay bin 3`,
+  `Cutout Mask Colorbar`. The modal's Hide/Clear only touch these; the sidebar's
+  Hide/Delete/opacity only touch the viewport mask; re-rendering the viewport
+  mask keeps the cutout
+- Shown in Aladin view too (`Cutout Mask aladin moc` carries the pixel IDs)
 
 ## Workflow Best Practices
 
@@ -154,9 +173,11 @@ Generate HEALPix effective coverage cutouts showing survey footprint around clus
 ## Technical Implementation
 
 ### **Trace Naming Conventions**
-- **Mosaic cutouts**: `'MER-Mosaic cutout'`
+- **Mosaic cutouts**: `'MER-Mosaic cutout #<n>'`
 - **CATRED boxes**: `'CATRED {masked/unmasked} - Boxed'`
-- **Mask cutouts**: `'Mask overlay (cutout)'`
+- **Mask cutouts**: viewport-mask names with a `'Cutout '` prefix
+  (`'Cutout Mask overlay bin <i>'`, `'Cutout Inverted mask overlay bin <i>'`,
+  `'Cutout Mask aladin moc'`, `'Cutout Mask Colorbar'`)
 
 ### **Trace Preservation**
 All cluster analysis traces are preserved during:
@@ -228,7 +249,11 @@ Bottom → Top:
 - Click CATRED box points to view photometric redshift PDFs
 - PHZ plot updates automatically with point information
 - Uses `pointNumber` for accurate point identification
-- Works for both global and box CATRED traces
+- Works for global CATRED, CATRED box and Members traces, including after
+  members are loaded (the click data is looked up in whichever store holds the
+  clicked trace)
+- Clicks on cluster markers open the cluster details only; they do not switch
+  to the p(z) tab
 
 ### **Main Plot Filtering**
 - SNR and redshift filters apply to cluster selection

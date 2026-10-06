@@ -88,6 +88,25 @@ catred_fileinfo_csv = catred_fileinfo.csv
 catred_polygons_pkl = catred_polygons_by_tileid.pkl
 ```
 
+#### `[view]` - Sky Map and Globe
+
+How much of a large catalog is sent to the browser, and when the globe and the
+2-D map hand over to each other. Read by `Config.get_view_settings()`; the
+defaults below are those in `config.ini`.
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `cull_min_clusters` | 5000 | Catalogs with more merged clusters than this are culled to the area around the view; smaller ones are sent whole |
+| `max_points_sent` | 50000 | Most clusters per request; the server picks the widest margin around the view (one view width, a quarter, or none) that stays under this |
+| `density_threshold` | 50000 | Above this many clusters in the visible area, a density map replaces the markers |
+| `nside_max` | 1024 | Globe: HEALPix resolution of the finest density cells (power of 2; 1024 ≈ 3.4′) |
+| `globe_max_cells` | 3000 | Globe: most density cells drawn; the cell size follows the zoom |
+| `map_enter_fov` | 8 | Zooming the globe in below this field of view (deg) switches to the 2-D map |
+| `globe_enter_fov` | 15 | Zooming the map out past this field of view (deg) switches to the globe; kept ≥ 1.5 × `map_enter_fov` |
+
+See [VIEWPORT_OPTIMIZATION.md](VIEWPORT_OPTIMIZATION.md) and
+[VIEW_MODE_SWITCHING_GUIDE.md](VIEW_MODE_SWITCHING_GUIDE.md).
+
 ### Variable Interpolation
 
 The configuration system supports variable interpolation:
@@ -267,6 +286,9 @@ If configuration fails, tools fall back to hardcoded paths:
 
 # Combine options
 ./launch.sh --config custom.ini --test-dependencies
+
+# Clear the on-disk caches (~/.cache/clusterviz, clusterviz_bg, clusterviz_state) and exit
+./launch.sh --clear-cache
 ```
 
 ### When to Use Each Option

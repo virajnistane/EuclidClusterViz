@@ -1,17 +1,18 @@
-## View Mode Switching Guide
+# View Mode Switching Guide
 
-ClusterViz provides two visualization modes: **Standard (Plotly)** and **Aladin View**.
+ClusterViz provides three visualization modes: **Standard (Plotly)**, **Globe** and **Aladin View**.
 The toggle sits in the header above the main plot.
 
 ---
 
 ## The Toggle
 
-`esasky_view.py → create_view_mode_toggle()` renders a `dbc.ButtonGroup` with two buttons:
+`esasky_view.py → create_view_mode_toggle()` renders a `dbc.ButtonGroup` with three buttons:
 
 | Button ID | Label | Default state |
 |-----------|-------|---------------|
 | `view-mode-plotly-btn` | Standard View | Active (outline=False) |
+| `view-mode-globe-btn` | Globe | Enabled, outline=True |
 | `view-mode-aladin-btn` | Aladin View | Disabled, outline=True |
 
 The active mode is persisted in `dcc.Store(id="view-mode-store", data="plotly")`.
@@ -33,6 +34,37 @@ Default mode. Renders the full interactive `dcc.Graph(id="cluster-plot")` scatte
 The sidebar is a fixed ~300–380 px column beside the plot on desktop (stacked above it below
 992 px). All sidebar controls (Render clusters, Apply filters, Mask and Mosaic sections) apply to
 this mode.
+
+---
+
+## Globe Mode
+
+A whole-sky overview (`src/visualization/sky_overview.py`, callbacks in
+`callbacks/sky_overview_callbacks.py`), drawn as an orthographic projection in
+`dcc.Graph(id="sky-overview")`:
+
+- **Cluster density** of the filtered catalog as HEALPix cells. The density is
+  aggregated on the server, so nothing per cluster is sent and the globe stays
+  light for any catalog size. At most `globe_max_cells` cells are drawn; the cell
+  size follows the zoom (finest `nside_max`, coarsest nside 8).
+- **CL-tile CORE outlines** in a neutral colour.
+- RA increases to the left, as on the sky.
+
+The globe is rebuilt when the view is entered, after each **Render** / **Apply
+filters**, and when a zoom or rotation needs another resolution or area.
+
+### One zoomable sky (automatic handoff)
+
+- Zooming the globe in below `map_enter_fov` (default 8°) switches to the 2-D map
+  at the same place.
+- Zooming the map out past `globe_enter_fov` (default 15°), or clicking
+  **Globe**, switches to the globe centred where the map was.
+- A Render of a catalog wider than the map threshold starts on the globe.
+- `globe_enter_fov` is kept at least 1.5× `map_enter_fov` so the views never
+  flip back and forth.
+
+Settings live in `config.ini` `[view]` (`nside_max`, `globe_max_cells`,
+`map_enter_fov`, `globe_enter_fov`).
 
 ---
 

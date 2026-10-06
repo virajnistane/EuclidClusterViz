@@ -70,15 +70,17 @@ The full path from source data to a visible mosaic tile is:
    - Flipped left-right (FLIP_LEFT_RIGHT) so that column 0 = minimum RA.
    ESA cutouts are already normalised inside `_load_esa_cutout_by_mertile` and skip this step.
 
-6. **Coordinate bounds** (`_calculate_image_bounds_direct`). The processed image corners are mapped back to RA/Dec using the scaled WCS to produce `ra_min`, `ra_max`, `dec_min`, `dec_max`.
+6. **Coordinate bounds** (`_tile_radec_bounds`, local FITS). The full-resolution WCS is sampled along all four **pixel-edge** borders (−0.5 … n−0.5, 64 points per edge; edges, not only corners, because lines of constant Dec curve between the corners) to get the RA/Dec box `ra_min`, `ra_max`, `dec_min`, `dec_max`. RA is unwrapped around CRVAL1 so tiles crossing RA 0/360 give a continuous range. ESA cutouts keep the bounds returned by `_load_esa_cutout_by_mertile`.
 
-7. **PNG encoding** (`create_mosaic_image_trace`). The processed array is double-flipped (`[::-1, ::-1]`) to put row 0 at `dec_max` and column 0 at `ra_max`, matching the `layout.images` anchor convention. Values are scaled to 0–255 uint8, saved as a grayscale PNG with `compress_level=6`, and base64-encoded into a `data:image/png;base64,...` URI.
+7. **Resampling onto an RA/Dec grid** (`_resample_to_radec_grid`, local FITS). A MER tile is a gnomonic (TAN) image about 32′ across; in RA/Dec its pixel grid is a trapezoid, not a rectangle (lines of constant RA converge toward the pole). Stretching the pixels linearly over the RA/Dec box misplaced sources by about 0.5″ at the tile centre, 5″ at the east/west edge midpoints and **about 10″ at the corners** (at Dec ≈ −50°), so the tile did not line up with cluster cutouts or CATRED. The downscaled image is therefore resampled: each output pixel centre (`ra = ra_max − (c+0.5)·dRA`, `dec = dec_max − (r+0.5)·dDec`) is mapped through `wcs_world2pix` and sampled bilinearly (`scipy.ndimage.map_coordinates`). Output size is unchanged (~1920 × 1920); the resample adds about 0.5–1 s per tile. Pixels outside the tile footprint (slivers in the box corners) become transparent.
 
-8. **Layout image spec** returned as a `dict` with fields `source`, `xref="x"`, `yref="y"`, `x=ra_max`, `y=dec_max`, `sizex`, `sizey`, `sizing="stretch"`, `opacity`, `layer="below"`, and `name` prefixed with `"Mosaic"`.
+8. **PNG encoding** (`create_mosaic_image_trace`). Row 0 is `dec_max` and column 0 is `ra_max`, matching the `layout.images` anchor convention (ESA cutouts get the same orientation by flipping `[::-1, ::-1]`). Values are scaled to 0–255 uint8 and saved as a PNG with `compress_level=6` — grayscale (`L`), or grayscale + alpha (`LA`) when part of the box is outside the footprint — then base64-encoded into a `data:image/png;base64,...` URI.
 
-9. **Injection into figure**. The callback sets `figure["layout"]["images"]`, replacing any existing entries whose `name` starts with `"Mosaic"` and appending the new specs.
+9. **Layout image spec** returned as a `dict` with fields `source`, `xref="x"`, `yref="y"`, `x=ra_max`, `y=dec_max`, `sizex`, `sizey`, `sizing="stretch"`, `opacity`, `layer="below"`, and `name` prefixed with `"Mosaic"`.
 
-10. **Live adjustments** (clientside). The opacity slider, visibility toggle, and delete button all operate on `figure.layout.images` in the browser without server round-trips.
+10. **Injection into figure**. The callback sets `figure["layout"]["images"]`, replacing any existing entries whose `name` starts with `"Mosaic"` and appending the new specs.
+
+11. **Live adjustments** (clientside). The opacity slider, visibility toggle, and delete button all operate on `figure.layout.images` in the browser without server round-trips.
 
 ## Image Source Radio Selector: Mosaic vs. Aladin
 
