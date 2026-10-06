@@ -17,6 +17,7 @@ echo ""
 
 # Create the environment, or re-sync it when uv.lock/pyproject.toml changed (a
 # fast no-op otherwise). CLUSTERVIZ_NO_AUTOSYNC=1 skips the check.
+SYNC_START=$(date +%s.%N)
 if [ -z "${CLUSTERVIZ_NO_AUTOSYNC:-}" ]; then
     if ! "$PROJECT_DIR/setup_venv.sh" --if-stale; then
         echo "✗ Virtual environment setup failed"
@@ -26,6 +27,7 @@ elif [ ! -d "$PROJECT_DIR/.venv" ]; then
     echo "✗ Virtual environment not found (CLUSTERVIZ_NO_AUTOSYNC is set): run ./setup_venv.sh"
     exit 1
 fi
+SYNC_TIME=$(echo "$(date +%s.%N) - $SYNC_START" | bc)
 
 # Activate virtual environment
 echo "Activating virtual environment..."
@@ -37,7 +39,7 @@ VENV_TIME=$(echo "$VENV_END - $VENV_START" | bc)
 # Reject stale environments created before the Python 3.14 minimum.
 if ! python -c "import sys; sys.exit(sys.version_info < (3, 14))"; then
     echo "✗ Python 3.14 or newer is required in $VENV_DIR"
-    echo "   Remove the old virtual environment and rerun setup_venv.sh"
+    echo "   Rebuild it: ./setup_venv.sh --recreate"
     exit 1
 fi
 
@@ -50,44 +52,11 @@ else
     exit 1
 fi
 
-# Check for critical dependencies and install if missing
-echo ""
-echo "Checking critical dependencies..."
-DEPS_START=$(date +%s.%N)
-
-
-
-# Check other critical modules
-IMPORT_START=$(date +%s.%N)
-# Cheap presence check (no heavy imports); the app itself imports them right after
-python -c "
-import importlib.util, sys
-mods = ['plotly', 'pandas', 'numpy', 'astropy', 'shapely', 'dash']
-missing = [m for m in mods if importlib.util.find_spec(m) is None]
-if missing:
-    print('✗ Missing dependency: ' + ', '.join(missing))
-    sys.exit(1)
-print('✓ All core dependencies available')
-"
-
-if [ $? -ne 0 ]; then
-    echo "Installing missing dependencies from pyproject.toml..."
-    export UV_LINK_MODE=copy
-    uv pip install -e "$PROJECT_DIR"
-    if [ $? -ne 0 ]; then
-        echo "✗ Failed to install dependencies"
-        echo "   Please run: pip install -e $PROJECT_DIR"
-        exit 1
-    fi
-    echo "✓ Dependencies installed"
+# No separate dependency check: setup_venv.sh --if-stale (above) keeps .venv in sync
+# with uv.lock and import-tests it after each sync
+if [ -n "${CLUSTERVIZ_NO_AUTOSYNC:-}" ]; then
+    echo "Note: CLUSTERVIZ_NO_AUTOSYNC is set; if the app fails to import, run ./setup_venv.sh"
 fi
-IMPORT_END=$(date +%s.%N)
-IMPORT_TIME=$(echo "$IMPORT_END - $IMPORT_START" | bc)
-echo "   [import check time: ${IMPORT_TIME}s]"
-
-DEPS_END=$(date +%s.%N)
-DEPS_TIME=$(echo "$DEPS_END - $DEPS_START" | bc)
-echo "   [Total dependency check time: ${DEPS_TIME}s]"
 
 # Warm the page cache for the files the app imports at startup. The venv (Ceph) and the
 # uv-managed stdlib (/pbs/home) sit on network filesystems: a cold import reads ~2,700
@@ -138,7 +107,7 @@ echo ""
 echo "=== Launcher Overhead Summary (app import/init timed separately below) ==="
 echo "Launcher total: ${TOTAL_TIME}s"
 echo "  - Venv activation: ${VENV_TIME}s"
-echo "  - Dependency checks: ${DEPS_TIME}s"
+echo "  - Venv check/sync: ${SYNC_TIME}s"
 echo "  - Module prefetch: ${PREFETCH_TIME}s"
 echo ""
 
