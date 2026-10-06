@@ -4,6 +4,7 @@ The cutout is the viewport mask built over a size x size arcmin box around the
 cluster, with trace names prefixed by CUTOUT_MASK_PREFIX so it is a separate layer.
 """
 
+import sys
 import unittest
 from unittest import mock
 
@@ -105,6 +106,33 @@ class TestMaskCutout(unittest.TestCase):
         self.assertIn("Mask aladin moc", names)
         self.assertIn("Mask Colorbar", names)
         self.assertFalse(any(n.startswith(CUTOUT_MASK_PREFIX) for n in names))
+
+
+class TestGroupedMaskColours(unittest.TestCase):
+    """Colour-scale bins use Plotly scales; matplotlib is not a dependency."""
+
+    def setUp(self):
+        self.pixels, _ = _footprint()
+        # One pixel per weight bin end: lowest and highest bin both used
+        self.weights = np.array([0.85, 0.9, 0.95, 0.97, 1.0], np.float32)
+
+    def _fills(self, colorscale):
+        traces = _handler()._create_grouped_mask_traces(self.pixels, self.weights, 0.5, colorscale)
+        return {t.name: t.fillcolor for t in traces}
+
+    def test_named_scale_without_matplotlib(self):
+        with mock.patch.dict(sys.modules, {"matplotlib": None}):
+            fills = self._fills("viridis")
+        self.assertTrue(all(f.startswith("rgb(") for f in fills.values()), fills)
+        self.assertEqual(fills["Mask overlay bin 0"], "rgb(68, 1, 84)")      # viridis start
+        self.assertEqual(fills["Mask overlay bin 11"], "rgb(253, 231, 37)")  # viridis end
+
+    def test_unknown_scale_falls_back_to_viridis(self):
+        self.assertEqual(self._fills("nope"), self._fills("viridis"))
+
+    def test_reversed_scale(self):
+        fills = self._fills("Greys_r")
+        self.assertEqual(fills["Mask overlay bin 0"], "rgb(0, 0, 0)")
 
 
 if __name__ == "__main__":

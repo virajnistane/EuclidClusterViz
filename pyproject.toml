@@ -31,7 +31,6 @@ dependencies = [
     "astropy>=5.0",
     "healpy>=1.16.0",
     "scipy>=1.16.0",
-    "matplotlib>=3.10.0",
     "shapely>=2.1.2,<3.0",
     "dash[diskcache,compress]==2.18.2",
     "dash-bootstrap-components==1.5.0",
@@ -55,6 +54,13 @@ dev = [
     "ipykernel>=6.31.0",
 ]
 
+# Notebooks (notebooks/*.ipynb). Kept out of the runtime and dev dependencies: with
+# matplotlib installed, `import healpy` also loads matplotlib.pyplot (slow on network storage)
+notebooks = [
+    "matplotlib>=3.10.0",
+    "ipykernel>=6.31.0",
+]
+
 # Testing dependencies
 test = [
     "pytest>=8.4.2",
@@ -71,6 +77,7 @@ docs = [
 
 # All optional dependencies combined
 all = [
+    "matplotlib>=3.10.0",
     "pytest>=8.4.2",
     "black>=25.9.0",
     "flake8>=7.3.0",

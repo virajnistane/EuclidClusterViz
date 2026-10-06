@@ -198,6 +198,7 @@ The EDEN-3.1 environment lacks several critical modules (`healpy`, `dash`, `plot
 |---------|--------|
 | `./setup_venv.sh` | Create or update `.venv` (installs uv if needed) |
 | `./setup_venv.sh --dev` / `--docs` / `--test` | Also install that extra (pytest/black/mypy, Sphinx, coverage) |
+| `./setup_venv.sh --notebooks` | Also install matplotlib and ipykernel, for `notebooks/*.ipynb` |
 | `./setup_venv.sh --no-extras` | Drop all extras |
 | `./setup_venv.sh --recreate` | Delete `.venv` and rebuild it from scratch |
 
@@ -570,6 +571,8 @@ pip install -r requirements.txt
 - `flask-compress` (via `dash[compress]`) - gzip/brotli responses
 
 Versions: Plotly 6.3 and Dash 2.18 (Plotly 6 sends numpy arrays to the browser as typed binary).
+
+`matplotlib` is not a dependency of the app (colour scales come from Plotly). It is only needed by the notebooks: `./setup_venv.sh --notebooks`. Keep it out of the app's environment otherwise: when it is installed, `import healpy` also loads `matplotlib.pyplot`, which roughly doubles healpy's import time and is very slow on a cold node.
 
 ## 🎛️ Command-Line Options
 

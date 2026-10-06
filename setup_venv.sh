@@ -7,6 +7,7 @@
 #   ./setup_venv.sh --dev           # Also install the dev extra (pytest, black, mypy, ...)
 #   ./setup_venv.sh --docs          # Also install the docs extra (sphinx, myst-parser, ...)
 #   ./setup_venv.sh --test          # Also install the test extra (pytest-cov, pytest-mock)
+#   ./setup_venv.sh --notebooks     # Also install the notebooks extra (matplotlib, ipykernel)
 #   ./setup_venv.sh --no-extras     # Drop all extras
 #   ./setup_venv.sh --if-stale      # Do nothing when .venv already matches uv.lock/pyproject.toml
 #   ./setup_venv.sh --recreate      # Delete .venv and rebuild it from scratch
@@ -19,7 +20,7 @@ set -euo pipefail
 PYTHON_VERSION="3.14"
 
 usage() {
-    sed -n '3,15p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '3,16p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 IF_STALE=false
@@ -35,6 +36,7 @@ while [[ $# -gt 0 ]]; do
         --dev) REQUESTED_EXTRAS+=(dev); shift ;;
         --docs) REQUESTED_EXTRAS+=(docs); shift ;;
         --test) REQUESTED_EXTRAS+=(test); shift ;;
+        --notebooks) REQUESTED_EXTRAS+=(notebooks); shift ;;
         --all-extras) REQUESTED_EXTRAS+=(dev docs test); shift ;;
         --no-extras) NO_EXTRAS=true; shift ;;
         --if-stale) IF_STALE=true; shift ;;
@@ -198,7 +200,7 @@ import importlib, sys, time
 # network storage, and the app never needs them
 sys.modules.setdefault('IPython', None)
 for name in ('numpy', 'astropy.io.fits', 'pandas', 'scipy', 'shapely.geometry', 'PIL',
-             'matplotlib', 'healpy', 'plotly', 'dash', 'dash_bootstrap_components'):
+             'healpy', 'plotly', 'dash', 'dash_bootstrap_components'):
     t0 = time.perf_counter()
     print(f'  {name:<26}', end='', flush=True)
     importlib.import_module(name)

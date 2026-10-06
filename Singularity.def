@@ -27,7 +27,6 @@ From: python:3.14-slim
         "astropy>=5.0" \
         "healpy>=1.16.0" \
         "scipy>=1.16.0" \
-        "matplotlib>=3.10.0" \
         "shapely>=2.1.2,<3.0" \
         "dash[diskcache]==2.14.1" \
         "dash-bootstrap-components==1.5.0" \

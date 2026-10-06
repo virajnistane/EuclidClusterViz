@@ -18,7 +18,9 @@ from urllib.request import urlopen
 import base64
 
 import numpy as np
+import plotly.colors as pc
 import plotly.graph_objs as go
+from plotly.exceptions import PlotlyError
 from astropy import wcs
 from astropy.io import fits
 from astropy.table import Table
@@ -1592,14 +1594,13 @@ class MOSAICHandler:
         traces: List[go.Scatter] = []
         white_alpha_mode = colorscale == "white_alpha"
         if not white_alpha_mode:
-            # Imported here, not at module top: matplotlib is slow to load on a cold start
-            from matplotlib import colormaps
-
+            # Plotly's named scales ("viridis", "Viridis", "Greys_r", ...); matplotlib is
+            # not a dependency
             try:
-                colormap = colormaps[colorscale]
-            except KeyError:
+                scale = pc.get_colorscale(colorscale)
+            except PlotlyError:
                 print(f"Warning: Invalid colorscale '{colorscale}', defaulting to 'viridis'")
-                colormap = colormaps["viridis"]
+                scale = pc.get_colorscale("viridis")
 
         for bin_idx in range(n_bins):
             if grouped_count[bin_idx] == 0:
@@ -1609,8 +1610,7 @@ class MOSAICHandler:
             if white_alpha_mode:
                 fillcolor = f"rgba(255,255,255,{bin_norm:.3f})"
             else:
-                color = colormap(bin_norm)
-                fillcolor = f"rgba({int(color[0]*255)},{int(color[1]*255)},{int(color[2]*255)},1)"
+                fillcolor = pc.sample_colorscale(scale, [bin_norm])[0]
             traces.append(
                 go.Scatter(
                     x=grouped_x[bin_idx],
