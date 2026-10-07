@@ -58,46 +58,31 @@ if [ -n "${CLUSTERVIZ_NO_AUTOSYNC:-}" ]; then
     echo "Note: CLUSTERVIZ_NO_AUTOSYNC is set; if the app fails to import, run ./setup_venv.sh"
 fi
 
-# Warm the page cache for the files the app imports at startup. The venv (Ceph) and the
-# uv-managed stdlib (/pbs/home) sit on network filesystems: a cold import reads ~2,700
-# modules one file at a time (~80 s). Reading them first in parallel turns that into a
-# few large concurrent batches. Disable with CLUSTERVIZ_NO_PREFETCH=1.
-# Package list from `python -X importtime` of cluster_dash_app (top-level modules only).
-PREFETCH_PKGS="astropy astropy_iers_data erfa pandas numpy dash dash_bootstrap_components
-    plotly _plotly_utils narwhals flask werkzeug jinja2 markupsafe click blinker itsdangerous
-    PIL requests urllib3 charset_normalizer idna certifi yaml pyparsing dateutil pytz psutil
-    diskcache packaging importlib_metadata zipp platformdirs typing_extensions.py"
-
-prefetch_imports() {
-    local site_packages stdlib python_home p
-    local targets=()
-    site_packages=$(echo "$VIRTUAL_ENV"/lib/python3.*/site-packages)
-    python_home=$(sed -n 's/^home = //p' "$VIRTUAL_ENV/pyvenv.cfg")
-    stdlib=$(echo "$python_home"/../lib/python3.*)
-
-    for p in $PREFETCH_PKGS; do
-        [ -e "$site_packages/$p" ] && targets+=("$site_packages/$p")
-    done
-    [ -d "$stdlib" ] && targets+=("$stdlib")
-    [ ${#targets[@]} -eq 0 ] && return
-
-    # Test suites are never imported at startup and are a large share of the files.
-    find "${targets[@]}" \
-        \( -name tests -o -name test -o -name idlelib -o -name tkinter -o -name ensurepip \) -prune \
-        -o -type f \( -name '*.py' -o -name '*.pyc' -o -name '*.so' \) -print0 2>/dev/null |
-        xargs -0 -P 32 -n 64 cat > /dev/null 2>&1
+# Background prefetch. The venv (Ceph) and the uv-managed stdlib (/pbs/home) sit on
+# network filesystems, and Python reads each imported file one at a time: a cold start
+# waited ~80 s on those reads. setup_venv.sh writes the exact files the app loads
+# (.pyc, extensions, their shared libraries; in import order) to a manifest; parallel
+# readers fetch them into the page cache while the app starts, never delaying it.
+# CLUSTERVIZ_NO_PREFETCH=1 disables it; CLUSTERVIZ_PREFETCH_JOBS sets the readers (16).
+MANIFEST="$VENV_DIR/.clusterviz-prefetch"
+PREFETCH_INFO="off"
+start_prefetch() {
+    if [ -n "${CLUSTERVIZ_NO_PREFETCH:-}" ]; then
+        return
+    fi
+    if [ ! -s "$MANIFEST" ]; then
+        PREFETCH_INFO="no manifest (run ./setup_venv.sh --manifest)"
+        return
+    fi
+    nice -n 10 xargs -a "$MANIFEST" -d '\n' -P "${CLUSTERVIZ_PREFETCH_JOBS:-16}" -n 32 \
+        cat > /dev/null 2>&1 &
+    PREFETCH_PID=$!
+    # Stop the readers if the app exits first (including Ctrl-C)
+    trap 'kill "$PREFETCH_PID" 2>/dev/null' EXIT
+    PREFETCH_INFO="background, $(wc -l < "$MANIFEST") files"
 }
 
-PREFETCH_TIME=0
-if [ -z "$CLUSTERVIZ_NO_PREFETCH" ]; then
-    echo ""
-    echo "Prefetching Python modules into page cache..."
-    PREFETCH_START=$(date +%s.%N)
-    prefetch_imports
-    PREFETCH_END=$(date +%s.%N)
-    PREFETCH_TIME=$(echo "$PREFETCH_END - $PREFETCH_START" | bc)
-    echo "   [prefetch: ${PREFETCH_TIME}s]"
-fi
+start_prefetch
 
 # Calculate total launcher time (the app's own import/init time is printed by the app)
 SCRIPT_END=$(date +%s.%N)
@@ -108,7 +93,7 @@ echo "=== Launcher Overhead Summary (app import/init timed separately below) ===
 echo "Launcher total: ${TOTAL_TIME}s"
 echo "  - Venv activation: ${VENV_TIME}s"
 echo "  - Venv check/sync: ${SYNC_TIME}s"
-echo "  - Module prefetch: ${PREFETCH_TIME}s"
+echo "  - Module prefetch: ${PREFETCH_INFO}"
 echo ""
 
 echo "Starting Dash app server..."

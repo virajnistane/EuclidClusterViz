@@ -11,6 +11,7 @@
 #   ./setup_venv.sh --no-extras     # Drop all extras
 #   ./setup_venv.sh --if-stale      # Do nothing when .venv already matches uv.lock/pyproject.toml
 #   ./setup_venv.sh --recreate      # Delete .venv and rebuild it from scratch
+#   ./setup_venv.sh --manifest      # Only rewrite the launcher's prefetch list (after big code changes)
 #
 # The launchers run "--if-stale" before every start, so a pull that changes uv.lock
 # re-syncs the environment once. Set CLUSTERVIZ_NO_AUTOSYNC=1 to skip that check.
@@ -20,11 +21,12 @@ set -euo pipefail
 PYTHON_VERSION="3.14"
 
 usage() {
-    sed -n '3,16p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '3,17p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 IF_STALE=false
 RECREATE=false
+MANIFEST_ONLY=false
 NO_EXTRAS=false
 REQUESTED_EXTRAS=()
 if [ "${DEV:-}" = "1" ]; then
@@ -41,6 +43,7 @@ while [[ $# -gt 0 ]]; do
         --no-extras) NO_EXTRAS=true; shift ;;
         --if-stale) IF_STALE=true; shift ;;
         --recreate) RECREATE=true; shift ;;
+        --manifest) MANIFEST_ONLY=true; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown option: $1"; usage; exit 1 ;;
     esac
@@ -50,6 +53,8 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="${UV_PROJECT_ENVIRONMENT:-$PROJECT_DIR/.venv}"
 # Records what the last successful sync installed; compared on --if-stale
 STAMP_FILE="$VENV_DIR/.clusterviz-sync"
+# Files the app imports, read in the background by the launcher (run_dash_app_venv.sh)
+MANIFEST_FILE="$VENV_DIR/.clusterviz-prefetch"
 
 if [ ! -f "$PROJECT_DIR/pyproject.toml" ]; then
     echo "✗ pyproject.toml not found in $PROJECT_DIR"
@@ -84,6 +89,15 @@ stamp_value() {
     fi
 }
 
+# Never fatal: without a manifest the launcher just skips the prefetch. .pyc files are
+# written so the list names what Python really reads.
+write_manifest() {
+    env -u PYTHONDONTWRITEBYTECODE "$VENV_DIR/bin/python" \
+        "$PROJECT_DIR/cluster_visualization/scripts/write_prefetch_manifest.py" \
+        "$PROJECT_DIR" "$MANIFEST_FILE" \
+        || echo "Warning: prefetch manifest not written (the app still starts, without prefetch)"
+}
+
 venv_python_ok() {
     [ -x "$VENV_DIR/bin/python" ] \
         && "$VENV_DIR/bin/python" -c "import sys; sys.exit(sys.version_info < (${PYTHON_VERSION/./, }))" 2>/dev/null
@@ -104,8 +118,19 @@ is_up_to_date() {
     [ "$RECREATE" = false ] \
         && venv_python_ok \
         && [ "$(stamp_value hash)" = "$(deps_hash)" ] \
-        && [ "$(stamp_value extras)" = "$EXTRAS" ]
+        && [ "$(stamp_value extras)" = "$EXTRAS" ] \
+        && [ -s "$MANIFEST_FILE" ]
 }
+
+if [ "$MANIFEST_ONLY" = true ]; then
+    if ! venv_python_ok; then
+        echo "✗ No usable Python $PYTHON_VERSION environment in $VENV_DIR; run ./setup_venv.sh first"
+        exit 1
+    fi
+    cd "$PROJECT_DIR"
+    write_manifest
+    exit 0
+fi
 
 if [ "$IF_STALE" = true ] && is_up_to_date; then
     echo "✓ Environment up to date ($VENV_DIR)"
@@ -206,6 +231,9 @@ for name in ('numpy', 'astropy.io.fits', 'pandas', 'scipy', 'shapely.geometry', 
     importlib.import_module(name)
     print(f'{time.perf_counter() - t0:6.1f} s', flush=True)
 "
+
+echo "Writing the launcher's prefetch list..."
+write_manifest
 
 printf 'hash=%s\nextras=%s\n' "$(deps_hash)" "$EXTRAS" > "$STAMP_FILE"
 

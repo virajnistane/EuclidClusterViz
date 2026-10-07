@@ -138,9 +138,19 @@ environment (`python -c "import pyarrow"`); the app then caches as pickle.
 ### Slow cold start on the cluster (imports take a minute)
 
 On a node whose page cache is cold, the venv and stdlib are read file by file from
-network storage (Ceph). The launcher prefetches the startup packages in parallel
-to warm the cache; the app prints its real import/init timings. Prefetch can be
-turned off with `CLUSTERVIZ_NO_PREFETCH=1`.
+network storage (Ceph), because Python imports one file at a time.
+
+- `setup_venv.sh` writes `.venv/.clusterviz-prefetch` after each sync: the exact
+  files the app loads (`.pyc`, extension modules and the shared libraries they
+  use, including healpy/scipy/pyarrow used later), in import order.
+- The launcher reads that list with parallel readers **in the background** while
+  the app starts; it never waits for them.
+- Refresh the list after large code changes: `./setup_venv.sh --manifest`.
+- Turn it off with `CLUSTERVIZ_NO_PREFETCH=1`; change the number of readers with
+  `CLUSTERVIZ_PREFETCH_JOBS` (default 16).
+
+To compare, start once with and once without the prefetch on a cold node and read
+the app's own `Imports done in …` and `App initialized …` lines.
 
 ### Sky map is slow or shows a density map instead of clusters
 

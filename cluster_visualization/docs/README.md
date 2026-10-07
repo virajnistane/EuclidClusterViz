@@ -141,6 +141,7 @@ The virtual environment uses Python 3.14 managed by `uv`, independently of the E
 | `./setup_venv.sh --notebooks` | Also install matplotlib and ipykernel, for `notebooks/*.ipynb` |
 | `./setup_venv.sh --no-extras` | Drop all extras |
 | `./setup_venv.sh --recreate` | Delete `.venv` and rebuild it from scratch |
+| `./setup_venv.sh --manifest` | Only rewrite the launcher's prefetch list (after large code changes) |
 
 The same tasks are available through `make` (run `make` for the list):
 
@@ -210,7 +211,7 @@ The same tasks are available through `make` (run `make` for the list):
 - **Light Marker Payload**: gzip/brotli responses, ID-only customdata and float32 positions (~10× less data per zoom/pan update)
 - **Parquet Disk Cache**: Merged catalog, tile rows and members are cached as memory-mapped Parquet (pyarrow); pickle fallback without pyarrow
 - **Members Catalog on Demand**: Loaded on the first Members click with only the needed columns, sorted for binary-search lookup and shared by all algorithms
-- **Fast Cold Start**: Launcher prefetches startup packages to warm the page cache on network storage; default data preloads in the background once the port is open
+- **Fast Cold Start**: While the app starts, the launcher reads the exact files it imports (a manifest written by `setup_venv.sh`) into the page cache in the background; default data preloads in the background once the port is open
 - **Layered Rendering**: Optimized trace ordering (polygons → mosaics → mask overlays → CATRED → clusters)
 - **Preserved State**: Zoom levels and filter settings maintained during updates
 - **Efficient Caching**: Smart data caching with trace preservation for smooth interactions
@@ -846,7 +847,7 @@ export PYTHONPATH="${PYTHONPATH}:/path/to/cluster_visualization"
 ### **Browser & Updates**
 - **`IndexError` at `inputs_state[ind]` after an update**: the tab was opened before the server restarted with new code. Hard-reload the page (Ctrl+Shift+R).
 - **`Name or service not known` on bind**: conda sets `HOST=x86_64-conda-linux-gnu`; the app now pins `HOST`/`PORT` itself.
-- **Slow cold start on the cluster**: the launcher prefetches startup packages to warm the page cache on network storage (disable with `CLUSTERVIZ_NO_PREFETCH=1`).
+- **Slow cold start on the cluster**: the launcher prefetches the files listed in `.venv/.clusterviz-prefetch` in the background (refresh the list with `./setup_venv.sh --manifest`; disable with `CLUSTERVIZ_NO_PREFETCH=1`; reader count `CLUSTERVIZ_PREFETCH_JOBS`, default 16).
 - **No `.parquet` files in `~/.cache/clusterviz`**: pyarrow is missing; the app falls back to pickle caching.
 
 ### **Performance Optimization**
