@@ -424,6 +424,7 @@ class MainPlotCallbacks:
                         TraceType.MOSAIC,
                         TraceType.MASK_OVERLAY,
                         TraceType.NED_SPECZ,
+                        TraceType.NED_NEARBY_CATRED,
                         TraceType.MEMBERS,
                     },
                 )
@@ -439,6 +440,7 @@ class MainPlotCallbacks:
                     existing_mosaic_traces=preserved[TraceType.MOSAIC],
                     existing_mask_overlay_traces=preserved[TraceType.MASK_OVERLAY],
                     existing_ned_specz_traces=preserved[TraceType.NED_SPECZ],
+                    existing_ned_nearby_catred_traces=preserved[TraceType.NED_NEARBY_CATRED],
                     threshold=threshold,
                     maglim=maglim,
                     show_unmerged_clusters=show_unmerged_clusters,
