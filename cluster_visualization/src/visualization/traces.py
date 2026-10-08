@@ -928,11 +928,16 @@ class TraceCreator:
         No-op (returns cluster_data unchanged) if the switch is off or no
         NED catalog is configured/loaded.
         """
-        if not filter_active or self.ned_handler is None or not self.ned_handler.is_available():
+        if not filter_active:
+            return cluster_data
+        if self.ned_handler is None or not self.ned_handler.is_available():
+            status = getattr(self.ned_handler, "status", "no NED handler")
+            print(f"Warning: NED spec-z filter is on but no catalog is loaded ({status}); not applied")
             return cluster_data
 
         try:
             mask = np.isin(cluster_data["ID_UNIQUE_CLUSTER"], self.ned_handler.get_unique_cluster_ids())
+            print(f"NED spec-z filter: {len(cluster_data)} -> {int(mask.sum())} merged clusters")
             return cluster_data[mask]
         except Exception as e:
             print(f"Error applying NED spec-z filtering: {e}")

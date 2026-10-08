@@ -69,8 +69,15 @@ from shapely.geometry import Polygon
 
 # Create a simple test
 def test_get_radec_mertile():
-    # Import after mocking
-    sys.modules["astropy.io.fits"] = fits_mock
+    # Import after mocking; patch.dict restores sys.modules afterwards so the stub
+    # does not leak into later tests that read real FITS files
+    from unittest import mock
+
+    with mock.patch.dict(sys.modules, {"astropy.io.fits": fits_mock}):
+        _run_get_radec_mertile()
+
+
+def _run_get_radec_mertile():
     from cluster_dash_app import ClusterDashApp  # type: ignore
 
     app = ClusterDashApp()

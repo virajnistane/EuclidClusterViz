@@ -585,6 +585,20 @@ class MainPlotCallbacks:
             ned_specz_filter=bool(ned_specz_filter),
         )
 
+    def _count_selected(self, data, kw, fallback):
+        """Merged clusters passing every filter, as on the map (same rows the globe counts).
+
+        SNR, redshift, richness, the uploaded ID list and the NED spec-z filter all
+        apply; ``fallback`` (an SNR/redshift-only count) is used without a TraceCreator.
+        """
+        if self.trace_creator is None:
+            return fallback
+        try:
+            return int(len(self.trace_creator.selected_clusters(data, **kw)))
+        except Exception as e:
+            print(f"Warning: filtered cluster count fell back to SNR/redshift only: {e}")
+            return fallback
+
     def _filtered_status(self, algorithm, data, kw, show_polygons, show_mer_tiles, free_aspect_ratio):
         """Status toast with the filtered merged-cluster count for the given filter kwargs."""
         merged = data["data_detcluster_mergedcat"]
@@ -622,6 +636,7 @@ class MainPlotCallbacks:
                 snr_include_missing=kw[f"snr_include_missing_{suffix}"],
                 z_include_missing=kw["z_include_missing"],
             )
+        filtered_merged_count = self._count_selected(data, kw, filtered_merged_count)
 
         return self._create_status_info(
             algorithm,
@@ -1198,6 +1213,31 @@ class MainPlotCallbacks:
                     )
                     snr_lower_display = snr_amico_lower
                     snr_upper_display = snr_amico_upper
+
+                # Count with every filter, as on the map (the counts above are SNR/redshift only)
+                filtered_merged_count = self._count_selected(
+                    data,
+                    dict(
+                        snr_threshold_lower_pzwav=snr_pzwav_lower,
+                        snr_threshold_upper_pzwav=snr_pzwav_upper,
+                        snr_threshold_lower_amico=snr_amico_lower,
+                        snr_threshold_upper_amico=snr_amico_upper,
+                        snr_include_missing_pzwav=snr_include_missing_pzwav,
+                        snr_include_missing_amico=snr_include_missing_amico,
+                        z_threshold_lower=z_lower,
+                        z_threshold_upper=z_upper,
+                        z_include_missing=redshift_include_missing,
+                        richness_threshold_lower=richness_lower,
+                        richness_threshold_upper=richness_upper,
+                        richness_mode=richness_mode,
+                        richness_include_missing=richness_include_missing,
+                        flag_quality_zp=flag_quality_zp,
+                        flag_quality_rs=flag_quality_rs,
+                        idcluster_list=idcluster_list,
+                        ned_specz_filter=bool(ned_specz_filter),
+                    ),
+                    filtered_merged_count,
+                )
 
                 # Create status info
                 status = self._create_status_info(

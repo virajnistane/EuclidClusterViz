@@ -341,8 +341,15 @@ class SidebarSections:
         )
 
     @staticmethod
-    def create_ned_specz_filter_section():
-        """Only clusters with a NED spec-z cross-match (spec-z verification), at the next Apply"""
+    def create_ned_specz_filter_section(available=True, status=None):
+        """Only clusters with a NED spec-z cross-match (spec-z verification), at the next Apply.
+
+        Disabled, with the reason, when the NED catalog did not load.
+        """
+        if available:
+            help_text = f"NED catalog: {status}" if status else "Uses the NED catalog ([paths] ned_specz_fits)"
+        else:
+            help_text = f"Unavailable: NED catalog {status or 'not loaded'}"
         return html.Div(
             [
                 _group_label("Spec-z verification"),
@@ -350,9 +357,10 @@ class SidebarSections:
                     id="ned-specz-filter-switch",
                     label="Only clusters with a NED spec-z match",
                     value=False,
+                    disabled=not available,
                 ),
                 _pending_tag("ned-specz-filter-switch"),
-                _help("Needs the NED catalog ([paths] ned_specz_fits in config.ini)"),
+                _help(help_text),
             ],
             className="control-group",
         )
