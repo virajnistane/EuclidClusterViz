@@ -86,6 +86,25 @@ class TestHealpixAggregation(unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE_HEALPY, "healpy not installed")
+class TestNormalizeView(unittest.TestCase):
+    def test_in_range_view_unchanged(self):
+        self.assertEqual(so.normalize_view({"lon": -52.0, "lat": -28.0, "scale": 2.0}),
+                         {"lon": -52.0, "lat": -28.0, "scale": 2.0})
+
+    def test_past_the_pole_folds_to_the_same_centre(self):
+        def centre(view):
+            lon, lat = math.radians(view["lon"]), math.radians(view["lat"])
+            return (math.cos(lat) * math.cos(lon), math.cos(lat) * math.sin(lon), math.sin(lat))
+
+        for lon, lat in ((-52.0, -97.5), (10.0, 120.0), (170.0, 95.0), (0.0, 270.0), (-179.0, -181.0)):
+            raw = {"lon": lon, "lat": lat, "scale": 1.0}
+            fixed = so.normalize_view(raw)
+            self.assertTrue(-90.0 <= fixed["lat"] <= 90.0, fixed)
+            self.assertTrue(-180.0 <= fixed["lon"] < 180.0, fixed)
+            for a, b in zip(centre(raw), centre(fixed)):
+                self.assertAlmostEqual(a, b, places=9)
+
+
 class TestGeometry(unittest.TestCase):
     def test_cells_are_small_clockwise_rings_with_lon_minus_ra(self):
         import healpy as hp
@@ -187,6 +206,18 @@ class TestGlobeFigure(unittest.TestCase):
         payload = json.dumps(fig.to_plotly_json(), cls=plotly.utils.PlotlyJSONEncoder)
         self.assertIn("bdata", payload)
         self.assertEqual(fig.layout.meta["nside"], summary["nside"])
+
+    def test_view_past_a_pole_does_not_crash(self):
+        # Plotly lets the orthographic rotation go past +-90 (globe dragged over a pole);
+        # healpy rejected it with "THETA is out of range [0,pi]"
+        data = make_data(n=400)
+        for lat in (-97.5, 120.0, 270.0):
+            fig, summary = so.build_sky_overview(
+                data, self.creator, {}, view={"lon": -52, "lat": lat, "scale": 3}
+            )
+            view = fig.layout.meta["view"]
+            self.assertTrue(-90.0 <= view["lat"] <= 90.0, view)
+            self.assertTrue(-180.0 <= view["lon"] < 180.0, view)
 
     def test_view_request_changes_resolution(self):
         data = make_data(n=400)

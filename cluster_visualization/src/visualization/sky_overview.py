@@ -123,6 +123,24 @@ def hpx_counts(pixels: np.ndarray, nside_from: int, nside_to: int) -> Tuple[np.n
     return pix, counts
 
 
+def normalize_view(view: Dict[str, float]) -> Dict[str, float]:
+    """View with lat in [-90, 90] and lon in [-180, 180).
+
+    Plotly does not bound the orthographic rotation: dragging the globe over a pole,
+    or a map -> globe handoff from a map scrolled past Dec +-90, gives lat outside
+    +-90, which healpy rejects. Past a pole the centre is the same point as lat
+    folded back with lon on the other side (lat 100 = lat 80 at lon + 180).
+    """
+    lon, lat = float(view["lon"]), float(view["lat"])
+    lat = (lat + 180.0) % 360.0 - 180.0  # [-180, 180)
+    if lat > 90.0:
+        lat, lon = 180.0 - lat, lon + 180.0
+    elif lat < -90.0:
+        lat, lon = -180.0 - lat, lon + 180.0
+    lon = (lon + 180.0) % 360.0 - 180.0
+    return {**view, "lon": lon, "lat": lat}
+
+
 def visible_pixels(nside: int, rot_lon: float, rot_lat: float, scale: float) -> np.ndarray:
     """NESTED pixels within the (slightly widened) visible disc around the view centre.
 
@@ -340,7 +358,7 @@ def build_sky_overview(
         view = initial
     # The requested view is the browser's current one (after a user zoom or a map -> globe
     # handoff): put it in the layout so the new figure keeps the globe where it is
-    view = {k: float(view[k]) for k in ("lon", "lat", "scale")}
+    view = normalize_view({k: float(view[k]) for k in ("lon", "lat", "scale")})
 
     fine = trace_creator.row_column(
         data, rows, f"hpx{nside_max}",
