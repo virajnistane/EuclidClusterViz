@@ -21,8 +21,12 @@ class AppLayout:
     """Handles the main application layout orchestration"""
 
     @staticmethod
-    def create_layout():
-        """Create and return the complete app layout"""
+    def create_layout(ned_available=True, ned_status=None):
+        """Create and return the complete app layout.
+
+        ned_available / ned_status: whether the NED spec-z catalog loaded, and why not
+        (NEDHandler.status); the spec-z filter switch is disabled when it did not.
+        """
         return dbc.Container(
             [
                 # App bar: title, view mode, help — one compact row
@@ -77,7 +81,9 @@ class AppLayout:
                                             AppLayout._create_main_render_section(),
                                             className="render-bar",
                                         ),
-                                        AppLayout._create_collapsible_sections(),
+                                        AppLayout._create_collapsible_sections(
+                                            ned_available, ned_status
+                                        ),
                                     ],
                                     className="sidebar-panel cv-panel",
                                 )
@@ -516,7 +522,7 @@ class AppLayout:
         )
 
     @staticmethod
-    def _create_collapsible_sections():
+    def _create_collapsible_sections(ned_available=True, ned_status=None):
         """Sidebar sections, ordered by how often they are used"""
         return html.Div(
             [
@@ -538,7 +544,7 @@ class AppLayout:
                         SidebarSections.create_snr_section(),
                         SidebarSections.create_richness_section(),
                         SidebarSections.create_idcluster_section(),
-                        SidebarSections.create_ned_specz_filter_section(),
+                        SidebarSections.create_ned_specz_filter_section(ned_available, ned_status),
                         SidebarSections.create_cluster_matching_section(),
                         SidebarSections.create_apply_filters_bar(),
                     ],

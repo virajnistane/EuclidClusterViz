@@ -328,7 +328,9 @@ class ClusterVisualizationApp:
         self.figure_manager = FigureManager()
 
         # Initialize UI layout
-        self.app.layout = AppLayout.create_layout()
+        self.app.layout = AppLayout.create_layout(
+            ned_available=self.ned_handler.is_available(), ned_status=self.ned_handler.status
+        )
 
         # Initialize callbacks
         self.setup_callbacks()
