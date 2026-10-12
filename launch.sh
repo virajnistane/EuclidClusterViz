@@ -41,6 +41,10 @@ while [[ $# -gt 0 ]]; do
             CONFIG_ARG="$CONFIG_ARG --debug"
             shift
             ;;
+        --log-level)
+            CONFIG_ARG="$CONFIG_ARG --log-level $2"
+            shift 2
+            ;;
         *)
             echo "Unknown option: $1"
             echo "Use --help for usage information"
@@ -61,6 +65,7 @@ if [ "$SHOW_HELP" = true ]; then
     echo "  --test-dependencies      Test all dependencies and exit"
     echo "  --help, -h               Show this help message"
     echo "  --debug                  Run the app in debug mode with hot-reloading"
+    echo "  --log-level LEVEL        Terminal log level: DEBUG, INFO (default), WARNING, ERROR"
     echo ""
     echo "EXAMPLES:"
     echo "  ./launch.sh"

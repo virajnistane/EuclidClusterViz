@@ -39,6 +39,14 @@ while [[ $# -gt 0 ]]; do
             APP_ARGS+=("--debug")
             shift
             ;;
+        --log-level)
+            if [ "$#" -lt 2 ]; then
+                echo "Error: --log-level requires DEBUG, INFO, WARNING or ERROR"
+                exit 1
+            fi
+            APP_ARGS+=("--log-level" "$2")
+            shift 2
+            ;;
         --external|--remote)
             APP_ARGS+=("$1")
             shift
@@ -62,6 +70,7 @@ if [ "$SHOW_HELP" = true ]; then
     echo "  --test-dependencies      Test all dependencies and exit"
     echo "  --help, -h               Show this help message"
     echo "  --debug                  Run the app in debug mode with hot-reloading"
+    echo "  --log-level LEVEL        Terminal log level: DEBUG, INFO (default), WARNING, ERROR"
     echo "  --external               Allow external network access"
     echo "  --remote                 Alias for --external"
     echo ""

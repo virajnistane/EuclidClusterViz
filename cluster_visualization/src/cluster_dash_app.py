@@ -53,7 +53,7 @@ def check_environment():
     """Check required package availability."""
     import importlib.metadata
 
-    required = ["dash", "dash-bootstrap-components", "plotly", "numpy", "pandas", "astropy", "shapely"]
+    required = ["dash", "dash-bootstrap-components", "plotly", "numpy", "pandas", "astropy", "shapely", "loguru"]
     missing = []
     for pkg in required:
         try:
@@ -70,7 +70,6 @@ def check_environment():
         print("")
         return False
 
-    print("✓ All required packages available")
     return True
 
 
@@ -90,6 +89,9 @@ if src_path not in sys.path:
 
 # Import configuration
 from config import get_config
+from loguru import logger
+
+from cluster_visualization.utils.log import LEVELS, setup_logging
 
 
 def parse_arguments():
@@ -122,20 +124,28 @@ Examples:
     parser.add_argument(
         "--debug", action="store_true", help="Run the app in debug mode with hot-reloading"
     )
+    parser.add_argument(
+        "--log-level",
+        type=str.upper,
+        choices=LEVELS,
+        default=None,
+        help="Terminal log level (default: $CLUSTERVIZ_LOG_LEVEL, else INFO)",
+    )
     return parser.parse_args()
 
 
 # Parse arguments first
 args = parse_arguments()
+setup_logging(args.log_level)
 
 # Load configuration with custom file if specified
 if args.config:
-    print(f"📋 Using custom configuration file: {args.config}")
+    logger.info(f"Using configuration file: {args.config}")
     config = get_config(config_file=args.config)
 else:
-    print("📋 Using default configuration (auto-detect)")
+    logger.info("Using default configuration (auto-detect)")
     config = get_config()
-print("✓ Configuration loaded successfully")
+logger.debug("Configuration loaded")
 
 # Add local data modules path
 data_modules_path = os.path.join(os.path.dirname(__file__), "data")
@@ -148,7 +158,7 @@ from data.catred_handler import CATREDHandler
 from data.loader import DataLoader
 from mermosaic import MOSAICHandler
 
-print("✓ Data modules loaded successfully")
+logger.debug("Data modules loaded")
 
 from visualization.figures import FigureManager
 
@@ -161,7 +171,7 @@ from visualization.traces import TraceCreator
 TraceCreator.configure_view(**config.get_view_settings())
 configure_globe(**config.get_globe_settings())
 
-print("✓ Visualization modules loaded successfully")
+logger.debug("Visualization modules loaded")
 
 # Import callback modules
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -174,16 +184,16 @@ from callbacks.phz_callbacks import PHZCallbacks
 from callbacks.sky_overview_callbacks import SkyOverviewCallbacks
 from callbacks.ui_callbacks import UICallbacks
 
-print("✓ Callback modules loaded successfully")
+logger.debug("Callback modules loaded")
 
 # Import UI and core modules
 from ui.layout import AppLayout
 
-print("✓ UI layout module loaded successfully")
+logger.debug("UI layout module loaded")
 
 from core.app import ClusterVisualizationCore
 
-print("✓ Core module loaded successfully")
+logger.debug("Core module loaded")
 
 # Add local utils path
 parent_dir = os.path.dirname(os.path.dirname(__file__))
@@ -198,8 +208,8 @@ from cluster_visualization.utils.colordefinitions import colors_list, colors_lis
 from cluster_visualization.utils.myutils import get_xml_element
 from cluster_visualization.utils.magnitude import RichCLMagLimHandler
 
-print(f"✓ Utilities loaded from: {utils_path}")
-print(f"⏱  Imports done in {time.perf_counter() - _T0:.1f}s")
+logger.debug(f"Utilities loaded from: {utils_path}")
+logger.info(f"Imports done in {time.perf_counter() - _T0:.1f}s")
 
 
 class ClusterVisualizationApp:
@@ -227,8 +237,8 @@ class ClusterVisualizationApp:
 
         compress = importlib.util.find_spec("flask_compress") is not None
         if not compress:
-            print("⚠️  flask-compress not installed: responses are not gzipped "
-                  "(run: uv pip install -e . to get dash[compress])")
+            logger.warning("flask-compress not installed: responses are not gzipped "
+                           "(run: uv pip install -e . to get dash[compress])")
 
         self.app = dash.Dash(
             __name__,
@@ -247,7 +257,7 @@ class ClusterVisualizationApp:
             def serve_hips_tile(filename):
                 return send_from_directory(_hips_dir, filename)
 
-            print(f"✓ HiPS mask tiles served at /hips/mask/ from {_hips_dir}")
+            logger.info(f"HiPS mask tiles served at /hips/mask/ from {_hips_dir}")
 
         # Add custom CSS if file exists
         if os.path.exists(css_path):
@@ -276,11 +286,11 @@ class ClusterVisualizationApp:
                     </body>
                 </html>
                 """
-                print("✓ Custom enhanced styling loaded")
+                logger.debug("Custom enhanced styling loaded")
             except Exception as e:
-                print(f"⚠️  Warning: Could not load custom CSS: {e}")
+                logger.warning(f"Could not load custom CSS: {e}")
         else:
-            print(f"⚠️  Warning: Custom CSS file not found at {css_path}")
+            logger.warning(f"Custom CSS file not found at {css_path}")
 
         # Initialize connection monitoring
         self.connection_monitor = None
@@ -293,27 +303,22 @@ class ClusterVisualizationApp:
         # Initialize data handling modules
         self.data_loader = DataLoader(config)
         self.catred_handler = CATREDHandler()
-        print("✓ Using modular data handlers")
 
         # Initialize mosaic handler
         self.mosaic_handler = MOSAICHandler(config)
-        print("✓ Mosaic handler initialized")
 
         # Initialize visualization modules
         self.trace_creator = TraceCreator(colors_list, colors_list_transparent, self.catred_handler)
         self.figure_manager = FigureManager()
-        print("✓ Using modular visualization handlers")
 
         # Initialize UI layout
         self.app.layout = AppLayout.create_layout()
-        print("✓ Using modular UI layout")
 
         # Initialize callbacks
         self.setup_callbacks()
 
         # Initialize core application manager
         self.core = ClusterVisualizationCore(self.app)
-        print("✓ Using modular core manager")
 
     def setup_callbacks(self):
         """Setup Dash callbacks using modular approach"""
@@ -326,8 +331,6 @@ class ClusterVisualizationApp:
             and ClusterModalCallbacks
         ):
             # Use modular callback setup
-            print("✓ Setting up modular callbacks")
-
             # Initialize callback handlers
             self.main_plot_callbacks = MainPlotCallbacks(
                 self.app,
@@ -382,11 +385,10 @@ class ClusterVisualizationApp:
                 self.app, self.data_loader, self.trace_creator
             )
 
-            print("✓ All modular callbacks initialized")
+            logger.debug("All callbacks registered")
 
         else:
             # All modular components should be available - this should not happen
-            print("❌ ERROR: Modular callback components not available - check imports")
             raise ImportError("Required callback modules not available")
 
     def open_browser(self, port=8050, delay=1.5):
@@ -407,7 +409,6 @@ class ClusterVisualizationApp:
             return self.core.run(host, port, debug, auto_open, external_access)
         else:
             # Core module should always be available - this should not happen
-            print("❌ ERROR: Modular core not available - check imports")
             raise ImportError("Required core module not available")
 
 
@@ -420,12 +421,12 @@ def main():
     debug = args.debug
     
     if external_access:
-        print("🌐 External access enabled (binding to 0.0.0.0)")
+        logger.info("External access enabled (binding to 0.0.0.0)")
     else:
-        print("🔒 Local access only (binding to 127.0.0.1)")
+        logger.debug("Local access only (binding to 127.0.0.1)")
 
     app = ClusterVisualizationApp()
-    print(f"⏱  App initialized {time.perf_counter() - _T0:.1f}s after start")
+    logger.info(f"App initialized {time.perf_counter() - _T0:.1f}s after start")
 
     # Derive per-user ports from UID so multiple users on same node never collide.
     # UID is stable across all cluster nodes (set at account creation).
@@ -454,9 +455,9 @@ def main():
             break
         try:
             app.data_loader.load_data(select_algorithm="PZWAV")
-            print("✓ Preloaded default data (PZWAV)")
+            logger.info("Preloaded default data (PZWAV)")
         except Exception as e:
-            print(f"⚠️  Preload failed (will load on first request): {e}")
+            logger.warning(f"Preload failed (will load on first request): {e}")
 
     threading.Thread(target=_preload_default_data, daemon=True).start()
 
@@ -473,11 +474,11 @@ def main():
                 app.run(port=port, debug=debug, auto_open=False, external_access=external_access)
                 break
             except SystemExit:
-                print(f"Port {port} is busy, trying next port...")
+                logger.warning(f"Port {port} is busy, trying next port...")
                 continue
             except OSError as e:
                 if "Address already in use" in str(e):
-                    print(f"Port {port} is busy, trying next port...")
+                    logger.warning(f"Port {port} is busy, trying next port...")
                     continue
                 else:
                     raise e

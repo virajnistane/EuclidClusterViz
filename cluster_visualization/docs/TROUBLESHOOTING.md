@@ -68,6 +68,19 @@ The app prints this if no browser has connected. Run the `ssh -L` command shown 
 
 ## Environment & Dependencies
 
+### Terminal output: more or less detail
+
+Log lines show time, level and module. The default level is INFO; debug
+messages are hidden.
+
+```bash
+./launch.sh --log-level DEBUG          # everything, including per-render details
+CLUSTERVIZ_LOG_LEVEL=WARNING ./launch.sh   # only warnings and errors
+```
+
+`--log-level` wins over `CLUSTERVIZ_LOG_LEVEL`. The startup box with the SSH
+command is always printed, whatever the level.
+
 ### Missing packages at startup
 
 Launches re-sync `.venv` automatically when `uv.lock` or `pyproject.toml`

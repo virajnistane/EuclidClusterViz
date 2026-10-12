@@ -587,6 +587,7 @@ The application supports several command-line arguments for flexible deployment:
 Options:
   --config FILE            Use custom configuration file
   --test-dependencies      Test all dependencies and exit
+  --log-level LEVEL        Terminal log level: DEBUG, INFO (default), WARNING, ERROR
   --help, -h               Show help message
 
 Direct Python execution:
@@ -596,6 +597,8 @@ Direct Python execution:
     --config PATH    Path to custom configuration file (default: auto-detect config_local.ini or config.ini)
     --external       Allow external access (binds to 0.0.0.0 instead of 127.0.0.1)
     --remote         Alias for --external (for backward compatibility)
+    --log-level LVL  Terminal log level: DEBUG, INFO (default), WARNING, ERROR
+                     (default from $CLUSTERVIZ_LOG_LEVEL)
     --help           Show help message and exit
 ```
 

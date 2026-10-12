@@ -30,4 +30,6 @@ try:
     ]
 
 except ImportError as e:
-    print(f"Warning: Could not import all callback modules: {e}")
+    from loguru import logger
+
+    logger.warning(f"Could not import all callback modules: {e}")

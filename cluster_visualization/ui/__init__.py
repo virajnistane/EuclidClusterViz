@@ -12,6 +12,8 @@ try:
     __all__ = ["AppLayout"]
 
 except ImportError as e:
+    from loguru import logger
+
     # Graceful fallback if modules not available
-    print(f"⚠️  Warning: UI layout modules not fully available: {e}")
+    logger.warning(f"UI layout modules not fully available: {e}")
     __all__ = []

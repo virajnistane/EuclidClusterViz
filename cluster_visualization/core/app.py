@@ -14,6 +14,8 @@ import time
 import webbrowser
 from datetime import datetime, timedelta
 
+from loguru import logger
+
 
 class ConnectionMonitor:
     """Monitor user connections to detect if anyone has connected to the app"""
@@ -31,12 +33,9 @@ class ConnectionMonitor:
         self.connections.add(connection_id)
 
         if is_first_connection:
-            print(f"✓ User successfully connected at {datetime.now().strftime('%H:%M:%S')}")
-            if ip == "127.0.0.1" or ip == "localhost":
-                print("  ✓ SSH tunnel appears to be working correctly")
-            print(f"  Browser: {user_agent or 'unknown'}")
-            print(f"  Connection from: {ip or 'unknown'}")
-            print("")
+            via = " (SSH tunnel works)" if ip in ("127.0.0.1", "localhost") else ""
+            logger.info(f"First browser connected from {ip or 'unknown'}{via}")
+            logger.debug(f"Browser: {user_agent or 'unknown'}")
 
     def check_connections(self, warn_after_minutes=1, bound_port=None):
         """Check if any connections have been made and warn if not"""
@@ -141,7 +140,7 @@ class ClusterVisualizationCore:
                 return response
 
             app.server._debug_log_setup = True
-            print(f"📝 Debug log → {_log_path}")
+            logger.debug(f"Browser debug log: {_log_path}")
 
         # Set up Flask middleware to track connections if not already set up
         if not hasattr(app.server, "_connection_tracking_setup"):
@@ -237,8 +236,7 @@ class ClusterVisualizationCore:
         # Start connection monitoring
         if hasattr(self, "connection_monitor"):
             self.connection_monitor.start_monitoring(bound_port=port)
-            print("Connection monitoring started - will warn if no users connect within 1 minute")
-            print("")
+            logger.debug("Connection monitoring started: warns if no browser connects within 1 minute")
 
         # Dash >= 2.16 lets the HOST / PORT environment variables override the arguments.
         # Conda toolchains export HOST=x86_64-conda-linux-gnu (not a resolvable name),
@@ -296,7 +294,7 @@ class ClusterVisualizationCore:
                         continue
                 if proc_uid == uid:
                     _os.kill(pid, signal.SIGTERM)
-                    print(f"  Freed port {port} (terminated stale PID {pid})")
+                    logger.info(f"Freed port {port} (terminated stale PID {pid})")
                     freed = True
         except Exception:
             pass  # lsof unavailable — fall through to normal port-busy error
@@ -326,7 +324,7 @@ class ClusterVisualizationCore:
             if self._free_port_if_stale(port):
                 time.sleep(0.5)  # allow socket to leave TIME_WAIT after SIGTERM
             if self._port_in_use(bind_host, port):
-                print(f"Port {port} is busy, trying next port...")
+                logger.warning(f"Port {port} is busy, trying next port...")
                 continue
             try:
                 self.run(port=port, **kwargs)
@@ -335,12 +333,12 @@ class ClusterVisualizationCore:
                 # werkzeug prints the error and calls sys.exit(1) on bind failure. Only a
                 # port taken in the meantime is worth retrying; anything else is fatal.
                 if self._port_in_use(bind_host, port):
-                    print(f"Port {port} was taken during startup, trying next port...")
+                    logger.warning(f"Port {port} was taken during startup, trying next port...")
                     continue
-                print(f"Server failed to start on {bind_host}:{port} (see the error above)")
+                logger.error(f"Server failed to start on {bind_host}:{port} (see the error above)")
                 raise
         else:
-            print(f"No free port among {list(ports)}")
+            logger.error(f"No free port among {list(ports)}")
 
     @staticmethod
     def check_command_line_args():

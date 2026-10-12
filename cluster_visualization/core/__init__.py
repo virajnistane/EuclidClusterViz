@@ -12,6 +12,8 @@ try:
     __all__ = ["ClusterVisualizationCore"]
 
 except ImportError as e:
+    from loguru import logger
+
     # Graceful fallback if modules not available
-    print(f"⚠️  Warning: Core modules not fully available: {e}")
+    logger.warning(f"Core modules not fully available: {e}")
     __all__ = []
