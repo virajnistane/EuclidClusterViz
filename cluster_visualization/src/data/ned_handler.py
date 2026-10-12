@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd  # type: ignore[import]
 from astropy.io import fits  # type: ignore[import]
 from astropy.table import Table  # type: ignore[import]
+from loguru import logger
 
 from typing import Any, Optional
 
@@ -50,15 +51,16 @@ class NEDHandler:
                     f"{n_clusters} clusters{self._per_algorithm_counts()}, "
                     f"{len(self.df)} spec-z galaxies"
                 )
-                print(f"✓ NED spec-z catalog: {self.status} ({fits_path})")
+                logger.info(f"NED spec-z catalog: {self.status} ({fits_path})")
             except Exception as e:
                 self.status = f"could not read {fits_path}: {e}"
                 self.df = None
 
         if self.df is None:
             # Configured but unusable is an error worth seeing; not configured is a choice
-            prefix = "⚠️  NED spec-z catalog" if fits_path else "NED spec-z catalog"
-            print(f"{prefix} unavailable: {self.status}. Spec-z filter and display are off.")
+            (logger.warning if fits_path else logger.info)(
+                f"NED spec-z catalog unavailable: {self.status}. Spec-z filter and display are off."
+            )
 
     def _per_algorithm_counts(self) -> str:
         """" (AMICO 91, PZWAV 0)": the filter only keeps clusters of the algorithm on
@@ -130,9 +132,9 @@ class NEDHandler:
 
             combined = pd.concat([existing, new_rows], ignore_index=True)
             Table.from_pandas(combined).write(output_path, overwrite=True)
-            print(
-                f"Debug: NED-nearby-CATRED: wrote {len(new_rows)} match(es) to {output_path} "
+            logger.info(
+                f"NED-nearby CATRED: wrote {len(new_rows)} match(es) to {output_path} "
                 f"({len(combined)} total rows)"
             )
         except Exception as e:
-            print(f"Warning: Failed to update NED-nearby-CATRED output file {output_path}: {e}")
+            logger.warning(f"Failed to update NED-nearby CATRED output file {output_path}: {e}")

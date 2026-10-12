@@ -598,7 +598,7 @@ class MainPlotCallbacks:
         try:
             return int(len(self.trace_creator.selected_clusters(data, **kw)))
         except Exception as e:
-            print(f"Warning: filtered cluster count fell back to SNR/redshift only: {e}")
+            logger.warning(f"Filtered cluster count fell back to SNR/redshift only: {e}")
             return fallback
 
     def _filtered_status(self, algorithm, data, kw, show_polygons, show_mer_tiles, free_aspect_ratio):
