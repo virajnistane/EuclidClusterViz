@@ -19,6 +19,7 @@ import pandas as pd  # type: ignore[import]
 import plotly.graph_objs as go  # type: ignore[import]
 from dash import Input, Output, Patch, State, html
 from loguru import logger
+from cluster_visualization.src.visualization.figures import PHZ_EMPTY_HINT, wrap_hint
 
 from cluster_visualization.src.visualization.sky_overview import catalog_span_deg
 from cluster_visualization.src.visualization.trace_registry import TraceRegistry, TraceType
@@ -1817,7 +1818,7 @@ class MainPlotCallbacks:
 
         return initial_fig, initial_phz_fig, initial_status
 
-    def _create_empty_phz_plot(self, message="Click a CATRED source on the map to see its redshift probability, p(z)"):
+    def _create_empty_phz_plot(self, message=PHZ_EMPTY_HINT):
         """Empty p(z) panel: a centred hint, no axes or grid"""
         empty_phz_fig = go.Figure()
         empty_phz_fig.update_layout(
@@ -1830,7 +1831,7 @@ class MainPlotCallbacks:
             yaxis=dict(visible=False),
             annotations=[
                 dict(
-                    text=message,
+                    text=wrap_hint(message),
                     xref="paper",
                     yref="paper",
                     x=0.5,

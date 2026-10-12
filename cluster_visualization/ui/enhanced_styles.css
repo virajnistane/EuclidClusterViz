@@ -18,6 +18,10 @@
     --cv-pending-bg: #fff3cd;
     --cv-pending-text: #664d03;
     --cv-focus: 0 0 0 3px rgba(43, 87, 151, 0.28);
+    /* Height of the workspace (sidebar, plot, analysis panel): the screen below the
+       52px app bar, its 12px gap and the 16px bottom padding */
+    --cv-app-bar-h: 52px;
+    --cv-workspace-h: max(500px, calc(100vh - var(--cv-app-bar-h) - 1.75rem - 0.25rem));
 }
 
 body {
@@ -30,6 +34,59 @@ body {
 }
 
 /* ------------------------------------------------------------------ Layout */
+
+/* App bar: title left, view mode centred, help right, in one row */
+.app-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.75rem;
+    min-height: var(--cv-app-bar-h);
+    padding: 0.5rem 0;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid var(--cv-border);
+}
+
+.app-title {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--cv-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.app-bar-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.app-bar-help.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 50%;
+}
+
+/* Narrow screens: title on its own line, controls below it */
+@media (max-width: 767.98px) {
+    .app-bar {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+    }
+
+    .app-title {
+        flex: 1 0 100%;
+    }
+}
 
 /* Sidebar: full width when stacked; a fixed, readable column beside the plot */
 @media (min-width: 992px) {
@@ -45,7 +102,7 @@ body {
     }
 
     .sidebar-panel {
-        max-height: calc(100vh - 170px);
+        max-height: var(--cv-workspace-h);
         overflow-y: auto;
     }
 }
@@ -707,8 +764,7 @@ body {
 /* One column, one scroll area: tabs stay put, content scrolls below them */
 .analysis-panel {
     overflow: hidden;
-    height: 75vh;
-    min-height: 420px;
+    height: var(--cv-workspace-h);
     display: flex;
     flex-direction: column;
     border: 1px solid var(--cv-border);

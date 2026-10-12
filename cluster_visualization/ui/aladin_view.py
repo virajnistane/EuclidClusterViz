@@ -33,8 +33,7 @@ def create_aladin_view() -> html.Div:
                 id="aladin-div",
                 style={
                     "width": "100%",
-                    "height": "75vh",
-                    "min-height": "500px",
+                    "height": "var(--cv-workspace-h)",
                     "border-radius": "8px",
                     "overflow": "hidden",
                     "position": "relative",

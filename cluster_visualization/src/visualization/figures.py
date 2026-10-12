@@ -7,8 +7,19 @@ and aspect ratio management for Plotly figures.
 
 from typing import Dict, List, Optional, Tuple, Union
 
+import textwrap
+
 import numpy as np
 import plotly.graph_objs as go
+
+# Empty-state text of the p(z) panel (same for every caller)
+PHZ_EMPTY_HINT = "Click a CATRED source on the map to see its redshift probability, p(z)"
+
+
+def wrap_hint(text: str, width: int = 38) -> str:
+    """Break a centred Plotly annotation into short lines: annotations do not wrap,
+    so long text is clipped on both sides in a narrow panel."""
+    return "<br>".join(textwrap.wrap(text, width)) or text
 
 
 class FigureManager:
@@ -134,7 +145,7 @@ class FigureManager:
             showlegend=False,
             annotations=[
                 dict(
-                    text="Click a CATRED source on the map to see its redshift probability, p(z)",
+                    text=wrap_hint(PHZ_EMPTY_HINT),
                     xref="paper",
                     yref="paper",
                     x=0.5,

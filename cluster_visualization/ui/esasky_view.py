@@ -13,7 +13,7 @@ def create_view_mode_toggle() -> html.Div:
             dbc.ButtonGroup(
                 [
                     dbc.Button(
-                        [html.I(className="fas fa-chart-scatter me-1"), "Standard View"],
+                        [html.I(className="fas fa-map me-1"), "Standard View"],
                         id="view-mode-plotly-btn",
                         color="primary",
                         outline=False,
@@ -53,5 +53,5 @@ def create_view_mode_toggle() -> html.Div:
             ),
             dcc.Store(id="view-mode-store", data="plotly"),
         ],
-        className="d-flex justify-content-center align-items-center mb-2",
+        className="d-flex justify-content-center align-items-center",
     )

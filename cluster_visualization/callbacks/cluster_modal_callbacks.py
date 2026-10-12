@@ -16,6 +16,7 @@ import plotly.colors as pc  # type: ignore[import]
 import plotly.graph_objs as go  # type: ignore[import]
 from typing import Any, Dict, List, Optional, Tuple, cast
 from loguru import logger
+from cluster_visualization.src.visualization.figures import PHZ_EMPTY_HINT, wrap_hint
 from cluster_visualization.src.visualization.trace_registry import (
     CUTOUT_MASK_PREFIX,
     TraceRegistry,
@@ -1613,7 +1614,7 @@ class ClusterModalCallbacks:
 
         return fig
 
-    def _create_empty_phz_plot(self, message="Click on a CATRED data point to view its PHZ_PDF"):
+    def _create_empty_phz_plot(self, message=PHZ_EMPTY_HINT):
         """Create empty PHZ_PDF plot with message"""
         empty_phz_fig = go.Figure()
         empty_phz_fig.update_layout(
@@ -1624,7 +1625,7 @@ class ClusterModalCallbacks:
             showlegend=False,
             annotations=[
                 dict(
-                    text=message,
+                    text=wrap_hint(message),
                     xref="paper",
                     yref="paper",
                     x=0.5,

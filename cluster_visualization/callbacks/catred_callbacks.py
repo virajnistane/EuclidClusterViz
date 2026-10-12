@@ -11,6 +11,7 @@ import pandas as pd  # type: ignore[import]
 import plotly.graph_objs as go  # type: ignore[import]
 from dash import Input, Output, State, html
 from loguru import logger
+from cluster_visualization.src.visualization.figures import PHZ_EMPTY_HINT, wrap_hint
 import time
 
 from cluster_visualization.callbacks.utils import get_idclusters_array
@@ -545,7 +546,7 @@ class CATREDCallbacks:
         return ra_range, dec_range
 
 
-    def _create_empty_phz_plot(self, message="Click on a CATRED data point to view its PHZ_PDF"):
+    def _create_empty_phz_plot(self, message=PHZ_EMPTY_HINT):
         """Create empty PHZ_PDF plot with message"""
         empty_phz_fig = go.Figure()
         empty_phz_fig.update_layout(
@@ -556,7 +557,7 @@ class CATREDCallbacks:
             showlegend=False,
             annotations=[
                 dict(
-                    text=message,
+                    text=wrap_hint(message),
                     xref="paper",
                     yref="paper",
                     x=0.5,

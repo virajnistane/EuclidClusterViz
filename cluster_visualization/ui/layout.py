@@ -25,37 +25,33 @@ class AppLayout:
         """Create and return the complete app layout"""
         return dbc.Container(
             [
-                # Header row
-                dbc.Row(
+                # App bar: title, view mode, help — one compact row
+                html.Header(
                     [
-                        dbc.Col(
+                        html.H1(
+                            "Euclid cluster detection",
+                            className="app-title",
+                            title="ESA Euclid Mission: Cluster Detection Visualization",
+                        ),
+                        create_view_mode_toggle(),
+                        html.Div(
                             [
-                                html.H1(
-                                    "ESA Euclid Mission: Cluster Detection Visualization",
-                                    className="text-center mb-3",
+                                html.Button(
+                                    html.I(className="fas fa-circle-question", **{"aria-hidden": "true"}),
+                                    id="getting-started-open",
+                                    n_clicks=0,
+                                    type="button",
+                                    title="Getting started",
+                                    className="btn btn-sm btn-outline-secondary app-bar-help",
+                                    **{"aria-label": "Getting started"},
                                 ),
-                                html.Div(
-                                    [
-                                        dbc.Button(
-                                            "?",
-                                            id="getting-started-open",
-                                            n_clicks=0,
-                                            color="secondary",
-                                            outline=True,
-                                            size="sm",
-                                            title="Getting Started",
-                                            className="rounded-circle me-2",
-                                        ),
-                                        AppLayout._create_tutorial_menu(),
-                                        html.Div(id="tour-init-dummy", style={"display": "none"}),
-                                    ],
-                                    className="text-center mb-2",
-                                ),
-                                create_view_mode_toggle(),
-                            ]
-                        )
+                                AppLayout._create_tutorial_menu(),
+                                html.Div(id="tour-init-dummy", style={"display": "none"}),
+                            ],
+                            className="app-bar-actions",
+                        ),
                     ],
-                    className="mb-3",
+                    className="app-bar",
                 ),
                 # Main horizontal layout: Controls sidebar + Plot area
                 dbc.Row(
@@ -107,9 +103,8 @@ class AppLayout:
                                                                 dcc.Graph(
                                                                     id="cluster-plot",
                                                                     style={
-                                                                        "height": "75vh",
+                                                                        "height": "var(--cv-workspace-h)",
                                                                         "width": "100%",
-                                                                        "min-height": "500px",
                                                                     },
                                                                     config={
                                                                         "displayModeBar": True,
@@ -158,9 +153,8 @@ class AppLayout:
                                                                 id="sky-overview",
                                                                 figure={},
                                                                 style={
-                                                                    "height": "75vh",
+                                                                    "height": "var(--cv-workspace-h)",
                                                                     "width": "100%",
-                                                                    "min-height": "500px",
                                                                 },
                                                                 config={
                                                                     "displaylogo": False,
@@ -273,7 +267,7 @@ class AppLayout:
                                                                                                 dcc.Graph(
                                                                                                     id="phz-pdf-plot",
                                                                                                     style={
-                                                                                                        "height": "calc(75vh - 8.5rem)",
+                                                                                                        "height": "calc(var(--cv-workspace-h) - 8.5rem)",
                                                                                                         "width": "100%",
                                                                                                         "min-height": "340px",
                                                                                                     },
@@ -507,7 +501,7 @@ class AppLayout:
                 dcc.Store(id="onboarding-seen-store", storage_type="local", data=False),
             ],
             fluid=True,
-            className="px-3",
+            className="px-3 pb-3",
         )
 
     @staticmethod
