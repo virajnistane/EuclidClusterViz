@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, cast
 
 import numpy as np
+from loguru import logger
 
 from . import columnar
 
@@ -61,7 +62,7 @@ class DiskCache:
 
         # Create cache directory if it doesn't exist
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        print(f"Disk cache initialized at: {self.cache_dir}")
+        logger.debug(f"Disk cache at {self.cache_dir}")
 
     def _get_cache_key(self, key: str, source_files: Optional[list] = None) -> str:
         """
@@ -109,7 +110,7 @@ class DiskCache:
         # Check if cache is too old
         cache_age = time.time() - cache_path.stat().st_mtime
         if cache_age > self.max_age_seconds:
-            print(f"Cache expired for {key} (age: {cache_age/86400:.1f} days)")
+            logger.debug(f"Cache expired for {key} (age: {cache_age/86400:.1f} days)")
             cache_path.unlink()  # Delete expired cache
             return None
 
@@ -119,13 +120,13 @@ class DiskCache:
                 data = pickle.load(f)
 
             cache_size_mb = cache_path.stat().st_size / (1024 * 1024)
-            print(
-                f"✓ Loaded from cache: {key} ({cache_size_mb:.2f} MB, age: {cache_age/3600:.1f} hours)"
+            logger.debug(
+                f"Loaded from cache: {key} ({cache_size_mb:.2f} MB, age: {cache_age/3600:.1f} hours)"
             )
             return data
 
         except Exception as e:
-            print(f"Warning: Failed to load cache for {key}: {e}")
+            logger.warning(f"Failed to load cache for {key}: {e}")
             # Delete corrupted cache file
             if cache_path.exists():
                 cache_path.unlink()
@@ -160,10 +161,10 @@ class DiskCache:
             os.replace(temp_path, cache_path)
 
             cache_size_mb = cache_path.stat().st_size / (1024 * 1024)
-            print(f"✓ Saved to cache: {key} ({cache_size_mb:.2f} MB)")
+            logger.debug(f"Saved to cache: {key} ({cache_size_mb:.2f} MB)")
 
         except Exception as e:
-            print(f"Warning: Failed to save cache for {key}: {e}")
+            logger.warning(f"Failed to save cache for {key}: {e}")
             # Clean up temporary file if it exists
             if temp_path.exists():
                 temp_path.unlink()
@@ -187,20 +188,20 @@ class DiskCache:
             return None
         age = time.time() - path.stat().st_mtime
         if age > self.max_age_seconds:
-            print(f"Cache expired for {key} (age: {age/86400:.1f} days)")
+            logger.debug(f"Cache expired for {key} (age: {age/86400:.1f} days)")
             path.unlink()
             return None
         try:
             t0 = time.perf_counter()
             arr, meta = columnar.read_structured(str(path), columns)
             size_mb = path.stat().st_size / (1024 * 1024)
-            print(
-                f"✓ Loaded from cache: {key} [parquet, {len(arr.dtype.names)} cols] "
+            logger.debug(
+                f"Loaded from cache: {key} [parquet, {len(arr.dtype.names)} cols] "
                 f"({size_mb:.2f} MB, {time.perf_counter() - t0:.2f} s, age: {age/3600:.1f} hours)"
             )
             return arr, meta
         except Exception as e:
-            print(f"Warning: Failed to load parquet cache for {key}: {e}")
+            logger.warning(f"Failed to load parquet cache for {key}: {e}")
             if path.exists():
                 path.unlink()
             return None
@@ -221,13 +222,13 @@ class DiskCache:
             t0 = time.perf_counter()
             columnar.write_structured(str(path), arr, meta)
             size_mb = path.stat().st_size / (1024 * 1024)
-            print(
-                f"✓ Saved to cache: {key} [parquet] ({size_mb:.2f} MB, "
+            logger.debug(
+                f"Saved to cache: {key} [parquet] ({size_mb:.2f} MB, "
                 f"{time.perf_counter() - t0:.2f} s)"
             )
             return True
         except Exception as e:
-            print(f"Note: parquet cache not used for {key} ({e}); falling back to pickle")
+            logger.warning(f"Parquet cache not used for {key} ({e}); falling back to pickle")
             return False
 
     def get_or_compute(
@@ -265,13 +266,13 @@ class DiskCache:
             return cached_data
 
         # Cache miss - compute the data
-        print(f"Cache miss for {key} - computing...")
+        logger.debug(f"Cache miss for {key}: computing")
         start_time = time.time()
 
         data = compute_func(**kwargs)
 
         elapsed = time.time() - start_time
-        print(f"Computed {key} in {elapsed:.2f}s")
+        logger.info(f"Computed {key} in {elapsed:.2f}s (now cached)")
 
         # Save to cache
         self.set(key, data, source_files)
@@ -293,14 +294,14 @@ class DiskCache:
             # Clear all cache
             for cache_file in self._cache_files():
                 cache_file.unlink()
-            print(f"Cleared all cache entries")
+            logger.info("Cleared all disk cache entries")
         else:
             # Clear specific key (all versions with different timestamps)
             deleted = 0
             for cache_file in self._cache_files(f"{key}_*"):
                 cache_file.unlink()
                 deleted += 1
-            print(f"Cleared {deleted} cache entries for {key}")
+            logger.info(f"Cleared {deleted} disk cache entries for {key}")
 
     def get_cache_info(self) -> Dict[str, Any]:
         """
@@ -352,7 +353,7 @@ class DiskCache:
                 deleted += 1
 
         if deleted > 0:
-            print(f"Cleaned up {deleted} old cache entries (>{max_age_days} days)")
+            logger.info(f"Cleaned up {deleted} old disk cache entries (>{max_age_days} days)")
 
         return deleted
 

@@ -7,6 +7,7 @@ and apply magnitude-based cuts on CATRED data.
 
 import os
 import numpy as np
+from loguru import logger
 
 
 class Magnitude:
@@ -63,8 +64,8 @@ class Magnitude:
             return np.array([])
         ratio_badFlux = np.sum(flux <= 0) * 1.0 / len(flux)
         if ratio_badFlux >= error_ratio:
-            print(
-                f" WARNING: A significant fraction ({np.sum(flux<=0)}/ {len(flux)} >= {error_ratio}) of fluxes are <0."
+            logger.warning(
+                f"A significant fraction ({np.sum(flux<=0)}/{len(flux)} >= {error_ratio}) of fluxes are <= 0"
             )
 
         # Replace low flux by NaN (to get NaN mag, not Inf)
@@ -97,19 +98,19 @@ class Magnitude:
             if hasattr(catred_data, "colnames"):
                 # astropy Table
                 if flux_column not in catred_data.colnames:
-                    print(
-                        f"Warning: Flux column '{flux_column}' not found. Available columns: {catred_data.colnames[:10]}..."
+                    logger.warning(
+                        f"Flux column '{flux_column}' not found. Available columns: {catred_data.colnames[:10]}..."
                     )
                     return catred_data
                 flux = catred_data[flux_column]
             elif isinstance(catred_data, dict):
                 # Dictionary format
                 if flux_column not in catred_data:
-                    print(f"Warning: Flux column '{flux_column}' not found in data dictionary")
+                    logger.warning(f"Flux column '{flux_column}' not found in data dictionary")
                     return catred_data
                 flux = catred_data[flux_column]
             else:
-                print(f"Warning: Unsupported data format for magnitude cut")
+                logger.warning("Unsupported data format for magnitude cut")
                 return catred_data
 
             # Convert flux to magnitude
@@ -122,9 +123,7 @@ class Magnitude:
 
             n_before = len(flux)
             n_after = np.sum(mask)
-            print(
-                f"Debug: Magnitude cut applied - {n_after}/{n_before} sources kept (mag <= {maglim})"
-            )
+            logger.debug("Magnitude cut applied: {}/{} sources kept (mag <= {})", n_after, n_before, maglim)
 
             # Apply mask to data
             if hasattr(catred_data, "colnames"):
@@ -141,7 +140,7 @@ class Magnitude:
                 return filtered_data
 
         except Exception as e:
-            print(f"Error applying magnitude cut: {e}")
+            logger.opt(exception=e).error(f"Error applying magnitude cut: {e}")
             return catred_data
 
     @staticmethod
@@ -209,7 +208,7 @@ class Magnitude:
                 return (20, 26)
 
         except Exception as e:
-            print(f"Error estimating magnitude range: {e}")
+            logger.error(f"Error estimating magnitude range: {e}")
             return (20, 26)
 
 
@@ -222,17 +221,20 @@ class RichCLMagLimHandler:
         self._dmag_faint = 0.0
         if params_file_path:
             self._load(params_file_path)
-        print(f"RichCLMagLimHandler: available={self.available}, dmag_faint={self._dmag_faint}, params_file={params_file_path!r}")
+        logger.debug(
+            f"RichCLMagLimHandler: available={self.available}, dmag_faint={self._dmag_faint}, "
+            f"params_file={params_file_path!r}"
+        )
 
     def _load(self, params_file_path):
         import yaml
         if not os.path.exists(params_file_path):
-            print(f"Warning: richcl_params_file not found: {params_file_path}")
+            logger.warning(f"richcl_params_file not found: {params_file_path}")
             return
         with open(params_file_path) as fstream:
             param_data = yaml.safe_load(fstream)
         if not isinstance(param_data, dict):
-            print(f"Warning: richcl_params_file parsed to unexpected type: {type(param_data)}")
+            logger.warning(f"richcl_params_file parsed to unexpected type: {type(param_data)}")
             return
         parent = os.path.dirname(os.path.abspath(params_file_path))
         aux = param_data.get("aux", param_data)
@@ -248,7 +250,7 @@ class RichCLMagLimHandler:
                 self._z_arr = data[:, 0]
                 self._mag_arr = data[:, 1]
             else:
-                print(f"Warning: H_star.asc not found: {hstar_path}")
+                logger.warning(f"H_star.asc not found: {hstar_path}")
         richness_specs = param_data.get("richness_specs", param_data)
         dmag = richness_specs.get("dmag_faint") if isinstance(richness_specs, dict) else param_data.get("dmag_faint")
         if dmag is not None:

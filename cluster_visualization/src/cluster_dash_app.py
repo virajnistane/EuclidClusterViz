@@ -140,10 +140,10 @@ setup_logging(args.log_level)
 
 # Load configuration with custom file if specified
 if args.config:
-    logger.info(f"Using configuration file: {args.config}")
+    logger.debug(f"Custom configuration file: {args.config}")
     config = get_config(config_file=args.config)
 else:
-    logger.info("Using default configuration (auto-detect)")
+    logger.debug("Default configuration (auto-detect)")
     config = get_config()
 logger.debug("Configuration loaded")
 

@@ -10,6 +10,7 @@ import time
 from typing import Any, Dict, cast
 
 import psutil
+from loguru import logger
 
 
 class MemoryManager:
@@ -28,9 +29,10 @@ class MemoryManager:
         self.access_times: Dict[str, float] = {}  # Track when each cache item was last accessed
         self.process = psutil.Process()
 
-        print(f"Memory manager initialized:")
-        print(f"  Max memory: {max_memory_gb:.1f} GB")
-        print(f"  Warning threshold: {max_memory_gb * warning_threshold:.1f} GB")
+        logger.debug(
+            f"Memory manager: max {max_memory_gb:.1f} GB, "
+            f"warning at {max_memory_gb * warning_threshold:.1f} GB"
+        )
 
     def check_memory(self) -> int:
         """
@@ -95,10 +97,10 @@ class MemoryManager:
 
         if current_memory > self.warning_threshold_bytes:
             stats = self.get_memory_stats()
-            print(
-                f"⚠️  Memory threshold exceeded: {stats['rss_gb']:.2f} GB / {self.max_memory_bytes / 1024**3:.2f} GB"
+            logger.warning(
+                f"Memory threshold exceeded: {stats['rss_gb']:.2f} GB / "
+                f"{self.max_memory_bytes / 1024**3:.2f} GB ({stats['percent']:.1f}% of system RAM)"
             )
-            print(f"   Process using {stats['percent']:.1f}% of system RAM")
 
             # Get items sorted by access time (oldest first)
             items_by_age = sorted(
@@ -118,7 +120,7 @@ class MemoryManager:
                     del self.access_times[key]
                     removed_keys.append(key)
 
-                    print(f"   Evicted cache: {key}")
+                    logger.debug(f"Evicted cache: {key}")
 
                     # Check if we're below target now
                     if self.check_memory() < target_memory:
@@ -131,10 +133,10 @@ class MemoryManager:
             actual_freed_mb = (current_memory - new_memory) / 1024**2
             new_stats = self.get_memory_stats()
 
-            print(f"✓ Memory cleanup complete:")
-            print(f"   Removed {len(removed_keys)} cache entries")
-            print(f"   Freed ~{actual_freed_mb:.1f} MB")
-            print(f"   Now using {new_stats['rss_gb']:.2f} GB ({new_stats['percent']:.1f}%)")
+            logger.info(
+                f"Memory cleanup: removed {len(removed_keys)} cache entries, freed ~{actual_freed_mb:.1f} MB; "
+                f"now {new_stats['rss_gb']:.2f} GB ({new_stats['percent']:.1f}%)"
+            )
 
             return True
 
@@ -166,7 +168,7 @@ class MemoryManager:
 
     def print_cache_report(self, cache_dict: Dict[str, Any]) -> None:
         """
-        Print detailed cache usage report.
+        Log a detailed cache usage report (INFO).
 
         Args:
             cache_dict: Dictionary containing cached data
@@ -174,37 +176,31 @@ class MemoryManager:
         mem_stats = self.get_memory_stats()
         cache_stats = self.get_cache_stats(cache_dict)
 
-        print("\n" + "=" * 70)
-        print("MEMORY USAGE REPORT")
-        print("=" * 70)
-        print(f"System Memory:")
-        print(f"  Total RAM:      {mem_stats['total_gb']:.1f} GB")
-        print(
-            f"  Available:      {mem_stats['available_gb']:.1f} GB ({100 - mem_stats['system_percent']:.1f}% free)"
-        )
-        print(f"\nProcess Memory:")
-        print(f"  RSS (actual):   {mem_stats['rss_mb']:.1f} MB ({mem_stats['rss_gb']:.2f} GB)")
-        print(f"  VMS (virtual):  {mem_stats['vms_mb']:.1f} MB")
-        print(f"  % of system:    {mem_stats['percent']:.1f}%")
-        print(f"\nCache Statistics:")
-        print(f"  Items cached:   {cache_stats['total_items']}")
-        print(f"  Process memory: {mem_stats['rss_mb']:.1f} MB ({mem_stats['rss_gb']:.2f} GB)")
-        print(f"  Max allowed:    {self.max_memory_bytes / 1024**3:.1f} GB")
-        print(
-            f"  Usage:          {(mem_stats['rss_gb'] / (self.max_memory_bytes / 1024**3)) * 100:.1f}%"
-        )
-
+        lines = [
+            "Memory usage report",
+            "System memory:",
+            f"  Total RAM:      {mem_stats['total_gb']:.1f} GB",
+            f"  Available:      {mem_stats['available_gb']:.1f} GB "
+            f"({100 - mem_stats['system_percent']:.1f}% free)",
+            "Process memory:",
+            f"  RSS (actual):   {mem_stats['rss_mb']:.1f} MB ({mem_stats['rss_gb']:.2f} GB)",
+            f"  VMS (virtual):  {mem_stats['vms_mb']:.1f} MB",
+            f"  % of system:    {mem_stats['percent']:.1f}%",
+            "Cache statistics:",
+            f"  Items cached:   {cache_stats['total_items']}",
+            f"  Max allowed:    {self.max_memory_bytes / 1024**3:.1f} GB",
+            f"  Usage:          {(mem_stats['rss_gb'] / (self.max_memory_bytes / 1024**3)) * 100:.1f}%",
+        ]
         if cache_stats["items"]:
-            print(f"\nCached items (by recency):")
+            lines.append("Cached items (by recency):")
             for item in cache_stats["items"][:5]:  # Show top 5
                 age_str = (
                     f"{item['age_seconds']/60:.1f} min"
                     if item["age_seconds"] > 60
                     else f"{item['age_seconds']:.0f} sec"
                 )
-                print(f"  {item['key']:30s} (age: {age_str})")
-
-        print("=" * 70 + "\n")
+                lines.append(f"  {item['key']:30s} (age: {age_str})")
+        logger.info("\n".join(lines))
 
     @staticmethod
     def recommend_cache_size() -> float:
@@ -220,9 +216,6 @@ class MemoryManager:
         # Use 50% of available RAM for cache, capped at 16GB
         recommended: float = min(total_ram_gb * 0.5, 16.0)
 
-        print(f"\n💡 Memory Configuration Recommendation:")
-        print(f"   System has {total_ram_gb:.1f} GB RAM")
-        print(f"   Recommended cache size: {recommended:.1f} GB")
-        print(f"   This allows safe multi-user operation and prevents OOM crashes\n")
+        logger.debug(f"Recommended cache size: {recommended:.1f} GB (system has {total_ram_gb:.1f} GB RAM)")
 
         return recommended

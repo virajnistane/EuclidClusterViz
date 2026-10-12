@@ -33,6 +33,7 @@ except ImportError:
     raise ImportError("Config module not found in cluster_visualization.src.config")
 
 from cluster_visualization.src.visualization.trace_registry import CUTOUT_MASK_PREFIX
+from cluster_visualization.utils.log import tile_progress
 
 try:
     from cluster_visualization.src.data.loader import DataLoader
@@ -2149,14 +2150,13 @@ class MOSAICHandler:
         # Create traces for each mosaic with timing checks
         mertileid_to_tileid = self._build_mertileid_to_tileid_map(data)
 
-        for i, mertileid in enumerate(mertiles_to_load):
+        for i, mertileid in enumerate(tile_progress(mertiles_to_load, "MER mosaics")):
             # Check if we're running out of time
             elapsed_time = time.time() - start_time
             if elapsed_time > max_processing_time:
                 print(f"[TIMEOUT] Stopping mosaic loading after {elapsed_time:.2f}s")
                 break
 
-            print(f"[PROGRESS] Processing mosaic {i+1}/{len(mertiles_to_load)}: tile {mertileid}")
             if progress_callback is not None:
                 progress_callback(i + 1, len(mertiles_to_load), mertileid)
 
@@ -2347,16 +2347,11 @@ class MOSAICHandler:
                 print(f"Debug: Limiting to first {max_masks} mask overlays for performance")
                 mertiles_to_load = mertiles_to_load[:max_masks]
 
-            for i, mertileid in enumerate(mertiles_to_load):
+            for i, mertileid in enumerate(tile_progress(mertiles_to_load, "MER mask overlays")):
                 elapsed_time = time.time() - start_time
                 if elapsed_time > max_processing_time:
                     print(f"[TIMEOUT] Stopping mask overlay loading after {elapsed_time:.2f}s")
                     break
-
-                print(
-                    f"[PROGRESS] Processing mask overlay {i+1}/{len(mertiles_to_load)}: "
-                    f"tile {mertileid}"
-                )
 
                 try:
                     trace_start = time.time()

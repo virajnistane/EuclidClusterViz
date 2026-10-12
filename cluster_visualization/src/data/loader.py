@@ -11,7 +11,6 @@ This module handles all data loading operations including:
 
 import datetime
 import json
-import logging
 import os
 import pdb
 import pickle
@@ -22,15 +21,14 @@ import numpy as np
 import pandas as pd
 from astropy.io import fits
 import glob
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 try:
     from cluster_visualization.utils.disk_cache import DiskCache, get_default_cache
 
     DISK_CACHE_AVAILABLE = True
 except ImportError:
-    print("Warning: Disk cache not available - using memory-only caching")
+    logger.warning("Disk cache not available - using memory-only caching")
     DISK_CACHE_AVAILABLE = False
 
 try:
@@ -38,7 +36,7 @@ try:
 
     MEMORY_MANAGER_AVAILABLE = True
 except ImportError:
-    print("Warning: Memory manager not available - no memory limits enforced")
+    logger.warning("Memory manager not available - no memory limits enforced")
     MEMORY_MANAGER_AVAILABLE = False
 
 
@@ -103,7 +101,7 @@ class DataLoader:
         self.use_disk_cache = use_disk_cache and DISK_CACHE_AVAILABLE
         if self.use_disk_cache:
             self.disk_cache: Optional[DiskCache] = get_default_cache()
-            print("Disk caching enabled - subsequent loads will be 5-10x faster")
+            logger.debug("Disk caching enabled")
         else:
             self.disk_cache = None
 
@@ -143,26 +141,22 @@ class DataLoader:
         # Cleanup memory if needed before loading
         if self.memory_manager:
             current_mem = self.memory_manager.get_memory_stats()["rss_mb"]
-            print(f"🔍 [Memory Check] Current: {current_mem:.1f} MB, Loading: {select_algorithm}")
-            cleanup_performed = self.memory_manager.cleanup_if_needed(self.data_cache)
-            if cleanup_performed:
-                new_mem = self.memory_manager.get_memory_stats()["rss_mb"]
-                print(f"   ↳ After cleanup: {new_mem:.1f} MB")
+            logger.debug("Memory check: {:.1f} MB before loading {}", current_mem, select_algorithm)
+            self.memory_manager.cleanup_if_needed(self.data_cache)
 
         # Check cache first
         if select_algorithm in self.data_cache:
-            print(f"✓ [Cache HIT] Using cached data for {select_algorithm}")
+            logger.debug("Memory cache hit: {}", select_algorithm)
             if self.memory_manager:
                 self.memory_manager.mark_accessed(select_algorithm)
-                print(f"   ↳ Marked {select_algorithm} as recently accessed (LRU)")
             data: Dict[str, Any] = self.data_cache[select_algorithm]
             return data
 
-        print(f"⏳ [Cache MISS] Loading data for algorithm: {select_algorithm}")
+        logger.info(f"Loading data for {select_algorithm}")
 
         # Validate algorithm choice
         if select_algorithm not in ["PZWAV", "AMICO", "BOTH"]:
-            print(f"Warning: Unknown algorithm '{select_algorithm}'. Using 'PZWAV' as default.")
+            logger.warning(f"Unknown algorithm '{select_algorithm}'. Using 'PZWAV' as default.")
             select_algorithm = "PZWAV"
 
         # Get paths based on configuration
@@ -203,10 +197,10 @@ class DataLoader:
         # Calculate redshift range for UI slider
         z_min = float(data_detcluster_mergedcat["Z_CLUSTER"].min())
         z_max = float(data_detcluster_mergedcat["Z_CLUSTER"].max())
-        print(f"Redshift range: {z_min:.3f} to {z_max:.3f}")
+        ranges = [f"z {z_min:.3f} to {z_max:.3f}"]
 
         if "RICHNESS_ZP" not in data_detcluster_mergedcat.dtype.names or "RICHNESS_RS" not in data_detcluster_mergedcat.dtype.names:
-            print("Warning: RICHNESS_ZP or RICHNESS_RS columns not found in merged catalog. Skipping richness range calculation.")
+            logger.warning("RICHNESS_ZP or RICHNESS_RS columns not found in merged catalog. Skipping richness range calculation.")
             richness_zp_min = None
             richness_zp_max = None
             richness_rs_min = None
@@ -220,9 +214,10 @@ class DataLoader:
             richness_rs_min = float(np.nanmin(rs_vals)) if np.any(np.isfinite(rs_vals)) else None
             richness_rs_max = float(np.nanmax(rs_vals)) if np.any(np.isfinite(rs_vals)) else None
             if richness_zp_min is not None:
-                print(f"Richness-ZP range: {richness_zp_min:.3f} to {richness_zp_max:.3f}")
+                ranges.append(f"richness-ZP {richness_zp_min:.3f} to {richness_zp_max:.3f}")
             if richness_rs_min is not None:
-                print(f"Richness-RS range: {richness_rs_min:.3f} to {richness_rs_max:.3f}")
+                ranges.append(f"richness-RS {richness_rs_min:.3f} to {richness_rs_max:.3f}")
+        logger.info(f"{select_algorithm} ranges: " + ", ".join(ranges))
 
         # Assemble final data structure
         data = {
@@ -260,7 +255,6 @@ class DataLoader:
             current_mem_mb = mem_before / 1024**2
             max_mem_mb = self.memory_manager.max_memory_bytes / 1024**2
 
-            print(f"💾 [Cache Decision] Current: {current_mem_mb:.1f} MB / {max_mem_mb:.1f} MB")
 
             # Try caching and check if we're still under threshold
             self.data_cache[select_algorithm] = data
@@ -271,19 +265,21 @@ class DataLoader:
                 self.memory_manager.mark_accessed(select_algorithm)
                 new_mem_mb = mem_after / 1024**2
                 data_size_mb = (mem_after - mem_before) / 1024**2
-                print(f"   ↳ ✓ Cached in memory: {select_algorithm} (+{data_size_mb:.1f} MB)")
-                print(
-                    f"   ↳ Memory now: {new_mem_mb:.1f} MB (usage: {(new_mem_mb/max_mem_mb)*100:.1f}%)"
+                logger.debug(
+                    f"Cached {select_algorithm} in memory (+{data_size_mb:.1f} MB); now {new_mem_mb:.1f} MB "
+                    f"of {max_mem_mb:.1f} MB ({(new_mem_mb/max_mem_mb)*100:.1f}%)"
                 )
             else:
                 # Would exceed limit - remove from cache
                 del self.data_cache[select_algorithm]
-                print(f"   ↳ ⚠️  Skipping memory cache for {select_algorithm} (would exceed limit)")
-                print(f"   ↳ Data will be loaded from disk cache on next request.")
+                logger.warning(
+                    f"Not caching {select_algorithm} in memory ({current_mem_mb:.1f} MB of {max_mem_mb:.1f} MB "
+                    "used, would exceed the limit); next request loads it from the disk cache"
+                )
         else:
             # No memory manager - cache everything
             self.data_cache[select_algorithm] = data
-            print(f"💾 Cached in memory: {select_algorithm} (no memory limit)")
+            logger.debug(f"Cached {select_algorithm} in memory (no memory limit)")
 
         return data
 
@@ -295,7 +291,7 @@ class DataLoader:
         try:
             detfiles_list_files_dict = self._resolve_detintile_list_files(algorithm)
         except Exception as error:
-            print(f"Warning: Failed to resolve DetInTile list files for {algorithm}: {error}")
+            logger.warning(f"Failed to resolve DetInTile list files for {algorithm}: {error}")
             return False, self.NO_INDIVIDUAL_CLTILE_DATA_MESSAGE
 
         has_individual_cltile_data = self._has_resolved_detintile_entries(detfiles_list_files_dict)
@@ -430,7 +426,7 @@ class DataLoader:
 
         gluematchcat_members_xml = self.config.get_gluematchcat_members_xml()
         if gluematchcat_members_xml is not None and not os.path.exists(gluematchcat_members_xml):
-            print(f"Warning: GlueMatchCat members XML not found: {gluematchcat_members_xml}")
+            logger.warning(f"GlueMatchCat members XML not found: {gluematchcat_members_xml}")
             gluematchcat_members_xml = None
 
         if not use_gluematchcat:
@@ -447,8 +443,7 @@ class DataLoader:
         detfiles_list_files_dict = self._resolve_detintile_list_files(algorithm)
 
         if use_gluematchcat:
-            print(f"✓ Using GlueMatchCat for merged data (includes both PZWAV and AMICO)")
-            print(f"✓ Using separate DetInTile files for per-tile data")
+            logger.debug("Merged data from GlueMatchCat (PZWAV and AMICO); per-tile data from DetInTile files")
             paths = {
                 "use_gluematchcat": True,
                 "gluematchcat_dir": self.config.gluematchcat_dir,
@@ -462,7 +457,7 @@ class DataLoader:
                 "effcovmask_fileinfo_csv": self.config.get_effcovmask_fileinfo_csv(),
             }
         else:
-            print(f"✓ Using separate MergeDetCat files for {algorithm}")
+            logger.debug(f"Merged data from separate MergeDetCat files for {algorithm}")
 
             paths = {
                 "use_gluematchcat": False,
@@ -543,10 +538,9 @@ class DataLoader:
 
             # Check if file exists, if not try without checking (will raise error with better message)
             if not os.path.exists(fitsfile):
-                print(f"Warning: FITS file not found at {fitsfile}")
-                print(f"This may indicate a path configuration issue")
+                logger.warning(f"FITS file not found at {fitsfile} (path configuration issue?)")
 
-            print(f"Loading clusters from GlueMatchCat: {os.path.basename(fitsfile)}")
+            logger.debug(f"Loading clusters from GlueMatchCat: {os.path.basename(fitsfile)}")
             with fits.open(fitsfile, mode="readonly", memmap=True) as hdul:
                 # Convert to numpy array immediately to avoid memmap issues
                 data_all = np.array(hdul[1].data)
@@ -566,13 +560,13 @@ class DataLoader:
                 snr_max_amico = float(
                     data_merged[data_merged["DET_CODE_NB"] == 1]["SNR_CLUSTER"].max()
                 )
-                print(f"Loaded {len(data_merged)} total clusters (PZWAV + AMICO)")
+                logger.info(f"Loaded {len(data_merged)} clusters (PZWAV + AMICO) from {os.path.basename(fitsfile)}")
             else:
                 # Filter by DET_CODE_NB or ID_DET_AMICO columns
                 if algorithm == "PZWAV":
                     # Keep rows where DET_CODE_NB is 2
                     data_merged = data_all[data_all["DET_CODE_NB"] == 2]
-                    print(f"Loaded {len(data_merged)} PZWAV clusters from GlueMatchCat")
+                    logger.info(f"Loaded {len(data_merged)} PZWAV clusters from {os.path.basename(fitsfile)}")
                     snr_min_pzwav = float(data_merged["SNR_CLUSTER"].min())
                     snr_max_pzwav = float(data_merged["SNR_CLUSTER"].max())
                     snr_min_amico = None
@@ -580,7 +574,7 @@ class DataLoader:
                 elif algorithm == "AMICO":
                     # Keep rows where DET_CODE_NB is 1
                     data_merged = data_all[data_all["DET_CODE_NB"] == 1]
-                    print(f"Loaded {len(data_merged)} AMICO clusters from GlueMatchCat")
+                    logger.info(f"Loaded {len(data_merged)} AMICO clusters from {os.path.basename(fitsfile)}")
                     snr_min_pzwav = None
                     snr_max_pzwav = None
                     snr_min_amico = float(data_merged["SNR_CLUSTER"].min())
@@ -602,7 +596,7 @@ class DataLoader:
                     )
                     fitsfile = os.path.join(paths["mergedetcat_dir"], "data", fits_filename)
 
-                    print(f"Loading merged catalog from: {os.path.basename(fitsfile)}")
+                    logger.debug(f"Loading merged catalog from: {os.path.basename(fitsfile)}")
                     with fits.open(fitsfile, mode="readonly", memmap=True) as hdul:
                         _arr = np.array(hdul[1].data)
                     # Inject synthetic DET_CODE_NB if absent (per-algorithm catalogs lack it)
@@ -617,11 +611,11 @@ class DataLoader:
                     all_data.append(_arr)
 
                     if det_xml_key == "mergedetcat_pzwav":
-                        print(f"Loaded {len(all_data[-1])} PZWAV merged clusters")
+                        logger.info(f"Loaded {len(all_data[-1])} PZWAV merged clusters from {os.path.basename(fitsfile)}")
                         snr_min_pzwav = float(all_data[-1]["SNR_CLUSTER"].min())
                         snr_max_pzwav = float(all_data[-1]["SNR_CLUSTER"].max())
                     elif det_xml_key == "mergedetcat_amico":
-                        print(f"Loaded {len(all_data[-1])} AMICO merged clusters")
+                        logger.info(f"Loaded {len(all_data[-1])} AMICO merged clusters from {os.path.basename(fitsfile)}")
                         snr_min_amico = float(all_data[-1]["SNR_CLUSTER"].min())
                         snr_max_amico = float(all_data[-1]["SNR_CLUSTER"].max())
                     else:
@@ -632,7 +626,7 @@ class DataLoader:
 
                 # Combine arrays
                 data_merged = np.concatenate(all_data)
-                print(f"Loaded {len(data_merged)} total merged clusters (combined)")
+                logger.info(f"Loaded {len(data_merged)} merged clusters in total (combined)")
             else:
                 # Load single file
                 assert isinstance(mergedetcat_xml_files_dict, dict)
@@ -645,7 +639,7 @@ class DataLoader:
                 )
                 fitsfile = os.path.join(paths["mergedetcat_dir"], "data", fits_filename)
 
-                print(f"Loading merged catalog from: {os.path.basename(fitsfile)}")
+                logger.debug(f"Loading merged catalog from: {os.path.basename(fitsfile)}")
                 with fits.open(fitsfile, mode="readonly", memmap=True) as hdul:
                     data_merged = np.array(hdul[1].data)
                 # Inject synthetic DET_CODE_NB if absent (per-algorithm catalogs lack it)
@@ -658,7 +652,7 @@ class DataLoader:
                     _new_arr["DET_CODE_NB"] = _det_code
                     data_merged = _new_arr
 
-                print(f"Loaded {len(data_merged)} {algorithm} merged clusters")
+                logger.info(f"Loaded {len(data_merged)} {algorithm} merged clusters from {os.path.basename(fitsfile)}")
 
                 if algorithm == "PZWAV":
                     snr_min_pzwav = float(data_merged["SNR_CLUSTER"].min())
@@ -698,11 +692,9 @@ class DataLoader:
                 self.config.config_parser.set("files", "detintile_pzwav_list", resolved_pzwav_list)
             else:
                 raise FileNotFoundError(detintile_pzwav_list)
-            print(
-                f"Set detintile_pzwav_list path from merged catalog XML: {resolved_pzwav_list}"
-            )
+            logger.debug(f"detintile_pzwav_list from merged catalog XML: {resolved_pzwav_list}")
         except Exception as e:
-            print(f"Error occurred while setting detintile_pzwav_list: {e}")
+            logger.warning(f"Could not set detintile_pzwav_list from the merged catalog XML: {e}")
 
         try:
             detintile_amico_list = self._required_xml_text(
@@ -714,11 +706,9 @@ class DataLoader:
                 self.config.config_parser.set("files", "detintile_amico_list", resolved_amico_list)
             else:
                 raise FileNotFoundError(detintile_amico_list)
-            print(
-                f"Set detintile_amico_list path from merged catalog XML: {resolved_amico_list}"
-            )
+            logger.debug(f"detintile_amico_list from merged catalog XML: {resolved_amico_list}")
         except Exception as e:
-            print(f"Error occurred while setting detintile_amico_list: {e}")
+            logger.warning(f"Could not set detintile_amico_list from the merged catalog XML: {e}")
 
     def _load_data_detcluster_by_cltile(
         self, paths: Dict[str, Any], algorithm: str
@@ -748,7 +738,7 @@ class DataLoader:
         assert isinstance(detfiles_list_files_dict, dict)
         for detfiles_list_path_key, detfiles_list_path in detfiles_list_files_dict.items():
             if not os.path.exists(detfiles_list_path):
-                print(f"Warning: Detection files list not found: {detfiles_list_path}")
+                logger.warning(f"Detection files list not found: {detfiles_list_path}")
                 continue
 
             # Determine algorithm from the list file path
@@ -767,7 +757,7 @@ class DataLoader:
                 # Extract tile information from XML files
                 xml_path = self._resolve_detintile_xml_path(file)
                 if not xml_path:
-                    print(f"Warning: XML file not found in expected directories: {file}")
+                    logger.warning(f"XML file not found in expected directories: {file}")
                     continue
 
                 logger.debug(f"Resolved detintile XML path: {xml_path}")
@@ -779,7 +769,7 @@ class DataLoader:
                     dirpath = parent_dir
 
                 if not os.path.exists(os.path.join(dirpath, "data/")):
-                    print(f"Warning: Could not determine data directory for detintile XML: {xml_path}")
+                    logger.warning(f"Could not determine data directory for detintile XML: {xml_path}")
                     continue
 
                 logger.debug(f"Determined directory path for data/ dir: {dirpath}")
@@ -789,13 +779,13 @@ class DataLoader:
                         xml_path, "Data/SpatialInformation/DataContainer/FileName"
                     )
                 except Exception as e:
-                    print(f"Warning: Invalid tile metadata in {xml_path}: {e}")
+                    logger.warning(f"Invalid tile metadata in {xml_path}: {e}")
                     continue
                 # Use {dirpath}/data for tile data (even when using gluematchcat for merged data)
                 tile_file_path = os.path.join(dirpath, "data", tile_file)
 
                 if not os.path.exists(tile_file_path):
-                    print(f"Warning: Tile definition file not found: {tile_file_path}")
+                    logger.warning(f"Tile definition file not found: {tile_file_path}")
                     continue
 
                 with open(tile_file_path, "r") as tf:
@@ -803,7 +793,7 @@ class DataLoader:
                 tile_id = tile_info["TILE_ID"]
 
                 if tile_id in _tile_id_list:
-                    print(f"Warning: Duplicate tile ID found in detintile lists: {tile_id}")
+                    logger.warning(f"Duplicate tile ID found in detintile lists: {tile_id}")
                     tile_id = id_det_file  # Fallback to using index as tile ID to avoid overwriting
                     _tile_id_list.append(tile_id)
                 else:
@@ -823,12 +813,12 @@ class DataLoader:
                         xml_path, "Data/ClustersFile/DataContainer/FileName"
                     )
                 except Exception as e:
-                    print(f"Warning: Invalid cluster FITS metadata in {xml_path}: {e}")
+                    logger.warning(f"Invalid cluster FITS metadata in {xml_path}: {e}")
                     continue
                 # Load FITS data for this tile
                 fits_path = os.path.join(dirpath, "data", fits_file)
                 if not os.path.exists(fits_path):
-                    print(f"Warning: FITS file not found: {fits_path}")
+                    logger.warning(f"FITS file not found: {fits_path}")
                     continue
 
                 # Try to find density files
@@ -871,7 +861,7 @@ class DataLoader:
                 }
 
         data_by_tile = dict(sorted(data_by_tile.items()))
-        print(f"Loaded {len(data_by_tile)} individual tiles")
+        logger.info(f"Loaded {len(data_by_tile)} individual tiles")
 
         # Save to disk cache
         if self.use_disk_cache and self.disk_cache is not None:
@@ -947,7 +937,7 @@ class DataLoader:
 
         gluematchcat_dir = paths.get("gluematchcat_dir")
         if gluematchcat_dir is None:
-            print("Warning: gluematchcat_dir not available for members loading")
+            logger.warning("gluematchcat_dir not available for members loading")
             return None
 
         try:
@@ -955,12 +945,12 @@ class DataLoader:
                 gluematchcat_members_xml, "Data/RichMembersFile/DataContainer/FileName"
             )
         except Exception as e:
-            print(f"Warning: Could not extract members FITS filename from XML: {e}")
+            logger.warning(f"Could not extract members FITS filename from XML: {e}")
             return None
 
         fitsfile = os.path.join(gluematchcat_dir, "data", fits_filename)
         if not os.path.exists(fitsfile):
-            print(f"Warning: Members FITS file not found: {fitsfile}")
+            logger.warning(f"Members FITS file not found: {fitsfile}")
             return None
         return fitsfile
 
@@ -983,7 +973,7 @@ class DataLoader:
             if cached is not None:
                 return cached
 
-        print(f"Loading cluster members from: {os.path.basename(fitsfile)}")
+        logger.debug(f"Loading cluster members from: {os.path.basename(fitsfile)}")
         with fits.open(fitsfile, mode="readonly", memmap=True) as hdul:
             rows = hdul[1].data
             names = [n for n in MEMBER_COLUMNS if n in rows.dtype.names]
@@ -996,7 +986,7 @@ class DataLoader:
             del cols
         if "ID_UNIQUE_CLUSTER" in names:
             data_members = data_members[np.argsort(data_members["ID_UNIQUE_CLUSTER"], kind="stable")]
-        print(f"Loaded {len(data_members)} member galaxy entries ({len(names)} columns)")
+        logger.info(f"Loaded {len(data_members)} member galaxy entries ({len(names)} columns) from {os.path.basename(fitsfile)}")
 
         if self.use_disk_cache and self.disk_cache is not None:
             if not self.disk_cache.set_table("members", data_members, source_files):
@@ -1054,13 +1044,13 @@ class DataLoader:
             )
 
         if not os.path.exists(catred_dir):
-            print(f"Warning: CATRED directory not found at {catred_dir}")
+            logger.warning(f"CATRED directory not found at {catred_dir}")
             return pd.DataFrame()
 
         # Load CSV file info or generate it if it doesn't exist
         catred_fileinfo_df = pd.DataFrame()
         if os.path.exists(catred_fileinfo_csv):
-            print(f"catred_fileinfo.csv already exists in {os.path.dirname(catred_fileinfo_csv)}")
+            logger.debug(f"Reading catred_fileinfo.csv from {os.path.dirname(catred_fileinfo_csv)}")
             catred_fileinfo_df = pd.read_csv(catred_fileinfo_csv)
             catred_fileinfo_df.set_index("uid", inplace=True)
             try:
@@ -1076,8 +1066,8 @@ class DataLoader:
                         catredxmlfiles.extend([os.path.join(subdir, i) for i in subdir_xmlfiles])
                 # Check for mismatch in number of entries
                 if len(catred_fileinfo_df_wd) != len(catredxmlfiles):
-                    print(
-                        "Warning: Number of entries in catred_fileinfo.csv does not match number of CATRED XML files. Regenerating."
+                    logger.warning(
+                        "Number of entries in catred_fileinfo.csv does not match number of CATRED XML files. Regenerating."
                     )
                     regenerate = True
                     catred_fileinfo_df = self._generate_catred_fileinfo(
@@ -1085,9 +1075,9 @@ class DataLoader:
                     )
             except FileNotFoundError:
                 pass
-            print("Loaded catred file info")
+            logger.debug("Loaded catred file info")
         else:
-            print(f"catred_fileinfo.csv does not exist in {os.path.dirname(catred_fileinfo_csv)}")
+            logger.info(f"catred_fileinfo.csv not found in {os.path.dirname(catred_fileinfo_csv)}; generating it")
             catred_fileinfo_df = self._generate_catred_fileinfo(paths)
 
         # Load polygon data or generate it if it doesn't exist
@@ -1095,37 +1085,37 @@ class DataLoader:
             with open(catred_polygon_pkl, "rb") as f:
                 catred_polygon_info = pickle.load(f)
             catred_fileinfo_df["polygon"] = pd.Series(catred_polygon_info)
-            print("Loaded catred polygons")
+            logger.debug("Loaded catred polygons")
 
             # Diagnostic: Check pickle structure and alignment
             if isinstance(catred_polygon_info, dict):
-                print(f"Debug: Polygon pickle structure - dict with {len(catred_polygon_info)} entries")
+                logger.debug(f"Polygon pickle structure - dict with {len(catred_polygon_info)} entries")
                 sample_keys = list(catred_polygon_info.keys())[:3]
-                print(f"Debug: Sample pickle keys: {sample_keys} (type: {type(sample_keys[0]) if sample_keys else 'N/A'})")
-                print(f"Debug: DataFrame has {len(catred_fileinfo_df)} rows with indices {catred_fileinfo_df.index[:3].tolist()}")
+                logger.debug(f"Sample pickle keys: {sample_keys} (type: {type(sample_keys[0]) if sample_keys else 'N/A'})")
+                logger.debug(f"DataFrame has {len(catred_fileinfo_df)} rows with indices {catred_fileinfo_df.index[:3].tolist()}")
 
                 # Check alignment
                 none_count = catred_fileinfo_df["polygon"].isna().sum()
                 if none_count > 0:
-                    print(f"Warning: {none_count}/{len(catred_fileinfo_df)} tiles have None polygons after pickle load")
+                    logger.warning(f"{none_count}/{len(catred_fileinfo_df)} tiles have None polygons after pickle load")
                     if "mertileid" in catred_fileinfo_df.columns:
                         missing_ids = catred_fileinfo_df[catred_fileinfo_df["polygon"].isna()]["mertileid"].tolist()[:10]
-                        print(f"Debug: Sample mertileids with missing polygons: {missing_ids}")
+                        logger.debug(f"Sample mertileids with missing polygons: {missing_ids}")
         elif not catred_fileinfo_df.empty or regenerate:
-            print(
+            logger.info(
                 f"catred polygons not found at {catred_polygon_pkl} or regeneration requested. Generating polygons."
             )
             catred_fileinfo_df = self._generate_catred_polygons(catred_fileinfo_df, paths)
         else:
-            print("Warning: Cannot generate polygons - catred_fileinfo_df is empty")
+            logger.warning("Cannot generate polygons - catred_fileinfo_df is empty")
 
         # Validate polygon coverage
         if not catred_fileinfo_df.empty and "polygon" in catred_fileinfo_df.columns:
             polygon_coverage = (1 - catred_fileinfo_df["polygon"].isna().sum() / len(catred_fileinfo_df)) * 100
-            print(f"Debug: Polygon coverage: {polygon_coverage:.1f}%")
+            logger.debug(f"Polygon coverage: {polygon_coverage:.1f}%")
 
             if polygon_coverage < 95:
-                print(f"Warning: Low polygon coverage ({polygon_coverage:.1f}%) - consider regenerating polygons")
+                logger.warning(f"Low polygon coverage ({polygon_coverage:.1f}%) - consider regenerating polygons")
 
         # Save to disk cache
         if self.use_disk_cache and not catred_fileinfo_df.empty and self.disk_cache is not None:
@@ -1151,7 +1141,7 @@ class DataLoader:
 
         """
 
-        print("Processing catred XML files to create catred_fileinfo dictionary")
+        logger.info("Processing CATRED XML files to create catred_fileinfo")
 
         # Get catred directory from config
         if self.config and hasattr(self.config, "catred_dir"):
@@ -1165,7 +1155,7 @@ class DataLoader:
         catred_fileinfo_csv = paths["catred_fileinfo_csv"]
 
         if not os.path.exists(catred_dir):
-            print(f"Warning: CATRED directory not found at {catred_dir}")
+            logger.warning(f"CATRED directory not found at {catred_dir}")
             return pd.DataFrame()
 
         if catredxmlfiles is None:
@@ -1180,21 +1170,21 @@ class DataLoader:
                     catredxmlfiles.extend([os.path.join(subdir, i) for i in subdir_xmlfiles])
 
         if not catredxmlfiles:
-            print(f"Warning: No XML files found in {catred_dir}")
+            logger.warning(f"No XML files found in {catred_dir}")
             return pd.DataFrame()
 
         if add_mertile_radec_center:
             try:
                 mertile_dir = os.path.join(self.config._data_base_dir, "DpdMerTile")
             except Exception as e:
-                print(f"Error determining mertile_dir for RA/Dec extraction: {e}")
+                logger.error(f"Error determining mertile_dir for RA/Dec extraction: {e}")
                 add_mertile_radec_center = False
             # print(
             #     "add_mertile_radec_center is True - will attempt to extract RA/Dec center from XML files and add to DataFrame"
             # )
             # xmlfiles_mertiledef = [i for i in os.listdir(mertile_dir) if i.endswith(".xml")]
 
-        print(f"Found {len(catredxmlfiles)} CATRED XML files")
+        logger.info(f"Found {len(catredxmlfiles)} CATRED XML files")
 
         self.missing_mertile_definitions = []
         catred_fileinfo: Dict[int, Dict[str, Any]] = {}
@@ -1224,8 +1214,8 @@ class DataLoader:
                             catred_fileinfo[uid]["ra_center"] = float(ra_center)
                             catred_fileinfo[uid]["dec_center"] = float(dec_center)
                     except Exception as e:
-                        print(
-                            f"Warning: Failed to extract RA/Dec center for mertileid {mertileid} from mertile definition XML: {e}"
+                        logger.warning(
+                            f"Failed to extract RA/Dec center for mertileid {mertileid} from mertile definition XML: {e}"
                         )
                         self.missing_mertile_definitions.append(mertileid)
 
@@ -1263,11 +1253,11 @@ class DataLoader:
                 catred_fileinfo[uid]["remarks"] = ""
 
             except Exception as e:
-                print(f"Warning: Failed to process {catredxmlfile}: {e}")
+                logger.warning(f"Failed to process {catredxmlfile}: {e}")
                 continue
 
         if not catred_fileinfo:
-            print("Warning: No valid CATRED file information could be extracted")
+            logger.warning("No valid CATRED file information could be extracted")
             return pd.DataFrame()
 
         # Create DataFrame
@@ -1325,7 +1315,7 @@ class DataLoader:
             lambda x: len(x) > 1
         )  # get duplicated (mertileid, dataset_release) combinations
         if not duplicate_combinations.empty:
-            print(
+            logger.info(
                 f"Found {len(duplicate_combinations)} duplicate CATRED entries based on "
                 f"(mertileid, dataset_release) combinations. Keeping only latest creation_date entries."
             )
@@ -1358,7 +1348,7 @@ class DataLoader:
         output_csv = paths["catred_fileinfo_csv"]
         os.makedirs(os.path.dirname(output_csv), exist_ok=True)
         catred_fileinfo_df.to_csv(output_csv, index=True)
-        print(f"Saved catred_fileinfo.csv to {output_csv}")
+        logger.info(f"Saved catred_fileinfo.csv to {output_csv}")
 
         return catred_fileinfo_df
 
@@ -1366,13 +1356,13 @@ class DataLoader:
         self, catred_fileinfo_df: pd.DataFrame, paths: Dict[str, str]
     ) -> pd.DataFrame:
         """Generate catred_polygons_by_tileid.pkl from XML files (based on notebook cells 25-26)."""
-        print("Extracting polygons from XML files and saving to catred_fileinfo_df")
+        logger.info("Extracting CATRED polygons from XML files")
 
         # Import shapely here to avoid import issues if not needed
         try:
             from shapely.geometry import Polygon as ShapelyPolygon
         except ImportError:
-            print("Warning: Shapely not available - cannot generate polygon data")
+            logger.warning("Shapely not available - cannot generate polygon data")
             return catred_fileinfo_df
 
         def extract_polygon_from_xml(xml_file):
@@ -1386,7 +1376,7 @@ class DataLoader:
                     catred_vertices.append(coords)
                 return ShapelyPolygon(catred_vertices)
             except Exception as e:
-                print(f"Warning: Failed to extract polygon from {xml_file}: {e}")
+                logger.warning(f"Failed to extract polygon from {xml_file}: {e}")
                 return None
 
         # Make sure the 'polygon' column exists in the DataFrame
@@ -1404,10 +1394,10 @@ class DataLoader:
         final_count = len(catred_fileinfo_df)
 
         if final_count < initial_count:
-            print(f"Warning: {initial_count - final_count} polygons could not be extracted")
+            logger.warning(f"{initial_count - final_count} polygons could not be extracted")
 
         if final_count == 0:
-            print("Error: No valid polygons could be extracted")
+            logger.error("No valid polygons could be extracted")
             return catred_fileinfo_df
 
         # Make a dict of polygon values and save it to a pickle file
@@ -1423,7 +1413,7 @@ class DataLoader:
         with open(output_pickle, "wb") as f:
             pickle.dump(catred_fileinfo_dict, f)
 
-        print(f"Generated and saved {final_count} catred polygons to {output_pickle}")
+        logger.info(f"Generated and saved {final_count} catred polygons to {output_pickle}")
 
         return catred_fileinfo_df
 
@@ -1441,14 +1431,12 @@ class DataLoader:
             )
 
         if not os.path.exists(effcovmask_dir):
-            print(f"Warning: Effective coverage mask directory not found at {effcovmask_dir}")
+            logger.warning(f"Effective coverage mask directory not found at {effcovmask_dir}")
             return pd.DataFrame()
 
         # Check if CSV file exists
         if os.path.exists(effcovmask_fileinfo_csv):
-            print(
-                f"effcovmask_fileinfo.csv already exists in {os.path.dirname(effcovmask_fileinfo_csv)}"
-            )
+            logger.debug(f"Reading effcovmask_fileinfo.csv from {os.path.dirname(effcovmask_fileinfo_csv)}")
             effcovmask_fileinfo_df = pd.read_csv(effcovmask_fileinfo_csv)
             effcovmask_fileinfo_df.set_index("uid", inplace=True)
             try:
@@ -1472,25 +1460,23 @@ class DataLoader:
                         effcovxmlfiles.extend(subdir_files)
                 # Check for mismatch in number of entries
                 if len(effcovmask_fileinfo_df_wd) != len(effcovxmlfiles):
-                    print(
-                        "Warning: Number of entries in effcovmask_fileinfo.csv does not match number of effective coverage XML files. Regenerating."
+                    logger.warning(
+                        "Number of entries in effcovmask_fileinfo.csv does not match number of effective coverage XML files. Regenerating."
                     )
                     effcovmask_fileinfo_df = self._generate_effcovmask_fileinfo(paths)
             except FileNotFoundError:
                 pass
 
-            print("effcovmask_fileinfo loaded from CSV file")
+            logger.debug("effcovmask_fileinfo loaded from CSV file")
         else:
-            print(f"effcovmask_fileinfo.csv not found at {effcovmask_fileinfo_csv}")
+            logger.info(f"effcovmask_fileinfo.csv not found at {effcovmask_fileinfo_csv}; generating it")
             effcovmask_fileinfo_df = self._generate_effcovmask_fileinfo(paths)
 
         return effcovmask_fileinfo_df
 
     def _generate_effcovmask_fileinfo(self, paths: Dict[str, str], effcovxmlfiles: Optional[list] = None) -> pd.DataFrame:
         """Generate effcovmask_fileinfo.csv from XML files (based on notebook cell 29)."""
-        print(
-            "Processing effective coverage mask XML files to create effcovmask_fileinfo dictionary"
-        )
+        logger.info("Processing effective coverage mask XML files to create effcovmask_fileinfo")
 
         # Get effcovmask_dir from config
         if self.config and hasattr(self.config, "effcovmask_dir"):
@@ -1502,7 +1488,7 @@ class DataLoader:
             )
 
         if not os.path.exists(effcovmask_dir):
-            print(f"Warning: Effective coverage mask directory not found at {effcovmask_dir}")
+            logger.warning(f"Effective coverage mask directory not found at {effcovmask_dir}")
             return pd.DataFrame()
 
         if effcovxmlfiles is None:
@@ -1517,10 +1503,10 @@ class DataLoader:
                     effcovxmlfiles.extend([os.path.join(subdir, i) for i in subdir_files])
 
         if not effcovxmlfiles:
-            print(f"Warning: No effective coverage XML files found in {effcovmask_dir}")
+            logger.warning(f"No effective coverage XML files found in {effcovmask_dir}")
             return pd.DataFrame()
 
-        print(f"Found {len(effcovxmlfiles)} effective coverage XML files")
+        logger.info(f"Found {len(effcovxmlfiles)} effective coverage XML files")
 
         effcovmask_fileinfo: Dict[int, Dict[str, Any]] = {}
         for uid, effcovxmlfile in enumerate(effcovxmlfiles):
@@ -1564,11 +1550,11 @@ class DataLoader:
                 effcovmask_fileinfo[uid]["remarks"] = ""
 
             except Exception as e:
-                print(f"Warning: Failed to process {effcovxmlfile}: {e}")
+                logger.warning(f"Failed to process {effcovxmlfile}: {e}")
                 continue
 
         if not effcovmask_fileinfo:
-            print("Warning: No valid effective coverage file information could be extracted")
+            logger.warning("No valid effective coverage file information could be extracted")
             return pd.DataFrame()
 
         # Create DataFrame
@@ -1608,7 +1594,7 @@ class DataLoader:
             lambda x: len(x) > 1
         )  # get duplicated (mertileid, dataset_release) combinations
         if not duplicate_combinations.empty:
-            print(
+            logger.info(
                 f"Found {len(duplicate_combinations)} duplicate effective coverage mask entries based on "
                 f"(mertileid, dataset_release) combinations. Keeping only latest creation_date entries."
             )
@@ -1638,22 +1624,22 @@ class DataLoader:
         effcovmask_fileinfo_df = effcovmask_fileinfo_df.reset_index(drop=True, inplace=False)
         effcovmask_fileinfo_df.index.name = "uid"
 
-        print(f"Generated effcovmask_fileinfo for {len(effcovmask_fileinfo_df)} files")
+        logger.info(f"Generated effcovmask_fileinfo for {len(effcovmask_fileinfo_df)} files")
 
         # Save the DataFrame to a CSV file
         output_csv = paths["effcovmask_fileinfo_csv"]
         os.makedirs(os.path.dirname(output_csv), exist_ok=True)
         effcovmask_fileinfo_df.to_csv(output_csv, index=True)
-        print(f"Saved effcovmask_fileinfo.csv to {output_csv}")
+        logger.info(f"Saved effcovmask_fileinfo.csv to {output_csv}")
 
         return effcovmask_fileinfo_df
 
     def clear_cache(self) -> None:
         """Clear the data cache to free memory."""
         self.data_cache.clear()
-        print("Data cache cleared")
+        logger.info("Data cache cleared")
         if self.use_disk_cache:
-            print("Note: Disk cache still contains data. Use clear_disk_cache() to clear it.")
+            logger.info("Disk cache still contains data. Use clear_disk_cache() to clear it.")
 
     def clear_disk_cache(self, key) -> None:
         """Clear disk cache entries.
@@ -1664,7 +1650,7 @@ class DataLoader:
         if self.use_disk_cache and self.disk_cache is not None:
             self.disk_cache.clear(key)
         else:
-            print("Disk cache not available")
+            logger.warning("Disk cache not available")
 
     def get_cache_info(self) -> Dict[str, Any]:
         """Get disk cache information and statistics."""
@@ -1705,11 +1691,11 @@ class DataLoader:
         return None
 
     def print_memory_report(self) -> None:
-        """Print detailed memory and cache usage report."""
+        """Log a detailed memory and cache usage report (INFO)."""
         if self.memory_manager:
             self.memory_manager.print_cache_report(self.data_cache)
         else:
-            print("Memory manager not available - cannot generate report")
+            logger.warning("Memory manager not available - cannot generate report")
 
     def clear_memory_cache(self) -> None:
         """Manually clear all in-memory cached data."""
@@ -1717,7 +1703,7 @@ class DataLoader:
         self.data_cache.clear()
         if self.memory_manager:
             self.memory_manager.access_times.clear()
-        print(f"✓ Cleared {cleared} items from memory cache")
+        logger.info(f"Cleared {cleared} items from memory cache")
 
     def _get_catred_dir(self, paths: Dict[str, str]) -> str:
         """Get CATRED directory path."""

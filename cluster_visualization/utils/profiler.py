@@ -3,9 +3,9 @@
 Usage
 -----
 The profiler is attached to :class:`TraceCreator` as ``self._profiler``.
-It accumulates per-section stats across all renders and prints a sorted
-summary table after every render call (controlled by
-``CLUSTERVIZ_PROFILE`` env-var — set to ``"0"`` to disable).
+It accumulates per-section stats across all renders and logs a sorted
+summary table at DEBUG level after every render call (shown with
+``--log-level DEBUG``; ``CLUSTERVIZ_PROFILE=0`` disables the timing).
 
 Sections currently tracked
 --------------------------
@@ -25,6 +25,8 @@ import os
 import time
 import threading
 from typing import Dict
+
+from loguru import logger
 
 
 _ENABLED_DEFAULT: bool = os.environ.get("CLUSTERVIZ_PROFILE", "1") != "0"
@@ -88,7 +90,7 @@ class TraceProfiler:
             TraceProfiler._stats[name].update(elapsed)
 
     def tick_render(self) -> None:
-        """Increment render counter and print the stats table."""
+        """Increment render counter and log the stats table (DEBUG)."""
         if not self.enabled:
             return
         with self._lock:
@@ -97,13 +99,16 @@ class TraceProfiler:
         self.print_stats(header=f"render #{n}")
 
     def print_stats(self, header: str = "") -> None:
-        """Print a sorted stats table to stdout."""
+        """Log a sorted stats table at DEBUG level (built only when DEBUG is shown)."""
+        logger.opt(lazy=True).debug("{}", lambda: self._stats_table(header))
+
+    def _stats_table(self, header: str) -> str:
         W = 70
         with self._lock:
             if not TraceProfiler._stats:
-                return
+                return "Profiler: no sections recorded"
             lines = [
-                "",
+                "Profiler table",
                 "=" * W,
                 f"  CLUSTERVIZ PROFILER  {header}",
                 "=" * W,
@@ -122,8 +127,8 @@ class TraceProfiler:
                     f"  {name:<44} {s.count:>5}  {s.total*1000:>9.1f}  "
                     f"{avg*1000:>7.2f}  {s.min*1000:>7.2f}  {s.max*1000:>7.2f}"
                 )
-            lines.append("=" * W + "\n")
-        print("\n".join(lines))
+            lines.append("=" * W)
+        return "\n".join(lines)
 
     def reset(self) -> None:
         """Clear all accumulated stats and reset render counter."""

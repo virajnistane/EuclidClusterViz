@@ -18,6 +18,10 @@ from astropy.table import Table  # type: ignore[import]
 
 from typing import Any, Dict, List, Optional, Tuple
 
+from loguru import logger
+
+from cluster_visualization.utils.log import tile_progress
+
 from cluster_visualization.utils.profiler import TraceProfiler
 
 
@@ -60,8 +64,8 @@ class Mask:
             self.hpdata = np.zeros(npix, dtype=np.float32)
             self.hpdata[pixel_indices] = weight_values
 
-            print(
-                f"Debug: Loaded sparse HEALPix mask: nside={self.nside}, ordering={self.ordering}, "
+            logger.debug(
+                f"Loaded sparse HEALPix mask: nside={self.nside}, ordering={self.ordering}, "
                 f"sparse_pixels={len(pixel_indices)}, total_pixels={npix}"
             )
 
@@ -157,9 +161,9 @@ def get_masked_catred(
 
                 magnitude_handler = Magnitude()
                 filtered_src = magnitude_handler.apply_magnitude_cut(filtered_src, maglim=maglim)
-                print(f"Debug: Applied magnitude limit {maglim} to tile {tile_id}")
+                logger.debug(f"Applied magnitude limit {maglim} to tile {tile_id}")
             except (ImportError, Exception) as e:
-                print(f"Warning: Magnitude filtering requested but not available: {e}")
+                logger.warning(f"Magnitude filtering requested but not available: {e}")
 
         # Add columns to match expected format for plotting
         if "RA" not in filtered_src.colnames:
@@ -181,7 +185,7 @@ def get_masked_catred(
         return filtered_src
 
     except Exception as e:
-        print(f"Error in get_masked_catred: {e}")
+        logger.error(f"Error in get_masked_catred: {e}")
         raise
 
 
@@ -220,11 +224,11 @@ class CATREDHandler:
 
             # Check if we have the necessary data
             if "catred_info" not in data or data["catred_info"].empty:
-                print(f"Debug: No catred_info available for mertile {mertileid}")
+                logger.debug(f"No catred_info available for mertile {mertileid}")
                 return {}
 
             if mertileid not in data["catred_info"]["mertileid"].values:
-                print(f"Debug: MerTile {mertileid} not found in catred_info")
+                logger.debug(f"MerTile {mertileid} not found in catred_info")
                 return {}
 
             if (
@@ -232,8 +236,8 @@ class CATREDHandler:
                 or data.get("effcovmask_dsr", None)
                 not in data["effcovmask_info"]["dataset_release"].values
             ):
-                print(
-                    f"Debug: catred_dsr {data.get('catred_dsr', None)} or effcovmask_dsr {data.get('effcovmask_dsr', None)} not found in catred_info or effcovmask_info for mertile {mertileid}"
+                logger.debug(
+                    f"catred_dsr {data.get('catred_dsr', None)} or effcovmask_dsr {data.get('effcovmask_dsr', None)} not found in catred_info or effcovmask_info for mertile {mertileid}"
                 )
                 return {}
 
@@ -249,22 +253,22 @@ class CATREDHandler:
 
             # Check if fits_file column exists
             if "fits_file" not in mertile_row or pd.isna(mertile_row["fits_file"]):
-                print(
-                    f"Debug: No fits_file for mertile {mertileid}, using polygon vertices as demo data"
+                logger.debug(
+                    f"No fits_file for mertile {mertileid}, using polygon vertices as demo data"
                 )
                 return self._get_polygon_fallback_data(mertile_row, mertileid)
 
             # Try to load actual FITS file
             fits_path = mertile_row["fits_file"]
             if not os.path.exists(fits_path):
-                print(f"Debug: FITS file not found at {fits_path}, using polygon vertices")
+                logger.debug(f"FITS file not found at {fits_path}, using polygon vertices")
                 return self._get_polygon_fallback_data(mertile_row, mertileid)
 
             # Load actual FITS data
             return self._load_fits_data(fits_path, maglim)
 
         except Exception as e:
-            print(f"Debug: Error loading MER tile {mertileid}: {e}")
+            logger.warning(f"Error loading MER tile {mertileid}: {e}")
             # Fallback: try to use polygon vertices
             try:
                 if mertileid in data["catred_info"]["mertileid"].values:
@@ -281,7 +285,7 @@ class CATREDHandler:
                     )
                     return self._get_polygon_fallback_data(mertile_row, mertileid)
             except Exception as fallback_error:
-                print(f"Debug: Fallback also failed for MER tile {mertileid}: {fallback_error}")
+                logger.warning(f"Fallback also failed for MER tile {mertileid}: {fallback_error}")
 
             return {}
 
@@ -292,7 +296,7 @@ class CATREDHandler:
             x_coords, y_coords = poly.exterior.xy
             num_points = len(x_coords)
 
-            print(f"Debug: Using polygon vertices for MER tile {mertileid} ({num_points} points)")
+            logger.debug(f"Using polygon vertices for MER tile {mertileid} ({num_points} points)")
 
             return {
                 "RIGHT_ASCENSION": list(x_coords),
@@ -327,12 +331,12 @@ class CATREDHandler:
 
                     # Apply magnitude cut to the FITS data
                     fits_data = magnitude_handler.apply_magnitude_cut(fits_data, maglim)
-                    print(
-                        f"Debug: Applied magnitude limit {maglim} to FITS data, {len(fits_data)} objects remaining"
+                    logger.debug(
+                        f"Applied magnitude limit {maglim} to FITS data, {len(fits_data)} objects remaining"
                     )
 
                 except (ImportError, Exception) as e:
-                    print(f"Debug: Magnitude filtering not available for {fits_path}: {e}")
+                    logger.debug(f"Magnitude filtering not available for {fits_path}: {e}")
 
             # Extract the required columns
             result = {
@@ -347,7 +351,7 @@ class CATREDHandler:
                     result[col] = self._process_column_data(col, col_data)
                 else:
                     # Provide dummy values if column doesn't exist
-                    print(f"Debug: Column {col} not found in {fits_path}, using dummy values")
+                    logger.debug(f"Column {col} not found in {fits_path}, using dummy values")
                     result[col] = self._get_dummy_column_data(col, len(result["RIGHT_ASCENSION"]))
 
             return result
@@ -389,7 +393,7 @@ class CATREDHandler:
             or data["catred_info"].empty
             or "polygon" not in data["catred_info"].columns
         ):
-            print("Debug: No catred_info data available for MER scatter")
+            logger.debug("No catred_info data available for MER scatter")
             return False
         return True
 
@@ -431,9 +435,9 @@ class CATREDHandler:
             _state_dir = os.path.join(os.path.expanduser("~"), ".cache", "clusterviz_state")
             with _dc.Cache(_state_dir) as _sc:
                 _sc.set("catred_aladin_data", clipped)
-            print(f"Debug: Persisted {len(clipped.get('ra', []))} clipped CATRED points to aladin diskcache")
+            logger.debug(f"Persisted {len(clipped.get('ra', []))} clipped CATRED points to aladin diskcache")
         except Exception as _exc:
-            print(f"Warning: Could not persist CATRED aladin data: {_exc}")
+            logger.warning(f"Could not persist CATRED aladin data: {_exc}")
 
     def _find_intersecting_tiles(
         self, data: Dict[str, Any], ra_min: float, ra_max: float, dec_min: float, dec_max: float
@@ -476,8 +480,8 @@ class CATREDHandler:
                 & (dsr_df["dec_center"] <= dec_hi + margin)
             )
             candidates = dsr_df[pre_mask]
-            print(
-                f"Debug: Stage-1 center pre-filter: {len(candidates)}/{len(dsr_df)} tiles remain"
+            logger.debug(
+                f"Stage-1 center pre-filter: {len(candidates)}/{len(dsr_df)} tiles remain"
             )
         elif "polygon" in dsr_df.columns:
             # Derive bbox from polygon bounds via vectorized apply
@@ -491,8 +495,8 @@ class CATREDHandler:
 
             pre_mask = dsr_df["polygon"].apply(_bbox_overlaps)
             candidates = dsr_df[pre_mask]
-            print(
-                f"Debug: Stage-1 bbox pre-filter: {len(candidates)}/{len(dsr_df)} tiles remain"
+            logger.debug(
+                f"Stage-1 bbox pre-filter: {len(candidates)}/{len(dsr_df)} tiles remain"
             )
         else:
             candidates = dsr_df
@@ -503,13 +507,14 @@ class CATREDHandler:
         if "polygon" in candidates.columns:
             none_polygons = candidates[candidates["polygon"].isna()]
             if not none_polygons.empty:
-                print(f"Debug: {len(none_polygons)}/{len(candidates)} stage-1 candidates have None polygons")
-                print(f"Debug: Missing polygon mertileids: {none_polygons['mertileid'].tolist()[:10]}")
+                logger.debug(f"{len(none_polygons)}/{len(candidates)} stage-1 candidates have None polygons")
+                logger.debug(f"Missing polygon mertileids: {none_polygons['mertileid'].tolist()[:10]}")
             else:
-                print(f"Debug: All {len(candidates)} stage-1 candidates have valid polygons")
+                logger.debug(f"All {len(candidates)} stage-1 candidates have valid polygons")
         else:
-            print(f"Debug: WARNING - 'polygon' column missing from candidates DataFrame!")
-            print(f"Debug: Available columns: {list(candidates.columns)}")
+            logger.warning(
+                f"'polygon' column missing from candidates DataFrame; columns: {list(candidates.columns)}"
+            )
 
         _t_stage2 = time.perf_counter()
 
@@ -526,12 +531,12 @@ class CATREDHandler:
         mertiles_to_load = candidates.loc[intersects_mask, "mertileid"].tolist()
 
         if none_poly_count > 0:
-            print(f"Debug: Stage-2 skipped {none_poly_count}/{len(candidates)} tiles due to None polygons")
+            logger.debug(f"Stage-2 skipped {none_poly_count}/{len(candidates)} tiles due to None polygons")
 
         self._profiler.record("catred:find_tiles:stage2", time.perf_counter() - _t_stage2)
 
-        print(
-            f"Debug: Found {len(mertiles_to_load)} MER tiles in zoom area: "
+        logger.debug(
+            f"Found {len(mertiles_to_load)} MER tiles in zoom area: "
             f"{mertiles_to_load[:5]}{'...' if len(mertiles_to_load) > 5 else ''}"
         )
 
@@ -569,8 +574,8 @@ class CATREDHandler:
                 or "effcovmask_info" not in data
                 or data["effcovmask_info"].empty
             ):
-                print(
-                    f"Debug: Missing catred_info or effcovmask_info for coverage processing of mertile {mertileid}"
+                logger.debug(
+                    f"Missing catred_info or effcovmask_info for coverage processing of mertile {mertileid}"
                 )
                 return {}
 
@@ -578,7 +583,7 @@ class CATREDHandler:
                 mertileid not in data["catred_info"]["mertileid"].values
                 or mertileid not in data["effcovmask_info"]["mertileid"].values
             ):
-                print(f"Debug: MerTile {mertileid} not found in catred_info or effcovmask_info")
+                logger.debug(f"MerTile {mertileid} not found in catred_info or effcovmask_info")
                 return {}
 
             if (
@@ -586,8 +591,8 @@ class CATREDHandler:
                 or data.get("effcovmask_dsr", None)
                 not in data["effcovmask_info"]["dataset_release"].values
             ):
-                print(
-                    f"Debug: catred_dsr {data.get('catred_dsr', None)} or effcovmask_dsr {data.get('effcovmask_dsr', None)} not found in catred_info or effcovmask_info for mertile {mertileid}"
+                logger.debug(
+                    f"catred_dsr {data.get('catred_dsr', None)} or effcovmask_dsr {data.get('effcovmask_dsr', None)} not found in catred_info or effcovmask_info for mertile {mertileid}"
                 )
                 return {}
 
@@ -606,7 +611,7 @@ class CATREDHandler:
                 )  # Load all data
 
             if len(full_src_with_coverage) == 0:
-                print(f"Debug: No CATRED sources found for mertile {mertileid}")
+                logger.debug(f"No CATRED sources found for mertile {mertileid}")
                 return {}
 
             # Apply box selection if provided
@@ -649,13 +654,13 @@ class CATREDHandler:
                 ),
             }
 
-            print(
-                f"Debug: Loaded {len(result['RIGHT_ASCENSION'])} sources with coverage from MER tile {mertileid}"
+            logger.debug(
+                f"Loaded {len(result['RIGHT_ASCENSION'])} sources with coverage from MER tile {mertileid}"
             )
             return result
 
         except Exception as e:
-            print(f"Debug: Error loading CATRED data with coverage for mertile {mertileid}: {e}")
+            logger.opt(exception=e).warning(f"Error loading CATRED data with coverage for mertile {mertileid}: {e}")
             return {}
 
     def get_radec_mertile_masked(
@@ -691,8 +696,8 @@ class CATREDHandler:
                 or "effcovmask_info" not in data
                 or data["effcovmask_info"].empty
             ):
-                print(
-                    f"Debug: Missing catred_info or effcovmask_info for masked processing of mertile {mertileid}"
+                logger.debug(
+                    f"Missing catred_info or effcovmask_info for masked processing of mertile {mertileid}"
                 )
                 return {}
 
@@ -700,7 +705,7 @@ class CATREDHandler:
                 mertileid not in data["catred_info"]["mertileid"].values
                 or mertileid not in data["effcovmask_info"]["mertileid"].values
             ):
-                print(f"Debug: MerTile {mertileid} not found in catred_info or effcovmask_info")
+                logger.debug(f"MerTile {mertileid} not found in catred_info or effcovmask_info")
                 return {}
 
             if (
@@ -708,8 +713,8 @@ class CATREDHandler:
                 or data.get("effcovmask_dsr", None)
                 not in data["effcovmask_info"]["dataset_release"].values
             ):
-                print(
-                    f"Debug: catred_dsr {data.get('catred_dsr', None)} or effcovmask_dsr {data.get('effcovmask_dsr', None)} not found in catred_info or effcovmask_info for mertile {mertileid}"
+                logger.debug(
+                    f"catred_dsr {data.get('catred_dsr', None)} or effcovmask_dsr {data.get('effcovmask_dsr', None)} not found in catred_info or effcovmask_info for mertile {mertileid}"
                 )
                 return {}
 
@@ -727,7 +732,7 @@ class CATREDHandler:
             )
 
             if len(filtered_src) == 0:
-                print(f"Debug: No sources above threshold {threshold} for mertile {mertileid}")
+                logger.debug(f"No sources above threshold {threshold} for mertile {mertileid}")
                 return {}
 
             # Apply box selection if provided
@@ -770,13 +775,13 @@ class CATREDHandler:
                 ),
             }
 
-            print(
-                f"Debug: Loaded {len(result['RIGHT_ASCENSION'])} masked sources from MER tile {mertileid} (threshold={threshold})"
+            logger.debug(
+                f"Loaded {len(result['RIGHT_ASCENSION'])} masked sources from MER tile {mertileid} (threshold={threshold})"
             )
             return result
 
         except Exception as e:
-            print(f"Debug: Error loading masked MER tile {mertileid}: {e}")
+            logger.opt(exception=e).warning(f"Error loading masked MER tile {mertileid}: {e}")
             return {}
 
     def update_catred_data_with_coverage(
@@ -813,7 +818,7 @@ class CATREDHandler:
             or data["catred_info"].empty
             or "polygon" not in data["catred_info"].columns
         ):
-            print("Debug: No catred_info data available for coverage-based CATRED loading")
+            logger.debug("No catred_info data available for coverage-based CATRED loading")
             return catred_scatter_data
 
         _t_total = time.perf_counter()
@@ -827,7 +832,7 @@ class CATREDHandler:
                 zoom_data["dec_min"],
                 zoom_data["dec_max"],
             )
-        print(f"Debug: Found {len(mertiles_to_load)} MER tiles in zoom area for coverage loading")
+        logger.debug(f"Found {len(mertiles_to_load)} MER tiles in zoom area for coverage loading")
 
         # Load data with coverage for each MER tile
         with self._profiler.timer("catred:load_tiles"):
@@ -840,7 +845,10 @@ class CATREDHandler:
         self._persist_aladin_catred(self.current_catred_data)
 
         self._profiler.record("catred:update_coverage", time.perf_counter() - _t_total)
-        print(f"Debug: Total CATRED points with coverage loaded: {len(catred_scatter_data['ra'])} ({len(self.current_catred_data['ra'])} in viewport)")
+        logger.info(
+            f"CATRED with coverage: {len(catred_scatter_data['ra'])} points from {len(mertiles_to_load)} MER tiles "
+            f"({len(self.current_catred_data['ra'])} in viewport)"
+        )
         return self.current_catred_data
 
     def _load_tile_data_with_coverage(
@@ -852,7 +860,7 @@ class CATREDHandler:
         threshold: float = 0.8,
     ) -> None:
         """Load data with coverage for each MER tile and accumulate in scatter data."""
-        for mertileid in mertiles_to_load:
+        for mertileid in tile_progress(mertiles_to_load, "CATRED MER tiles"):
             with self._profiler.timer("catred:tile_load"):
                 tile_data = self.get_radec_mertile_with_coverage(mertileid, data, maglim, threshold)
             if tile_data and "RIGHT_ASCENSION" in tile_data:
@@ -864,8 +872,8 @@ class CATREDHandler:
                 catred_scatter_data["phz_pdf"].extend(tile_data["PHZ_PDF"])
                 catred_scatter_data["kron_radius"].extend(tile_data["KRON_RADIUS"])
                 catred_scatter_data["effective_coverage"].extend(tile_data["EFFECTIVE_COVERAGE"])
-                print(
-                    f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} sources with coverage from MER tile {mertileid}"
+                logger.debug(
+                    f"Added {len(tile_data['RIGHT_ASCENSION'])} sources with coverage from MER tile {mertileid}"
                 )
 
     def update_catred_data_clusterbox(
@@ -900,8 +908,8 @@ class CATREDHandler:
                 "trace_marker_color",
             ]
         ):
-            print("Debug: No valid box data for CATRED")
-            print("Debug: Box data received:", box)
+            logger.debug("No valid box data for CATRED")
+            logger.debug("Box data received: {}", box)
             return {
                 "ra": [],
                 "dec": [],
@@ -921,7 +929,7 @@ class CATREDHandler:
         )
 
         if not mertiles_to_load:
-            print("Debug: No intersecting MER tiles found for CATRED")
+            logger.debug("No intersecting MER tiles found for CATRED")
             return {
                 "ra": [],
                 "dec": [],
@@ -935,7 +943,7 @@ class CATREDHandler:
                 "trace_marker_color": [],
             }
 
-        print(f"Debug: Loading CATRED for {len(mertiles_to_load)} MER tiles")
+        logger.debug(f"Loading CATRED for {len(mertiles_to_load)} MER tiles")
 
         # Initialize scatter data container
         catred_scatter_data: Dict[str, List] = {
@@ -956,7 +964,7 @@ class CATREDHandler:
             mertiles_to_load, data, catred_scatter_data, threshold, maglim, box
         )
 
-        print(f"Debug: Total CATRED points loaded: {len(catred_scatter_data['ra'])}")
+        logger.info(f"CATRED: {len(catred_scatter_data['ra'])} points from {len(mertiles_to_load)} MER tiles")
         return catred_scatter_data
 
     def _load_tile_data_clusterbox(
@@ -969,7 +977,7 @@ class CATREDHandler:
         box: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Load masked data for each MER tile and accumulate in scatter data."""
-        for mertileid in mertiles_to_load:
+        for mertileid in tile_progress(mertiles_to_load, "CATRED MER tiles"):
             tile_data = self.get_radec_mertile_masked(
                 mertileid=mertileid, data=data, threshold=threshold, maglim=maglim, box=box
             )
@@ -1003,8 +1011,8 @@ class CATREDHandler:
                     if "trace_marker_color" in box and isinstance(box["trace_marker_color"], str):
                         catred_scatter_data["trace_marker_color"].append(box["trace_marker_color"])
 
-                print(
-                    f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} masked points from MER tile {mertileid}"
+                logger.debug(
+                    f"Added {len(tile_data['RIGHT_ASCENSION'])} masked points from MER tile {mertileid}"
                 )
 
     def update_catred_data_unmasked(
@@ -1025,7 +1033,7 @@ class CATREDHandler:
         if not zoom_data or not all(
             k in zoom_data for k in ["ra_min", "ra_max", "dec_min", "dec_max"]
         ):
-            print("Debug: No valid zoom data for unmasked CATRED")
+            logger.debug("No valid zoom data for unmasked CATRED")
             return {
                 "ra": [],
                 "dec": [],
@@ -1046,7 +1054,7 @@ class CATREDHandler:
         )
 
         if not mertiles_to_load:
-            print("Debug: No intersecting MER tiles found for unmasked CATRED")
+            logger.debug("No intersecting MER tiles found for unmasked CATRED")
             return {
                 "ra": [],
                 "dec": [],
@@ -1058,7 +1066,7 @@ class CATREDHandler:
                 "effective_coverage": [],
             }
 
-        print(f"Debug: Loading unmasked CATRED for {len(mertiles_to_load)} MER tiles")
+        logger.debug(f"Loading unmasked CATRED for {len(mertiles_to_load)} MER tiles")
 
         # Initialize scatter data container
         catred_scatter_data: Dict[str, List] = {
@@ -1079,7 +1087,10 @@ class CATREDHandler:
         self.current_catred_data = self._clip_to_viewport(catred_scatter_data, zoom_data)
         self._persist_aladin_catred(self.current_catred_data)
 
-        print(f"Debug: Total unmasked CATRED points loaded: {len(catred_scatter_data['ra'])} ({len(self.current_catred_data['ra'])} in viewport)")
+        logger.info(
+            f"CATRED unmasked: {len(catred_scatter_data['ra'])} points from {len(mertiles_to_load)} MER tiles "
+            f"({len(self.current_catred_data['ra'])} in viewport)"
+        )
         return self.current_catred_data
 
     def _load_tile_data_unmasked(
@@ -1090,7 +1101,7 @@ class CATREDHandler:
         maglim: float = 24.0,
     ) -> None:
         """Load unmasked data for each MER tile and accumulate in scatter data."""
-        for mertileid in mertiles_to_load:
+        for mertileid in tile_progress(mertiles_to_load, "CATRED MER tiles"):
             tile_data = self.get_radec_mertile(mertileid, data, maglim)
             if tile_data and "RIGHT_ASCENSION" in tile_data:
                 catred_scatter_data["ra"].extend(tile_data["RIGHT_ASCENSION"])
@@ -1103,8 +1114,8 @@ class CATREDHandler:
                 catred_scatter_data["effective_coverage"].extend(
                     tile_data["EFFECTIVE_COVERAGE"]
                 )  # Dummy coverage for unmasked data
-                print(
-                    f"Debug: Added {len(tile_data['RIGHT_ASCENSION'])} unmasked points from MER tile {mertileid}"
+                logger.debug(
+                    f"Added {len(tile_data['RIGHT_ASCENSION'])} unmasked points from MER tile {mertileid}"
                 )
 
     def load_catred_scatter_data(
@@ -1135,17 +1146,17 @@ class CATREDHandler:
 
             _t0 = time.perf_counter()
             if catred_masked:
-                print(f"Debug: Loading masked CATRED data with coverage for client-side filtering")
+                logger.debug(f"Loading masked CATRED data with coverage for client-side filtering")
                 result = self.update_catred_data_with_coverage(zoom_data, data, maglim, threshold)
             else:  # unmasked
-                print("Debug: Loading unmasked CATRED data")
+                logger.debug("Loading unmasked CATRED data")
                 result = self.update_catred_data_unmasked(
                     zoom_data, data, maglim=1000.0
                 )  # Use high maglim for unmasked to avoid filtering
             self._profiler.record("catred:load_scatter_data", time.perf_counter() - _t0)
             return result
         except:
-            print(f"Debug: catred_masked not a boolean, executing catred_masked='True' fallback")
+            logger.debug(f"catred_masked not a boolean, executing catred_masked='True' fallback")
             return {
                 "ra": [],
                 "dec": [],
@@ -1177,7 +1188,7 @@ class CATREDHandler:
         Returns:
             Dictionary with scatter plot data for CATRED points
         """
-        print("Debug: Loading masked (default) CATRED data for cluster box selection")
+        logger.debug("Loading masked (default) CATRED data for cluster box selection")
         return self.update_catred_data_clusterbox(box, data, threshold, maglim)
 
     def apply_box_selection(self, src: Table, box: Dict[str, float]) -> Table:
@@ -1191,8 +1202,8 @@ class CATREDHandler:
 
         z_column = self.catred_z_param_select_for_filter
         if z_column not in src.colnames:
-            print(
-                f"Debug: Preferred redshift column '{z_column}' not found in CATRED source table, falling back to available redshift column"
+            logger.debug(
+                f"Preferred redshift column '{z_column}' not found in CATRED source table, falling back to available redshift column"
             )
             if "PHZ_MEDIAN" in src.colnames:
                 z_column = "PHZ_MEDIAN"
@@ -1203,8 +1214,8 @@ class CATREDHandler:
                     "CATRED source table is missing both PHZ_MODE_1 and PHZ_MEDIAN columns"
                 )
 
-        print(
-            f"Debug: CATRED box selection using redshift column '{z_column}' with window [{z_min:.4f}, {z_max:.4f}]"
+        logger.debug(
+            f"CATRED box selection using redshift column '{z_column}' with window [{z_min:.4f}, {z_max:.4f}]"
         )
 
         selection_mask = (
@@ -1217,7 +1228,7 @@ class CATREDHandler:
         )
 
         filtered_src = src[selection_mask]
-        print(f"Debug: Applied box selection: {len(filtered_src)} sources remain after filtering")
+        logger.debug(f"Applied box selection: {len(filtered_src)} sources remain after filtering")
         return filtered_src
 
     def _extract_box_data_from_cluster_click(self, click_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -1257,8 +1268,8 @@ class CATREDHandler:
                 z_max = min(z_max, float(lim_upper))
 
         if z_min > z_max:
-            print(
-                f"Warning: z_min ({z_min:.4f}) > z_max ({z_max:.4f}) after applying redshift limits "
+            logger.warning(
+                f"z_min ({z_min:.4f}) > z_max ({z_max:.4f}) after applying redshift limits "
                 f"[{lim_lower}, {lim_upper}] on cluster redshift {z_center:.4f} ± {bin_width/2:.4f}. "
                 "No CATRED sources will pass the redshift filter."
             )
@@ -1317,7 +1328,7 @@ class CATREDHandler:
     def clear_traces_cache(self) -> None:
         """Clear the CATRED traces cache."""
         self.traces_cache = []
-        print("CATRED traces cache cleared")
+        logger.info("CATRED traces cache cleared")
 
     def get_traces_count(self) -> int:
         """Get the number of cached CATRED traces."""

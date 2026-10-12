@@ -13,6 +13,8 @@ import os
 import subprocess
 from typing import Any, Dict, Optional, List
 
+from loguru import logger
+
 
 def get_git_repo_root():
     """Get the root directory of the current git repository"""
@@ -61,7 +63,7 @@ class Config:
 
             for config_file in config_files:
                 if os.path.exists(config_file):
-                    print(f"📋 Loading configuration from: {config_file}")
+                    logger.info(f"Configuration file: {config_file}")
                     self.config_parser.read(config_file)
                     self._config_file_used = config_file
                     break
@@ -73,7 +75,7 @@ class Config:
         else:
             if not os.path.exists(config_file):
                 raise FileNotFoundError(f"Configuration file not found: {config_file}")
-            print(f"📋 Loading configuration from: {config_file}")
+            logger.info(f"Configuration file: {config_file}")
             self.config_parser.read(config_file)
             self._config_file_used = config_file
 
@@ -273,15 +275,15 @@ class Config:
                         json.dump(parsed_list, f, indent=2)
 
                     files_list_dict[key] = temp_file
-                    print(
-                        f"Debug: Created temporary JSON file for {key}: {temp_file} with {len(parsed_list)} files"
+                    logger.debug(
+                        f"Created temporary JSON file for {key}: {temp_file} with {len(parsed_list)} files"
                     )
                 else:
                     # Single JSON file path - use directly
                     files_list_dict[key] = parsed_list[0]
-                    print(f"Debug: Using JSON file for {key}: {parsed_list[0]}")
+                    logger.debug(f"Using JSON file for {key}: {parsed_list[0]}")
             else:
-                print(f"Warning: No configuration found for {key} in [files] section")
+                logger.warning(f"No configuration found for {key} in [files] section")
 
         return files_list_dict
 
@@ -471,7 +473,7 @@ class Config:
         try:
             return max(minimum, int(str(self.config_parser.get("view", option_name)).strip()))
         except ValueError:
-            print(f"Warning: [view] {option_name} is not an integer; using {default}")
+            logger.warning(f"[view] {option_name} is not an integer; using {default}")
             return default
 
     def get_view_settings(self) -> Dict[str, int]:
@@ -502,7 +504,7 @@ class Config:
         except ValueError:
             value = -1.0
         if value <= 0:
-            print(f"Warning: [view] {option_name} is not a positive number; using {default}")
+            logger.warning(f"[view] {option_name} is not a positive number; using {default}")
             return default
         return value
 
@@ -518,9 +520,9 @@ class Config:
 
         for name, path in critical_dirs:
             if not os.path.exists(path):
-                issues.append(f"❌ {name}: {path} does not exist")
+                issues.append(f"{name}: {path} does not exist")
             else:
-                print(f"✅ {name}: {path}")
+                logger.info(f"{name}: {path}")
 
         # Check optional directories
         optional_dirs = [
@@ -535,38 +537,39 @@ class Config:
 
         for name, path in optional_dirs:
             if not os.path.exists(path):
-                print(f"⚠️  {name}: {path} does not exist (optional)")
+                logger.warning(f"{name}: {path} does not exist (optional)")
             else:
-                print(f"✅ {name}: {path}")
+                logger.info(f"{name}: {path}")
 
         # Check environment
         eden_active = self.eden_path in os.environ.get("PATH", "")
         if eden_active:
-            print(f"✅ EDEN environment is active")
+            logger.info("EDEN environment is active")
         else:
-            print(f"⚠️  EDEN environment not detected in PATH")
+            logger.warning("EDEN environment not detected in PATH")
 
         return len(issues) == 0, issues
 
     def print_config_summary(self):
-        """Print a summary of current configuration"""
-        print("=== Cluster Visualization Configuration ===")
-        print(f"Configuration file: {self._config_file_used}")
-        print(f"Base workspace: {self._base_workspace}")
-        print(f"EDEN path: {self.eden_path}")
-        print(f"Project root (auto-detected): {self.project_root}")
-        print("")
-        print("Data directories:")
-        print(f"  CATRED directory: {self.catred_dir}")
-        print(f"  Effective coverage mask directory: {self.effcovmask_dir}")
-        print(f"  Mosaic directory: {self.mosaic_dir}")
-        print("")
-        print("Working directories:")
-        print(f"  DetIntile directory: {self.detintile_dir}")
-        print(f"  MergeDetCat directory: {self.mergedetcat_dir}")
-        print(f"  GlueMatchCat directory: {self.gluematchcat_dir}")
-        print(f"  Characterization directory: {self.characterization_dir}")
-        print("===========================================")
+        """Log a summary of the current configuration (INFO)."""
+        logger.info(
+            "\n".join([
+                "Cluster Visualization configuration",
+                f"Configuration file: {self._config_file_used}",
+                f"Base workspace: {self._base_workspace}",
+                f"EDEN path: {self.eden_path}",
+                f"Project root (auto-detected): {self.project_root}",
+                "Data directories:",
+                f"  CATRED directory: {self.catred_dir}",
+                f"  Effective coverage mask directory: {self.effcovmask_dir}",
+                f"  Mosaic directory: {self.mosaic_dir}",
+                "Working directories:",
+                f"  DetIntile directory: {self.detintile_dir}",
+                f"  MergeDetCat directory: {self.mergedetcat_dir}",
+                f"  GlueMatchCat directory: {self.gluematchcat_dir}",
+                f"  Characterization directory: {self.characterization_dir}",
+            ])
+        )
 
 
 # Global configuration instance (lazy initialization)
@@ -624,13 +627,13 @@ class ConfigFromEnv(Config):
         env_workspace = os.environ.get("EUCLID_WORKSPACE")
         if env_workspace:
             self._base_workspace = env_workspace
-            print(f"🌍 Using EUCLID_WORKSPACE from environment: {env_workspace}")
+            logger.info(f"Using EUCLID_WORKSPACE from environment: {env_workspace}")
 
         env_eden = os.environ.get("EDEN_PATH")
         if env_eden:
             self._cvmfs_eden_path = env_eden
             self.eden_path = env_eden
-            print(f"🌍 Using EDEN_PATH from environment: {env_eden}")
+            logger.info(f"Using EDEN_PATH from environment: {env_eden}")
 
         # Re-setup paths with environment overrides
         self._setup_paths()
@@ -642,9 +645,10 @@ if __name__ == "__main__":
     is_valid, issues = validate_environment()
 
     if not is_valid:
-        print("\n❌ Configuration issues found:")
-        for issue in issues:
-            print(f"  {issue}")
-        print("\nPlease update the paths in config.py to match your environment.")
+        logger.error(
+            "Configuration issues found:\n"
+            + "\n".join(f"  {issue}" for issue in issues)
+            + "\nPlease update the paths in your config file to match your environment."
+        )
     else:
-        print("\n✅ Configuration is valid!")
+        logger.info("Configuration is valid")

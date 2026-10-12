@@ -6,7 +6,9 @@ cluster_dash_app.py after argument parsing) sets the format and the level:
 ``logging`` module (dash, werkzeug, astropy, ...) go to the same sink.
 
 The sink is stdout, like the startup banner and SSH box that stay plain prints:
-with output redirected to a file, one stream keeps the lines in order.
+with output redirected to a file, one stream keeps the lines in order. Lines are
+written with ``tqdm.write`` so they appear above any progress bar
+(``tile_progress``) instead of breaking it.
 """
 
 import inspect
@@ -22,6 +24,24 @@ FORMAT = (
     "<green>{time:HH:mm:ss}</green> <level>{level: <7}</level> "
     "<cyan>{name}</cyan> | <level>{message}</level>"
 )
+# Package prefixes left out of the module name shown in each line
+_PREFIXES = ("cluster_visualization.src.", "cluster_visualization.")
+
+
+def short_name(name: str) -> str:
+    """Module name as shown: no package prefix, "app" for the entry script."""
+    if name == "__main__":
+        return "app"
+    for prefix in _PREFIXES:
+        if name.startswith(prefix):
+            return name[len(prefix):]
+    return name
+
+
+def _patch(record) -> None:
+    record["name"] = short_name(record["name"] or "")
+
+
 # Libraries whose DEBUG output is noise even at --log-level DEBUG
 _QUIET = ("PIL", "urllib3", "asyncio", "fsspec", "numexpr", "matplotlib")
 
@@ -48,6 +68,31 @@ def resolve_level(level=None) -> str:
     return name if name in LEVELS else "INFO"
 
 
+def _write(message) -> None:
+    from tqdm import tqdm
+
+    tqdm.write(str(message), end="")
+
+
+def tile_progress(items, desc: str):
+    """Progress bar over MER tiles being loaded (stderr, cleared when done).
+
+    Shown only on a terminal and for more than one tile; otherwise the items are
+    iterated as they are. Log lines keep their place above the bar (see ``_write``).
+    """
+    from tqdm import tqdm
+
+    items = list(items)
+    return tqdm(
+        items,
+        desc=desc,
+        unit="tile",
+        leave=False,
+        dynamic_ncols=True,
+        disable=len(items) < 2 or not sys.stderr.isatty(),
+    )
+
+
 def setup_logging(level=None) -> str:
     """Replace loguru's handlers with one stdout sink at the resolved level. Idempotent."""
     level = resolve_level(level)
@@ -61,9 +106,11 @@ def setup_logging(level=None) -> str:
         "LOGURU_DIAGNOSE": "NO",
     })
     logger.remove()
+    logger.configure(patcher=_patch)
     logger.add(
-        sys.stdout,
+        _write,
         level=level,
+        colorize=sys.stdout.isatty(),
         format=FORMAT,
         backtrace=False,
         diagnose=False,  # tracebacks without local variables (DataFrames can be huge)

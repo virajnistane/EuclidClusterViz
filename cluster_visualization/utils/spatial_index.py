@@ -10,6 +10,7 @@ This module provides efficient spatial indexing using KD-trees for:
 from typing import List, Optional, Tuple
 
 import numpy as np
+from loguru import logger
 
 
 class SpatialIndex:
@@ -62,9 +63,8 @@ class SpatialIndex:
         # utils/__init__ imports this module at app startup, and scipy is slow to load cold.
         from scipy.spatial import cKDTree
 
-        print(f"Building spatial index for {self.n_points:,} points...")
         self.tree = cKDTree(self.coords)
-        print(f"Spatial index built successfully")
+        logger.debug("Spatial index built for {:,} points", self.n_points)
 
     def query_radius(self, ra_center: float, dec_center: float, radius_deg: float) -> np.ndarray:
         """
@@ -236,13 +236,13 @@ class CATREDSpatialIndex:
             indices = np.arange(0, self.n_original, step)
             self.index = SpatialIndex(ra[indices], dec[indices])
             self.subsampled = True
-            print(
-                f"CATRED spatial index: subsampled {len(indices):,} from {self.n_original:,} points"
+            logger.debug(
+                "CATRED spatial index: subsampled {:,} from {:,} points", len(indices), self.n_original
             )
         else:
             self.index = SpatialIndex(ra, dec)
             self.subsampled = False
-            print(f"CATRED spatial index: using all {self.n_original:,} points")
+            logger.debug("CATRED spatial index: using all {:,} points", self.n_original)
 
     def check_proximity_batch(
         self, ra_array: np.ndarray, dec_array: np.ndarray, radius_deg: float = 0.1

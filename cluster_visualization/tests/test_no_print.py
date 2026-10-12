@@ -37,19 +37,11 @@ PENDING = {
     "callbacks/sky_overview_callbacks.py",
     "callbacks/ui_callbacks.py",
     "callbacks/utils.py",
-    "src/config.py",
-    "src/data/catred_handler.py",
-    "src/data/loader.py",
     "src/mermosaic.py",
     "src/visualization/catred_proximity.py",
     "src/visualization/figures.py",
     "src/visualization/sky_overview.py",
     "src/visualization/traces.py",
-    "utils/disk_cache.py",
-    "utils/magnitude.py",
-    "utils/memory_manager.py",
-    "utils/profiler.py",
-    "utils/spatial_index.py",
 }
 
 
