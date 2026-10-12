@@ -62,8 +62,9 @@ TOUR_STEPS = {
          "body": "Survey imagery behind the clusters for the current zoomed view."},
         {"element": "#display-options-header", "title": "Display", "side": "right",
          "body": "MER tiles, polygon fill and aspect ratio. These update the plot immediately."},
-        {"element": "#status-info-toggle", "title": "Status", "side": "left",
-         "body": "Render results and errors appear here; click to restore it if minimized."},
+        {"element": "#status-info-toggle", "title": "Status", "side": "top",
+         "body": "Render results and errors appear at the bottom left of the plot. This button "
+                 "minimizes them; a dot marks a new status while minimized."},
         {"element": "#tutorial-tour-menu", "title": "More tours", "side": "bottom",
          "body": "Open this menu for the full walkthrough or a detailed tour of any one section. "
                  "The Getting Started guide (?) is always one click away."},

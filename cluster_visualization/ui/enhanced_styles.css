@@ -530,18 +530,23 @@ body {
     margin-top: 8px;
 }
 
-/* ----------------------------------------------------------- Status toast */
+/* ----------------------------------------------------------- Status panel */
 
-/* Status alerts float top-right so they stay visible while the sidebar is scrolled.
-   z-index kept below Bootstrap's modal/backdrop (1050+) so open modals sit on top of it.
-   pointer-events:none on the outer box + auto on children avoids blocking clicks on
-   whatever sits underneath the empty space around the alert. */
+/* Render results and errors sit over the bottom-left of the plot they describe,
+   inside the plot column, so they never cover the analysis tabs or modals.
+   Inset past the plot's axis margins; the modebar and legend are top/right.
+   pointer-events:none on the outer box + auto on children lets clicks reach the
+   plot around the panel. */
+.plot-col {
+    position: relative;
+}
+
 .status-toast-container {
-    position: fixed;
-    top: 100px;
-    right: 20px;
-    z-index: 1030;
-    max-width: 360px;
+    position: absolute;
+    left: 52px;
+    bottom: 52px;
+    z-index: 6;
+    max-width: min(360px, calc(100% - 64px));
     pointer-events: none;
 }
 
@@ -553,39 +558,83 @@ body {
     display: none;
 }
 
+/* Status alerts carry Bootstrap spacing utilities (mt-2, !important) */
+.status-toast-container .alert {
+    margin: 0 !important;
+    box-shadow: 0 4px 16px rgba(29, 33, 39, 0.14);
+}
+
 .status-toast-toggle {
     position: absolute;
-    top: -8px;
-    right: -8px;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    border: none;
-    background: #495057;
-    color: #fff;
-    line-height: 1;
-    font-size: 14px;
-    cursor: pointer;
+    top: -12px;
+    right: -12px;
     z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--cv-border-strong);
+    border-radius: 50%;
+    background: var(--cv-surface);
+    color: var(--cv-text-muted);
+    font-size: 0.75rem;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(29, 33, 39, 0.12);
+    transition: color 150ms ease-out, border-color 150ms ease-out;
 }
 
-/* Minimized: collapse to a small floating blob, content stays mounted so it can be restored */
-.status-toast-container.status-toast-minimized {
-    max-width: none;
-    width: 38px;
-    height: 38px;
+.status-toast-toggle:hover {
+    color: var(--cv-text);
+    border-color: var(--cv-text-muted);
 }
 
+.status-toast-toggle:focus-visible {
+    outline: none;
+    box-shadow: var(--cv-focus);
+}
+
+.status-toast-icon-show {
+    display: none;
+}
+
+/* Minimized: only the toggle shows (an info button); content stays mounted */
 .status-toast-container.status-toast-minimized #status-info {
     display: none;
 }
 
 .status-toast-container.status-toast-minimized .status-toast-toggle {
-    position: static;
-    width: 38px;
-    height: 38px;
-    font-size: 18px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    position: relative;
+    top: auto;
+    right: auto;
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
+    color: var(--cv-accent);
+    box-shadow: 0 2px 8px rgba(29, 33, 39, 0.18);
+}
+
+.status-toast-minimized .status-toast-icon-hide {
+    display: none;
+}
+
+.status-toast-minimized .status-toast-icon-show {
+    display: inline;
+}
+
+/* A status arrived while minimized: accent dot, cleared when the panel is opened */
+.status-toast-has-update .status-toast-toggle::after {
+    content: "";
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--cv-accent);
+    box-shadow: 0 0 0 2px var(--cv-surface);
 }
 
 /* ------------------------------------------------------------------ Motion */

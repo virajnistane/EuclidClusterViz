@@ -199,8 +199,35 @@ class AppLayout:
                                                 ),
                                                 # Aladin Lite view (hidden until mode switch)
                                                 create_aladin_view(),
+                                                # Render results and errors, over the bottom-left of the
+                                                # plot it describes; minimizes to a button, keeping content
+                                                html.Div(
+                                                    [
+                                                        html.Button(
+                                                            [
+                                                                html.I(
+                                                                    className="fas fa-minus status-toast-icon-hide",
+                                                                    **{"aria-hidden": "true"},
+                                                                ),
+                                                                html.I(
+                                                                    className="fas fa-circle-info status-toast-icon-show",
+                                                                    **{"aria-hidden": "true"},
+                                                                ),
+                                                            ],
+                                                            id="status-info-toggle",
+                                                            n_clicks=0,
+                                                            className="status-toast-toggle",
+                                                            title="Hide status",
+                                                            **{"aria-label": "Hide status", "aria-expanded": "true"},
+                                                        ),
+                                                        html.Div(id="status-info", role="status"),
+                                                    ],
+                                                    id="status-toast-outer",
+                                                    className="status-toast-container",
+                                                ),
                                             ],
                                             xs=12, xl=8,
+                                            className="plot-col",
                                         ),
                                         # Tabbed interface for PHZ plot and Cluster Analysis
                                         dbc.Col(
@@ -442,21 +469,12 @@ class AppLayout:
                                     ],
                                     className="mt-2",
                                 ),
-                                # Status info row — floating toast; minimizes to a blob instead of clearing content
-                                html.Div(
-                                    [
-                                        html.Button(
-                                            "×",
-                                            id="status-info-toggle",
-                                            n_clicks=0,
-                                            className="status-toast-toggle",
-                                        ),
-                                        html.Div(id="status-info"),
-                                    ],
-                                    id="status-toast-outer",
-                                    className="status-toast-container",
+                                # Status panel state: minimized by the user, and whether a status
+                                # arrived while minimized (the panel itself lives in the plot column)
+                                dcc.Store(
+                                    id="status-toast-minimized-store",
+                                    data={"minimized": False, "unread": False},
                                 ),
-                                dcc.Store(id="status-toast-minimized-store", data=False),
                                 # Slider values used by the last render, for "not applied" readouts
                                 dcc.Store(id="applied-filters-store", data=None),
                                 # Algorithm of the figure on screen, and where its cluster traces are,

@@ -1508,16 +1508,22 @@ class UICallbacks:
     #         return sum(1 for row in reader for value in row if str(value).strip())
 
     def _setup_status_toast_dismiss_callback(self):
-        """Toggle button minimizes the status-info toast to a blob; content stays mounted so it can be restored.
-        New content arriving auto-restores it from the minimized state."""
+        """Toggle button minimizes the status panel to a button; content stays mounted so it can
+        be restored. The user's choice holds: a status arriving while minimized marks the button
+        as unread instead of reopening the panel over the plot."""
         self.app.clientside_callback(
             """
-            function(n_clicks, children, isMinimized) {
+            function(n_clicks, children, state) {
+                const s = (state && typeof state === 'object')
+                    ? state : {minimized: Boolean(state), unread: false};
                 const trig = window.dash_clientside.callback_context.triggered[0].prop_id;
                 if (trig.startsWith('status-info.')) {
-                    return children ? false : window.dash_clientside.no_update;
+                    if (!s.minimized || !children) {
+                        return window.dash_clientside.no_update;
+                    }
+                    return {minimized: true, unread: true};
                 }
-                return !isMinimized;
+                return {minimized: !s.minimized, unread: false};
             }
             """,
             Output("status-toast-minimized-store", "data"),
@@ -1528,11 +1534,22 @@ class UICallbacks:
 
         self.app.clientside_callback(
             """
-            function(isMinimized) {
-                return isMinimized ? 'status-toast-container status-toast-minimized' : 'status-toast-container';
+            function(state) {
+                const s = (state && typeof state === 'object')
+                    ? state : {minimized: Boolean(state), unread: false};
+                let cls = 'status-toast-container';
+                if (s.minimized) { cls += ' status-toast-minimized'; }
+                if (s.minimized && s.unread) { cls += ' status-toast-has-update'; }
+                const label = s.minimized
+                    ? (s.unread ? 'Show status (updated)' : 'Show status')
+                    : 'Hide status';
+                return [cls, label, label, s.minimized ? 'false' : 'true'];
             }
             """,
             Output("status-toast-outer", "className"),
+            Output("status-info-toggle", "aria-label"),
+            Output("status-info-toggle", "title"),
+            Output("status-info-toggle", "aria-expanded"),
             Input("status-toast-minimized-store", "data"),
         )
 
