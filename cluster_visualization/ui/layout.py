@@ -68,7 +68,6 @@ class AppLayout:
                                         html.Div(
                                             [
                                                 html.H2("Controls", className="sidebar-title"),
-                                                AppLayout._create_main_render_section(),
                                                 html.P(
                                                     "Display options update live and keep your zoom. "
                                                     "Filters take effect when you press Apply filters.",
@@ -76,6 +75,11 @@ class AppLayout:
                                                 ),
                                             ],
                                             className="sidebar-head",
+                                        ),
+                                        # Stays at the top of the sidebar while it scrolls
+                                        html.Div(
+                                            AppLayout._create_main_render_section(),
+                                            className="render-bar",
                                         ),
                                         AppLayout._create_collapsible_sections(),
                                     ],
