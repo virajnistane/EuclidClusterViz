@@ -13,6 +13,7 @@ PACKAGE = Path(__file__).resolve().parents[1]
 # Whole files: CLI scripts whose stdout is their output, and dev tools
 ALLOWED_FILES = {
     "scripts/generate_mask_hips.py",
+    "scripts/generate_ned_catred_matches.py",
     "scripts/write_prefetch_manifest.py",
     "src/test_dash_app.py",
     "utils/fix_syntax.py",

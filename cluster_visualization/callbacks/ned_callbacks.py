@@ -8,6 +8,7 @@ distinctly from CATRED, for manual verification against CATRED sources.
 
 import plotly.graph_objs as go
 from dash import Input, Output, State
+from loguru import logger
 
 from cluster_visualization.src.data.ned_catred_matcher import match_ned_to_catred
 from cluster_visualization.src.visualization.trace_registry import TraceRegistry, TraceType
@@ -184,7 +185,7 @@ class NEDCallbacks:
                         relayout_data, current_figure,
                     )
                 except Exception as e:
-                    print(f"Error finding CATRED sources near NED galaxies: {e}")
+                    logger.opt(exception=e).error(f"Error finding CATRED sources near NED galaxies: {e}")
 
             categorized[TraceType.NED_NEARBY_CATRED] = nearby_traces
             current_figure["data"] = TraceRegistry.assemble_in_layer_order(categorized)
@@ -248,7 +249,7 @@ class NEDCallbacks:
 
         viewport = self._get_current_viewport(relayout_data, current_figure)
         if viewport is None:
-            print("Debug: No zoomed-in viewport available for NED-nearby-CATRED matching")
+            logger.info("NED-nearby CATRED: zoom in first (no zoomed-in viewport)")
             return []
 
         all_ned_ra = df["RA"].to_numpy()
@@ -263,7 +264,7 @@ class NEDCallbacks:
         df_in_view = df[in_view].reset_index(drop=True)
         ned_ra = df_in_view["RA"].to_numpy()
         ned_dec = df_in_view["DEC"].to_numpy()
-        print(f"Debug: NED-nearby-CATRED: {len(ned_ra)} NED galaxies in current viewport")
+        logger.debug(f"NED-nearby CATRED: {len(ned_ra)} NED galaxies in current viewport")
         if len(ned_ra) == 0:
             return []
 
@@ -272,22 +273,22 @@ class NEDCallbacks:
             df_in_view, self.catred_handler, data, radius_arcsec, catred_masked, threshold, maglim
         )
         if result is None:
-            print("Debug: NED-nearby-CATRED: no CATRED points loaded for this viewport")
+            logger.info("NED-nearby CATRED: no CATRED points loaded for this viewport")
             return []
 
         if len(result.nearest_rows) > 0:
-            print(
-                f"Debug: NED-nearby-CATRED: recording {len(result.nearest_rows)} "
+            logger.debug(
+                f"NED-nearby CATRED: recording {len(result.nearest_rows)} "
                 "nearest-match row(s) to output file"
             )
             try:
                 self.ned_handler.write_catred_matches(result.nearest_rows)
             except Exception as e:
-                print(f"Warning: Failed to record NED-nearby-CATRED matches: {e}")
+                logger.warning(f"Failed to record NED-nearby CATRED matches: {e}")
 
         if len(result.display_matched_idx) == 0:
-            print(
-                f"Debug: NED-nearby-CATRED: 0 of {len(result.catred_ra)} CATRED sources within "
+            logger.info(
+                f"NED-nearby CATRED: 0 of {len(result.catred_ra)} CATRED sources within "
                 f"{radius_arcsec} arcsec of any of {len(ned_ra)} NED galaxies in view "
                 f"(nearest CATRED source is {result.overall_nearest_arcsec:.2f} arcsec away - "
                 "try a larger radius)"
@@ -295,7 +296,7 @@ class NEDCallbacks:
             return []
 
         idx = result.display_matched_idx
-        print(f"Debug: NED-nearby-CATRED: matched {len(idx)} CATRED sources within {radius_arcsec} arcsec")
+        logger.info(f"NED-nearby CATRED: {len(idx)} CATRED sources within {radius_arcsec} arcsec of {len(ned_ra)} NED galaxies")
 
         hover_text = self._format_catred_hover_text(result.catred_scatter, idx)
         return [self._build_nearby_catred_trace(result.catred_ra[idx], result.catred_dec[idx], hover_text)]

@@ -3,10 +3,10 @@
 import os
 import tempfile
 import unittest
-from unittest import mock
 
 import numpy as np
 from astropy.io import fits
+from loguru import logger
 
 from cluster_visualization.callbacks.main_plot import MainPlotCallbacks
 from cluster_visualization.src.data.ned_handler import NEDHandler
@@ -90,10 +90,14 @@ class TestNEDFilter(unittest.TestCase):
 
     def test_filter_without_catalog_is_noop_and_says_so(self):
         handler = NEDHandler(_Config("/nonexistent/ned.fits"))
-        with mock.patch("builtins.print") as printed:
+        messages = []
+        sink = logger.add(messages.append, level="WARNING", format="{message}")
+        try:
             rows = self._selected(handler, True)
+        finally:
+            logger.remove(sink)
         self.assertEqual(len(rows), 1000)
-        self.assertTrue(any("no catalog is loaded" in str(c) for c in printed.call_args_list))
+        self.assertTrue(any("no catalog is loaded" in str(m) for m in messages), messages)
 
     def test_status_count_follows_filter(self):
         handler = NEDHandler(_Config(_ned_fits(tempfile.mkdtemp())))

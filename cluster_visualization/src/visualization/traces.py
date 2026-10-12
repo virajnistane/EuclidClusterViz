@@ -214,13 +214,13 @@ class TraceCreator:
         # Prepare NED spec-z traces (preserve existing ones)
         ned_specz_traces = existing_ned_specz_traces or []
         if ned_specz_traces:
-            print(f"Debug: Preserving {len(ned_specz_traces)} existing NED spec-z traces in layer order")
+            logger.debug(f"Preserving {len(ned_specz_traces)} existing NED spec-z traces in layer order")
 
         # Prepare NED-nearby CATRED traces (preserve existing ones)
         ned_nearby_catred_traces = existing_ned_nearby_catred_traces or []
         if ned_nearby_catred_traces:
-            print(
-                f"Debug: Preserving {len(ned_nearby_catred_traces)} existing NED-nearby CATRED traces in layer order"
+            logger.debug(
+                f"Preserving {len(ned_nearby_catred_traces)} existing NED-nearby CATRED traces in layer order"
             )
 
         # Combine in proper layer order: polygons (bottom) → mosaics → CATRED → clusters (top)
@@ -935,15 +935,15 @@ class TraceCreator:
             return cluster_data
         if self.ned_handler is None or not self.ned_handler.is_available():
             status = getattr(self.ned_handler, "status", "no NED handler")
-            print(f"Warning: NED spec-z filter is on but no catalog is loaded ({status}); not applied")
+            logger.warning(f"NED spec-z filter is on but no catalog is loaded ({status}); not applied")
             return cluster_data
 
         try:
             mask = np.isin(cluster_data["ID_UNIQUE_CLUSTER"], self.ned_handler.get_unique_cluster_ids())
-            print(f"NED spec-z filter: {len(cluster_data)} -> {int(mask.sum())} merged clusters")
+            logger.debug("NED spec-z filter: {} -> {} merged clusters", len(cluster_data), int(mask.sum()))
             return cluster_data[mask]
         except Exception as e:
-            print(f"Error applying NED spec-z filtering: {e}")
+            logger.opt(exception=e).error(f"Error applying NED spec-z filtering: {e}")
             return cluster_data
 
     def _check_zoom_threshold(self, relayout_data: Optional[Dict], show_mer_tiles: bool) -> bool:
