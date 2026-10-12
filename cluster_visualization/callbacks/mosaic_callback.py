@@ -6,6 +6,7 @@ Includes zoom-dependent MER-Mosaic and mask button state management.
 """
 
 from dash import Input, Output, State
+from loguru import logger
 
 from cluster_visualization.src.visualization.trace_registry import CUTOUT_MASK_PREFIX
 
@@ -199,12 +200,10 @@ class MOSAICCallbacks:
 
     def _setup_mosaic_render_callback(self):
         """Setup mosaic image rendering callback"""
-        print(f"🔧 Setting up mosaic render callback, mosaic_handler: {self.mosaic_handler}")
         if not self.mosaic_handler:
-            print("⚠️  Skipping mosaic callback - no mosaic handler available")
+            logger.warning("Skipping mosaic callback - no mosaic handler available")
             return  # Skip if no mosaic handler available
-
-        print("✅ Adding mosaic render callback")
+        logger.debug("Registering mosaic render callback")
 
         @self.app.callback(
             Output("cluster-plot", "figure", allow_duplicate=True),
@@ -244,31 +243,22 @@ class MOSAICCallbacks:
         ):
             """Render mosaic images when button is clicked"""
             try:
-                print(
-                    f"🔍 Mosaic callback triggered! n_clicks={n_clicks}, mosaic_enabled={mosaic_enabled}"
+                logger.debug(
+                    "Mosaic button: click {}, enabled={}, opacity={}, algorithm={}, provider={}, source={}",
+                    n_clicks, mosaic_enabled, opacity, algorithm, mosaic_provider, mosaic_source,
                 )
-                print(
-                    f"   -> relayout_data keys: {list(relayout_data.keys()) if relayout_data else None}"
-                )
-                print(f"   -> opacity: {opacity}, algorithm: {algorithm}")
-                print(f"   -> provider: {mosaic_provider}, source: {mosaic_source}")
-                print(f"   -> current_figure exists: {current_figure is not None}")
 
                 if not n_clicks:
-                    print(f"   -> Returning early: n_clicks is {n_clicks}")
                     return current_figure
 
                 if not mosaic_enabled:
-                    print(f"   -> Returning early: mosaic not enabled ({mosaic_enabled})")
+                    logger.debug("Mosaic not enabled; nothing to render")
                     return current_figure
 
-                print("🚀 Proceeding with mosaic loading...")
                 try:
-                    print(f"   -> Loading data for algorithm: {algorithm}")
                     # Load current data
                     set_progress((15, f"Loading {algorithm} data..."))
                     data = self.data_loader.load_data(algorithm)
-                    print(f"   -> Data loaded successfully")
 
                     # Get mosaic traces for current zoom window
                     if self.mosaic_handler:
@@ -301,9 +291,6 @@ class MOSAICCallbacks:
                             esa_cutout_format=esa_cutout_format,
                             progress_callback=mosaic_progress_cb,
                         )
-                        print(
-                            f"   -> Mosaic traces result: {len(mosaic_traces) if mosaic_traces else 0} traces"
-                        )
 
                         if mosaic_traces and len(mosaic_traces) > 0:
                             # Inject as layout.images (PNG bitmaps) — not figure.data traces.
@@ -320,12 +307,9 @@ class MOSAICCallbacks:
                                 existing_images.extend(mosaic_traces)
                                 layout["images"] = existing_images
 
-                                print(
-                                    f"✓ Added {len(mosaic_traces)} mosaic layout images "
-                                    f"(layer=below, PNG bitmap)"
-                                )
+                                logger.debug(f"Added {len(mosaic_traces)} mosaic layout images (layer=below)")
                             else:
-                                print("⚠️  No current figure to update")
+                                logger.warning("No current figure to update")
 
                             # --- Legacy go.Heatmap injection (kept for reference) ---
                             # if current_figure and "data" in current_figure:
@@ -357,35 +341,26 @@ class MOSAICCallbacks:
                             #         + catred_traces + other_traces + cluster_traces
                             #     )
                         else:
-                            print("ℹ️  No mosaic images found for current zoom window")
+                            logger.info("No mosaic images found for current zoom window")
                     else:
-                        print("❌ No mosaic handler available")
+                        logger.warning("No mosaic handler available")
 
-                    print("   -> Returning updated figure")
                     return current_figure
 
                 except Exception as e:
-                    print(f"❌ Error in mosaic loading: {e}")
-                    import traceback
-
-                    traceback.print_exc()
+                    logger.exception(f"Error in mosaic loading: {e}")
                     return current_figure
 
             except Exception as e:
-                print(f"❌ Fatal error in mosaic callback: {e}")
-                import traceback
-
-                traceback.print_exc()
+                logger.exception(f"Fatal error in mosaic callback: {e}")
                 return current_figure
 
     def _setup_mask_overlay_callback(self):
         """Setup mask overlay toggle callback"""
-        print(f"🔧 Setting up mask overlay callback, mosaic_handler: {self.mosaic_handler}")
         if not self.mosaic_handler:
-            print("⚠️  Skipping mask overlay callback - no mosaic handler available")
+            logger.warning("Skipping mask overlay callback - no mosaic handler available")
             return  # Skip if no mosaic handler available
-
-        print("✅ Adding mask overlay callback")
+        logger.debug("Registering mask overlay callback")
 
         @self.app.callback(
             Output("cluster-plot", "figure", allow_duplicate=True),
@@ -413,31 +388,22 @@ class MOSAICCallbacks:
             mask_type,
             mask_binary_inverted,
         ):
-            """Render mosaic images when button is clicked"""
+            """Render the HEALPix mask overlay when the button is clicked"""
             try:
                 mask_type = mask_type or "corrected"
                 binary_inverted = bool(mask_binary_inverted)
                 mask_opacity = mask_opacity if mask_opacity is not None else 0.4
-                print(f"🔍 Mask overlay callback triggered! n_clicks={n_clicks}")
-                print(
-                    f"   -> relayout_data keys: {list(relayout_data.keys()) if relayout_data else None}"
+                logger.debug(
+                    "Mask button: click {}, mask_type={}, inverted={}, opacity={}, algorithm={}, provider={}, source={}",
+                    n_clicks, mask_type, binary_inverted, mask_opacity, algorithm, mosaic_provider, mosaic_source,
                 )
-                print(
-                    f"   -> algorithm: {algorithm}, provider: {mosaic_provider}, "
-                    f"source: {mosaic_source}, mask_type: {mask_type}"
-                )
-                print(f"   -> current_figure exists: {current_figure is not None}")
 
                 if not n_clicks:
-                    print(f"   -> Returning early: n_clicks is {n_clicks}")
                     return current_figure
 
-                print(f"🚀 Proceeding with HEALPix mask loading (mask_type={mask_type})...")
                 try:
-                    print(f"   -> Loading data for algorithm: {algorithm}")
                     # Load current data
                     data = self.data_loader.load_data(algorithm)
-                    print(f"   -> Data loaded successfully")
 
                     # Get mosaic traces for current zoom window
                     if self.mosaic_handler:
@@ -465,9 +431,6 @@ class MOSAICCallbacks:
                                 mask_type=mask_type,
                                 binary_inverted=binary_inverted,
                             )
-                        )
-                        print(
-                            f"   -> Mask footprint traces result: {len(mask_footprint_traces) if mask_footprint_traces else 0} traces"
                         )
 
                         if mask_footprint_traces and len(mask_footprint_traces) > 0:
@@ -533,37 +496,27 @@ class MOSAICCallbacks:
                                 )
                                 current_figure["data"] = new_data
 
-                                print(
-                                    f"✓ Added {len(mask_footprint_traces)} mosaic image traces as 2nd layer from bottom"
-                                )
-                                print(
-                                    f"   -> Layer order: {len(polygon_traces)} polygons, "
+                                logger.debug(
+                                    f"Mask overlay layer order: {len(polygon_traces)} polygons, "
                                     f"{len(mosaic_traces)} mosaics, {len(mosaic_cutout_traces)} mosaic cutouts, "
                                     f"{len(mask_footprint_traces)} mask overlays, {len(catred_traces)} CATRED, "
                                     f"{len(other_traces)} other, {len(cluster_traces)} clusters (top)"
                                 )
                             else:
-                                print("⚠️  No current figure data to update")
+                                logger.warning("No current figure data to update")
                         else:
-                            print("ℹ️  No mosaic images found for current zoom window")
+                            logger.info("No mask overlay found for current zoom window")
                     else:
-                        print("❌ No mosaic handler available")
+                        logger.warning("No mosaic handler available")
 
-                    print("   -> Returning updated figure")
                     return current_figure
 
                 except Exception as e:
-                    print(f"❌ Error in mosaic loading: {e}")
-                    import traceback
-
-                    traceback.print_exc()
+                    logger.exception(f"Error in mask overlay loading: {e}")
                     return current_figure
 
             except Exception as e:
-                print(f"❌ Fatal error in mosaic callback: {e}")
-                import traceback
-
-                traceback.print_exc()
+                logger.exception(f"Fatal error in mask overlay callback: {e}")
                 return current_figure
 
     def _setup_mosaic_visibility_toggle_callback(self):

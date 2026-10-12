@@ -8,6 +8,7 @@ import base64
 import io
 import numpy as np
 import pandas as pd
+from loguru import logger
 from numpy.typing import NDArray
 
 
@@ -72,5 +73,5 @@ def get_idclusters_array(
             raise ValueError(f"Unsupported file type: {upload_filename}")
 
         except Exception as e:
-            print(f"Error processing uploaded file: {e}")
+            logger.warning(f"Could not read the uploaded ID file: {e}")
             return None

@@ -7,9 +7,9 @@ update rendered-meta-store) and when the browser's tracker bumps globe-request.
 """
 
 import time
-import traceback
 
 from dash import Input, Output, State, no_update
+from loguru import logger
 
 # Relative: the app imports this package as `callbacks`, tests as `cluster_visualization.callbacks`
 from .main_plot import MainPlotCallbacks
@@ -371,12 +371,11 @@ class SkyOverviewCallbacks:
                     matching_clusters=bool(matching_clusters),
                     uirevision=uirevision,
                 )
-                print(
+                logger.debug(
                     f"Globe [nside={summary['nside']}, cells={summary['cells']}, "
                     f"clusters={summary['clusters']}] in {time.perf_counter() - _t:.2f}s"
                 )
                 return fig, {"display": "none"}
             except Exception as e:
-                print(f"Error: globe overview failed: {e}")
-                traceback.print_exc()
+                logger.exception(f"Globe overview failed: {e}")
                 return no_update, no_update

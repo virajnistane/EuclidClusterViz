@@ -979,7 +979,7 @@ The application now supports independent control of multiple overlay layers:
 - ✅ **Overlay Preservation on Render**: Full Re-render keeps CATRED, mosaic and mask overlay traces and cluster members
 - ✅ **Incremental Re-render**: Re-render with the algorithm already on screen takes the same patch path as Apply filters (cluster traces only); first render, algorithm changes and renders after "Use this file" stay full background renders
 - ✅ **Quiet, Responsive UI**: No gradients, emoji or perpetual animations; fixed-width sidebar column on desktop, stacked below 992 px
-- ✅ **Figure-Size Logging Opt-In**: `CLUSTERVIZ_LOG_FIGURE_SIZE=1`
+- ✅ **Figure-Size Logging Opt-In**: `CLUSTERVIZ_LOG_FIGURE_SIZE=1` with `--log-level DEBUG`
 
 ### **October 2026 (later): Scale, Globe, Caching & Overlay Fixes**
 - ✅ **Faster Startup**: Dependency presence check instead of imports, background preload of the default data, launcher prefetch for cold network storage (~80 s → ~5 s on a cold node), `--clear-cache` launcher flag

@@ -27,17 +27,7 @@ ALLOWED_FUNCTIONS = {
 }
 
 # Not converted yet (removed module by module)
-PENDING = {
-    "callbacks/catred_callbacks.py",
-    "callbacks/cluster_modal_callbacks.py",
-    "callbacks/esasky_callbacks.py",
-    "callbacks/main_plot.py",
-    "callbacks/mosaic_callback.py",
-    "callbacks/phz_callbacks.py",
-    "callbacks/sky_overview_callbacks.py",
-    "callbacks/ui_callbacks.py",
-    "callbacks/utils.py",
-}
+PENDING: set = set()
 
 
 def print_calls(tree):

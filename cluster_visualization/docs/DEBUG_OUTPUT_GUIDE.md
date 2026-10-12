@@ -1,5 +1,11 @@
 # Memory Manager Debug Output Reference
 
+> **Outdated format.** Terminal output now goes through loguru: lines read
+> `HH:MM:SS LEVEL module | message`, without the emoji and `[Cache ...]` tags
+> shown below. Memory-check, cache-hit and cache-decision details are DEBUG
+> lines (`./launch.sh --log-level DEBUG`); cleanup results and skipped memory
+> caching are INFO/WARNING. See TROUBLESHOOTING.md, "Terminal output".
+
 ## Overview
 When the app is running, the memory manager provides detailed debug output to help you understand memory operations and diagnose issues.
 
@@ -274,14 +280,14 @@ The debug output is already verbose. To disable:
 | Output | When You See It |
 |--------|-----------------|
 | `Debug: Apply filters - patched N cluster traces in X.XXXs` | Every **Apply filters** click that patches the figure incrementally |
-| `Debug: Apply filters - full rebuild (no patchable render on screen)` | Apply filters when the algorithm on screen differs from the dropdown, or nothing has been rendered yet |
-| `Debug: Figure JSON N KB, M traces, K merged clusters` | Full renders, only when `CLUSTERVIZ_LOG_FIGURE_SIZE=1` is set |
+| `Apply filters - full rebuild (no patchable render on screen)` (DEBUG) | Apply filters when the algorithm on screen differs from the dropdown, or nothing has been rendered yet |
+| `Figure JSON N KB, M traces, K merged clusters` (DEBUG) | Full renders, only when `CLUSTERVIZ_LOG_FIGURE_SIZE=1` is set |
 
 Serializing the whole figure to measure its size is expensive, so the figure-size log is opt-in:
 
 ```bash
-CLUSTERVIZ_LOG_FIGURE_SIZE=1 ./launch.sh
+CLUSTERVIZ_LOG_FIGURE_SIZE=1 ./launch.sh --log-level DEBUG
 ```
 
-Section timings (`apply:cluster_traces`, `apply:patch`, `apply:total`, `row_cache:build`, `create_traces:*`) are recorded by the trace profiler, enabled unless `CLUSTERVIZ_PROFILE=0`.
+Section timings (`apply:cluster_traces`, `apply:patch`, `apply:total`, `row_cache:build`, `create_traces:*`) are recorded by the trace profiler, enabled unless `CLUSTERVIZ_PROFILE=0`; its table is logged at DEBUG after every render.
 

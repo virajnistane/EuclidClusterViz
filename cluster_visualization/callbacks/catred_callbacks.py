@@ -10,6 +10,7 @@ import dash_bootstrap_components as dbc  # type: ignore[import]
 import pandas as pd  # type: ignore[import]
 import plotly.graph_objs as go  # type: ignore[import]
 from dash import Input, Output, State, html
+from loguru import logger
 import time
 
 from cluster_visualization.callbacks.utils import get_idclusters_array
@@ -159,8 +160,8 @@ class CATREDCallbacks:
             if catred_n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
-            print(
-                f"Debug: Manual CATRED render button clicked (click #{catred_n_clicks}) with threshold={threshold}, maglim={maglim}"
+            logger.debug(
+                f"CATRED render button (click #{catred_n_clicks}): threshold={threshold}, maglim={maglim}"
             )
 
             try:
@@ -226,8 +227,8 @@ class CATREDCallbacks:
                 existing_mosaic_traces = _preserved[TraceType.MOSAIC]
                 existing_mask_overlay_traces = _preserved[TraceType.MASK_OVERLAY]
 
-                print(
-                    f"Debug: Preserving {len(existing_catred_traces)} CATRED, "
+                logger.debug(
+                    f"Preserving {len(existing_catred_traces)} CATRED, "
                     f"{len(existing_mosaic_traces)} Mosaic, {len(existing_mask_overlay_traces)} Mask traces"
                 )
 
@@ -281,7 +282,7 @@ class CATREDCallbacks:
                     if mosaic_images:
                         existing_layout_images = list(fig.layout.images or [])
                         fig.update_layout(images=existing_layout_images + mosaic_images)
-                        print(f"Debug: Re-injected {len(mosaic_images)} mosaic layout images after CATRED rebuild")
+                        logger.debug(f"Re-injected {len(mosaic_images)} mosaic layout images after CATRED rebuild")
 
                 # Preserve zoom state
                 if self.figure_manager:
@@ -335,8 +336,7 @@ class CATREDCallbacks:
                 return fig, empty_phz_fig, status, time.time()
 
             except Exception as e:
-                import traceback
-                traceback.print_exc()
+                logger.exception(f"Error rendering CATRED data: {e}")
                 error_status = dbc.Alert(f"Error rendering CATRED data: {str(e)}", color="danger")
                 return dash.no_update, dash.no_update, error_status, dash.no_update
 
@@ -431,7 +431,7 @@ class CATREDCallbacks:
                 self.catred_handler.current_catred_data = None
             if self.trace_creator:
                 self.trace_creator.clear_catred_data()
-            print(f"Debug: CATRED server state cleared (click #{n_clicks})")
+            logger.debug(f"CATRED server state cleared (click #{n_clicks})")
             return dash.no_update
 
     def load_data(self, algorithm):

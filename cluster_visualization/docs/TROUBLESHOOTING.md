@@ -81,6 +81,10 @@ CLUSTERVIZ_LOG_LEVEL=WARNING ./launch.sh   # only warnings and errors
 `--log-level` wins over `CLUSTERVIZ_LOG_LEVEL`. The startup box with the SSH
 command is always printed, whatever the level.
 
+At INFO the terminal shows one line per action (data loaded, cluster clicked,
+mosaic/mask overlay or cutout made, CATRED loaded). Timings that run on every
+pan or zoom (`Patch [...]`, `Globe [...]`) and the profiler table are DEBUG lines.
+
 ### Missing packages at startup
 
 Launches re-sync `.venv` automatically when `uv.lock` or `pyproject.toml`

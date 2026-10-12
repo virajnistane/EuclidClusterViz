@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional
 import numpy as np
 import pandas as pd
 from dash import Input, Output, State, no_update
+from loguru import logger
 
 
 class ESASkyCallbacks:
@@ -63,9 +64,9 @@ class ESASkyCallbacks:
                             "dec": dec_center,
                             "fov": fov_deg,
                         }
-                        print(f"[ESASky] Viewport: RA={ra_center:.4f} Dec={dec_center:.4f} FOV={fov_deg:.4f}°")
+                        logger.debug(f"ESA Sky: Viewport: RA={ra_center:.4f} Dec={dec_center:.4f} FOV={fov_deg:.4f}°")
             except Exception as exc:
-                print(f"[ESASky] Warning: Could not extract viewport: {exc}")
+                logger.warning(f"ESA Sky: Could not extract viewport: {exc}")
 
             # --- Clusters ---
             try:
@@ -97,9 +98,9 @@ class ESASkyCallbacks:
                                 entry["Z"] = float(row["Z_CLUSTER"])
                             rows.append(entry)
                         overlay["clusters"] = rows
-                        print(f"[ESASky] Pushed {len(rows)} cluster overlay entries")
+                        logger.debug(f"ESA Sky: Pushed {len(rows)} cluster overlay entries")
             except Exception as exc:
-                print(f"[ESASky] Warning: Could not load cluster data: {exc}")
+                logger.warning(f"ESA Sky: Could not load cluster data: {exc}")
 
             # --- CATRED ---
             try:
@@ -111,9 +112,9 @@ class ESASkyCallbacks:
                     for ra, dec in zip(ra_list, dec_list):
                         rows.append({"ra": float(ra), "dec": float(dec), "name": "CATRED"})
                     overlay["catred"] = rows
-                    print(f"[ESASky] Pushed {len(rows)} CATRED overlay entries")
+                    logger.debug(f"ESA Sky: Pushed {len(rows)} CATRED overlay entries")
             except Exception as exc:
-                print(f"[ESASky] Warning: Could not load CATRED data: {exc}")
+                logger.warning(f"ESA Sky: Could not load CATRED data: {exc}")
 
             # --- HEALPix mask (centroid of each loaded tile) ---
             try:
@@ -130,8 +131,8 @@ class ESASkyCallbacks:
                                 "name": f"Tile {key}",
                             })
                     overlay["mask"] = mask_rows
-                    print(f"[ESASky] Pushed {len(mask_rows)} mask tile centroids")
+                    logger.debug(f"ESA Sky: Pushed {len(mask_rows)} mask tile centroids")
             except Exception as exc:
-                print(f"[ESASky] Warning: Could not load mask data: {exc}")
+                logger.warning(f"ESA Sky: Could not load mask data: {exc}")
 
             return overlay

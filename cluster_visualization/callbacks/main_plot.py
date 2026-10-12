@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd  # type: ignore[import]
 import plotly.graph_objs as go  # type: ignore[import]
 from dash import Input, Output, Patch, State, html
+from loguru import logger
 
 from cluster_visualization.src.visualization.sky_overview import catalog_span_deg
 from cluster_visualization.src.visualization.trace_registry import TraceRegistry, TraceType
@@ -25,7 +26,7 @@ from cluster_visualization.src.visualization.trace_registry import TraceRegistry
 try:
     from cluster_visualization.callbacks.utils import get_idclusters_array
 except ImportError:
-    print("Warning: Could not import get_idclusters_array from utils. ID cluster upload functionality may be affected.")
+    logger.warning("Could not import get_idclusters_array from utils. ID cluster upload functionality may be affected.")
 
 
 
@@ -642,8 +643,8 @@ class MainPlotCallbacks:
         if os.environ.get("CLUSTERVIZ_LOG_FIGURE_SIZE") != "1":
             return
         _fig_json = fig.to_json()
-        print(
-            f"Debug: Figure JSON {len(_fig_json) / 1024:.0f} KB, {len(fig.data)} traces, "
+        logger.debug(
+            f"Figure JSON {len(_fig_json) / 1024:.0f} KB, {len(fig.data)} traces, "
             f"{len(data['data_detcluster_mergedcat'])} merged clusters"
         )
 
@@ -660,7 +661,7 @@ class MainPlotCallbacks:
             with _dc.Cache(state_dir) as cache:
                 catred_data = cache.get("catred_click_data")
         except Exception as exc:
-            print(f"Warning: Could not read CATRED state cache: {exc}")
+            logger.warning(f"Could not read CATRED state cache: {exc}")
             return None
 
         points = []
@@ -789,7 +790,7 @@ class MainPlotCallbacks:
 
                 if not can_patch:
                     # Figure on screen is not this algorithm's (or unknown): rebuild in full
-                    print("Debug: Apply filters - full rebuild (no patchable render on screen)")
+                    logger.debug("Apply filters - full rebuild (no patchable render on screen)")
                     traces = self.create_traces(
                         data,
                         show_polygons,
@@ -857,17 +858,14 @@ class MainPlotCallbacks:
                     "density map" if cull_info.get("density")
                     else f"{cull_info.get('clusters', '?')} clusters, margin {cull_info.get('margin')}"
                 ) if view_bounds is not None else "whole catalog"
-                print(
+                logger.debug(
                     f"Patch [{tag}] ({shown}): {len(cluster_traces)} traces in {time.perf_counter() - _t_total:.2f}s "
                     f"[load {_dt_load:.2f}s, traces {_dt_traces:.2f}s, encode {_dt_patch:.2f}s]"
                 )
                 return patch, status, dash.no_update, ack
 
             except Exception as e:
-                import traceback
-
-                print(f"❌ Patch [{tag}] failed: {e}")
-                traceback.print_exc()
+                logger.exception(f"Patch [{tag}] failed: {e}")
                 _fig, _phz, status = self._create_error_plots(str(e))
                 # Still acknowledge, so the browser stops waiting for this request
                 return dash.no_update, status, dash.no_update, ack
@@ -1055,8 +1053,8 @@ class MainPlotCallbacks:
                 existing_mosaic_traces = _preserved[TraceType.MOSAIC]
                 existing_mask_overlay_traces = _preserved[TraceType.MASK_OVERLAY]
 
-                print(
-                    f"Debug: Options update - preserving {len(existing_catred_traces)} CATRED, "
+                logger.debug(
+                    f"Options update - preserving {len(existing_catred_traces)} CATRED, "
                     f"{len(existing_mosaic_traces)} Mosaic, {len(existing_mask_overlay_traces)} Mask traces"
                 )
 
@@ -2014,7 +2012,7 @@ class MainPlotCallbacks:
             raise ValueError(f"Unsupported file type: {upload_filename}")
 
         except Exception as e:
-            print(f"Error processing uploaded file: {e}")
+            logger.warning(f"Could not read the uploaded ID file: {e}")
             return None
 
     def _create_status_info(

@@ -9,12 +9,13 @@ import dash  # type: ignore[import]
 import numpy as np
 import plotly.graph_objs as go  # type: ignore[import]
 from dash import Input, Output, State
+from loguru import logger
 
 try:
     from cluster_visualization.callbacks.utils import get_idclusters_array
 except ImportError:
-    print(
-        "Warning: Could not import get_idclusters_array from utils. "
+    logger.warning(
+        "Could not import get_idclusters_array from utils. "
         "PHZ cluster-data ID filtering may be affected."
     )
 
@@ -83,12 +84,7 @@ class PHZCallbacks:
             prevent_initial_call=True,
         )
         def update_phz_pdf_plot(clickData, current_figure):
-            print("=== PHZ CALLBACK TRIGGERED ===")
-            print(f"Debug: Click callback triggered with clickData: {clickData}")
-            print(f"Debug: clickData type: {type(clickData)}")
-
             if not clickData:
-                print("Debug: No clickData received")
                 return dash.no_update, dash.no_update, dash.no_update
 
             # Name of the clicked trace (Scattergl clickData has no traceName)
@@ -99,51 +95,36 @@ class PHZCallbacks:
             # traces are added to catred_handler in this process. Use the source that
             # holds the clicked trace.
             current_catred_data, data_source = self._catred_data_for_trace(clicked_trace_name)
-            print(f"Debug: Data source: {data_source}, data available: {current_catred_data is not None}")
-            if current_catred_data:
-                print(f"Debug: Data keys: {list(current_catred_data.keys())}")
-
             if not current_catred_data:
-                print("Debug: No current_catred_data available from any source")
+                logger.debug("CATRED click on '{}': no CATRED data available", clicked_trace_name)
                 return dash.no_update, dash.no_update, dash.no_update
 
             try:
                 # Extract click information
                 clicked_point = clickData["points"][0]
-                print(f"Debug: Clicked point: {clicked_point}")
-
-                print(f"Debug: Clicked trace name: '{clicked_trace_name}'")
 
                 # Clicks on cluster markers or other non-CATRED traces are handled elsewhere
                 # (cluster modal); don't hijack the analysis tabs for them. Match by exact
                 # trace name: substring checks fail on cluster traces like
                 # "PZWAV (Merged, near CATRED)".
                 if clicked_trace_name != "Unknown" and clicked_trace_name not in current_catred_data:
-                    print("Debug: Click was not on a CATRED trace")
                     return dash.no_update, dash.no_update, dash.no_update
 
                 # Get coordinates for matching
                 clicked_x = clicked_point.get("x")
                 clicked_y = clicked_point.get("y")
-                print(f"Debug: Clicked coordinates: ({clicked_x}, {clicked_y})")
 
                 # Get point index from pointNumber (more reliable than customdata)
                 point_number = clicked_point.get("pointNumber", None)
-                custom_data = clicked_point.get("customdata", None)
-                print(f"Debug: Point number (index in trace): {point_number}")
-                print(f"Debug: Custom data (may be coverage value, not index): {custom_data}")
-
-                # Additional click data debugging
-                print(f"Debug: All click data keys: {list(clicked_point.keys())}")
-                if "curveNumber" in clicked_point:
-                    print(f"Debug: Curve number: {clicked_point['curveNumber']}")
+                logger.debug(
+                    "CATRED click: trace '{}' ({} data), point {}, curve {}, at ({}, {})",
+                    clicked_trace_name, data_source, point_number,
+                    clicked_point.get("curveNumber"), clicked_x, clicked_y,
+                )
 
                 # Search through stored CATRED data to find the matching trace
                 found_catred_data = None
                 point_index = None
-
-                print(f"Debug: Available CATRED data traces: {list(current_catred_data.keys())}")
-                print(f"Debug: Looking for traces containing 'CATRED'")
 
                 # First, try to match the exact clicked trace name if it's a CATRED/Members trace
                 if (
@@ -152,52 +133,33 @@ class PHZCallbacks:
                     and clicked_trace_name in current_catred_data
                 ):
                     catred_data = current_catred_data[clicked_trace_name]
-                    print(
-                        f"Debug: Direct match found for clicked trace '{clicked_trace_name}' with {len(catred_data['ra'])} points"
-                    )
 
                     # Use pointNumber (most reliable - it's the index in the trace array)
                     if point_number is not None and point_number < len(catred_data["ra"]):
                         found_catred_data = catred_data
                         point_index = point_number
-                        print(f"Debug: Using pointNumber as index: {point_index}")
                     # Fallback to coordinate matching if pointNumber not available
                     elif clicked_x is not None and clicked_y is not None:
-                        print(
-                            f"Debug: Attempting coordinate matching for ({clicked_x}, {clicked_y})"
-                        )
                         for i, (x, y) in enumerate(zip(catred_data["ra"], catred_data["dec"])):
                             distance = ((x - clicked_x) ** 2 + (y - clicked_y) ** 2) ** 0.5
                             if distance < 1e-6:  # Tight tolerance for direct match
                                 found_catred_data = catred_data
                                 point_index = i
-                                print(
-                                    f"Debug: Found matching point by coordinates at index: {point_index}"
-                                )
                                 break
 
                 # If direct match failed, search through all CATRED traces
                 if not found_catred_data:
-                    print(f"Debug: No direct match, searching all CATRED traces...")
-
                     for trace_name, catred_data in current_catred_data.items():
-                        print(f"Debug: Checking trace: '{trace_name}'")
 
                         # Check if this is a CATRED or Members trace
                         # Only the clicked trace can supply the point (see guard above)
                         if trace_name == clicked_trace_name and (
                             "CATRED" in trace_name or "Members" in trace_name
                         ):
-                            print(
-                                f"Debug: Found CATRED trace '{trace_name}' with {len(catred_data['ra'])} points"
-                            )
 
                             # Match by coordinates only: pointNumber indexes the clicked trace,
                             # which is not this one, so it can't be used as a row index here.
                             if clicked_x is not None and clicked_y is not None:
-                                print(
-                                    f"Debug: Attempting coordinate matching for ({clicked_x}, {clicked_y})"
-                                )
                                 best_match_index = None
                                 best_distance = float("inf")
 
@@ -214,26 +176,10 @@ class PHZCallbacks:
                                 if best_match_index is not None:
                                     found_catred_data = catred_data
                                     point_index = best_match_index
-                                    print(
-                                        f"Debug: Found matching point by coordinates at index: {point_index} (distance: {best_distance:.6f})"
-                                    )
                                     break
-                                else:
-                                    print(
-                                        f"Debug: No coordinate match found in trace '{trace_name}'"
-                                    )
-                        else:
-                            print(f"Debug: Skipping non-CATRED trace: '{trace_name}'")
-
-                # Additional debugging if no match found
-                if not found_catred_data:
-                    print("Debug: No CATRED trace matched the click")
-                    print(f"Debug: Available trace names: {list(current_catred_data.keys())}")
-                    print(f"Debug: Click data keys: {clicked_point.keys()}")
-                    print(f"Debug: Full clicked point data: {clicked_point}")
 
                 if found_catred_data and point_index is not None:
-                    print(f"Debug: Successfully found CATRED data for point index: {point_index}")
+                    logger.debug("CATRED click matched point {} of '{}'", point_index, clicked_trace_name)
 
                     # Get PHZ_PDF data for this point
                     phz_pdf = found_catred_data["phz_pdf"][point_index]
@@ -242,24 +188,37 @@ class PHZCallbacks:
                     phz_mode_1 = found_catred_data["phz_mode_1"][point_index]
                     phz_median = found_catred_data["phz_median"][point_index]
 
-                    print(
-                        f"Debug: PHZ_PDF length: {len(phz_pdf)}, PHZ_MODE_1: {phz_mode_1}, PHZ_MEDIAN: {phz_median}"
-                    )
+                    if clicked_trace_name.startswith("Members"):
+                        self._log_member_click(clicked_trace_name, found_catred_data, point_index)
 
                     return self._create_phz_pdf_plot(phz_pdf, ra, dec, phz_mode_1, phz_median), "phz-tab", "phz-catred-subtab"
                 else:
-                    print("Debug: Click was not on a CATRED data point")
+                    logger.debug(
+                        "CATRED click matched no point; traces: {}", list(current_catred_data.keys())
+                    )
 
                 # If we get here, the click wasn't on a CATRED point
                 return dash.no_update, dash.no_update, dash.no_update
 
             except Exception as e:
-                print(f"Debug: Error creating PHZ_PDF plot: {e}")
-                import traceback
-
-                print(f"Debug: Traceback: {traceback.format_exc()}")
+                logger.exception(f"Error creating PHZ_PDF plot: {e}")
 
                 return self._create_error_phz_plot(str(e)), dash.no_update, dash.no_update
+
+    @staticmethod
+    def _log_member_click(trace_name, member_data, index) -> None:
+        """One INFO line for a click on a cluster member (values may be missing or NaN)."""
+
+        def fmt(key, digits):
+            try:
+                return f"{float(member_data[key][index]):.{digits}f}"
+            except (KeyError, IndexError, TypeError, ValueError):
+                return "n/a"
+
+        logger.info(
+            f"Member clicked ({trace_name}): RA={fmt('ra', 5)}, Dec={fmt('dec', 5)}, "
+            f"PHZ_MEDIAN={fmt('phz_median', 3)}, PMEM_ZP={fmt('pmem_zp', 2)}, PMEM_RS={fmt('pmem_rs', 2)}"
+        )
 
     @staticmethod
     def _clicked_trace_name(clickData, current_figure):
@@ -269,10 +228,9 @@ class PHZCallbacks:
             traces = (current_figure or {}).get("data", [])
             if curve_number is not None and curve_number < len(traces):
                 name = traces[curve_number].get("name", "Unknown")
-                print(f"Debug: Retrieved trace name from figure using curveNumber {curve_number}: '{name}'")
                 return name
         except Exception as e:
-            print(f"Warning: Could not retrieve trace name from figure: {e}")
+            logger.warning(f"Could not retrieve trace name from figure: {e}")
         return "Unknown"
 
     def _catred_click_sources(self):
@@ -296,7 +254,7 @@ class PHZCallbacks:
             if cached:
                 yield "diskcache", cached
         except Exception as exc:
-            print(f"Warning: Could not read CATRED data from state cache: {exc}")
+            logger.warning(f"Could not read CATRED data from state cache: {exc}")
 
     def _catred_data_for_trace(self, trace_name):
         """(data dict, source label) for the source holding ``trace_name``.
@@ -320,7 +278,7 @@ class PHZCallbacks:
         try:
             # Validate PHZ_PDF data
             if not phz_pdf or len(phz_pdf) == 0:
-                print(f"Debug: Empty PHZ_PDF data")
+                logger.debug("Empty PHZ_PDF data")
                 return self._create_error_phz_plot("Empty PHZ_PDF data")
 
             # Convert to numpy array for safety
@@ -328,7 +286,7 @@ class PHZCallbacks:
 
             # Check for NaN or infinite values
             if np.any(np.isnan(phz_pdf_array)) or np.any(np.isinf(phz_pdf_array)):
-                print(f"Debug: PHZ_PDF contains NaN or infinite values")
+                logger.debug("PHZ_PDF contains NaN or infinite values")
                 return self._create_error_phz_plot("PHZ_PDF contains invalid values")
 
             # The catalogue does not ship its redshift grid; PHZ_PDF is assumed to be
@@ -383,14 +341,11 @@ class PHZCallbacks:
                 hovermode="x unified",
             )
 
-            print(f"Debug: Created PHZ_PDF plot for point at RA: {ra:.6f}, Dec: {dec:.6f}")
+            logger.debug("PHZ_PDF plot for point at RA {:.6f}, Dec {:.6f}", ra, dec)
             return phz_fig
 
         except Exception as e:
-            print(f"Debug: Error in _create_phz_pdf_plot: {e}")
-            import traceback
-
-            print(f"Debug: Traceback: {traceback.format_exc()}")
+            logger.exception(f"Error in _create_phz_pdf_plot: {e}")
             return self._create_error_phz_plot(f"Error creating plot: {str(e)}")
 
     def _create_error_phz_plot(self, error_message):
@@ -495,20 +450,16 @@ class PHZCallbacks:
                             idcluster_upload_contents, idcluster_upload_filename
                         )
                     except Exception as exc:
-                        print(f"[ClusterData] ID upload parse skipped: {exc}")
+                        logger.warning(f"Cluster data: ID upload parse skipped: {exc}")
 
                 if idcluster_list is not None and len(idcluster_list) > 0:
                     if "ID_UNIQUE_CLUSTER" in filtered.dtype.names:
                         filtered = filtered[
                             np.isin(filtered["ID_UNIQUE_CLUSTER"], np.asarray(idcluster_list))
                         ]
-                        print(
-                            f"[ClusterData] ID filter applied: {len(filtered)} clusters remain"
-                        )
+                        logger.debug(f"Cluster data: ID filter applied, {len(filtered)} clusters remain")
                     else:
-                        print(
-                            "[ClusterData] ID filter skipped: ID_UNIQUE_CLUSTER not present"
-                        )
+                        logger.warning("Cluster data: ID filter skipped, ID_UNIQUE_CLUSTER not present")
 
                 # ---- Viewport filter ----
                 ra_range = None
@@ -536,14 +487,13 @@ class PHZCallbacks:
                         f"RA [{ra_min:.2f}, {ra_max:.2f}], "
                         f"Dec [{dec_min:.2f}, {dec_max:.2f}]"
                     )
-                    print(
-                        f"[ClusterData] Viewport filter: {len(viewport_data)}/{len(filtered)} "
-                        f"clusters — {viewport_label}"
+                    logger.info(
+                        f"Cluster data: {len(viewport_data)}/{len(filtered)} clusters in {viewport_label}"
                     )
                 else:
                     viewport_data = filtered
                     viewport_label = "full sky"
-                    print(f"[ClusterData] No viewport — using all {len(filtered)} clusters")
+                    logger.info(f"Cluster data: all {len(filtered)} clusters (no viewport)")
 
                 if len(viewport_data) == 0:
                     msg = "No clusters in current viewport"
@@ -646,10 +596,7 @@ class PHZCallbacks:
                 return z_fig, snr_fig
 
             except Exception as exc:
-                import traceback
-
-                print(f"[ClusterData] Error: {exc}")
-                print(traceback.format_exc())
+                logger.exception(f"Cluster data plots failed: {exc}")
                 msg = str(exc)
                 return (
                     self._create_empty_cluster_plot(f"Error: {msg}"),

@@ -13,11 +13,12 @@ import dash_bootstrap_components as dbc
 import base64
 import csv
 import io
+from loguru import logger
 
 try:
     from cluster_visualization.callbacks.utils import get_idclusters_array
 except ImportError:
-    print("Warning: Could not import get_idclusters_array from utils. ID cluster upload functionality may be affected.")
+    logger.warning("Could not import get_idclusters_array from utils. ID cluster upload functionality may be affected.")
 
 class UICallbacks:
     """Handles UI-related callbacks"""
@@ -742,9 +743,7 @@ class UICallbacks:
         def toggle_matching_clusters_switch(algorithm):
             """Enable matching-clusters-switch only when algorithm is BOTH"""
             is_disabled = algorithm != "BOTH"
-            print(
-                f"🔄 Algorithm dropdown callback: algorithm={algorithm}, matching-switch-disabled={is_disabled}"
-            )
+            logger.debug(f"Algorithm {algorithm}: matching switch disabled={is_disabled}")
             return is_disabled
 
         @self.app.callback(
@@ -1415,7 +1414,7 @@ class UICallbacks:
                     if self.data_loader:
                         # Clear in-memory cache
                         self.data_loader.data_cache.clear()
-                        print(f"✓ Cleared in-memory data cache")
+                        logger.info("Cleared in-memory data cache")
 
                         # Clear disk cache entries for merged catalog
                         if hasattr(self.data_loader, "cached") and self.data_loader.cached:
@@ -1425,7 +1424,7 @@ class UICallbacks:
                                     cache_keys_to_remove.append(key)
                             for key in cache_keys_to_remove:
                                 del self.data_loader.cached[key]
-                                print(f"✓ Cleared disk cache entry: {key}")
+                                logger.info(f"Cleared disk cache entry: {key}")
 
                     return html.Div(
                         [

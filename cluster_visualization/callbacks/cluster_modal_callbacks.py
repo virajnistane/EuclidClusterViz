@@ -15,6 +15,7 @@ import pandas as pd
 import plotly.colors as pc  # type: ignore[import]
 import plotly.graph_objs as go  # type: ignore[import]
 from typing import Any, Dict, List, Optional, Tuple, cast
+from loguru import logger
 from cluster_visualization.src.visualization.trace_registry import (
     CUTOUT_MASK_PREFIX,
     TraceRegistry,
@@ -118,7 +119,7 @@ class ClusterModalCallbacks:
                     "merged_record": merged_record, "merged_cluster_id": merged_cluster_id,
                     "resolution_note": resolution_note,
                 }
-                print(f"🔭 Aladin cluster clicked: RA={ra:.3f}, Dec={dec:.3f}")
+                logger.info(f"Cluster clicked (Aladin): RA={ra:.3f}, Dec={dec:.3f}")
 
                 snr_str = f"{snr:.2f}" if isinstance(snr, float) else str(snr)
                 z_str = f"{redshift:.2f}" if isinstance(redshift, float) else str(redshift)
@@ -186,7 +187,7 @@ class ClusterModalCallbacks:
                 "merged_record": merged_record, "merged_cluster_id": merged_cluster_id,
                 "resolution_note": resolution_note,
             }
-            print(f"Cluster clicked: RA={ra}, Dec={dec}, merged ID={merged_cluster_id}")
+            logger.info(f"Cluster clicked: RA={ra}, Dec={dec}, merged ID={merged_cluster_id}")
 
             snr_str = f"{snr:.2f}" if isinstance(snr, float) else str(snr)
             z_str = f"{redshift:.2f}" if isinstance(redshift, float) else str(redshift)
@@ -617,9 +618,7 @@ class ClusterModalCallbacks:
             cluster = self.selected_cluster
 
             set_progress((20, f"Loading {algorithm} data..."))
-            print(f"Loading data for algorithm: {algorithm}")
             data = self.data_loader.load_data(select_algorithm=algorithm)
-            print("Data loaded successfully.")
             set_progress((50, "Processing..."))
 
             if button_id == "tab-generate-cutout":
@@ -704,13 +703,13 @@ class ClusterModalCallbacks:
                                 # Reassemble in layer order
                                 current_figure["data"] = TraceRegistry.assemble_in_layer_order(categorized)
 
-                                print(f"✓ Added mosaic cutout trace with proper layering")
+                                logger.debug("Added mosaic cutout trace")
                             else:
-                                print("⚠️  No current figure data to update")
+                                logger.warning("No current figure data to update")
                         else:
-                            print("ℹ️  No mosaic images found for current zoom window")
+                            logger.info("No mosaic image found for this cluster's cutout")
                     else:
-                        print("❌ No mosaic handler available")
+                        logger.warning("No mosaic handler available")
 
                 # if self.figure_manager:
                 #     fig = self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio)
@@ -736,8 +735,8 @@ class ClusterModalCallbacks:
                     color="info",
                 )
 
-                print(
-                    f"🔬 Tab cutout: RA={cluster['ra']:.3f}°, Dec={cluster['dec']:.3f}°, Size={cutout_size}, Type={cutout_type}"
+                logger.info(
+                    f"Tab cutout: RA={cluster['ra']:.3f}°, Dec={cluster['dec']:.3f}°, size={cutout_size}, type={cutout_type}"
                 )
                 return current_figure, empty_phz_fig, results_content, status_msg
 
@@ -807,7 +806,7 @@ class ClusterModalCallbacks:
                     redshift_range[1] if redshift_range and len(redshift_range) == 2 else None
                 )
 
-                print(f"Debug catred_redshift_bin_width received: {catred_redshift_bin_width!r}")
+                logger.debug(f"catred_redshift_bin_width received: {catred_redshift_bin_width!r}")
                 
                 # Extract existing traces to preserve across re-render
                 _preserved = TraceRegistry.extract_traces(
@@ -894,15 +893,13 @@ class ClusterModalCallbacks:
                             fig.to_plotly_json().get("layout", {}).get("images", []) or []
                         )
                         fig.update_layout(images=existing_layout_images + mosaic_images)
-                        print(
-                            f"Debug: Re-injected {len(mosaic_images)} mosaic layout images after CATRED box rebuild"
-                        )
+                        logger.debug(f"Re-injected {len(mosaic_images)} mosaic layout images after CATRED box rebuild")
 
                 # Re-inject Members traces dropped by the full figure rebuild
                 for t in members_traces:
                     fig.add_trace(t)
                 if members_traces:
-                    print(f"Debug: Re-injected {len(members_traces)} Members trace(s) after CATRED box rebuild")
+                    logger.debug(f"Re-injected {len(members_traces)} Members trace(s) after CATRED box rebuild")
 
                 empty_phz_fig = self._create_empty_phz_plot()
 
@@ -959,9 +956,9 @@ class ClusterModalCallbacks:
 
                 set_progress((65, "Creating mask overlay..."))
                 if not self.mosaic_handler:
-                    print("❌ No mosaic handler available")
+                    logger.warning("No mosaic handler available")
                 elif not (current_figure and "data" in current_figure):
-                    print("⚠️  No current figure data to update")
+                    logger.warning("No current figure data to update")
                 else:
                     # Same mechanism as the sidebar's viewport mask, over a box
                     # around the cluster; its own layer (CUTOUT_MASK_PREFIX names)
@@ -981,9 +978,9 @@ class ClusterModalCallbacks:
                             categorized.setdefault(classified, []).append(trace)
                         categorized[TraceType.MASK_OVERLAY].extend(mask_cutout_traces)
                         current_figure["data"] = TraceRegistry.assemble_in_layer_order(categorized)
-                        print(f"✓ Added {len(mask_cutout_traces)} mask cutout traces")
+                        logger.debug(f"Added {len(mask_cutout_traces)} mask cutout traces")
                     else:
-                        print("ℹ️  No mask overlay found for current selected cluster")
+                        logger.info("No mask overlay found for the selected cluster")
 
                 empty_phz_fig = self._create_empty_phz_plot()
 
@@ -1926,7 +1923,7 @@ class ClusterModalCallbacks:
             if self.trace_creator:
                 self.trace_creator.clear_catred_data()
 
-            print(f"Debug: CATRED box server state cleared (click #{n_clicks})")
+            logger.debug(f"CATRED box server state cleared (click #{n_clicks})")
             return dash.no_update
 
         # Mask Cutout visibility toggle
@@ -2052,7 +2049,7 @@ class ClusterModalCallbacks:
                 keys_to_remove = [k for k in self.catred_handler.current_catred_data if k.startswith("Members (ID")]
                 for k in keys_to_remove:
                     del self.catred_handler.current_catred_data[k]
-                print(f"Debug: Cleared {len(keys_to_remove)} Members entry(ies) from current_catred_data")
+                logger.debug(f"Cleared {len(keys_to_remove)} Members entry(ies) from current_catred_data")
             return dash.no_update
 
         # Members visibility toggle
@@ -2250,7 +2247,7 @@ class ClusterModalCallbacks:
                         pmem_rs_all.append(rs)
                     remaining -= set(found_ids)
             except Exception as exc:
-                print(f"Warning: could not read CATRED tile {tile_id} for member lookup: {exc}")
+                logger.warning(f"Could not read CATRED tile {tile_id} for member lookup: {exc}")
 
         if not ra_all:
             return _empty
@@ -2361,6 +2358,7 @@ class ClusterModalCallbacks:
             return matched, data, None
 
         def _members_alert(n_table, n_plotted, cluster_id):
+            logger.info(f"Members of cluster {int(cluster_id)}: {n_table} in catalog, {n_plotted} plotted")
             content = [
                 html.Div([
                     html.Span("In catalog: ", className="fw-bold"),
@@ -2408,6 +2406,7 @@ class ClusterModalCallbacks:
                 return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
             matched, data, err = _query_members(algorithm)
             if err:
+                logger.warning(f"Cluster members: {err}")
                 return dbc.Alert(err, color="warning"), dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
             if self.selected_cluster is None or matched is None or data is None:
