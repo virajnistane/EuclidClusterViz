@@ -37,7 +37,6 @@ PENDING = {
     "callbacks/sky_overview_callbacks.py",
     "callbacks/ui_callbacks.py",
     "callbacks/utils.py",
-    "src/mermosaic.py",
     "src/visualization/catred_proximity.py",
     "src/visualization/figures.py",
     "src/visualization/sky_overview.py",

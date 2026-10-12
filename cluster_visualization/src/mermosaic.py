@@ -26,6 +26,7 @@ from astropy.io import fits
 from astropy.table import Table
 from astropy.units import UnitsWarning
 from PIL import Image
+from loguru import logger
 
 try:
     from cluster_visualization.src.config import Config
@@ -204,7 +205,7 @@ class MOSAICHandler:
                 for mertileid in tile_def.get("LEV1", {}).get("ID_INTERSECTED", []):
                     mapping[int(mertileid)] = tileid
             except Exception as exc:
-                print(f"[MOSAIC] Could not read cltiledef {cltiledef_file}: {exc}")
+                logger.warning(f"Could not read cltiledef {cltiledef_file}: {exc}")
         return mapping
 
     def get_available_mosaic_sources(self, provider: Optional[str] = None) -> List[Dict[str, str]]:
@@ -261,7 +262,7 @@ class MOSAICHandler:
                             }
                         )
             except Exception as exc:
-                print(f"[WARNING] ESA source discovery failed: {exc}")
+                logger.warning(f"ESA source discovery failed: {exc}")
 
         if not discovered_sources:
             discovered_sources = list(self.FALLBACK_ESA_SOURCES)
@@ -297,7 +298,7 @@ class MOSAICHandler:
 
         cache_key = self._build_cache_key(provider_norm, normalized_source, mertileid)
         if cache_key in self.traces_cache:
-            print(f"[CACHE HIT] Using cached data for key {cache_key}")
+            logger.debug(f"Using cached data for key {cache_key}")
             return self.traces_cache[cache_key]
 
         if provider_norm == "esa_sky":
@@ -318,7 +319,7 @@ class MOSAICHandler:
         """Load local MER FITS tile from configured mosaic directory."""
         mosaic_dir = self.config.mosaic_dir
         if not mosaic_dir:
-            print("[ERROR] paths.mosaic_dir is not configured")
+            logger.error("paths.mosaic_dir is not configured")
             return None
 
         fits_files: List[str] = []
@@ -327,7 +328,7 @@ class MOSAICHandler:
                 os.path.join(mosaic_dir, f"EUC_MER_BGSUB-MOSAIC-VIS_TILE{mertileid}*.fits.gz")
             )
         except Exception:
-            print(f"Error accessing directory {mosaic_dir}, trying subdirectories...")
+            logger.warning(f"Error accessing directory {mosaic_dir}, trying subdirectories")
             for subdir in os.listdir(mosaic_dir):
                 subdir_path = os.path.join(mosaic_dir, subdir)
                 if os.path.isdir(subdir_path):
@@ -340,24 +341,27 @@ class MOSAICHandler:
                         break
 
         if not fits_files:
-            print(f"Warning: No mosaic FITS file found for MER tile {mertileid}")
+            logger.warning(f"No mosaic FITS file found for MER tile {mertileid}")
             return None
 
         if self.select_best_local_file:
             fits_file = self._select_best_local_mosaic_file(fits_files)
         else:
             fits_file = fits_files[0]
-            print(
-                "[SELECT] Using first MER mosaic candidate for speed "
+            logger.debug(
+                "Using first MER mosaic candidate for speed "
                 f"({os.path.basename(fits_file)})"
             )
         file_size_gb = os.path.getsize(fits_file) / (1024**3)
 
         # Check file size for initial performance optimization
         if file_size_gb > self.max_file_size_gb:
-            print(f"[WARNING] Large file ({file_size_gb:.2f}GB) - may take longer to process")
+            logger.warning(f"Large file ({file_size_gb:.2f}GB) - may take longer to process")
 
-        print(f"[LOADING] Processing mosaic for MER tile {mertileid} ({file_size_gb:.2f}GB)...")
+        # A big local FITS read takes a while: say so at the default level
+        (logger.info if file_size_gb >= 1 else logger.debug)(
+            f"Reading mosaic FITS for MER tile {mertileid} ({file_size_gb:.2f} GB)"
+        )
 
         # Thread-safe FITS loading with timeout
         result_queue: queue.Queue = queue.Queue()
@@ -382,7 +386,7 @@ class MOSAICHandler:
                         return
 
                     load_time = time.time() - start_time
-                    print(f"[TIMING] FITS loaded in {load_time:.2f}s")
+                    logger.debug(f"FITS loaded in {load_time:.2f}s")
 
                     result_queue.put(
                         {
@@ -408,18 +412,18 @@ class MOSAICHandler:
         load_thread.join(timeout=self.timeout_seconds)
 
         if load_thread.is_alive():
-            print(f"[TIMEOUT] Loading MER tile {mertileid} timed out after {self.timeout_seconds}s")
+            logger.warning(f"Loading MER tile {mertileid} timed out after {self.timeout_seconds}s")
             return None
 
         # Check for errors
         if not error_queue.empty():
             error_msg = error_queue.get()
-            print(f"[ERROR] Failed to load MER tile {mertileid}: {error_msg}")
+            logger.error(f"Failed to load MER tile {mertileid}: {error_msg}")
             return None
 
         # Get results
         if result_queue.empty():
-            print(f"[ERROR] No data loaded for MER tile {mertileid}")
+            logger.error(f"No data loaded for MER tile {mertileid}")
             return None
 
         result = result_queue.get()
@@ -429,7 +433,7 @@ class MOSAICHandler:
         self.mosaic_data = result["data"]
         self.mosaic_wcs = result["wcs"]
 
-        print(f"[SUCCESS] Processed MER tile {mertileid}")
+        logger.debug(f"Processed MER tile {mertileid}")
         return result
 
     def _parse_mosaic_timestamp_score(self, file_path: str) -> int:
@@ -463,7 +467,7 @@ class MOSAICHandler:
                 valid_mask = np.isfinite(sample) & (np.abs(sample) < 1e30)
                 return float(np.mean(valid_mask))
         except Exception as exc:
-            print(f"[WARNING] Could not score mosaic candidate {os.path.basename(file_path)}: {exc}")
+            logger.warning(f"Could not score mosaic candidate {os.path.basename(file_path)}: {exc}")
             return -1.0
 
     def _select_best_local_mosaic_file(self, fits_files: List[str]) -> str:
@@ -477,8 +481,8 @@ class MOSAICHandler:
         # Prefer highest valid fraction, then latest timestamp, then lexicographic path.
         scored_candidates.sort(key=lambda x: (x[0], x[1], x[2]))
         best_valid, best_ts, best_file = scored_candidates[-1]
-        print(
-            "[SELECT] Chose MER mosaic candidate "
+        logger.debug(
+            "Chose MER mosaic candidate "
             f"{os.path.basename(best_file)} (valid_fraction={best_valid:.4f}, ts_score={best_ts})"
         )
         return best_file
@@ -504,11 +508,11 @@ class MOSAICHandler:
         percentile stretch used for local FITS tiles.
         """
         if not tile_bounds:
-            print(f"[WARNING] Missing tile bounds for ESA tile request: {mertileid}")
+            logger.warning(f"Missing tile bounds for ESA tile request: {mertileid}")
             return None
 
         if not self.esa_cutout_base_url:
-            print("[ERROR] ESA cutout endpoint is not configured")
+            logger.error("ESA cutout endpoint is not configured")
             return None
 
         ra_min, ra_max, dec_min, dec_max = tile_bounds
@@ -530,7 +534,7 @@ class MOSAICHandler:
             "format": fmt,
         }
         cutout_url = f"{self.esa_cutout_base_url}?{urlencode(params)}"
-        print(f"[ESA] Fetching {fmt.upper()} cutout for tile {mertileid}")
+        logger.debug(f"Fetching {fmt.upper()} cutout for tile {mertileid}")
 
         try:
             with urlopen(cutout_url, timeout=self.esa_timeout_seconds) as resp:
@@ -544,7 +548,7 @@ class MOSAICHandler:
                     header = hdul[0].header.copy()
                     raw_data = hdul[0].data
                     if raw_data is None or raw_data.size == 0:
-                        print(f"[WARNING] Empty FITS payload for ESA tile {mertileid}")
+                        logger.warning(f"Empty FITS payload for ESA tile {mertileid}")
                         return None
                     # hips2fits may return 3-D or 4-D data when Stokes / spectral
                     # axes are present (NAXIS3, NAXIS4).  Drop all degenerate
@@ -607,7 +611,7 @@ class MOSAICHandler:
                 image_array = np.asarray(pil_img, dtype=np.float32)
 
                 if image_array.size == 0:
-                    print(f"[WARNING] Empty JPEG payload for ESA tile {mertileid}")
+                    logger.warning(f"Empty JPEG payload for ESA tile {mertileid}")
                     return None
 
                 # Simple geometric normalization: scale to [0, 1] by the
@@ -653,7 +657,7 @@ class MOSAICHandler:
                 }
 
         except Exception as exc:
-            print(f"[ERROR] ESA cutout load failed for tile {mertileid}: {exc}")
+            logger.error(f"ESA cutout load failed for tile {mertileid}: {exc}")
             return None
 
     def get_mosaic_cutout(self, mertileid, racen, deccen, size, mosaicinfo=None):
@@ -678,7 +682,7 @@ class MOSAICHandler:
                     mertileid, provider="local_fits", source_id="local_mer"
                 )
             except Exception as e:
-                print(f"Error loading mosaic data for MER tile {mertileid}: {e}")
+                logger.opt(exception=e).error(f"Error loading mosaic data for MER tile {mertileid}: {e}")
                 return None, None, None
 
         mosaic_header = mosaicinfo["header"]
@@ -803,17 +807,17 @@ class MOSAICHandler:
             return self._corrected_mask_data
 
         if not self._corrected_mask_path:
-            print("[CORRECTED MASK] No corrected_mask_fits path configured")
+            logger.warning("No corrected_mask_fits path configured")
             return None
 
         if not os.path.exists(self._corrected_mask_path):
-            print(
-                f"[CORRECTED MASK] File not found: {self._corrected_mask_path!r}. "
+            logger.warning(
+                f"Corrected mask file not found: {self._corrected_mask_path!r}. "
                 "Falling back to per-tile effective coverage mask."
             )
             return None
 
-        print(f"[CORRECTED MASK] Loading from {self._corrected_mask_path}")
+        logger.debug(f"Loading corrected mask from {self._corrected_mask_path}")
         t0 = time.time()
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=UnitsWarning)
@@ -828,8 +832,8 @@ class MOSAICHandler:
         import healpy as hp
         ra, dec = hp.pix2ang(nside=nside, ipix=pixels, nest=nested, lonlat=True)
         self._corrected_mask_data = (pixels, weights, ra, dec, nside)
-        print(
-            f"[CORRECTED MASK] Loaded {len(pixels):,} pixels (nside={nside}) "
+        logger.info(
+            f"Corrected mask loaded: {len(pixels):,} pixels (nside={nside}) "
             f"in {time.time() - t0:.2f}s"
         )
         return self._corrected_mask_data
@@ -884,8 +888,8 @@ class MOSAICHandler:
                     return result_pix, result_wt
             # Corrected mask returned no data — fall back to per-tile effcov if available
             if mertileid is not None and not binary_inverted:
-                print(
-                    f"[MASK] Corrected mask empty for viewport; falling back to effcov for tile {mertileid}"
+                logger.debug(
+                    f"Corrected mask empty for viewport; falling back to effcov for tile {mertileid}"
                 )
                 return self._get_mask_footprint_in_viewport(
                     ra_min, ra_max, dec_min, dec_max, mask_type="effcov", mertileid=mertileid
@@ -894,7 +898,7 @@ class MOSAICHandler:
 
         else:  # effcov — per-tile, requires mertileid
             if mertileid is None:
-                print("[MASK] mertileid required for mask_type='effcov'")
+                logger.error("mertileid required for mask_type='effcov'")
                 return empty
             try:
                 matches = self.effcovmask_fileinfo_df.loc[
@@ -902,7 +906,7 @@ class MOSAICHandler:
                     & (self.effcovmask_fileinfo_df["dataset_release"] == self.effcovmask_dsr)
                 ]
                 if matches.empty:
-                    print(f"[MASK] No effcov mask file found for tile {mertileid}")
+                    logger.warning(f"No effcov mask file found for tile {mertileid}")
                     return empty
                 hpmask_fits = matches.squeeze()["fits_file"]
                 footprint = self._read_effcovmask_table(hpmask_fits)
@@ -920,7 +924,7 @@ class MOSAICHandler:
                 )
                 return np.asarray(footprint["PIXEL"][mask]), np.asarray(footprint["WEIGHT"][mask])
             except Exception as exc:
-                print(f"[MASK] Error loading effcov mask for tile {mertileid}: {exc}")
+                logger.opt(exception=exc).error(f"Error loading effcov mask for tile {mertileid}: {exc}")
                 return empty
 
     def _find_intersecting_tiles(
@@ -944,7 +948,7 @@ class MOSAICHandler:
 
         # Check if catred_info exists in data (contains tile polygons)
         if "catred_info" not in data:
-            print("Warning: No catred_info found in data for tile intersection")
+            logger.warning("No catred_info found in data for tile intersection")
             return mertiles_to_load
 
         dsr_df = data["catred_info"].loc[
@@ -983,8 +987,8 @@ class MOSAICHandler:
             intersects_mask[valid] = shapely_intersects(polygons[valid], zoom_box)
         mertiles_to_load = candidates.loc[intersects_mask, "mertileid"].tolist()
 
-        print(
-            f"Debug: Found {len(mertiles_to_load)} MER tiles with mosaics in zoom area: "
+        logger.debug(
+            f"Found {len(mertiles_to_load)} MER tiles with mosaics in zoom area: "
             f"{mertiles_to_load[:5]}{'...' if len(mertiles_to_load) > 5 else ''}"
         )
 
@@ -1048,8 +1052,8 @@ class MOSAICHandler:
         Process mosaic image data with early downsampling for performance optimization
         """
         if target_width_and_height is None and target_scale_factor is None:
-            print(
-                "Warning: No target dimensions or scale factor provided for mosaic processing, using original size"
+            logger.warning(
+                "No target dimensions or scale factor provided for mosaic processing, using original size"
             )
             target_width = mosaic_data.shape[1]
             target_height = mosaic_data.shape[0]
@@ -1068,13 +1072,13 @@ class MOSAICHandler:
         try:
             # Ensure we have a valid numpy array
             if not isinstance(mosaic_data, np.ndarray):
-                print(f"Warning: mosaic_data is not ndarray, type: {type(mosaic_data)}")
+                logger.warning(f"mosaic_data is not ndarray, type: {type(mosaic_data)}")
                 return np.zeros((target_height, target_width))
 
-            print(
-                f"Debug: Original mosaic dimensions: {mosaic_data.shape[1]} x {mosaic_data.shape[0]} pixels"
+            logger.debug(
+                f"Original mosaic dimensions: {mosaic_data.shape[1]} x {mosaic_data.shape[0]} pixels"
             )
-            print(f"Debug: Target dimensions: {target_width} x {target_height} pixels")
+            logger.debug(f"Target dimensions: {target_width} x {target_height} pixels")
 
             # PERFORMANCE OPTIMIZATION: Early downsampling for very large images
             original_shape = mosaic_data.shape
@@ -1087,27 +1091,27 @@ class MOSAICHandler:
                     original_shape[1] // (target_width * 2),
                 )
                 if downsample_factor > 1:
-                    print(
-                        f"Debug: Early downsampling by factor {downsample_factor} for performance"
+                    logger.debug(
+                        f"Early downsampling by factor {downsample_factor} for performance"
                     )
                     mosaic_data = mosaic_data[::downsample_factor, ::downsample_factor]
-                    print(
-                        f"Debug: Downsampled to: {mosaic_data.shape[1]} x {mosaic_data.shape[0]} pixels"
+                    logger.debug(
+                        f"Downsampled to: {mosaic_data.shape[1]} x {mosaic_data.shape[0]} pixels"
                     )
 
-            print("Debug: Computing statistics...")
+            logger.debug("Computing statistics...")
 
             mer_image = self._percentile_normalize(mosaic_data)
 
             if not np.any(mer_image):
-                print("Warning: Invalid normalization bounds, returning zeros")
+                logger.warning("Invalid normalization bounds, returning zeros")
                 return np.zeros((target_height, target_width), dtype=np.float32)
 
-            print(
-                f"Debug: After clipping and normalization - range: [{np.min(mer_image):.3f}, {np.max(mer_image):.3f}]"
+            logger.debug(
+                f"After clipping and normalization - range: [{np.min(mer_image):.3f}, {np.max(mer_image):.3f}]"
             )
 
-            print("Debug: Starting image resize...")
+            logger.debug("Starting image resize...")
 
             # Resize the image to match target dimensions
             # Convert to PIL Image, resize with LANCZOS,
@@ -1120,7 +1124,7 @@ class MOSAICHandler:
             mer_array = np.nan_to_num(mer_array, nan=0.0, posinf=1.0, neginf=0.0)
             mer_array = np.clip(mer_array, 0.0, 1.0).astype(np.float32, copy=False)
 
-            print(f"Debug: Final processed image shape: {mer_array.shape}")
+            logger.debug(f"Final processed image shape: {mer_array.shape}")
 
             # Clean up large arrays to free memory
             del mer_image
@@ -1130,10 +1134,7 @@ class MOSAICHandler:
             return mer_array
 
         except Exception as e:
-            print(f"Error processing mosaic image: {e}")
-            import traceback
-
-            traceback.print_exc()
+            logger.exception(f"Error processing mosaic image: {e}")
             return np.zeros((target_height, target_width))
 
     def _create_scaled_wcs(
@@ -1150,7 +1151,7 @@ class MOSAICHandler:
             scale_x = orig_width / target_width
             scale_y = orig_height / target_height
 
-            print(f"Debug: WCS scaling factors - scale_x: {scale_x:.3f}, scale_y: {scale_y:.3f}")
+            logger.debug(f"WCS scaling factors - scale_x: {scale_x:.3f}, scale_y: {scale_y:.3f}")
 
             # Create a modified header (binned header) similar to notebook
             header_binned = original_header.copy()
@@ -1182,12 +1183,12 @@ class MOSAICHandler:
             # Create the scaled WCS
             wcs_binned = wcs.WCS(header_binned)
 
-            print(f"Debug: Created scaled WCS for {target_width}x{target_height} image")
+            logger.debug(f"Created scaled WCS for {target_width}x{target_height} image")
 
             return wcs_binned
 
         except Exception as e:
-            print(f"Warning: Failed to create scaled WCS, using original: {e}")
+            logger.warning(f"Failed to create scaled WCS, using original: {e}")
             # Fallback to original WCS
             return wcs.WCS(original_header)
 
@@ -1202,13 +1203,13 @@ class MOSAICHandler:
         """Calculate coordinate bounds for the processed image using scaled WCS approach from notebook."""
         try:
             if wcs_cutout:
-                print("Debug: Using provided wcs_cutout for bounds calculation")
+                logger.debug("Using provided wcs_cutout for bounds calculation")
                 scaled_wcs = wcs_cutout
             else:
                 # Get the original image dimensions
                 naxis1 = header["NAXIS1"]  # Width in pixels
                 naxis2 = header["NAXIS2"]  # Height in pixels
-                print(f"Debug: Original mosaic dimensions: {naxis1} x {naxis2} pixels")
+                logger.debug(f"Original mosaic dimensions: {naxis1} x {naxis2} pixels")
                 # Create scaled WCS similar to notebook's header_binned approach
                 original_shape = (naxis2, naxis1)  # (height, width)
                 scaled_wcs = self._create_scaled_wcs(
@@ -1254,7 +1255,7 @@ class MOSAICHandler:
                         ra_coords.append(world_coord[0])
                         dec_coords.append(world_coord[1])
                     else:
-                        print(f"Warning: Unexpected single coordinate: {world_coord}")
+                        logger.warning(f"Unexpected single coordinate: {world_coord}")
                         ra_coords.append(0.0)
                         dec_coords.append(0.0)
             else:
@@ -1269,11 +1270,11 @@ class MOSAICHandler:
                             dec_coords.append(world_coord[1])
                         else:
                             # Single value returned - this shouldn't happen for 2D coordinates
-                            print(f"Warning: Unexpected WCS conversion result: {world_coord}")
+                            logger.warning(f"Unexpected WCS conversion result: {world_coord}")
                             ra_coords.append(0.0)
                             dec_coords.append(0.0)
                     except Exception as e:
-                        print(f"Warning: Failed to convert corner {corner}: {e}")
+                        logger.warning(f"Failed to convert corner {corner}: {e}")
                         ra_coords.append(0.0)
                         dec_coords.append(0.0)
 
@@ -1287,12 +1288,12 @@ class MOSAICHandler:
             ra_size = ra_max - ra_min
             dec_size = dec_max - dec_min
 
-            print(f"Debug: Mosaic tile bounds: RA({ra_min:.6f}, {ra_max:.6f}) = {ra_size:.6f}°")
-            print(f"Debug: Mosaic tile bounds: Dec({dec_min:.6f}, {dec_max:.6f}) = {dec_size:.6f}°")
+            logger.debug(f"Mosaic tile bounds: RA({ra_min:.6f}, {ra_max:.6f}) = {ra_size:.6f}°")
+            logger.debug(f"Mosaic tile bounds: Dec({dec_min:.6f}, {dec_max:.6f}) = {dec_size:.6f}°")
 
             # Handle potential RA wraparound near 0/360 degrees
             if ra_max - ra_min > 180:
-                print("Debug: Detected RA wraparound, adjusting coordinates")
+                logger.debug("Detected RA wraparound, adjusting coordinates")
                 # Find coordinates < 180 and > 180, adjust the smaller ones
                 ra_coords = np.array(ra_coords)
                 if np.any(ra_coords < 180) and np.any(ra_coords > 180):
@@ -1300,8 +1301,8 @@ class MOSAICHandler:
                     ra_min = np.min(ra_coords)
                     ra_max = np.max(ra_coords)
                     ra_size = ra_max - ra_min
-                    print(
-                        f"Debug: Adjusted RA bounds: ({ra_min:.6f}, {ra_max:.6f}) = {ra_size:.6f}°"
+                    logger.debug(
+                        f"Adjusted RA bounds: ({ra_min:.6f}, {ra_max:.6f}) = {ra_size:.6f}°"
                     )
 
             return {
@@ -1316,10 +1317,7 @@ class MOSAICHandler:
             }
 
         except Exception as e:
-            print(f"Error calculating mosaic bounds: {e}")
-            import traceback
-
-            traceback.print_exc()
+            logger.exception(f"Error calculating mosaic bounds: {e}")
 
             # Fallback: try to get pixel scale from WCS and estimate bounds
             try:
@@ -1340,11 +1338,11 @@ class MOSAICHandler:
                     ra_size = naxis1 * ra_pixel_scale
                     dec_size = naxis2 * dec_pixel_scale
 
-                    print(
-                        f"Debug: Fallback - pixel scale: RA={ra_pixel_scale:.8f}°/px, Dec={dec_pixel_scale:.8f}°/px"
+                    logger.debug(
+                        f"Fallback - pixel scale: RA={ra_pixel_scale:.8f}°/px, Dec={dec_pixel_scale:.8f}°/px"
                     )
-                    print(
-                        f"Debug: Fallback - estimated tile size: RA={ra_size:.6f}°, Dec={dec_size:.6f}°"
+                    logger.debug(
+                        f"Fallback - estimated tile size: RA={ra_size:.6f}°, Dec={dec_size:.6f}°"
                     )
 
                     return {
@@ -1360,7 +1358,7 @@ class MOSAICHandler:
                     raise ValueError("Could not determine pixel scale")
 
             except Exception as fallback_error:
-                print(f"Fallback calculation also failed: {fallback_error}")
+                logger.warning(f"Fallback bounds calculation also failed: {fallback_error}; using a standard tile size")
                 # Final fallback - use a standard tile size estimate
                 return {
                     "ra_min": 0,
@@ -1465,14 +1463,14 @@ class MOSAICHandler:
             else:
                 raise ValueError("Original image dimensions not found in WCS or mosaic data")
 
-            print(f"Debug: Original image size: {orig_width} x {orig_height}")
-            print(f"Debug: Processed image size: {width} x {height}")
+            logger.debug(f"Original image size: {orig_width} x {orig_height}")
+            logger.debug(f"Processed image size: {width} x {height}")
 
             # Calculate correct scaling factors
             scale_x = orig_width / width
             scale_y = orig_height / height
 
-            print(f"Debug: Scale factors: scale_x={scale_x:.3f}, scale_y={scale_y:.3f}")
+            logger.debug(f"Scale factors: scale_x={scale_x:.3f}, scale_y={scale_y:.3f}")
 
             # Scale corner pixel centres back to original image coordinates
             corners_original = (corners + 0.5) * [scale_x, scale_y] - 0.5
@@ -1483,7 +1481,7 @@ class MOSAICHandler:
             )
 
         except Exception as e:
-            print(f"Warning: Could not get original dimensions, using direct conversion: {e}")
+            logger.warning(f"Could not get original dimensions, using direct conversion: {e}")
             # Fallback: use processed image corners directly with WCS
             # This assumes the WCS has been properly scaled for the processed image
             ra_coords, dec_coords = mosaic_wcs.wcs_pix2world(corners[:, 0], corners[:, 1], 0)
@@ -1600,7 +1598,7 @@ class MOSAICHandler:
             try:
                 scale = pc.get_colorscale(colorscale)
             except PlotlyError:
-                print(f"Warning: Invalid colorscale '{colorscale}', defaulting to 'viridis'")
+                logger.warning(f"Invalid colorscale '{colorscale}', defaulting to 'viridis'")
                 scale = pc.get_colorscale("viridis")
 
         for bin_idx in range(n_bins):
@@ -1720,18 +1718,18 @@ class MOSAICHandler:
             tile_bounds=tile_bounds,
         )
         if not mosaic_info:
-            print(f"Warning: Could not load mosaic data for tile {mertileid}")
+            logger.warning(f"Could not load mosaic data for tile {mertileid}")
             return None
 
         if provider_norm == "esa_sky":
             processed_image = np.asarray(mosaic_info["data"], dtype=np.float32)
             esa_h, esa_w = processed_image.shape
-            print(f"Debug: ESA cutout at native {esa_w}x{esa_h} (no server-side upscale)")
+            logger.debug(f"ESA cutout at native {esa_w}x{esa_h} (no server-side upscale)")
 
             bounds = mosaic_info.get("bounds")
             if bounds is None:
                 if tile_bounds is None:
-                    print(f"Warning: Missing bounds for ESA tile {mertileid}")
+                    logger.warning(f"Missing bounds for ESA tile {mertileid}")
                     return None
                 bounds = {
                     "ra_min": tile_bounds[0],
@@ -1757,13 +1755,6 @@ class MOSAICHandler:
 
         height, width = processed_image.shape
 
-        print(f"Debug: Creating layout image for tile {mertileid} ({provider_norm})")
-        print(
-            f"       - Tile size: {bounds.get('ra_size_deg', 'unknown'):.6f}° × {bounds.get('dec_size_deg', 'unknown'):.6f}°"
-        )
-        print(f"       - RA range: {bounds['ra_min']:.6f}° to {bounds['ra_max']:.6f}°")
-        print(f"       - Dec range: {bounds['dec_min']:.6f}° to {bounds['dec_max']:.6f}°")
-        print(f"       - Image shape: {height} × {width} pixels")
 
         # layout.images placement (data coordinates), default anchors left/top:
         #   x=ra_max, sizex=ra_max-ra_min: on the reversed RA axis the image's
@@ -1781,7 +1772,11 @@ class MOSAICHandler:
         buf = BytesIO()
         pil_img.save(buf, format="PNG", optimize=True, compress_level=6)
         b64 = base64.b64encode(buf.getvalue()).decode("ascii")
-        print(f"       - PNG size: {len(buf.getvalue()) / 1024:.1f} KB")
+        logger.debug(
+            "Layout image tile {} ({}): RA {:.6f}..{:.6f}, Dec {:.6f}..{:.6f}, {}x{} px, PNG {:.1f} KB",
+            mertileid, provider_norm, bounds["ra_min"], bounds["ra_max"],
+            bounds["dec_min"], bounds["dec_max"], width, height, len(buf.getvalue()) / 1024,
+        )
 
         provider_label = "ESA" if provider_norm == "esa_sky" else "MER"
         cltile_suffix = f" CL{tileid}" if tileid is not None else ""
@@ -1867,7 +1862,7 @@ class MOSAICHandler:
                 source_id="local_mer",
             )
             if not mosaic_info or mosaic_info.get("wcs") is None or mosaic_info.get("data") is None:
-                print(f"Warning: Could not load local FITS/WCS for MER tile {mertileid}")
+                logger.warning(f"Could not load local FITS/WCS for MER tile {mertileid}")
                 return None
 
             mosaic_data = mosaic_info["data"]
@@ -1878,8 +1873,6 @@ class MOSAICHandler:
             ra_min_mosaic, ra_max_mosaic = corners.ra.deg.min(), corners.ra.deg.max()
             dec_min_mosaic, dec_max_mosaic = corners.dec.deg.min(), corners.dec.deg.max()
 
-        print(f"RA range: {ra_min_mosaic:.4f} to {ra_max_mosaic:.4f}")
-        print(f"Dec range: {dec_min_mosaic:.4f} to {dec_max_mosaic:.4f}")
 
         # Load footprint pixels filtered to this viewport.
         io_start = time.time()
@@ -1891,16 +1884,18 @@ class MOSAICHandler:
         )
         io_time = time.time() - io_start
         n_pix = len(pix_arr)
-        print(f"Footprint pixels in viewport ({mask_type}, inverted={binary_inverted}): {n_pix}")
-        if n_pix > 0:
-            print(f"Weight range: {wt_arr.min():.3f} to {wt_arr.max():.3f}")
+        logger.debug(
+            "Mask tile {}: RA {:.4f}..{:.4f}, Dec {:.4f}..{:.4f}, {} footprint pixels ({}, inverted={}){}",
+            mertileid, ra_min_mosaic, ra_max_mosaic, dec_min_mosaic, dec_max_mosaic, n_pix,
+            mask_type, binary_inverted,
+            f", weights {wt_arr.min():.3f}..{wt_arr.max():.3f}" if n_pix > 0 else "",
+        )
 
         # Create grouped traces for HEALPix footprint polygons.
         footprint_traces: List[go.Scatter] = []
         weight_min, weight_max = 0.85, 1.0
 
         if n_pix > 0:
-            print(f"Creating {'binary inverted' if binary_inverted else 'grouped'} traces for {n_pix} HEALPix polygons...")
             polygon_start = time.time()
             display_weights = 1.0 - wt_arr if binary_inverted else wt_arr
             if binary_inverted:
@@ -1941,8 +1936,8 @@ class MOSAICHandler:
             footprint_traces.append(colorbar_trace)
 
         total_trace_time = time.time() - trace_start
-        print(
-            "[TIMING] Mask trace breakdown for tile "
+        logger.debug(
+            "Mask trace breakdown for tile "
             f"{mertileid} ({mask_type}): io={io_time:.2f}s, "
             f"polygon={polygon_time:.2f}s, total={total_trace_time:.2f}s"
         )
@@ -1958,7 +1953,7 @@ class MOSAICHandler:
     ) -> Optional[go.Heatmap]:
         """Create a Plotly heatmap trace for a mosaic cutout."""
 
-        print(f"Debug: Creating cutout trace with size {clickdata.get('cutout_size', 1)} arcmin")
+        logger.info(f"Mosaic cutout: {clickdata.get('cutout_size', 1)} arcmin")
 
         ra_cen, dec_cen = clickdata["cluster_ra"], clickdata["cluster_dec"]
 
@@ -1968,7 +1963,7 @@ class MOSAICHandler:
         # Find which MER tiles intersect with the cutout region
         mertiles_to_load = self._find_intersecting_tiles(data, ra_min, ra_max, dec_min, dec_max)
         if len(mertiles_to_load) != 1:
-            print("Warning: Multiple MER tiles intersect with cutout region, returning None")
+            logger.warning("Multiple MER tiles intersect with cutout region, returning None")
             return None
         else:
             mertileid = mertiles_to_load[0]
@@ -1987,12 +1982,12 @@ class MOSAICHandler:
                 mosaicinfo=mosaicinfo,
             )
         except Exception as e:
-            print(f"Warning: Exception while getting cutout for MER tile {mertileid}: {e}")
+            logger.warning(f"Exception while getting cutout for MER tile {mertileid}: {e}")
             return None
 
         # Process the image
         if data_cutout is None:
-            print(f"Warning: Could not get cutout for MER tile {mertileid}")
+            logger.warning(f"Could not get cutout for MER tile {mertileid}")
             return None
         else:
             # Use actual cutout pixel dimensions (capped at 512) as the rendering target.
@@ -2022,16 +2017,11 @@ class MOSAICHandler:
         y_coords = np.linspace(bounds["dec_min"], bounds["dec_max"], height)
 
         # Add debug information about the tile size and coordinates
-        print(f"Debug: Creating heatmap trace for MER tile {mertileid}")
-        print(
-            f"       - Tile size (degree): {bounds.get('ra_size_deg', 'unknown'):.6f}° × {bounds.get('dec_size_deg', 'unknown'):.6f}°"
+        logger.debug(
+            "Heatmap tile {}: RA {:.6f}..{:.6f}, Dec {:.6f}..{:.6f}, {}x{} px",
+            mertileid, bounds["ra_min"], bounds["ra_max"], bounds["dec_min"], bounds["dec_max"],
+            width, height,
         )
-        print(
-            f"       - Tile size (arcmin): {bounds.get('ra_size_deg', 'unknown')*60:.3f} arcmin × {bounds.get('dec_size_deg', 'unknown')*60:.3f} arcmin"
-        )
-        print(f"       - RA range: {bounds['ra_min']:.6f}° to {bounds['ra_max']:.6f}°")
-        print(f"       - Dec range: {bounds['dec_min']:.6f}° to {bounds['dec_max']:.6f}°")
-        print(f"       - Image shape: {height} × {width} pixels")
 
         # Look up CL-Tile ID for this MER tile
         mertileid_to_tileid = self._build_mertileid_to_tileid_map(data)
@@ -2111,14 +2101,14 @@ class MOSAICHandler:
 
         if not relayout_data:
             self.esa_cutout_format = _original_format
-            print("Debug: No relayout data available for mosaic loading")
+            logger.debug("No relayout data available for mosaic loading")
             return traces
 
         # Extract zoom ranges from relayout data
         zoom_ranges = self._extract_zoom_ranges(relayout_data)
         if not zoom_ranges:
             self.esa_cutout_format = _original_format
-            print("Debug: Could not extract zoom ranges for mosaic loading")
+            logger.debug("Could not extract zoom ranges for mosaic loading")
             return traces
 
         ra_min, ra_max, dec_min, dec_max = zoom_ranges
@@ -2127,8 +2117,8 @@ class MOSAICHandler:
         vp_ra_hi = max(ra_min, ra_max) # type: ignore
         vp_dec_lo = min(dec_min, dec_max) # type: ignore
         vp_dec_hi = max(dec_min, dec_max) # type: ignore
-        print(
-            f"Debug: Loading mosaics for zoom area: RA({vp_ra_lo:.3f}, {vp_ra_hi:.3f}), "
+        logger.debug(
+            f"Loading mosaics for zoom area: RA({vp_ra_lo:.3f}, {vp_ra_hi:.3f}), "
             f"Dec({vp_dec_lo:.3f}, {vp_dec_hi:.3f}), provider={provider_norm}, source={source_id}"
         )
 
@@ -2136,7 +2126,7 @@ class MOSAICHandler:
         mertiles_to_load = self._find_intersecting_tiles(data, vp_ra_lo, vp_ra_hi, vp_dec_lo, vp_dec_hi)
 
         if not mertiles_to_load:
-            print("Debug: No MER tiles with mosaics found in zoom area")
+            logger.debug("No MER tiles with mosaics found in zoom area")
             return traces
 
         # PERFORMANCE LIMITS: Strict limits for interactive experience
@@ -2144,7 +2134,7 @@ class MOSAICHandler:
         max_processing_time = 120  # Maximum 120 seconds total processing time
 
         if len(mertiles_to_load) > max_mosaics:
-            print(f"Debug: Limiting to first {max_mosaics} mosaics for performance")
+            logger.warning(f"{len(mertiles_to_load)} MER tiles in view; showing mosaics for the first {max_mosaics} only")
             mertiles_to_load = mertiles_to_load[:max_mosaics]
 
         # Create traces for each mosaic with timing checks
@@ -2154,7 +2144,7 @@ class MOSAICHandler:
             # Check if we're running out of time
             elapsed_time = time.time() - start_time
             if elapsed_time > max_processing_time:
-                print(f"[TIMEOUT] Stopping mosaic loading after {elapsed_time:.2f}s")
+                logger.warning(f"Stopping mosaic loading after {elapsed_time:.2f}s")
                 break
 
             if progress_callback is not None:
@@ -2185,23 +2175,23 @@ class MOSAICHandler:
                     ra_overlap = tile_ra_min <= vp_ra_hi and tile_ra_max >= vp_ra_lo
                     dec_overlap = tile_dec_min <= vp_dec_hi and tile_dec_max >= vp_dec_lo
                     if not (ra_overlap and dec_overlap):
-                        print(
-                            f"[SKIP] Tile {mertileid} FITS bounds RA({tile_ra_min:.3f},{tile_ra_max:.3f}) "
+                        logger.debug(
+                            f"Tile {mertileid} FITS bounds RA({tile_ra_min:.3f},{tile_ra_max:.3f}) "
                             f"Dec({tile_dec_min:.3f},{tile_dec_max:.3f}) outside viewport — skipping"
                         )
                     else:
                         traces.append(trace)
-                        print(
-                            f"[SUCCESS] Created mosaic trace for MER tile {mertileid} in {trace_time:.2f}s"
+                        logger.debug(
+                            f"Created mosaic trace for MER tile {mertileid} in {trace_time:.2f}s"
                         )
                 else:
-                    print(f"[WARNING] No trace created for MER tile {mertileid}")
+                    logger.warning(f"No trace created for MER tile {mertileid}")
 
             except Exception as e:
-                print(f"[ERROR] Failed to create mosaic trace for tile {mertileid}: {e}")
+                logger.opt(exception=e).error(f"Failed to create mosaic trace for tile {mertileid}: {e}")
 
         total_time = time.time() - start_time
-        print(f"[TIMING] Total mosaic loading completed in {total_time:.2f}s")
+        logger.info(f"Mosaics: {len(traces)} of {len(mertiles_to_load)} MER tiles in {total_time:.2f}s")
 
         # Restore the format that was set before this call.
         self.esa_cutout_format = _original_format
@@ -2231,23 +2221,23 @@ class MOSAICHandler:
         mask_traces: List[go.Scatter] = []
         provider_norm = self._normalize_provider(provider)
         if not relayout_data:
-            print("Debug: No relayout data available for mask overlay loading")
+            logger.debug("No relayout data available for mask overlay loading")
             return mask_traces
 
         # Extract zoom ranges from relayout data
         zoom_ranges = self._extract_zoom_ranges(relayout_data)
         if not zoom_ranges:
-            print("Debug: Could not extract zoom ranges for mask overlay loading")
+            logger.debug("Could not extract zoom ranges for mask overlay loading")
             return mask_traces
 
         ra_min, ra_max, dec_min, dec_max = zoom_ranges
         if any(v is None for v in (ra_min, ra_max, dec_min, dec_max)):
-            print("Debug: Incomplete zoom ranges for mask overlay loading")
+            logger.debug("Incomplete zoom ranges for mask overlay loading")
             return mask_traces
         assert ra_min is not None and ra_max is not None
         assert dec_min is not None and dec_max is not None
-        print(
-            f"Debug: Loading mask overlays for zoom area: RA({ra_min:.3f}, {ra_max:.3f}), "
+        logger.debug(
+            f"Loading mask overlays for zoom area: RA({ra_min:.3f}, {ra_max:.3f}), "
             f"Dec({dec_min:.3f}, {dec_max:.3f}), mask_type={mask_type}, "
             f"provider={provider_norm}, source={source_id}"
         )
@@ -2303,7 +2293,7 @@ class MOSAICHandler:
             )
             n_pix = len(pix_arr)
             label = "INVERTED CORRECTED MASK" if binary_inverted else "CORRECTED MASK"
-            print(f"[{label}] Viewport pixels: {n_pix}")
+            logger.debug(f"{label.capitalize()}: {n_pix} viewport pixels")
 
             if n_pix > 0:
                 display_weights = 1.0 - wt_arr if binary_inverted else wt_arr
@@ -2329,7 +2319,7 @@ class MOSAICHandler:
                     name_prefix=outline_name_prefix,
                 ))
             else:
-                print(f"[{label}] No pixels found in viewport")
+                logger.debug(f"{label.capitalize()}: no pixels in viewport")
 
         else:
             # ----------------------------------------------------------------
@@ -2337,20 +2327,20 @@ class MOSAICHandler:
             # ----------------------------------------------------------------
             mertiles_to_load = self._find_intersecting_tiles(data, ra_min, ra_max, dec_min, dec_max)
             if not mertiles_to_load:
-                print("Debug: No MER tiles found in zoom area")
+                logger.debug("No MER tiles found in zoom area")
                 return mask_traces
 
             max_masks = 5
             max_processing_time = 30
             tile_processing_time_total = 0.0
             if len(mertiles_to_load) > max_masks:
-                print(f"Debug: Limiting to first {max_masks} mask overlays for performance")
+                logger.warning(f"{len(mertiles_to_load)} MER tiles in view; showing mask overlays for the first {max_masks} only")
                 mertiles_to_load = mertiles_to_load[:max_masks]
 
             for i, mertileid in enumerate(tile_progress(mertiles_to_load, "MER mask overlays")):
                 elapsed_time = time.time() - start_time
                 if elapsed_time > max_processing_time:
-                    print(f"[TIMEOUT] Stopping mask overlay loading after {elapsed_time:.2f}s")
+                    logger.warning(f"Stopping mask overlay loading after {elapsed_time:.2f}s")
                     break
 
                 try:
@@ -2373,16 +2363,16 @@ class MOSAICHandler:
 
                     if footprint_traces:
                         mask_traces.extend(footprint_traces)
-                        print(
-                            f"[SUCCESS] Created mask overlay traces for MER tile {mertileid} "
+                        logger.debug(
+                            f"Created mask overlay traces for MER tile {mertileid} "
                             f"in {trace_time:.2f}s"
                         )
                     else:
-                        print(f"[WARNING] No mask overlay traces created for MER tile {mertileid}")
+                        logger.warning(f"No mask overlay traces created for MER tile {mertileid}")
 
                 except Exception as e:
-                    print(
-                        f"[ERROR] Failed to create mask overlay traces for tile {mertileid}: {e}"
+                    logger.opt(exception=e).error(
+                        f"Failed to create mask overlay traces for tile {mertileid}: {e}"
                     )
 
         # Add a single colorbar for mask overlays.
@@ -2395,10 +2385,8 @@ class MOSAICHandler:
             mask_traces.append(colorbar_trace)
 
         total_time = time.time() - start_time
-        print(
-            f"[TIMING] Total mask overlay loading completed in {total_time:.2f}s "
-            f"(mask_type={mask_type})"
-        )
+        kind = "Mask cutout" if name_prefix else "Mask overlay"
+        logger.info(f"{kind} ({mask_type}): {len(mask_traces)} traces in {total_time:.2f}s")
         return mask_traces
 
     def clear_traces_cache(self):
@@ -2412,7 +2400,7 @@ class MOSAICHandler:
 
         gc.collect()
 
-        print(f"[CACHE] Cleared {cache_size} cached mosaic entries")
+        logger.info(f"Cleared {cache_size} cached mosaic entries")
 
     def _create_placeholder_trace(
         self, mertileid: int, opacity: float = 0.5, colorscale: str = "gray"
@@ -2472,11 +2460,11 @@ class MOSAICHandler:
                     mertileid, provider="local_fits", source_id="local_mer"
                 )
                 if not mosaic_info:
-                    print(f"Warning: Could not load mosaic data for MER tile {mertileid}")
+                    logger.warning(f"Could not load mosaic data for MER tile {mertileid}")
                     return None, None
                 wcs_mosaic = mosaic_info["wcs"]
             except Exception as e:
-                print(f"Warning: Exception while loading mosaic WCS for MER tile {mertileid}: {e}")
+                logger.warning(f"Exception while loading mosaic WCS for MER tile {mertileid}: {e}")
                 return None, None
 
         import healpy as hp
@@ -2499,14 +2487,13 @@ if __name__ == "__main__":
     # Test loading mosaic data
     mosaic_info = handler.get_mosaic_fits_data_by_mertile(test_mertileid)
     if mosaic_info:
-        print(f"Successfully loaded mosaic for MER tile {test_mertileid}")
-        print(f"Image shape: {mosaic_info['data'].shape}")
+        logger.info(f"Loaded mosaic for MER tile {test_mertileid}, image shape {mosaic_info['data'].shape}")
 
         # Test creating a trace
         trace = handler.create_mosaic_image_trace(test_mertileid)
         if trace:
-            print("Successfully created mosaic trace")
+            logger.info("Created mosaic trace")
         else:
-            print("Failed to create mosaic trace")
+            logger.error("Failed to create mosaic trace")
     else:
-        print(f"Failed to load mosaic for MER tile {test_mertileid}")
+        logger.error(f"Failed to load mosaic for MER tile {test_mertileid}")
