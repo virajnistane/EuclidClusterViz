@@ -20,13 +20,14 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import plotly.graph_objs as go
+from loguru import logger
 
 try:
     from cluster_visualization.utils.spatial_index import CATREDSpatialIndex
 
     SPATIAL_INDEX_AVAILABLE = True
 except ImportError:
-    print("Warning: Spatial indexing not available - using fallback proximity detection")
+    logger.warning("Spatial indexing not available - using fallback proximity detection")
     SPATIAL_INDEX_AVAILABLE = False
 
 
@@ -58,13 +59,13 @@ class CatredProximityDetector:
         self._subsampled_cache = None
         self._index_hash = None
         self._spatial_index = None
-        print("Debug: CatredProximityDetector: all caches cleared")
+        logger.debug("CatredProximityDetector: all caches cleared")
 
     def clear_bounds_cache(self) -> None:
         """Clear only the bounds cache (call when new CATRED data arrives)."""
         if self._bounds_cache is not None:
             self._bounds_cache = None
-            print("Debug: Cleared old CATRED bounds cache for new data")
+            logger.debug("Cleared old CATRED bounds cache for new data")
 
     # ------------------------------------------------------------------
     # Public API
@@ -93,14 +94,10 @@ class CatredProximityDetector:
             Boolean numpy array of length ``len(ra_array)``.
         """
         if SPATIAL_INDEX_AVAILABLE and len(catred_points) > 1000:
-            print(
-                f"Using spatial index for proximity detection with {len(catred_points):,} CATRED points"
-            )
+            logger.debug("Proximity detection: spatial index, {:,} CATRED points", len(catred_points))
             return self._check_with_spatial_index(ra_array, dec_array, catred_points)
         else:
-            print(
-                f"Using legacy proximity detection ({len(catred_points):,} CATRED points)"
-            )
+            logger.debug("Proximity detection: legacy, {:,} CATRED points", len(catred_points))
             return np.array(
                 [
                     self._check_single_legacy(ra, dec, catred_points)
@@ -133,8 +130,8 @@ class CatredProximityDetector:
 
         if len(catred_points) > 20000:
             sampled_points = catred_points[::5]
-            print(
-                f"Debug: Subsampled {len(sampled_points)} from {len(catred_points)} CATRED points for proximity"
+            logger.debug(
+                f"Subsampled {len(sampled_points)} from {len(catred_points)} CATRED points for proximity"
             )
         else:
             sampled_points = catred_points
@@ -160,7 +157,6 @@ class CatredProximityDetector:
         catred_hash = hash(tuple(catred_array.flatten()[:1000]))
 
         if self._spatial_index is None or self._index_hash != catred_hash:
-            print(f"Building spatial index for {len(catred_points):,} CATRED points...")
             self._spatial_index = CATREDSpatialIndex(
                 catred_array[:, 0],
                 catred_array[:, 1],
@@ -176,8 +172,8 @@ class CatredProximityDetector:
 
         elapsed = time.time() - start_time
         n_near = int(np.sum(is_near))
-        print(
-            f"Proximity check completed: {n_near:,}/{len(ra_array):,} clusters near CATRED data ({elapsed:.2f}s)"
+        logger.debug(
+            "Proximity check: {:,}/{:,} clusters near CATRED data ({:.2f}s)", n_near, len(ra_array), elapsed
         )
         return is_near
 
@@ -216,8 +212,8 @@ class CatredProximityDetector:
                 "dec_max": np.max(catred_array[:, 1]) + proximity_threshold,
                 "hash": catred_points_hash,
             }
-            print(
-                f"Debug: CATRED bounds cache created/updated - {len(sampled_points)} sampled points, hash: {catred_points_hash}"
+            logger.debug(
+                f"CATRED bounds cache created/updated - {len(sampled_points)} sampled points, hash: {catred_points_hash}"
             )
 
         bounds = self._bounds_cache

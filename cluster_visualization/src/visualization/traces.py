@@ -16,6 +16,7 @@ from numpy.typing import NDArray
 
 import numpy as np
 import plotly.graph_objs as go
+from loguru import logger
 
 from cluster_visualization.src.visualization.catred_proximity import (
     CatredProximityDetector,
@@ -138,8 +139,8 @@ class TraceCreator:
                 catred_traces, show_mer_tiles, catred_masked, manual_catred_data, zoom_threshold_met
             )
         except:
-            print(
-                "Debug: catred_masked is not a boolean, probably set to 'none' in CATREDCallbacks"
+            logger.debug(
+                "catred_masked is not a boolean, probably set to 'none' in CATREDCallbacks"
             )
             pass
 
@@ -149,8 +150,8 @@ class TraceCreator:
                 catred_traces, show_mer_tiles, catred_masked, catred_box_data
             )
         except:
-            print(
-                "Debug: catred_masked is not a boolean, probably set to 'none' in CATREDCallbacks"
+            logger.debug(
+                "catred_masked is not a boolean, probably set to 'none' in CATREDCallbacks"
             )
             pass
 
@@ -193,13 +194,13 @@ class TraceCreator:
         # Prepare mosaic traces (preserve existing ones)
         mosaic_traces = existing_mosaic_traces or []
         if mosaic_traces:
-            print(f"Debug: Preserving {len(mosaic_traces)} existing mosaic traces in layer order")
+            logger.debug(f"Preserving {len(mosaic_traces)} existing mosaic traces in layer order")
 
         # Prepare mask overlay traces (preserve existing ones)
         mask_overlay_traces = existing_mask_overlay_traces or []
         if mask_overlay_traces:
-            print(
-                f"Debug: Preserving {len(mask_overlay_traces)} existing mask overlay traces in layer order"
+            logger.debug(
+                f"Preserving {len(mask_overlay_traces)} existing mask overlay traces in layer order"
             )
 
         # Combine in proper layer order: polygons (bottom) → mosaics → CATRED → clusters (top)
@@ -217,10 +218,10 @@ class TraceCreator:
                 _state_dir = _os.path.join(_os.path.expanduser("~"), ".cache", "clusterviz_state")
                 with _dc.Cache(_state_dir) as _sc:
                     _sc.set("catred_click_data", self.current_catred_data)
-                print(f"Debug: Persisted {len(self.current_catred_data)} CATRED trace(s) to state cache "
+                logger.debug(f"Persisted {len(self.current_catred_data)} CATRED trace(s) to state cache "
                       f"(keys: {list(self.current_catred_data.keys())})")
             except Exception as _exc:
-                print(f"Warning: Could not persist CATRED data to state cache: {_exc}")
+                logger.warning(f"Could not persist CATRED data to state cache: {_exc}")
             self._profiler.record("create_traces:diskcache", time.perf_counter() - _t)
 
         _result = traces + mosaic_traces + mask_overlay_traces + catred_traces + cluster_traces
@@ -490,8 +491,8 @@ class TraceCreator:
             assert data["paths"]["use_gluematchcat"] == True and idcluster_list is not None
             merged = self._apply_idcluster_filtering(merged, idcluster_list)
         except:
-            print(
-                "Debug: ID-cluster based filtering skipped - either not using gluematchcat or idcluster_list is None"
+            logger.debug(
+                "ID-cluster based filtering skipped - either not using gluematchcat or idcluster_list is None"
             )
         return merged
 
@@ -586,7 +587,7 @@ class TraceCreator:
         order = np.argsort(ids, kind="stable")
         sorted_ids = ids[order]
         if len(sorted_ids) > 1 and np.any(sorted_ids[1:] == sorted_ids[:-1]):
-            print("Debug: ID_UNIQUE_CLUSTER not unique - per-row render cache disabled")
+            logger.debug("ID_UNIQUE_CLUSTER not unique - per-row render cache disabled")
             data["_render_row_cache"] = None
             return None
 
@@ -653,7 +654,7 @@ class TraceCreator:
         if manual_catred_data and manual_catred_data.get("ra"):
             for ra, dec in zip(manual_catred_data["ra"], manual_catred_data["dec"]):
                 all_points.append((ra, dec))
-            print(f"Debug: Added {len(manual_catred_data['ra'])} points from manual CATRED data")
+            logger.debug(f"Added {len(manual_catred_data['ra'])} points from manual CATRED data")
 
         # Collect coordinates from existing CATRED traces (passed from cache)
         if existing_catred_traces and len(existing_catred_traces) > 0:
@@ -663,8 +664,8 @@ class TraceCreator:
                     if catred_data and catred_data.get("ra"):
                         for ra, dec in zip(catred_data["ra"], catred_data["dec"]):
                             all_points.append((ra, dec))
-                        print(
-                            f"Debug: Added {len(catred_data['ra'])} points from existing trace '{trace_name}'"
+                        logger.debug(
+                            f"Added {len(catred_data['ra'])} points from existing trace '{trace_name}'"
                         )
             else:
                 # In background callbacks, in-memory current_catred_data can be empty even
@@ -691,29 +692,29 @@ class TraceCreator:
                         recovered_points += 1
 
                 if recovered_points > 0:
-                    print(
-                        f"Debug: Recovered {recovered_points} CATRED points from existing traces"
+                    logger.debug(
+                        f"Recovered {recovered_points} CATRED points from existing traces"
                     )
         else:
             # No existing CATRED traces - clear stored CATRED data to revert markers
             if hasattr(self, "current_catred_data"):
                 self.current_catred_data = None
-                print("Debug: CATRED data cleared - reverting marker enhancements")
+                logger.debug("CATRED data cleared - reverting marker enhancements")
             # Clear bounds cache as well
             self.proximity_detector.clear_bounds_cache()
 
         if catred_box_data and catred_box_data.get("ra"):
             for ra, dec in zip(catred_box_data["ra"], catred_box_data["dec"]):
                 all_points.append((ra, dec))
-            print(f"Debug: Added {len(catred_box_data['ra'])} points from CATRED box data")
+            logger.debug(f"Added {len(catred_box_data['ra'])} points from CATRED box data")
 
         # If no CATRED data found, return None (no enhancement)
         if not all_points:
-            print("Debug: No CATRED data points found - no enhancement will be applied")
+            logger.debug("No CATRED data points found - no enhancement will be applied")
             return None
 
-        print(
-            f"Debug: Found {len(all_points)} total CATRED data points for proximity-based enhancement"
+        logger.debug(
+            f"Found {len(all_points)} total CATRED data points for proximity-based enhancement"
         )
         return all_points
 
@@ -721,7 +722,7 @@ class TraceCreator:
         """Explicitly clear stored CATRED data to revert marker enhancements."""
         if hasattr(self, "current_catred_data"):
             self.current_catred_data = None
-            print("Debug: TraceCreator CATRED data explicitly cleared")
+            logger.debug("TraceCreator CATRED data explicitly cleared")
 
         self.proximity_detector.clear()
 
@@ -792,7 +793,7 @@ class TraceCreator:
         flag_values = flag_quality_zp if richness_mode == "zp" else flag_quality_rs
 
         if col not in cluster_data.dtype.names:
-            print(f"Debug: {col} column not found, skipping richness filtering")
+            logger.debug(f"{col} column not found, skipping richness filtering")
             return cluster_data
 
         if richness_lower is not None or richness_upper is not None:
@@ -864,7 +865,7 @@ class TraceCreator:
             keep   = np.any(ang_ok & z_ok, axis=1)
             return cast(StructuredArray, cluster_data[keep])
         except Exception as e:
-            print(f"Debug: _filter_detfits_by_unique_ids failed: {e}")
+            logger.opt(exception=e).warning(f"_filter_detfits_by_unique_ids failed, not filtering: {e}")
             return cluster_data
 
     def _apply_idcluster_filtering(
@@ -880,8 +881,10 @@ class TraceCreator:
             mask = np.isin(cluster_data['ID_UNIQUE_CLUSTER'], idcluster_list)
             filtered_data = cluster_data[mask]
         except Exception as e:
-            print(f"Error applying IDCLUSTER filtering: {e}")
-            print(f"IDCLUSTER list provided: {idcluster_list}")
+            ids = list(idcluster_list)
+            logger.opt(exception=e).error(
+                f"Error applying IDCLUSTER filtering ({len(ids)} ids, first: {ids[:10]}): {e}"
+            )
             return cluster_data
         
         return filtered_data
@@ -889,12 +892,8 @@ class TraceCreator:
     def _check_zoom_threshold(self, relayout_data: Optional[Dict], show_mer_tiles: bool) -> bool:
         """Check if zoom level meets threshold for CATRED data display (< 2 degrees)."""
         if not relayout_data:
-            print(
-                f"Debug: Zoom check skipped - no relayout_data available"
-            )
+            logger.debug("Zoom check skipped - no relayout_data available")
             return False
-
-        print(f"Debug: Checking zoom threshold - relayout_data: {relayout_data}")
 
         # Extract zoom ranges
         ra_range = dec_range = None
@@ -909,16 +908,13 @@ class TraceCreator:
         elif "yaxis.range" in relayout_data:
             dec_range = abs(relayout_data["yaxis.range"][1] - relayout_data["yaxis.range"][0])
 
-        print(f"Debug: Zoom ranges - RA: {ra_range}, Dec: {dec_range}")
 
         # Check threshold (< 2 degrees in both dimensions)
         if ra_range is not None and dec_range is not None and ra_range < 2.0 and dec_range < 2.0:
-            print(
-                f"Debug: Zoom threshold MET! RA: {ra_range:.3f}° < 2°, Dec: {dec_range:.3f}° < 2°"
-            )
+            logger.debug("Zoom threshold met: RA {:.3f}°, Dec {:.3f}° (< 2°)", ra_range, dec_range)
             return True
         else:
-            print(f"Debug: Zoom threshold NOT met. RA: {ra_range}, Dec: {dec_range}")
+            logger.debug("Zoom threshold not met: RA {}, Dec {}", ra_range, dec_range)
             return False
 
     def _add_existing_catred_traces(
@@ -926,8 +922,8 @@ class TraceCreator:
     ) -> None:
         """Add existing CATRED traces to preserve them across renders."""
         if existing_catred_traces:
-            print(
-                f"Debug: Adding {len(existing_catred_traces)} existing CATRED traces to bottom layer"
+            logger.debug(
+                f"Adding {len(existing_catred_traces)} existing CATRED traces to bottom layer"
             )
             data_traces.extend(existing_catred_traces)
 
@@ -942,22 +938,20 @@ class TraceCreator:
         """Add manually loaded CATRED high-resolution data traces."""
         if not manual_catred_data:
             if zoom_threshold_met:
-                print(
-                    f"Debug: CATRED scatter conditions met but no manual data provided - use render button"
+                logger.debug(
+                    f"CATRED scatter conditions met but no manual data provided - use render button"
                 )
             else:
-                print(
-                    f"Debug: CATRED scatter data conditions not met - "
+                logger.debug(
+                    f"CATRED scatter data conditions not met - "
                     f"manual_data: {manual_catred_data is not None}"
                 )
             return
 
         if not manual_catred_data.get("ra"):
-            print("Debug: No CATRED scatter data available to display")
+            logger.debug("No CATRED scatter data available to display")
             return
 
-        print(f"Debug: Using manually loaded CATRED scatter data")
-        print(f"Debug: Creating CATRED scatter trace with {len(manual_catred_data['ra'])} points")
 
         # Generate unique trace name
         trace_count = self.catred_handler.get_traces_count() if self.catred_handler else 1
@@ -968,8 +962,9 @@ class TraceCreator:
         # For masked mode, include effective coverage in customdata for client-side filtering
         if catred_masked and "effective_coverage" in manual_catred_data:
             customdata = manual_catred_data["effective_coverage"]
-            print(
-                f"Debug: Including effective coverage data for client-side filtering, values range: {min(customdata):.3f} to {max(customdata):.3f}"
+            logger.opt(lazy=True).debug(
+                "Effective coverage for client-side filtering: {}",
+                lambda: f"{min(customdata):.3f} to {max(customdata):.3f}",
             )
         else:
             customdata = list(
@@ -1006,17 +1001,10 @@ class TraceCreator:
 
         # NOTE: diskcache persistence moved to create_traces() so both tile
         # and box traces are captured in a single write after both methods run.
-        print(
-            f"Debug: Stored CATRED data for trace '{trace_name}' with {len(manual_catred_data['ra'])} points"
+        logger.debug(
+            "CATRED trace '{}': {} points (PHZ_PDF length {})",
+            trace_name, len(manual_catred_data["ra"]), len(manual_catred_data["phz_pdf"][0]) if manual_catred_data["phz_pdf"] else 0,
         )
-        print(
-            f"Debug: PHZ_PDF sample length: {len(manual_catred_data['phz_pdf'][0]) if manual_catred_data['phz_pdf'] else 'No PHZ_PDF data'}"
-        )
-        print(f"Debug: Current CATRED data keys: {list(self.current_catred_data.keys())}")
-        print(f"Debug: TraceCreator.current_catred_data id: {id(self.current_catred_data)}")
-        print(f"Debug: Trace name: '{trace_name}'")
-        print("Debug: CATRED trace added to TOP LAYER (should be clickable)")
-        print("Debug: About to return from _add_manual_catred_traces method")
 
     def _add_catred_box_trace(
         self,
@@ -1027,17 +1015,15 @@ class TraceCreator:
     ) -> None:
         """Add CATRED bounding box trace if applicable."""
         if not catred_box_data:
-            print(
-                f"Debug: CATRED box trace skipped - no catred_box_data provided"
+            logger.debug(
+                f"CATRED box trace skipped - no catred_box_data provided"
             )
             return
 
         if not catred_box_data.get("ra"):
-            print("Debug: No CATRED scatter data available to display")
+            logger.debug("No CATRED scatter data available to display")
             return
 
-        print(f"Debug: Using loaded CATRED box data")
-        print(f"Debug: Creating CATRED scatter trace with {len(catred_box_data['ra'])} points")
 
         # Generate unique trace name
         trace_count = self.catred_handler.get_traces_count() if self.catred_handler else 1
@@ -1048,8 +1034,9 @@ class TraceCreator:
         # For masked mode, include effective coverage in customdata for client-side filtering
         if catred_masked and "effective_coverage" in catred_box_data:
             customdata = catred_box_data["effective_coverage"]
-            print(
-                f"Debug: Including effective coverage data for client-side filtering, values range: {min(customdata):.3f} to {max(customdata):.3f}"
+            logger.opt(lazy=True).debug(
+                "Effective coverage for client-side filtering: {}",
+                lambda: f"{min(customdata):.3f} to {max(customdata):.3f}",
             )
         else:
             customdata = list(
@@ -1092,19 +1079,11 @@ class TraceCreator:
             ):
                 self.catred_handler.current_catred_data = {}
             self.catred_handler.current_catred_data[trace_name] = catred_box_data
-            print(f"Debug: Also stored CATRED data in catred_handler")
 
-        print(
-            f"Debug: Stored CATRED data for trace '{trace_name}' with {len(catred_box_data['ra'])} points"
+        logger.debug(
+            "CATRED trace '{}': {} points (PHZ_PDF length {})",
+            trace_name, len(catred_box_data["ra"]), len(catred_box_data["phz_pdf"][0]) if catred_box_data["phz_pdf"] else 0,
         )
-        print(
-            f"Debug: PHZ_PDF sample length: {len(catred_box_data['phz_pdf'][0]) if catred_box_data['phz_pdf'] else 'No PHZ_PDF data'}"
-        )
-        print(f"Debug: Current CATRED data keys: {list(self.current_catred_data.keys())}")
-        print(f"Debug: TraceCreator.current_catred_data id: {id(self.current_catred_data)}")
-        print(f"Debug: Trace name: '{trace_name}'")
-        print("Debug: CATRED trace added to TOP LAYER (should be clickable)")
-        print("Debug: About to return from _add_manual_catred_traces method")
 
     def _format_catred_hover_text(self, catred_data: Dict[str, List]) -> List[str]:
         """Format hover text for CATRED data points."""
@@ -1147,7 +1126,7 @@ class TraceCreator:
         """
         # Extract coordinates
         if len(amico_cluster) == 0:
-            print(f"Warning: No matching AMICO cluster found for PZWAV cluster")
+            logger.warning(f"No matching AMICO cluster found for PZWAV cluster")
             return None
 
         # Get first match if multiple matches exist
@@ -1777,8 +1756,8 @@ class TraceCreator:
                         )
                         data_traces.append(enhanced_trace_amico)
 
-                    print(
-                        f"Debug: Enhanced {len(pzwav_near)} PZWAV and {len(amico_near)} AMICO merged clusters near MER data"
+                    logger.debug(
+                        f"Enhanced {len(pzwav_near)} PZWAV and {len(amico_near)} AMICO merged clusters near MER data"
                     )
                 else:
                     # Single algorithm
@@ -1853,8 +1832,8 @@ class TraceCreator:
                     )
                     data_traces.append(enhanced_trace)
 
-                    print(
-                        f"Debug: Enhanced {len(near_catred_data)} merged clusters near MER data, {len(away_from_catred_data)} normal"
+                    logger.debug(
+                        f"Enhanced {len(near_catred_data)} merged clusters near MER data, {len(away_from_catred_data)} normal"
                     )
 
     def _compute_merged_tile_colors(
@@ -2115,7 +2094,7 @@ class TraceCreator:
                 hoverlabel=dict(bgcolor="lightyellow", font_size=12, font_family="Arial"),
             )
             data_traces.append(trace)
-        print(f"Debug: Added unmerged cluster traces for {data['algorithm']}")
+        logger.debug(f"Added unmerged cluster traces for {data['algorithm']}")
 
     def _create_cltile_polygons(
         self,
@@ -2230,7 +2209,7 @@ class TraceCreator:
                         )
                         polygon_traces.append(mertile_trace)
                 except Exception as e:
-                    print(f"Debug: merpoly = {merpoly}, type={type(merpoly)}")
+                    logger.debug("Could not draw MER tile polygon ({}): {}", type(merpoly).__name__, e)
 
     def _mer_polygon_lookup(self, data: Dict[str, Any]) -> Dict[Any, Any]:
         """mertileid -> polygon for the catalog's dataset release, built once per catalog."""

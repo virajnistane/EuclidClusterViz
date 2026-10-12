@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import plotly.graph_objects as go
+from loguru import logger
 
 GLOBE_SETTINGS = {
     "nside_max": 1024,
@@ -326,7 +327,7 @@ def tile_traces(data: Dict[str, Any], trace_creator, counts_by_tile: Dict[str, i
                 polygons, data, tile_id, value, show_polygons=False, show_mer_tiles=False
             )
         except Exception as e:
-            print(f"Debug: globe - no polygons for tile {tile_id}: {e}")
+            logger.debug(f"globe - no polygons for tile {tile_id}: {e}")
     core = [t for t in polygons if "CORE" in (t.name or "")]
     return [_to_geo(t, counts_by_tile) for t in trace_creator._merge_polygon_traces(core)]
 
