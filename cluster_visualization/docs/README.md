@@ -486,7 +486,8 @@ Direct Python execution:
     --external       Allow external access (binds to 0.0.0.0 instead of 127.0.0.1)
     --remote         Alias for --external (for backward compatibility)
     --log-level LVL  Terminal log level: DEBUG, INFO (default), WARNING, ERROR
-                     (default from $CLUSTERVIZ_LOG_LEVEL)
+                     (default from $CLUSTERVIZ_LOG_LEVEL, else [logging] level in the
+                     config file; also changeable in the sidebar Configuration section)
     --help           Show help message and exit
 ```
 

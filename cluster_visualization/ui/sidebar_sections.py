@@ -402,6 +402,29 @@ class SidebarSections:
             [
                 html.Div(
                     [
+                        _group_label("Terminal log level", "log-level-select"),
+                        dbc.Select(
+                            id="log-level-select",
+                            options=[
+                                {"label": "DEBUG (everything)", "value": "DEBUG"},
+                                {"label": "INFO", "value": "INFO"},
+                                {"label": "WARNING", "value": "WARNING"},
+                                {"label": "ERROR", "value": "ERROR"},
+                            ],
+                            # Set on page load from the running app (ui_callbacks)
+                            value=None,
+                            size="sm",
+                        ),
+                        _help(
+                            "Applies now, for this app; not saved to the config file. "
+                            "Background tasks use it from their next run.",
+                            "log-level-status",
+                        ),
+                    ],
+                    className="control-group",
+                ),
+                html.Div(
+                    [
                         _group_label("Merged catalog"),
                         html.Div(id="config-merged-catalog", className="small", children=[loading()]),
                     ],

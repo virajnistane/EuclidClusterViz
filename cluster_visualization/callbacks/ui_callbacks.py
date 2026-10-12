@@ -15,6 +15,8 @@ import csv
 import io
 from loguru import logger
 
+from cluster_visualization.utils.log import LEVELS, current_level, setup_logging
+
 try:
     from cluster_visualization.callbacks.utils import get_idclusters_array
 except ImportError:
@@ -92,6 +94,7 @@ class UICallbacks:
         self._setup_members_color_callback()
         self._setup_collapsible_callbacks()
         self._setup_config_display_callback()
+        self._setup_log_level_callback()
         self._setup_file_configuration_callback()
         self._setup_file_browser_callbacks()
         self._setup_view_mode_callbacks()
@@ -977,6 +980,38 @@ class UICallbacks:
                 ],
                 Input(f"{section}-collapse", "is_open"),
             )
+
+    @staticmethod
+    def apply_log_level(value):
+        """Sidebar log level: on page load (value None) show the running level;
+        otherwise switch to the chosen one. Returns (select value, status text)."""
+        current = current_level()
+        if not value:
+            return current, f"Now {current}."
+        value = str(value).upper()
+        if value not in LEVELS or value == current:
+            return current, f"Now {current}."
+        message = f"Log level set to {value} from the sidebar (was {current})"
+        # Log at whichever of the two levels shows INFO (the old one when going quieter)
+        if LEVELS.index(value) < LEVELS.index(current):
+            setup_logging(value)
+            logger.info(message)
+        else:
+            logger.info(message)
+            setup_logging(value)
+        return value, f"Now {value}."
+
+    def _setup_log_level_callback(self):
+        """Sidebar Configuration > Terminal log level (applied at once, not saved)."""
+
+        @self.app.callback(
+            Output("log-level-select", "value"),
+            Output("log-level-status", "children"),
+            Input("log-level-select", "value"),
+            prevent_initial_call=False,
+        )
+        def set_log_level(value):
+            return self.apply_log_level(value)
 
     def _setup_config_display_callback(self):
         """Setup callback to display configuration parameters"""

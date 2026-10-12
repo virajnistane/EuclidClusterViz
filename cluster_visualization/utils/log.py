@@ -68,6 +68,28 @@ def resolve_level(level=None) -> str:
     return name if name in LEVELS else "INFO"
 
 
+def choose_level(cli=None, user_env=None, config_value=None):
+    """Level from --log-level, else the user's CLUSTERVIZ_LOG_LEVEL, else the config
+    file's [logging] level, else INFO.
+
+    Returns (level, problem): problem names a value that is not a level (INFO is
+    used instead), or is None.
+    """
+    for source, value in (("--log-level", cli), (ENV_VAR, user_env), ("[logging] level", config_value)):
+        if not value:
+            continue
+        name = str(value).strip().upper()
+        if name in LEVELS:
+            return name, None
+        return "INFO", f"Unknown log level {value!r} in {source}; using INFO"
+    return "INFO", None
+
+
+def current_level() -> str:
+    """Level currently applied by setup_logging (INFO before any setup)."""
+    return resolve_level(os.environ.get(ENV_VAR))
+
+
 def _write(message) -> None:
     from tqdm import tqdm
 

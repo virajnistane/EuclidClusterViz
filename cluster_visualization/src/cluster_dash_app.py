@@ -91,7 +91,7 @@ if src_path not in sys.path:
 from config import get_config
 from loguru import logger
 
-from cluster_visualization.utils.log import LEVELS, setup_logging
+from cluster_visualization.utils.log import ENV_VAR, LEVELS, choose_level, setup_logging
 
 
 def parse_arguments():
@@ -129,14 +129,17 @@ Examples:
         type=str.upper,
         choices=LEVELS,
         default=None,
-        help="Terminal log level (default: $CLUSTERVIZ_LOG_LEVEL, else INFO)",
+        help="Terminal log level (default: $CLUSTERVIZ_LOG_LEVEL, else [logging] level "
+        "in the config file, else INFO)",
     )
     return parser.parse_args()
 
 
 # Parse arguments first
+_user_env_level = os.environ.get(ENV_VAR)  # read before setup_logging writes it
 args = parse_arguments()
-setup_logging(args.log_level)
+# Early setup (config loading logs too); the config file's level is applied below
+setup_logging(choose_level(args.log_level, _user_env_level)[0])
 
 # Load configuration with custom file if specified
 if args.config:
@@ -146,6 +149,12 @@ else:
     logger.debug("Default configuration (auto-detect)")
     config = get_config()
 logger.debug("Configuration loaded")
+
+# Final level: --log-level > CLUSTERVIZ_LOG_LEVEL > [logging] level > INFO
+_log_level, _log_problem = choose_level(args.log_level, _user_env_level, config.get_log_level())
+setup_logging(_log_level)
+if _log_problem:
+    logger.warning(_log_problem)
 
 # Add local data modules path
 data_modules_path = os.path.join(os.path.dirname(__file__), "data")

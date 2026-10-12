@@ -466,6 +466,13 @@ class Config:
         raw_value = str(self._get_mosaic_option("select_best_local_file", "false")).strip().lower()
         return raw_value in {"1", "true", "yes", "on"}
 
+    def get_log_level(self) -> Optional[str]:
+        """Terminal log level from [logging] level (upper-cased), or None when not set."""
+        if not self.config_parser.has_option("logging", "level"):
+            return None
+        value = str(self.config_parser.get("logging", "level")).strip()
+        return value.upper() or None
+
     def _get_view_int(self, option_name: str, default: int, minimum: int = 0) -> int:
         """Integer from the [view] section; default when missing or invalid."""
         if not self.config_parser.has_option("view", option_name):

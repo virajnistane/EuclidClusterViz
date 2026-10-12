@@ -78,8 +78,17 @@ messages are hidden.
 CLUSTERVIZ_LOG_LEVEL=WARNING ./launch.sh   # only warnings and errors
 ```
 
-`--log-level` wins over `CLUSTERVIZ_LOG_LEVEL`. The startup box with the SSH
-command is always printed, whatever the level.
+Where the level comes from, first match wins:
+
+1. `--log-level` on `./launch.sh` (or `make run ARGS="--log-level DEBUG"`)
+2. the `CLUSTERVIZ_LOG_LEVEL` environment variable
+3. `level` in the `[logging]` section of the config file
+4. INFO
+
+While the app runs, **Configuration > Terminal log level** in the sidebar changes
+it at once (not saved to the config file; a background task already running keeps
+its level until it ends). The startup box with the SSH command is always printed,
+whatever the level.
 
 At INFO the terminal shows one line per action (data loaded, cluster clicked,
 mosaic/mask overlay or cutout made, CATRED loaded). Timings that run on every

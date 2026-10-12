@@ -133,6 +133,66 @@ class TestSetupLogging(unittest.TestCase):
         profiler.print_stats(header="t")
         self.assertIn("test:section", self.out.getvalue())
 
+    def test_choose_level_precedence(self):
+        self.assertEqual(log.choose_level(), ("INFO", None))
+        self.assertEqual(log.choose_level(config_value="warning"), ("WARNING", None))
+        self.assertEqual(log.choose_level(user_env="ERROR", config_value="DEBUG"), ("ERROR", None))
+        self.assertEqual(log.choose_level("DEBUG", "ERROR", "WARNING"), ("DEBUG", None))
+
+    def test_choose_level_unknown_value(self):
+        level, problem = log.choose_level(config_value="verbose")
+        self.assertEqual(level, "INFO")
+        self.assertIn("'verbose'", problem)
+        self.assertIn("[logging] level", problem)
+
+    def test_current_level_follows_setup(self):
+        self.assertEqual(log.current_level(), "INFO")
+        log.setup_logging("WARNING")
+        self.assertEqual(log.current_level(), "WARNING")
+
+    def test_sidebar_log_level(self):
+        from cluster_visualization.callbacks.ui_callbacks import UICallbacks
+
+        log.setup_logging("INFO")
+        # Page load: the select shows the running level
+        self.assertEqual(UICallbacks.apply_log_level(None), ("INFO", "Now INFO."))
+        # Change: applied at once, and announced at the old level
+        self.assertEqual(UICallbacks.apply_log_level("DEBUG"), ("DEBUG", "Now DEBUG."))
+        self.assertEqual(log.current_level(), "DEBUG")
+        logger.debug("visible now")
+        self.assertIn("Log level set to DEBUG from the sidebar", self.out.getvalue())
+        self.assertIn("visible now", self.out.getvalue())
+        # Unknown value: unchanged
+        self.assertEqual(UICallbacks.apply_log_level("LOUD"), ("DEBUG", "Now DEBUG."))
+
+    def test_sidebar_announcement_visible_both_ways(self):
+        from cluster_visualization.callbacks.ui_callbacks import UICallbacks
+
+        log.setup_logging("WARNING")
+        UICallbacks.apply_log_level("DEBUG")  # louder: announced at the new level
+        self.assertIn("Log level set to DEBUG from the sidebar (was WARNING)", self.out.getvalue())
+        UICallbacks.apply_log_level("ERROR")  # quieter: announced at the old level
+        self.assertIn("Log level set to ERROR from the sidebar (was DEBUG)", self.out.getvalue())
+
+
+class TestConfigLogLevel(unittest.TestCase):
+    def _config(self, text):
+        import configparser
+
+        from cluster_visualization.src.config import Config
+
+        config = Config.__new__(Config)
+        config.config_parser = configparser.ConfigParser()
+        config.config_parser.read_string(text)
+        return config
+
+    def test_level_read_and_upper_cased(self):
+        self.assertEqual(self._config("[logging]\nlevel = debug\n").get_log_level(), "DEBUG")
+
+    def test_missing_section_or_empty(self):
+        self.assertIsNone(self._config("[view]\n").get_log_level())
+        self.assertIsNone(self._config("[logging]\nlevel =\n").get_log_level())
+
 
 if __name__ == "__main__":
     unittest.main()
