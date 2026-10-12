@@ -14,6 +14,8 @@ import plotly.graph_objs as go
 
 # Empty-state text of the p(z) panel (same for every caller)
 PHZ_EMPTY_HINT = "Click a CATRED source on the map to see its redshift probability, p(z)"
+# layout.meta of the empty p(z) figure: the UI then shows the Cluster data sub-tab
+PHZ_EMPTY_META = "phz-empty"
 
 
 def wrap_hint(text: str, width: int = 38) -> str:
@@ -138,6 +140,7 @@ class FigureManager:
         fig = go.Figure()
 
         fig.update_layout(
+            meta=PHZ_EMPTY_META,
             title="",
             xaxis_title="",
             yaxis_title="",

@@ -11,6 +11,9 @@ import plotly.graph_objs as go  # type: ignore[import]
 from dash import Input, Output, State
 from loguru import logger
 
+from cluster_visualization.src.visualization.figures import PHZ_EMPTY_META
+from cluster_visualization.src.visualization.trace_registry import TraceRegistry, TraceType
+
 try:
     from cluster_visualization.callbacks.utils import get_idclusters_array
 except ImportError:
@@ -65,6 +68,7 @@ class PHZCallbacks:
     def setup_callbacks(self):
         """Setup all PHZ-related callbacks"""
         self._setup_phz_pdf_callback()
+        self._setup_default_subtab_callback()
         self._setup_cluster_data_callback()
 
     def _setup_phz_pdf_callback(self):
@@ -90,6 +94,16 @@ class PHZCallbacks:
             # Name of the clicked trace (Scattergl clickData has no traceName)
             clicked_trace_name = self._clicked_trace_name(clickData, current_figure)
 
+            # Cluster markers (and the highlight ring on the selected one) open the
+            # Cluster tools tab (cluster_modal_callbacks); anything else that is not a
+            # CATRED/member point is an invalid click: show PHZ Analysis > Cluster data
+            kind = self._clicked_trace_kind(clickData, current_figure)
+            if kind in (TraceType.CLUSTER, TraceType.SELECTED_CLUSTER):
+                return dash.no_update, dash.no_update, dash.no_update
+            if kind is not self.UNKNOWN_TRACE and kind not in (TraceType.CATRED, TraceType.MEMBERS):
+                logger.debug("Click on '{}' (not a cluster or CATRED point)", clicked_trace_name)
+                return self.DEFAULT_TABS
+
             # CATRED click data lives in several places: tile/box traces built by the
             # background render worker are only in the shared diskcache, while Members
             # traces are added to catred_handler in this process. Use the source that
@@ -97,7 +111,7 @@ class PHZCallbacks:
             current_catred_data, data_source = self._catred_data_for_trace(clicked_trace_name)
             if not current_catred_data:
                 logger.debug("CATRED click on '{}': no CATRED data available", clicked_trace_name)
-                return dash.no_update, dash.no_update, dash.no_update
+                return self.DEFAULT_TABS
 
             try:
                 # Extract click information
@@ -108,7 +122,7 @@ class PHZCallbacks:
                 # trace name: substring checks fail on cluster traces like
                 # "PZWAV (Merged, near CATRED)".
                 if clicked_trace_name != "Unknown" and clicked_trace_name not in current_catred_data:
-                    return dash.no_update, dash.no_update, dash.no_update
+                    return self.DEFAULT_TABS
 
                 # Get coordinates for matching
                 clicked_x = clicked_point.get("x")
@@ -198,12 +212,28 @@ class PHZCallbacks:
                     )
 
                 # If we get here, the click wasn't on a CATRED point
-                return dash.no_update, dash.no_update, dash.no_update
+                return self.DEFAULT_TABS
 
             except Exception as e:
                 logger.exception(f"Error creating PHZ_PDF plot: {e}")
 
                 return self._create_error_phz_plot(str(e)), dash.no_update, dash.no_update
+
+    def _setup_default_subtab_callback(self):
+        """No CATRED/member point selected (the p(z) panel was reset to its empty hint, e.g.
+        by a render or Clear): show the Cluster data sub-tab instead of an empty p(z)."""
+        self.app.clientside_callback(
+            f"""
+            function(fig) {{
+                const meta = fig && fig.layout && fig.layout.meta;
+                return meta === '{PHZ_EMPTY_META}'
+                    ? 'phz-cluster-subtab' : window.dash_clientside.no_update;
+            }}
+            """,
+            Output("phz-inner-tabs", "active_tab", allow_duplicate=True),
+            Input("phz-pdf-plot", "figure"),
+            prevent_initial_call=True,
+        )
 
     @staticmethod
     def _log_member_click(trace_name, member_data, index) -> None:
@@ -219,6 +249,24 @@ class PHZCallbacks:
             f"Member clicked ({trace_name}): RA={fmt('ra', 5)}, Dec={fmt('dec', 5)}, "
             f"PHZ_MEDIAN={fmt('phz_median', 3)}, PMEM_ZP={fmt('pmem_zp', 2)}, PMEM_RS={fmt('pmem_rs', 2)}"
         )
+
+    # Tabs shown when no cluster/CATRED/member point is selected: PHZ Analysis > Cluster data
+    DEFAULT_TABS = (dash.no_update, "phz-tab", "phz-cluster-subtab")
+    # The figure state does not name the clicked trace (no curveNumber or no figure)
+    UNKNOWN_TRACE = "unknown"
+
+    @classmethod
+    def _clicked_trace_kind(cls, clickData, current_figure):
+        """TraceType of the clicked trace (None for an unnamed or unclassified trace),
+        or UNKNOWN_TRACE when the figure state cannot tell."""
+        try:
+            curve_number = clickData["points"][0].get("curveNumber")
+            traces = (current_figure or {}).get("data", [])
+        except (KeyError, IndexError, TypeError, AttributeError):
+            return cls.UNKNOWN_TRACE
+        if curve_number is None or not 0 <= curve_number < len(traces):
+            return cls.UNKNOWN_TRACE
+        return TraceRegistry.classify_trace(traces[curve_number])
 
     @staticmethod
     def _clicked_trace_name(clickData, current_figure):
@@ -381,6 +429,8 @@ class PHZCallbacks:
                 Input("phz-inner-tabs", "active_tab"),
                 Input("phz-cluster-refresh-btn", "n_clicks"),
                 Input("phz-cluster-nbins-slider", "value"),
+                # New render or applied filters: refresh while the sub-tab is on screen
+                Input("rendered-meta-store", "data"),
             ],
             [
                 State("cluster-plot", "figure"),
@@ -394,7 +444,7 @@ class PHZCallbacks:
             prevent_initial_call=True,
         )
         def update_cluster_data_plots(
-            active_tab, _refresh_clicks, n_bins,
+            active_tab, _refresh_clicks, n_bins, _rendered_meta,
             cluster_figure, algorithm,
             snr_range_pzwav, snr_range_amico, redshift_range,
             idcluster_upload_contents, idcluster_upload_filename,
@@ -402,7 +452,7 @@ class PHZCallbacks:
             # Allow trigger from sub-tab switch, refresh button, or bins slider
             ctx = dash.callback_context
             triggered_id = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
-            if triggered_id == "phz-inner-tabs" and active_tab != "phz-cluster-subtab":
+            if triggered_id in ("phz-inner-tabs", "rendered-meta-store") and active_tab != "phz-cluster-subtab":
                 return dash.no_update, dash.no_update
 
             n_bins = int(n_bins) if n_bins else 40

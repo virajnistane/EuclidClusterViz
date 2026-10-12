@@ -371,7 +371,7 @@ class AppLayout:
                                                                                 ),
                                                                             ],
                                                                             id="phz-inner-tabs",
-                                                                            active_tab="phz-catred-subtab",
+                                                                            active_tab="phz-cluster-subtab",  # until a CATRED/member point is clicked
                                                                         ),
                                                                     ],
                                                                     id="phz-tab-content",

@@ -86,6 +86,9 @@ class _CapturingApp:
 
         return register
 
+    def clientside_callback(self, *args, **kwargs):
+        pass
+
 
 class _FakeCache:
     """diskcache.Cache stand-in backed by a dict."""
@@ -104,7 +107,10 @@ class _FakeCache:
 
 
 class TestPhzClickRouting(unittest.TestCase):
-    """Only clicks on stored CATRED/Members traces switch to the p(z) tab."""
+    """Only clicks on stored CATRED/Members traces switch to the p(z) tab; cluster clicks
+    leave the tabs to the cluster callback; anything else shows PHZ > Cluster data."""
+
+    DEFAULT = (dash.no_update, "phz-tab", "phz-cluster-subtab")
 
     CATRED_TRACE = "CATRED Masked - MER Tile"
     # Real cluster trace name: contains "CATRED" but is not a CATRED trace
@@ -151,6 +157,51 @@ class TestPhzClickRouting(unittest.TestCase):
         self.state_cache["catred_click_data"] = {self.CATRED_TRACE: self.catred}
         _figure, tab, subtab = self._click(0, 1, 46.20, -56.10)
         self.assertEqual((tab, subtab), ("phz-tab", "phz-catred-subtab"))
+
+    def test_member_click_switches_to_pz_tab(self):
+        self.handler.current_catred_data = {"Members (ID 109926)": self.catred}
+        self.figure = {"data": [{"name": "Members (ID 109926)"}]}
+        _figure, tab, subtab = self._click(0, 1, 46.20, -56.10)
+        self.assertEqual((tab, subtab), ("phz-tab", "phz-catred-subtab"))
+
+    def test_selected_cluster_highlight_counts_as_cluster(self):
+        self.figure = {"data": [{"name": "__selected_cluster__"}]}
+        result = self._click(0, 0, 46.2, -56.1)
+        self.assertTrue(all(value is dash.no_update for value in result))
+
+    def test_other_traces_are_invalid_clicks(self):
+        for name in ("MER-Tile 102018211", "Mask overlay bin 3", "Matched Pair", None):
+            self.figure = {"data": [{"name": name} if name else {}]}
+            self.assertEqual(self._click(0, 0, 46.2, -56.1), self.DEFAULT, name)
+
+    def test_catred_click_without_data_is_invalid(self):
+        self.handler.current_catred_data = {}
+        self.assertEqual(self._click(0, 1, 46.20, -56.10), self.DEFAULT)
+
+    def test_catred_click_matching_no_point_is_invalid(self):
+        self.assertEqual(self._click(0, None, 10.0, 10.0), self.DEFAULT)
+
+    def test_no_click_changes_nothing(self):
+        result = self.on_click(None, self.figure)
+        self.assertTrue(all(value is dash.no_update for value in result))
+
+
+class TestEmptyPzMarker(unittest.TestCase):
+    """The empty p(z) figure carries a marker; the UI then shows the Cluster data sub-tab."""
+
+    def test_empty_pz_figures_carry_the_marker(self):
+        from cluster_visualization.callbacks.main_plot import MainPlotCallbacks
+        from cluster_visualization.src.visualization.figures import PHZ_EMPTY_META, FigureManager
+
+        self.assertEqual(MainPlotCallbacks._create_empty_phz_plot(mock.MagicMock()).layout.meta,
+                         PHZ_EMPTY_META)
+        self.assertEqual(FigureManager().create_empty_phz_figure().layout.meta, PHZ_EMPTY_META)
+
+    def test_error_pz_figure_keeps_the_catred_subtab(self):
+        from cluster_visualization.src.visualization.figures import PHZ_EMPTY_META
+
+        error = PHZCallbacks(_CapturingApp(), None)._create_error_phz_plot("boom")
+        self.assertNotEqual(error.layout.meta, PHZ_EMPTY_META)
 
 
 if __name__ == "__main__":

@@ -19,7 +19,7 @@ import pandas as pd  # type: ignore[import]
 import plotly.graph_objs as go  # type: ignore[import]
 from dash import Input, Output, Patch, State, html
 from loguru import logger
-from cluster_visualization.src.visualization.figures import PHZ_EMPTY_HINT, wrap_hint
+from cluster_visualization.src.visualization.figures import PHZ_EMPTY_HINT, PHZ_EMPTY_META, wrap_hint
 
 from cluster_visualization.src.visualization.sky_overview import catalog_span_deg
 from cluster_visualization.src.visualization.trace_registry import TraceRegistry, TraceType
@@ -1822,6 +1822,7 @@ class MainPlotCallbacks:
         """Empty p(z) panel: a centred hint, no axes or grid"""
         empty_phz_fig = go.Figure()
         empty_phz_fig.update_layout(
+            meta=PHZ_EMPTY_META,
             template="plotly_white",
             paper_bgcolor="#ffffff",
             plot_bgcolor="#ffffff",

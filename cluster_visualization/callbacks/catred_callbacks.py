@@ -11,7 +11,7 @@ import pandas as pd  # type: ignore[import]
 import plotly.graph_objs as go  # type: ignore[import]
 from dash import Input, Output, State, html
 from loguru import logger
-from cluster_visualization.src.visualization.figures import PHZ_EMPTY_HINT, wrap_hint
+from cluster_visualization.src.visualization.figures import PHZ_EMPTY_HINT, PHZ_EMPTY_META, wrap_hint
 import time
 
 from cluster_visualization.callbacks.utils import get_idclusters_array
@@ -550,6 +550,7 @@ class CATREDCallbacks:
         """Create empty PHZ_PDF plot with message"""
         empty_phz_fig = go.Figure()
         empty_phz_fig.update_layout(
+            meta=PHZ_EMPTY_META,
             title="PHZ_PDF Plot",
             xaxis_title="Redshift",
             yaxis_title="Probability Density",
