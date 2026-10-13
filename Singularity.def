@@ -1,90 +1,101 @@
 Bootstrap: docker
 From: python:3.14-slim
 
+# Build from the ClusterViz/ directory (paths under %files are relative to it):
+#     make sif
+# or  apptainer build --fakeroot clusterviz.sif Singularity.def
+
 %labels
     Author Viraj Nistane
     Description ClusterViz Dash app — Euclid cluster visualization
-    Version 1.0.0
-
-%post
-    # System deps needed by healpy, astropy, Pillow
-    apt-get update -qq && apt-get install -y --no-install-recommends \
-        gcc g++ gfortran \
-        libcfitsio-dev \
-        libffi-dev \
-        libpng-dev \
-        libjpeg-dev \
-        pkg-config \
-        && rm -rf /var/lib/apt/lists/*
-
-    pip install --no-cache-dir --upgrade pip
-
-    # Install all runtime dependencies (pinned versions from pyproject.toml)
-    pip install --no-cache-dir \
-        "plotly==5.17.0" \
-        "pandas>=2.3.3,<3.0" \
-        "numpy>=2.3.0,<3.0" \
-        "astropy>=5.0" \
-        "healpy>=1.16.0" \
-        "scipy>=1.16.0" \
-        "shapely>=2.1.2,<3.0" \
-        "dash[diskcache]==2.14.1" \
-        "dash-bootstrap-components==1.5.0" \
-        "Pillow>=9.2.0" \
-        "psutil>=5.9.0" \
-        "diskcache>=5.6.3" \
-        "loguru>=0.7" \
-
-    # Pre-compile all .py files to .pyc so Python skips parsing on startup
-    python -m compileall /usr/local/lib/python3.14/site-packages/astropy  -q || true
-    python -m compileall /usr/local/lib/python3.14/site-packages/healpy   -q || true
-    python -m compileall /usr/local/lib/python3.14/site-packages/shapely  -q || true
-    python -m compileall /usr/local/lib/python3.14/site-packages/plotly   -q || true
-    python -m compileall /usr/local/lib/python3.14/site-packages/dash     -q || true
-
-%environment
-    # Tell Python where to find the project
-    export PYTHONPATH=/app:$PYTHONPATH
-    # Silence astropy download attempts in offline HPC environments
-    export ASTROPY_CONFIG_DIR=/tmp/astropy_cfg
-    export MPLCONFIGDIR=/tmp/mpl_cfg
-    # Skip the EDEN check — environment is guaranteed by the image
-    export CLUSTERVIZ_SKIP_EDEN_CHECK=1
+    Version 1.4.0
 
 %files
-    # Copy the project into the image at build time
-    # Run: apptainer build clusterviz.sif Singularity.def
-    # from the ClusterViz/ directory
-    . /app
+    # Only what the app needs at run time. Copying "." would also pull in .env,
+    # config_local.ini, tmp/, logs, tests/ and docs/ — never do that.
+    pyproject.toml /app/pyproject.toml
+    uv.lock /app/uv.lock
+    config.ini /app/config.ini
+    cluster_visualization/__init__.py /app/cluster_visualization/__init__.py
+    cluster_visualization/callbacks /app/cluster_visualization/callbacks
+    cluster_visualization/core /app/cluster_visualization/core
+    cluster_visualization/scripts /app/cluster_visualization/scripts
+    cluster_visualization/src /app/cluster_visualization/src
+    cluster_visualization/ui /app/cluster_visualization/ui
+    cluster_visualization/utils /app/cluster_visualization/utils
+
+%post
+    set -e
+
+    # Every compiled dependency (numpy, scipy, healpy, astropy, shapely, pyarrow, ...)
+    # ships a cp314 manylinux wheel in uv.lock, so no compilers are needed.
+    pip install --no-cache-dir "uv>=0.10.11"
+
+    # Install the exact versions from uv.lock into /opt/venv. The app itself is not
+    # installed as a package: it runs from /app via PYTHONPATH, like launch.sh does.
+    cd /app
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_PYTHON_DOWNLOADS=never \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_NO_CACHE=1 \
+        uv sync --frozen --no-dev --no-install-project --python /usr/local/bin/python3.14
+
+    # Drop host bytecode caches and precompile the app (the image is read-only at run time)
+    find /app -name __pycache__ -type d -prune -exec rm -rf {} +
+    rm -rf /app/cluster_visualization/.ruff_cache
+    /opt/venv/bin/python -m compileall -q /app/cluster_visualization
+
+    # core/app.py writes tmp/browser_debug.log under the project root; /app is
+    # read-only inside the image, so point it at the container's /tmp.
+    ln -s /tmp /app/tmp
+
+%environment
+    export VIRTUAL_ENV=/opt/venv
+    export PATH=/opt/venv/bin:$PATH
+    export PYTHONPATH=/app:$PYTHONPATH
+    export PYTHONDONTWRITEBYTECODE=1
 
 %runscript
+    # Make a relative --config path absolute before changing to /app, and fall back
+    # to the config.ini baked into the image when no --config is given.
+    has_config=
+    prev=
+    n=$#
+    while [ "$n" -gt 0 ]; do
+        arg=$1
+        shift
+        n=$((n - 1))
+        if [ "$prev" = "--config" ]; then
+            case $arg in /*) ;; *) arg="$PWD/$arg" ;; esac
+        fi
+        case $arg in
+            --config) has_config=1 ;;
+            --config=/*) has_config=1 ;;
+            --config=*) has_config=1; arg="--config=$PWD/${arg#--config=}" ;;
+        esac
+        set -- "$@" "$arg"
+        prev=$arg
+    done
+    [ -n "$has_config" ] || set -- --config /app/config.ini "$@"
+
     cd /app
-    # Default to /app/config.ini unless caller already passes --config
-    case "$*" in
-        *--config*) exec python cluster_visualization/src/cluster_dash_app.py "$@" ;;
-        *)          exec python cluster_visualization/src/cluster_dash_app.py --config /app/config.ini "$@" ;;
-    esac
+    exec python cluster_visualization/src/cluster_dash_app.py "$@"
 
 %help
-    ClusterViz Singularity/Apptainer image.
+    ClusterViz Apptainer image.
 
-    Build:
-        apptainer build clusterviz.sif Singularity.def
+    Build (from the ClusterViz/ directory):
+        make sif
 
-    Run (default port 8050):
-        apptainer run clusterviz.sif
+    Run (port 8050 + UID % 1000). Bind the data tree the config points at;
+    $HOME is bound by default, so paths under it need no --bind:
+        apptainer run --bind /sps,/pbs clusterviz.sif
 
-    Run with custom config:
-        apptainer run clusterviz.sif --config /path/to/config.ini
+    Run with your own config:
+        apptainer run --bind /sps,/pbs clusterviz.sif --config my_config.ini
 
-    Run with external access:
-        apptainer run clusterviz.sif --external
+    Other app options pass through, e.g. --external, --log-level DEBUG.
 
-    Mount your data directory (read-only):
-        apptainer run --bind /data/euclid:/data/euclid:ro clusterviz.sif
-
-    Bind cache directory across sessions to keep disk cache:
-        apptainer run --bind $HOME/.cache/clusterviz:$HOME/.cache/clusterviz clusterviz.sif
-
-    PBS job example (add to your job script):
-        apptainer run --bind /scratch/$USER:/scratch/$USER clusterviz.sif --external
+    $HOME is bound by default, so the disk caches in ~/.cache/clusterviz* persist
+    between runs.

@@ -4,10 +4,11 @@
 # Pass extra arguments with ARGS, e.g. make run ARGS="--config my.ini"
 
 .DEFAULT_GOAL := help
-.PHONY: help venv setup setup-dev rebuild run run-debug test docs docs-clean clear-cache clean-venv
+.PHONY: help venv setup setup-dev rebuild run run-debug test docs docs-clean clear-cache clean-venv sif
 
 PY := .venv/bin/python
 DOCS := cluster_visualization/docs
+SIF := clusterviz.sif
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-12s %s\n", $$1, $$2}'
@@ -46,3 +47,6 @@ clear-cache: ## Delete the on-disk caches (~/.cache/clusterviz*)
 
 clean-venv: ## Delete .venv
 	rm -rf .venv
+
+sif: ## Build the Apptainer image clusterviz.sif from Singularity.def (needs apptainer; ARGS=--force to overwrite)
+	apptainer build --fakeroot $(ARGS) $(SIF) Singularity.def
