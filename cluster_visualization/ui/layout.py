@@ -29,7 +29,7 @@ class AppLayout:
                 html.Header(
                     [
                         html.H1(
-                            "Euclid cluster detection",
+                            "Euclid-Viz: LE3-CL Visualization Tool",
                             className="app-title",
                             title="ESA Euclid Mission: Cluster Detection Visualization",
                         ),
