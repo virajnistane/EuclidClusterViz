@@ -290,6 +290,12 @@ class TabContent:
                 className="mb-0",
             ),
             _pending("tab-members-mag-filter-switch"),
+            html.Small(
+                "Keeps members no fainter than Rich-CL's limit at their redshift: H★(z) plus its "
+                "faint-end margin (dmag_faint), read from the Rich-CL parameters file "
+                "([misc] richcl_params_file). Skipped if that file can't be read.",
+                className="control-help",
+            ),
             html.Div(
                 [_label("Radius (ZP or RS branch)", "tab-members-radius-filter-mode"), _pending("tab-members-radius-filter-mode")],
                 className="d-flex align-items-center gap-2 mt-2",
