@@ -1,7 +1,7 @@
 """Write the list of files the app imports, for the launcher's background prefetch.
 
 On a cold cluster node every import reads its file from network storage (Ceph venv,
-/pbs/home stdlib) one at a time. run_dash_app_venv.sh reads the files listed here in
+$HOME stdlib) one at a time. run_dash_app_venv.sh reads the files listed here in
 parallel while the app starts, so Python finds them in the page cache.
 
 The list holds exactly what Python loads: the app entry module is executed without

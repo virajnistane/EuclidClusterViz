@@ -68,7 +68,6 @@ The system uses three configuration files:
 #### `[paths]` - Data Locations
 ```ini
 base_workspace = /sps/euclid/OU-LE3/CL/ial_workspace/workdir
-eden_path = /cvmfs/euclid-dev.in2p3.fr/EDEN-3.1
 mergedetcat_dir = ${paths:base_workspace}/MergeDetCat/RR2_south
 rr2_downloads_dir = ${paths:base_workspace}/RR2_downloads
 ```
@@ -118,7 +117,6 @@ mergedetcat_dir = ${paths:base_workspace}/MergeDetCat/RR2_south
 Environment variables are also supported:
 ```ini
 base_workspace = ${HOME}/euclid_data
-eden_path = ${EDEN_PATH}
 ```
 
 ### Environment Variables (Alternative)
@@ -127,7 +125,6 @@ You can also use environment variables to override configuration:
 
 ```bash
 export EUCLID_WORKSPACE="/your/workspace/path"
-export EDEN_PATH="/your/eden/path"
 ```
 
 Then use `ConfigFromEnv` in your scripts for environment variable priority.
@@ -181,8 +178,6 @@ The configuration system manages these key paths:
 
 ### Base Paths (User Configurable)
 - **Base Workspace**: `/sps/euclid/OU-LE3/CL/ial_workspace/workdir`
-- **EDEN Environment**: `/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1`
-- **User Home**: `/pbs/home/v/vnistane`
 
 ### Derived Paths (Automatically Calculated)
 - **MergeDetCat Directory**: `{base_workspace}/MergeDetCat/RR2_south/`
@@ -230,7 +225,6 @@ if not is_valid:
 ### Validation Checks
 - ✅ Critical directories exist
 - ✅ Data files are accessible
-- ✅ EDEN environment is available
 - ✅ Python path setup is correct
 
 ## Troubleshooting
@@ -311,7 +305,6 @@ User on different system:
 ```python
 # In config.py, update these lines:
 self._base_workspace = '/data/euclid/workspace'
-self._cvmfs_eden_path = '/opt/euclid/eden'
 ```
 
 ### Using Environment Variables

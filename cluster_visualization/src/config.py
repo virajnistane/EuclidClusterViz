@@ -90,7 +90,6 @@ class Config:
 
         # Read paths from configuration
         self._base_workspace = self._expand_path(self.config_parser.get("paths", "base_workspace"))
-        self._cvmfs_eden_path = self._expand_path(self.config_parser.get("paths", "eden_path"))
         self._data_base_dir = self._expand_path(self.config_parser.get("paths", "data_base_dir"))
 
         # LE3 input data directories
@@ -156,9 +155,6 @@ class Config:
             self.mask_hips_path = _val if _val else None
         else:
             self.mask_hips_path = None
-
-        # Environment paths
-        self.eden_path = self._cvmfs_eden_path
 
         # Project paths - use auto-detected git repository root
         self.project_root = self._detected_project_root
@@ -548,13 +544,6 @@ class Config:
             else:
                 logger.info(f"{name}: {path}")
 
-        # Check environment
-        eden_active = self.eden_path in os.environ.get("PATH", "")
-        if eden_active:
-            logger.info("EDEN environment is active")
-        else:
-            logger.warning("EDEN environment not detected in PATH")
-
         return len(issues) == 0, issues
 
     def print_config_summary(self):
@@ -564,7 +553,6 @@ class Config:
                 "Cluster Visualization configuration",
                 f"Configuration file: {self._config_file_used}",
                 f"Base workspace: {self._base_workspace}",
-                f"EDEN path: {self.eden_path}",
                 f"Project root (auto-detected): {self.project_root}",
                 "Data directories:",
                 f"  CATRED directory: {self.catred_dir}",
@@ -635,12 +623,6 @@ class ConfigFromEnv(Config):
         if env_workspace:
             self._base_workspace = env_workspace
             logger.info(f"Using EUCLID_WORKSPACE from environment: {env_workspace}")
-
-        env_eden = os.environ.get("EDEN_PATH")
-        if env_eden:
-            self._cvmfs_eden_path = env_eden
-            self.eden_path = env_eden
-            logger.info(f"Using EDEN_PATH from environment: {env_eden}")
 
         # Re-setup paths with environment overrides
         self._setup_paths()

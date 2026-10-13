@@ -58,7 +58,7 @@ if [ -n "${CLUSTERVIZ_NO_AUTOSYNC:-}" ]; then
     echo "Note: CLUSTERVIZ_NO_AUTOSYNC is set; if the app fails to import, run ./setup_venv.sh"
 fi
 
-# Background prefetch. The venv (Ceph) and the uv-managed stdlib (/pbs/home) sit on
+# Background prefetch. The venv (Ceph) and the uv-managed stdlib ($HOME) sit on
 # network filesystems, and Python reads each imported file one at a time: a cold start
 # waited ~80 s on those reads. setup_venv.sh writes the exact files the app loads
 # (.pyc, extensions, their shared libraries; in import order) to a manifest; parallel

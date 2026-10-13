@@ -122,7 +122,7 @@ This tool provides a professional-grade visualization solution for Euclid cluste
 
 **Required Setup**: Virtual environment with all dependencies
 
-The EDEN-3.1 environment lacks several critical modules (`healpy`, `dash`, `plotly`, etc.), so a virtual environment is required:
+The app runs from a `uv`-managed virtual environment (`.venv`) that holds all dependencies:
 
 ```bash
 # Set up virtual environment with all dependencies
@@ -155,7 +155,7 @@ The same tasks are available through `make` (run `make` for the list):
 | `make clear-cache` | Delete `~/.cache/clusterviz*` |
 
 
-**Note**: While EDEN-3.1 provides base astronomical libraries, the application requires additional packages:
+**Note**: Besides the standard scientific stack, the application needs:
 - `healpy` - HEALPix operations for masked CATRED data
 - `dash` & `plotly` - Interactive web application framework
 - `dash-bootstrap-components` - Enhanced UI components
@@ -299,7 +299,6 @@ cluster_visualization/
 ./setup_venv.sh
 source .venv/bin/activate
 
-# Note: EDEN-3.1 alone is insufficient (missing healpy, dash, etc.)
 # The setup script will install all required dependencies
 ```
 

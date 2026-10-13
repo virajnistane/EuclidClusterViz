@@ -86,7 +86,7 @@ else:
 ### Run Performance Test
 
 ```bash
-cd /pbs/home/v/vnistane/ClusterViz
+cd ClusterViz   # repository root
 source .venv/bin/activate
 python test_spatial_index_performance.py
 ```

@@ -179,7 +179,7 @@ This tool provides a professional-grade visualization solution for Euclid cluste
 
 **Python requirement**: Python 3.14. If `uv` is missing, the setup script installs it in `$HOME/.local/bin` and uses it to download and manage Python 3.14.
 
-The EDEN-3.1 environment lacks several critical modules (`healpy`, `dash`, `plotly`, etc.), so a virtual environment is required:
+The app runs from a `uv`-managed virtual environment (`.venv`) that holds all dependencies:
 
 ```bash
 # Recommended: One-command setup with automatic uv integration
@@ -972,7 +972,7 @@ cluster_visualization/src/
 - **Memory Efficiency**: Smart caching system for algorithm switching with `psutil` monitoring
 - **Trace Management**: Optimized layer ordering and intelligent trace preservation across updates
 - **Independent Overlays**: Separate control of mosaic images and HEALPix mask layers
-- **Startup Timing**: Performance instrumentation shows bottlenecks (EDEN check, venv activation, imports)
+- **Startup Timing**: Performance instrumentation shows bottlenecks (venv activation, imports)
 
 ### **Large Dataset Handling**
 - **Sparse HEALPix Support**: Efficient processing of NSIDE=16384 astronomical data
@@ -985,7 +985,7 @@ cluster_visualization/src/
 - **Package Installation**: 10s (uv) vs 5min (pip) for full setup
 - **Virtual Environment**: ~0.15s activation time
 - **Dependency Checks**: ~1.1s for all imports (healpy, plotly, pandas, etc.)
-- **Startup Time**: ~1.3s total (EDEN + venv + deps)
+- **Startup Time**: ~1.3s total (venv + deps)
 
 ## 🔧 Troubleshooting & Support
 

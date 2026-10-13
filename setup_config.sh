@@ -27,12 +27,6 @@ COMMON_WORKSPACES=(
     "$HOME/workspace/euclid_data"
 )
 
-COMMON_EDEN_PATHS=(
-    "/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1"
-    "/opt/euclid/EDEN-3.1"
-    "$HOME/software/EDEN-3.1"
-)
-
 echo "🔍 Detecting existing paths..."
 
 # Find existing workspace
@@ -41,16 +35,6 @@ for ws in "${COMMON_WORKSPACES[@]}"; do
     if [ -d "$ws" ]; then
         DETECTED_WORKSPACE="$ws"
         echo "✅ Found workspace: $ws"
-        break
-    fi
-done
-
-# Find existing EDEN path
-DETECTED_EDEN=""
-for eden in "${COMMON_EDEN_PATHS[@]}"; do
-    if [ -d "$eden" ]; then
-        DETECTED_EDEN="$eden"
-        echo "✅ Found EDEN: $eden"
         break
     fi
 done
@@ -73,26 +57,6 @@ else
     read -p "   Enter workspace path: " WORKSPACE_PATH
 fi
 
-# Prompt for EDEN path  
-if [ -n "$DETECTED_EDEN" ]; then
-    echo
-    echo "🔬 EDEN environment path:"
-    echo "   Detected: $DETECTED_EDEN"
-    read -p "   Use this path? [Y/n]: " use_detected_eden
-    if [[ $use_detected_eden =~ ^[Nn]$ ]]; then
-        read -p "   Enter custom EDEN path: " EDEN_PATH
-    else
-        EDEN_PATH="$DETECTED_EDEN"
-    fi
-else
-    echo
-    echo "🔬 EDEN environment path not auto-detected."
-    read -p "   Enter EDEN path (or press Enter for default): " EDEN_PATH
-    if [ -z "$EDEN_PATH" ]; then
-        EDEN_PATH="/cvmfs/euclid-dev.in2p3.fr/EDEN-3.1"
-    fi
-fi
-
 # Create config_local.ini
 echo
 echo "📝 Creating config_local.ini..."
@@ -104,9 +68,6 @@ cat > config_local.ini << EOF
 [paths]
 # Base workspace directory containing all Euclid data
 base_workspace = $WORKSPACE_PATH
-
-# CVMFS EDEN environment path
-eden_path = $EDEN_PATH
 
 # Main data directories
 mergedetcat_dir = \${paths:base_workspace}/MergeDetCat/RR2_south
@@ -136,14 +97,14 @@ catred_polygons_pkl = catred_polygons_by_tileid.pkl
 [environment]
 # Environment variables to check
 required_env_vars = 
-optional_env_vars = EUCLID_WORKSPACE,EDEN_PATH
+optional_env_vars = EUCLID_WORKSPACE
 
 [validation]
 # Directories that must exist for the application to work
 critical_dirs = base_workspace,mergedetcat_dir,rr2_downloads_dir
 
 # Directories that are optional but recommended
-optional_dirs = eden_path
+optional_dirs =
 EOF
 
 echo "✅ Configuration file created: config_local.ini"

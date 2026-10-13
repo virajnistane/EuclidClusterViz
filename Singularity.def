@@ -88,14 +88,17 @@ From: python:3.14-slim
     Build (from the ClusterViz/ directory):
         make sif
 
-    Run (port 8050 + UID % 1000). Bind the data tree the config points at;
-    $HOME is bound by default, so paths under it need no --bind:
-        apptainer run --bind /sps,/pbs clusterviz.sif
+    Run (port 8050 + UID % 1000):
+        apptainer run --bind /sps,/pbs,/cvmfs clusterviz.sif
 
     Run with your own config:
-        apptainer run --bind /sps,/pbs clusterviz.sif --config my_config.ini
+        apptainer run --bind /sps,/pbs,/cvmfs clusterviz.sif --config my_config.ini
+
+    Binds (CC-IN2P3 does not mount $HOME into the container on its own):
+        /sps    Euclid data (base_workspace, CATRED, mosaics, masks)
+        /pbs    $HOME: the disk caches in ~/.cache/clusterviz* (startup fails
+                without them) and any config or catalogue files kept there
+        /cvmfs  RichCL parameters for the cluster-members "Magnitude limit"
+                switch; without it that filter is silently skipped
 
     Other app options pass through, e.g. --external, --log-level DEBUG.
-
-    $HOME is bound by default, so the disk caches in ~/.cache/clusterviz* persist
-    between runs.
