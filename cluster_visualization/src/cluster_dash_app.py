@@ -468,6 +468,15 @@ def main():
         except Exception as e:
             logger.warning(f"Preload failed (will load on first request): {e}")
 
+    # Import scipy.spatial once, before requests are served in parallel threads.
+    # scipy.spatial and scipy.spatial.distance import each other, so two threads doing
+    # the lazy first import at the same time (globe callback, data preload, scipy.stats
+    # in the p(z) callback) can fail with importlib's _DeadlockError.
+    _t = time.perf_counter()
+    import scipy.spatial  # noqa: F401
+
+    logger.debug(f"scipy.spatial imported in {time.perf_counter() - _t:.1f}s")
+
     threading.Thread(target=_preload_default_data, daemon=True).start()
 
     if app.core:
