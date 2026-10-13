@@ -103,7 +103,7 @@ class NEDHandler:
         if not self.fits_path:
             return None
         stem, _ext = os.path.splitext(self.fits_path)
-        return f"{stem}_catred.fits"
+        return f"{stem}_catredMatches.fits"
 
     def write_catred_matches(self, new_rows: pd.DataFrame) -> None:
         """Upsert nearest-CATRED-to-NED match rows into the companion FITS file.

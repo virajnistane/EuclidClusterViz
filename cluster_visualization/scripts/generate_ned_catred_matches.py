@@ -115,9 +115,16 @@ def main():
         sys.exit("No CATRED matches found for any NED galaxy - nothing written.")
 
     combined = pd.concat(all_rows, ignore_index=True)
-    Table.from_pandas(combined).write(args.output, overwrite=True)
+
+    if args.output:
+        os.makedirs(os.path.dirname(args.output), exist_ok=True)
+        output = args.output
+    else:
+        output = ned_handler.fits_path.replace(".fits", "_catredMatches_fromScript.fits")
+
+    Table.from_pandas(combined).write(output, overwrite=True)
     print(
-        f"\nDone: {len(combined)} matched galaxies out of {len(df)} written to {args.output}"
+        f"\nDone: {len(combined)} matched galaxies out of {len(df)} written to {output}"
     )
 
 
