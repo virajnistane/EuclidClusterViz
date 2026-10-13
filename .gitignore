@@ -116,3 +116,4 @@ graphify-out/
 # extra files
 extra_files/*_catredMatches_fromScript.fits
 extra_files/*_catredMatches.fits
+extra_files/euclid_*.fits
