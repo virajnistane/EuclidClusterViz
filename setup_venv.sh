@@ -7,7 +7,8 @@
 #   ./setup_venv.sh --dev           # Also install the dev extra (pytest, black, mypy, ...)
 #   ./setup_venv.sh --docs          # Also install the docs extra (sphinx, myst-parser, ...)
 #   ./setup_venv.sh --test          # Also install the test extra (pytest-cov, pytest-mock)
-#   ./setup_venv.sh --notebooks     # Also install the notebooks extra (matplotlib, ipykernel)
+#   ./setup_venv.sh --notebooks     # Also install the notebooks extra (matplotlib, ipykernel, nbformat)
+#   ./setup_venv.sh --all-extras    # Install all extras (dev, docs, test)
 #   ./setup_venv.sh --no-extras     # Drop all extras
 #   ./setup_venv.sh --if-stale      # Do nothing when .venv already matches uv.lock/pyproject.toml
 #   ./setup_venv.sh --recreate      # Delete .venv and rebuild it from scratch

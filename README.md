@@ -198,7 +198,8 @@ The app runs from a `uv`-managed virtual environment (`.venv`) that holds all de
 |---------|--------|
 | `./setup_venv.sh` | Create or update `.venv` (installs uv if needed) |
 | `./setup_venv.sh --dev` / `--docs` / `--test` | Also install that extra (pytest/black/mypy, Sphinx, coverage) |
-| `./setup_venv.sh --notebooks` | Also install matplotlib and ipykernel, for `notebooks/*.ipynb` |
+| `./setup_venv.sh --notebooks` | Also install matplotlib, ipykernel, and nbformat for `notebooks/*.ipynb` |
+| `./setup_venv.sh --all-extras` | Install all extras (dev, docs, test) |
 | `./setup_venv.sh --no-extras` | Drop all extras |
 | `./setup_venv.sh --recreate` | Delete `.venv` and rebuild it from scratch |
 | `./setup_venv.sh --manifest` | Only rewrite the launcher's prefetch list (after large code changes) |
@@ -573,7 +574,7 @@ pip install -r requirements.txt
 
 Versions: Plotly 6.3 and Dash 2.18 (Plotly 6 sends numpy arrays to the browser as typed binary).
 
-`matplotlib` is not a dependency of the app (colour scales come from Plotly). It is only needed by the notebooks: `./setup_venv.sh --notebooks`. Keep it out of the app's environment otherwise: when it is installed, `import healpy` also loads `matplotlib.pyplot`, which roughly doubles healpy's import time and is very slow on a cold node.
+`matplotlib`, `ipykernel`, and `nbformat` are notebook-only dependencies; install them with `./setup_venv.sh --notebooks`. `nbformat` is required for Plotly's rich notebook renderer. Keep matplotlib out of the app's environment otherwise: when it is installed, `import healpy` also loads `matplotlib.pyplot`, which roughly doubles healpy's import time and is very slow on a cold node.
 
 ## 🎛️ Command-Line Options
 

@@ -60,6 +60,7 @@ dev = [
 notebooks = [
     "matplotlib>=3.10.0",
     "ipykernel>=6.31.0",
+    "nbformat>=4.2.0",
 ]
 
 # Testing dependencies
