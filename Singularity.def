@@ -88,7 +88,11 @@ From: python:3.14-slim
     Build (from the ClusterViz/ directory):
         make sif
 
-    Run (port 8050 + UID % 1000):
+    Simplest: copy launch_sif.sh next to the image and run it; it binds the
+    paths below that exist on the host and passes other options through:
+        ./launch_sif.sh --config my_config.ini
+
+    Or by hand (port 8050 + UID % 1000):
         apptainer run --bind /sps,/pbs,/cvmfs clusterviz.sif
 
     Run with your own config:

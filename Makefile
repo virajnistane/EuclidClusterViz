@@ -4,7 +4,7 @@
 # Pass extra arguments with ARGS, e.g. make run ARGS="--config my.ini"
 
 .DEFAULT_GOAL := help
-.PHONY: help venv setup setup-dev rebuild run run-debug test docs docs-clean clear-cache clean-venv sif
+.PHONY: help venv setup setup-dev rebuild run run-debug test docs docs-clean clear-cache clean-venv sif run-sif
 
 PY := .venv/bin/python
 DOCS := cluster_visualization/docs
@@ -50,3 +50,6 @@ clean-venv: ## Delete .venv
 
 sif: ## Build the Apptainer image clusterviz.sif from Singularity.def (needs apptainer; ARGS=--force to overwrite)
 	apptainer build --fakeroot $(ARGS) $(SIF) Singularity.def
+
+run-sif: ## Launch the app from clusterviz.sif via launch_sif.sh (binds what exists)
+	./launch_sif.sh $(ARGS)
