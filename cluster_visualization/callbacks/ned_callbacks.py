@@ -13,6 +13,7 @@ from loguru import logger
 from cluster_visualization.src.data.ned_catred_matcher import match_ned_to_catred
 from cluster_visualization.src.visualization.trace_registry import TraceRegistry, TraceType
 
+NEARBY_TRACE_NAME = "NED-Nearby CATRED Sources"
 
 class NEDCallbacks:
     """Handles NED spec-z verification catalog display callbacks"""
@@ -173,6 +174,8 @@ class NEDCallbacks:
             )
 
             nearby_traces = []
+            if self.catred_handler is not None:
+                self._clear_click_data()
             if (
                 self.ned_handler is not None
                 and self.ned_handler.is_available()
@@ -269,9 +272,15 @@ class NEDCallbacks:
             return []
 
         data = self.data_loader.load_data(algorithm)
-        result = match_ned_to_catred(
-            df_in_view, self.catred_handler, data, radius_arcsec, catred_masked, threshold, maglim
-        )
+        # The CATRED load replaces catred_handler.current_catred_data with its own flat
+        # scatter dict; keep the per-trace click data (Members, earlier matches) it held.
+        click_data = self.catred_handler.current_catred_data
+        try:
+            result = match_ned_to_catred(
+                df_in_view, self.catred_handler, data, radius_arcsec, catred_masked, threshold, maglim
+            )
+        finally:
+            self.catred_handler.current_catred_data = click_data
         if result is None:
             logger.info("NED-nearby CATRED: no CATRED points loaded for this viewport")
             return []
@@ -298,8 +307,26 @@ class NEDCallbacks:
         idx = result.display_matched_idx
         logger.info(f"NED-nearby CATRED: {len(idx)} CATRED sources within {radius_arcsec} arcsec of {len(ned_ra)} NED galaxies")
 
+        self._store_click_data(result.catred_scatter, idx)
         hover_text = self._format_catred_hover_text(result.catred_scatter, idx)
         return [self._build_nearby_catred_trace(result.catred_ra[idx], result.catred_dec[idx], hover_text)]
+
+    def _store_click_data(self, catred_scatter, idx):
+        """Register the matched subset under the trace name so a click on one of its
+        markers shows the p(z) plot (PHZCallbacks reads catred_handler.current_catred_data,
+        indexed by the clicked pointNumber, so rows follow the trace's point order)."""
+        if self.catred_handler.current_catred_data is None:
+            self.catred_handler.current_catred_data = {}
+        self.catred_handler.current_catred_data[NEARBY_TRACE_NAME] = {
+            key: [catred_scatter[key][i] for i in idx]
+            for key in ("ra", "dec", "phz_pdf", "phz_mode_1", "phz_median", "phz_70_int")
+            if len(catred_scatter.get(key, [])) == len(catred_scatter["ra"])
+        }
+
+    def _clear_click_data(self):
+        data = getattr(self.catred_handler, "current_catred_data", None)
+        if data:
+            data.pop(NEARBY_TRACE_NAME, None)
 
     @staticmethod
     def _format_catred_hover_text(catred_scatter, idx):
@@ -343,7 +370,7 @@ class NEDCallbacks:
                 color="rgba(0, 150, 255, 0)",
                 line=dict(width=1.5, color="darkblue"),
             ),
-            name="NED-Nearby CATRED Sources",
+            name=NEARBY_TRACE_NAME,
             hoverinfo="text",
             text=text,
             showlegend=True,

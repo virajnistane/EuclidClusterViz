@@ -100,7 +100,9 @@ class PHZCallbacks:
             kind = self._clicked_trace_kind(clickData, current_figure)
             if kind in (TraceType.CLUSTER, TraceType.SELECTED_CLUSTER):
                 return dash.no_update, dash.no_update, dash.no_update
-            if kind is not self.UNKNOWN_TRACE and kind not in (TraceType.CATRED, TraceType.MEMBERS):
+            if kind is not self.UNKNOWN_TRACE and kind not in (
+                TraceType.CATRED, TraceType.MEMBERS, TraceType.NED_NEARBY_CATRED
+            ):
                 logger.debug("Click on '{}' (not a cluster or CATRED point)", clicked_trace_name)
                 return self.DEFAULT_TABS
 

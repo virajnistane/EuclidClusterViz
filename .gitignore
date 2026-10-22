@@ -112,3 +112,6 @@ ipython_config.py
 .github/
 CLAUDE.md
 graphify-out/
+
+# extra files
+extra_files/
