@@ -18,7 +18,9 @@ from loguru import logger
 
 from cluster_visualization.src.data.catalog_matcher import (
     file_stem,
+    match_by_id,
     match_by_position,
+    spec_z_values,
     write_matches,
 )
 from cluster_visualization.src.data.galaxy_catalog import (
@@ -214,19 +216,24 @@ class CatalogCallbacks:
             if names is None or key in names:
                 del data[key]
 
-    def _store_click_data(self, spec, catred_scatter, idx):
+    def _store_click_data(self, spec, result, galaxies):
         """Register matched CATRED rows under the match trace's name, in point order, so a
-        click on one shows its p(z) (PHZCallbacks indexes this by the clicked pointNumber)."""
+        click on one shows its p(z) (PHZCallbacks indexes this by the clicked pointNumber),
+        with the spec-z of the catalog galaxy each source belongs to."""
         if self.catred_handler is None:
             return
         if self.catred_handler.current_catred_data is None:
             self.catred_handler.current_catred_data = {}
-        n = len(catred_scatter["ra"])
-        self.catred_handler.current_catred_data[match_trace_name(spec)] = {
-            key: [catred_scatter[key][i] for i in idx]
+        scatter, idx = result.catred_scatter, result.display_matched_idx
+        n = len(scatter["ra"])
+        click = {
+            key: [scatter[key][i] for i in idx]
             for key in ("ra", "dec", "phz_pdf", "phz_mode_1", "phz_median", "phz_70_int")
-            if len(catred_scatter.get(key, [])) == n
+            if len(scatter.get(key, [])) == n
         }
+        click.update(spec_z_values(galaxies, result.display_galaxy_idx, len(idx)))
+        click["catalog"] = [spec.name] * len(idx)
+        self.catred_handler.current_catred_data[match_trace_name(spec)] = click
 
     def _without_catalogs(self, figure, catalog_ids):
         """Figure without the traces of ``catalog_ids``; no_update if it has none."""
@@ -706,16 +713,20 @@ class CatalogCallbacks:
                 if len(galaxies) == 0:
                     notes.append(f"{spec.name}: no galaxies in view")
                     continue
+                by_id = "OBJECT_ID" in spec.columns
                 try:
-                    result = match_by_position(
-                        galaxies,
-                        self.catred_handler,
-                        data,
-                        radius_arcsec,
-                        catred_masked,
-                        threshold,
-                        maglim,
-                    )
+                    if by_id:
+                        result = match_by_id(galaxies, self.catred_handler, data)
+                    else:
+                        result = match_by_position(
+                            galaxies,
+                            self.catred_handler,
+                            data,
+                            radius_arcsec,
+                            catred_masked,
+                            threshold,
+                            maglim,
+                        )
                 except Exception as e:
                     logger.opt(exception=e).error(
                         f"Catalog '{spec.name}': CATRED match failed: {e}"
@@ -729,22 +740,29 @@ class CatalogCallbacks:
                 idx = result.display_matched_idx
                 if len(idx) == 0:
                     notes.append(
-                        f"{spec.name}: none within {radius_arcsec}″ of {len(galaxies)} galaxies "
+                        f"{spec.name}: none of {len(galaxies)} OBJECT_IDs found in CATRED"
+                        if by_id
+                        else f"{spec.name}: none within {radius_arcsec}″ of {len(galaxies)} galaxies "
                         f"(nearest {result.overall_nearest_arcsec:.1f}″)"
                     )
                     continue
-                self._store_click_data(spec, result.catred_scatter, idx)
+                self._store_click_data(spec, result, galaxies)
                 hover = format_catred_hover(result.catred_scatter, idx, f"CATRED near {spec.name}")
+                z = spec_z_values(galaxies, result.display_galaxy_idx, len(idx)).get("spec_z")
+                if z is not None:
+                    hover = [
+                        h if v is None else f"{h}<br>{spec.name} z_spec: {v:.4f}"
+                        for h, v in zip(hover, z)
+                    ]
                 traces.append(
                     build_match_trace(spec, result.catred_ra[idx], result.catred_dec[idx], hover)
                 )
-                notes.append(
-                    f"{spec.name}: {len(idx)} CATRED sources near {len(galaxies)} galaxies"
-                )
-                logger.info(
-                    f"Catalog '{spec.name}': {len(idx)} CATRED sources within {radius_arcsec} arcsec "
-                    f"of {len(galaxies)} galaxies in view"
-                )
+                if by_id:
+                    summary = f"{len(idx)} of {len(galaxies)} galaxies found by OBJECT_ID"
+                else:
+                    summary = f"{len(idx)} CATRED sources within {radius_arcsec}″ of {len(galaxies)} galaxies"
+                notes.append(f"{spec.name}: {summary}")
+                logger.info(f"Catalog '{spec.name}': {summary} in view")
 
             categorized = TraceRegistry.extract_all_preserved(
                 figure, exclude={TraceType.CATALOG_MATCH}

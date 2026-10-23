@@ -2157,9 +2157,6 @@ class ClusterModalCallbacks:
         Returns (ra, dec, phz_pdf, phz_mode_1, phz_median, phz_70_int, pmem_zp, pmem_rs).
         May be shorter than input if some IDs are not found in the searched tiles.
         """
-        from astropy.io import fits as _fits
-        from astropy.io.fits.fitsrec import FITS_rec
-
         _empty: tuple[
             np.ndarray, np.ndarray, list, list, list, list, list, list, list
         ] = (
@@ -2170,7 +2167,6 @@ class ClusterModalCallbacks:
             return _empty
 
         catred_info = data.get("catred_info")
-        catred_dsr = data.get("catred_dsr")
         if catred_info is None or catred_info.empty or not self.catred_handler:
             return _empty
 
@@ -2199,84 +2195,21 @@ class ClusterModalCallbacks:
                     float(row["PMEM_RS"]) if has_rs else float("nan"),
                 )
 
-        member_ids_arr = np.asarray(member_object_ids)
-        remaining = set(member_ids_arr.tolist())
-        ra_all, dec_all = [], []
-        phz_pdf_all, phz_mode1_all, phz_median_all, phz_70int_all = [], [], [], []
-        pmem_zp_all, pmem_rs_all = [], []
-        flux_h_unif_all = []
-
-        for tile_id in tile_ids:
-            if not remaining:
-                break
-            rows = catred_info.loc[
-                (catred_info["mertileid"] == tile_id)
-                & (catred_info["dataset_release"] == catred_dsr)
-            ]
-            if rows.empty:
-                continue
-            fits_file = rows.iloc[0]["fits_file"]
-            try:
-                with _fits.open(fits_file, mode="readonly", memmap=True) as hdul:
-                    if len(hdul) <= 1:
-                        continue
-
-                    hdu1: Any = hdul[1]
-                    tdata = cast(Optional[FITS_rec], getattr(hdu1, "data", None))
-                    if tdata is None:
-                        continue
-
-                    names = tdata.names or []
-                    if "OBJECT_ID" not in names:
-                        continue
-                    obj_ids = np.asarray(tdata["OBJECT_ID"])
-                    mask = np.isin(obj_ids, member_ids_arr)
-                    if not np.any(mask):
-                        continue
-                    n_match = int(np.sum(mask))
-                    ra_all.append(np.asarray(tdata["RIGHT_ASCENSION"])[mask])
-                    dec_all.append(np.asarray(tdata["DECLINATION"])[mask])
-                    phz_pdf_all.extend(
-                        np.asarray(tdata["PHZ_PDF"])[mask].tolist() if "PHZ_PDF" in names
-                        else [None] * n_match
-                    )
-                    phz_mode1_all.extend(
-                        np.asarray(tdata["PHZ_MODE_1"])[mask].tolist() if "PHZ_MODE_1" in names
-                        else [float("nan")] * n_match
-                    )
-                    phz_median_all.extend(
-                        np.asarray(tdata["PHZ_MEDIAN"])[mask].tolist() if "PHZ_MEDIAN" in names
-                        else [float("nan")] * n_match
-                    )
-                    phz_70int_all.extend(
-                        np.asarray(tdata["PHZ_70_INT"])[mask].tolist() if "PHZ_70_INT" in names
-                        else [None] * n_match
-                    )
-                    flux_h_unif_all.extend(
-                        np.asarray(tdata["FLUX_H_UNIF"])[mask].tolist() if "FLUX_H_UNIF" in names
-                        else [float("nan")] * n_match
-                    )
-                    found_ids = obj_ids[mask].tolist()
-                    for oid in found_ids:
-                        zp, rs = pmem_lookup.get(int(oid), (float("nan"), float("nan")))
-                        pmem_zp_all.append(zp)
-                        pmem_rs_all.append(rs)
-                    remaining -= set(found_ids)
-            except Exception as exc:
-                logger.warning(f"Could not read CATRED tile {tile_id} for member lookup: {exc}")
-
-        if not ra_all:
+        found = self.catred_handler.lookup_by_object_id(member_object_ids, data, tile_ids)
+        if len(found["object_id"]) == 0:
             return _empty
+        nan_pair = (float("nan"), float("nan"))
+        pmem = [pmem_lookup.get(int(oid), nan_pair) for oid in found["object_id"]]
         return (
-            np.concatenate(ra_all),
-            np.concatenate(dec_all),
-            phz_pdf_all,
-            phz_mode1_all,
-            phz_median_all,
-            phz_70int_all,
-            pmem_zp_all,
-            pmem_rs_all,
-            flux_h_unif_all,
+            found["ra"],
+            found["dec"],
+            found["phz_pdf"],
+            found["phz_mode_1"],
+            found["phz_median"],
+            found["phz_70_int"],
+            [zp for zp, _ in pmem],
+            [rs for _, rs in pmem],
+            found["flux_h_unif"],
         )
 
     def _build_members_trace(self, ra, dec, cluster_id, color="#000000", size=10,

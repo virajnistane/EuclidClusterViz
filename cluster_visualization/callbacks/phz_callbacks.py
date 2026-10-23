@@ -11,7 +11,8 @@ import plotly.graph_objs as go  # type: ignore[import]
 from dash import Input, Output, State
 from loguru import logger
 
-from cluster_visualization.src.visualization.catalog_traces import MATCH_PREFIX
+from cluster_visualization.src.data.catalog_matcher import match_by_id, spec_z_values
+from cluster_visualization.src.visualization.catalog_traces import MATCH_PREFIX, trace_meta
 from cluster_visualization.src.visualization.figures import PHZ_EMPTY_META
 from cluster_visualization.src.visualization.trace_registry import TraceRegistry, TraceType
 
@@ -29,6 +30,7 @@ PLOT_ACCENT = "#2b5797"
 PLOT_INK = "#1d2127"
 PLOT_MUTED = "#59616b"
 PLOT_GRID = "#e6e9ee"
+SPEC_Z_COLOR = "#b5482c"  # catalog spec-z line on the p(z) plot (dashed, so not colour alone)
 PLOT_BASE = dict(
     template="plotly_white",
     font=dict(family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif", size=12, color=PLOT_INK),
@@ -48,7 +50,7 @@ PLOT_LAYOUT = dict(
 class PHZCallbacks:
     """Handles PHZ_PDF plot callbacks"""
 
-    def __init__(self, app, catred_handler=None, data_loader=None):
+    def __init__(self, app, catred_handler=None, data_loader=None, catalog_registry=None):
         """
         Initialize PHZ callbacks.
 
@@ -56,10 +58,13 @@ class PHZCallbacks:
             app: Dash application instance
             catred_handler: CATREDHandler instance for CATRED data operations (optional)
             data_loader: DataLoader instance for merged catalog access (optional)
+            catalog_registry: CatalogRegistry, to look up a clicked galaxy catalog marker
+                in CATRED by its OBJECT_ID (optional)
         """
         self.app = app
         self.catred_handler = catred_handler
         self.data_loader = data_loader
+        self.catalog_registry = catalog_registry
 
         # Fallback attributes for backward compatibility
         self.current_catred_data = None
@@ -84,11 +89,12 @@ class PHZCallbacks:
             ],
             [Input("cluster-plot", "clickData")],
             [
-                dash.dependencies.State("cluster-plot", "figure")
-            ],  # Add figure state to get trace names
+                dash.dependencies.State("cluster-plot", "figure"),  # names the clicked trace
+                dash.dependencies.State("algorithm-dropdown", "value"),  # tile data for lookups
+            ],
             prevent_initial_call=True,
         )
-        def update_phz_pdf_plot(clickData, current_figure):
+        def update_phz_pdf_plot(clickData, current_figure, algorithm=None):
             if not clickData:
                 return dash.no_update, dash.no_update, dash.no_update
 
@@ -101,6 +107,8 @@ class PHZCallbacks:
             kind = self._clicked_trace_kind(clickData, current_figure)
             if kind in (TraceType.CLUSTER, TraceType.SELECTED_CLUSTER):
                 return dash.no_update, dash.no_update, dash.no_update
+            if kind is TraceType.GALAXY_CATALOG:
+                return self._catalog_galaxy_pz(clickData, current_figure, algorithm)
             if kind is not self.UNKNOWN_TRACE and kind not in (
                 TraceType.CATRED, TraceType.MEMBERS, TraceType.CATALOG_MATCH
             ):
@@ -206,7 +214,16 @@ class PHZCallbacks:
                     if clicked_trace_name.startswith("Members"):
                         self._log_member_click(clicked_trace_name, found_catred_data, point_index)
 
-                    return self._create_phz_pdf_plot(phz_pdf, ra, dec, phz_mode_1, phz_median), "phz-tab", "phz-catred-subtab"
+                    # Catalog matches carry their galaxy's spec-z
+                    def value(key):
+                        values = found_catred_data.get(key)
+                        return values[point_index] if values and point_index < len(values) else None
+
+                    plot = self._create_phz_pdf_plot(
+                        phz_pdf, ra, dec, phz_mode_1, phz_median,
+                        spec_z=value("spec_z"), spec_z_err=value("spec_z_err"), spec_label=value("catalog"),
+                    )
+                    return plot, "phz-tab", "phz-catred-subtab"
                 else:
                     logger.debug(
                         "CATRED click matched no point; traces: {}", list(current_catred_data.keys())
@@ -235,6 +252,54 @@ class PHZCallbacks:
             Input("phz-pdf-plot", "figure"),
             prevent_initial_call=True,
         )
+
+    def _catalog_galaxy_pz(self, clickData, figure, algorithm):
+        """p(z) of a clicked galaxy catalog marker: its CATRED source found by OBJECT_ID,
+        with the galaxy's spec-z. Explains instead when the catalog maps no OBJECT_ID."""
+        catred_tabs = ("phz-tab", "phz-catred-subtab")
+        try:
+            point = clickData["points"][0]
+            meta = trace_meta(figure["data"][point["curveNumber"]])
+            row = point.get("customdata")
+            row = row[0] if isinstance(row, list) else row
+        except (KeyError, IndexError, TypeError):
+            return self.DEFAULT_TABS
+        catalog = (
+            self.catalog_registry.catalog(meta.get("catalog_id"))
+            if self.catalog_registry is not None and meta.get("catalog_id")
+            else None
+        )
+        if catalog is None or row is None or not catalog.is_available():
+            return self.DEFAULT_TABS
+        spec, df = catalog.spec, catalog.df
+        if "OBJECT_ID" not in df.columns:
+            return (
+                self._create_error_phz_plot(
+                    f"{spec.name} has no OBJECT_ID mapped, so its galaxies can't be found in CATRED. "
+                    "Use 'Load CATRED near shown catalogs' and click a marked source."
+                ),
+                *catred_tabs,
+            )
+        if self.catred_handler is None or self.data_loader is None:
+            return self._create_error_phz_plot("CATRED is not available."), *catred_tabs
+
+        galaxy = df.loc[[int(row)]]
+        object_id = int(galaxy["OBJECT_ID"].iloc[0])
+        result = match_by_id(galaxy, self.catred_handler, self.data_loader.load_data(algorithm))
+        if result is None or len(result.display_matched_idx) == 0:
+            return (
+                self._create_error_phz_plot(f"OBJECT_ID {object_id} is not in the CATRED tiles around it."),
+                *catred_tabs,
+            )
+        scatter = result.catred_scatter
+        z = spec_z_values(galaxy, result.display_galaxy_idx, 1)
+        logger.debug("Catalog galaxy clicked ({}): OBJECT_ID {}", spec.name, object_id)
+        plot = self._create_phz_pdf_plot(
+            scatter["phz_pdf"][0], scatter["ra"][0], scatter["dec"][0],
+            scatter["phz_mode_1"][0], scatter["phz_median"][0],
+            spec_z=z.get("spec_z", [None])[0], spec_z_err=z.get("spec_z_err", [None])[0], spec_label=spec.name,
+        )
+        return plot, *catred_tabs
 
     @staticmethod
     def _has_click_data(trace_name):
@@ -327,8 +392,11 @@ class PHZCallbacks:
                 return data, label
         return first
 
-    def _create_phz_pdf_plot(self, phz_pdf, ra, dec, phz_mode_1, phz_median):
-        """Create PHZ_PDF plot for a given CATRED point"""
+    def _create_phz_pdf_plot(
+        self, phz_pdf, ra, dec, phz_mode_1, phz_median, spec_z=None, spec_z_err=None, spec_label=None
+    ):
+        """Create PHZ_PDF plot for a given CATRED point; ``spec_z`` (from a galaxy catalog,
+        named ``spec_label``) adds a dashed line, with a band of ±``spec_z_err``."""
         try:
             # Validate PHZ_PDF data
             if not phz_pdf or len(phz_pdf) == 0:
@@ -372,6 +440,27 @@ class PHZCallbacks:
                         mode="lines",
                         name=f"{label} z = {value:.3f}",
                         line=dict(color=PLOT_INK, width=1.5, dash=dash),
+                        hoverinfo="skip",
+                    )
+                )
+            if spec_z is not None and np.isfinite(spec_z):
+                y_top = float(np.nanmax(phz_pdf_array)) if len(phz_pdf_array) else 1
+                label = f"{spec_label} spec-z" if spec_label else "Spec-z"
+                if spec_z_err is not None and np.isfinite(spec_z_err) and spec_z_err > 0:
+                    phz_fig.add_vrect(
+                        x0=spec_z - spec_z_err, x1=spec_z + spec_z_err,
+                        fillcolor=SPEC_Z_COLOR, opacity=0.15, line_width=0, layer="below",
+                    )
+                    label += f" = {spec_z:.4f} ± {spec_z_err:.4f}"
+                else:
+                    label += f" = {spec_z:.4f}"
+                phz_fig.add_trace(
+                    go.Scatter(
+                        x=[spec_z, spec_z],
+                        y=[0, y_top],
+                        mode="lines",
+                        name=label,
+                        line=dict(color=SPEC_Z_COLOR, width=2, dash="dash"),
                         hoverinfo="skip",
                     )
                 )

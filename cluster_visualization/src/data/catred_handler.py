@@ -542,6 +542,70 @@ class CATREDHandler:
 
         return mertiles_to_load
 
+    # OBJECT_ID lookup: (result key, CATRED column, value when the tile lacks the column)
+    _LOOKUP_COLUMNS = (
+        ("ra", "RIGHT_ASCENSION", np.nan),
+        ("dec", "DECLINATION", np.nan),
+        ("phz_pdf", "PHZ_PDF", None),
+        ("phz_mode_1", "PHZ_MODE_1", np.nan),
+        ("phz_median", "PHZ_MEDIAN", np.nan),
+        ("phz_70_int", "PHZ_70_INT", None),
+        ("flux_h_unif", "FLUX_H_UNIF", np.nan),
+    )
+
+    def lookup_by_object_id(self, object_ids, data: Dict[str, Any], tile_ids) -> Dict[str, Any]:
+        """CATRED rows for the given OBJECT_IDs, searched in the MER tiles ``tile_ids``.
+
+        Returns {"object_id", "ra", "dec" (arrays), "phz_pdf", "phz_mode_1", "phz_median",
+        "phz_70_int", "flux_h_unif" (lists)} in the order found. IDs not in those tiles
+        are left out; tiles are opened only until every ID is found.
+        """
+        result: Dict[str, Any] = {"object_id": []}
+        result.update({key: [] for key, _, _ in self._LOOKUP_COLUMNS})
+        catred_info = data.get("catred_info") if data else None
+        remaining = set(np.asarray(object_ids, dtype=np.int64).tolist())
+        if catred_info is None or catred_info.empty or not remaining:
+            return self._lookup_arrays(result)
+
+        catred_dsr = data.get("catred_dsr")
+        for tile_id in tile_ids:
+            if not remaining:
+                break
+            rows = catred_info.loc[
+                (catred_info["mertileid"] == tile_id) & (catred_info["dataset_release"] == catred_dsr)
+            ]
+            if rows.empty:
+                continue
+            fits_file = rows.iloc[0]["fits_file"]
+            try:
+                with fits.open(fits_file, mode="readonly", memmap=True) as hdul:
+                    tdata = hdul[1].data if len(hdul) > 1 else None
+                    names = (tdata.names or []) if tdata is not None else []
+                    if "OBJECT_ID" not in names:
+                        continue
+                    tile_object_ids = np.asarray(tdata["OBJECT_ID"])
+                    mask = np.isin(tile_object_ids, np.fromiter(remaining, dtype=np.int64))
+                    n = int(mask.sum())
+                    if not n:
+                        continue
+                    found = tile_object_ids[mask].tolist()
+                    result["object_id"].extend(found)
+                    for key, column, missing in self._LOOKUP_COLUMNS:
+                        result[key].extend(
+                            np.asarray(tdata[column])[mask].tolist() if column in names else [missing] * n
+                        )
+                    remaining -= set(found)
+            except Exception as exc:
+                logger.warning(f"Could not read CATRED tile {tile_id} for the OBJECT_ID lookup: {exc}")
+        return self._lookup_arrays(result)
+
+    @staticmethod
+    def _lookup_arrays(result: Dict[str, Any]) -> Dict[str, Any]:
+        result["object_id"] = np.asarray(result["object_id"], dtype=np.int64)
+        result["ra"] = np.asarray(result["ra"], dtype=float)
+        result["dec"] = np.asarray(result["dec"], dtype=float)
+        return result
+
     def get_radec_mertile_with_coverage(
         self,
         mertileid: int,

@@ -130,6 +130,8 @@ def build_catalog_trace(
         ),
         name=name,
         text=hover_texts(spec, df),
+        # Row of each marker in the loaded catalog, so a click finds its galaxy
+        customdata=df.index.to_numpy(),
         hoverinfo="text",
         showlegend=True,
         meta={

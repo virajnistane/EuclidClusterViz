@@ -383,7 +383,9 @@ class ClusterVisualizationApp:
 
             self.ui_callbacks = UICallbacks(self.app, config, self.data_loader)
 
-            self.phz_callbacks = PHZCallbacks(self.app, self.catred_handler, self.data_loader)
+            self.phz_callbacks = PHZCallbacks(
+                self.app, self.catred_handler, self.data_loader, self.catalog_registry
+            )
 
             richcl_maglim_handler = RichCLMagLimHandler(getattr(config, "richcl_params_file", None))
 

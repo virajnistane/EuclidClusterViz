@@ -361,7 +361,7 @@ class CatalogCallbackTest(unittest.TestCase):
             len(match.call_args.args[0]), 6
         )  # all NED rows are inside the figure's range
         write.assert_called_once()
-        self.assertIn("2 CATRED sources near 6 galaxies", feedback)
+        self.assertIn("NED spec-z: 2 CATRED sources within 3.0″ of 6 galaxies", feedback)
         kinds = [TraceRegistry.classify_trace(t) for t in figure["data"]]
         self.assertEqual(
             kinds, [TraceType.GALAXY_CATALOG, TraceType.CATALOG_MATCH, TraceType.CLUSTER]

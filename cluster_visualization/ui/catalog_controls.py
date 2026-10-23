@@ -95,8 +95,9 @@ class CatalogControls:
                             disabled=True,
                         ),
                         html.Small(
-                            "Zoom in to enable (view under 2° × 2°). Marks CATRED sources within the "
-                            "radius of the shown catalogs' galaxies; click one for its p(z).",
+                            "Zoom in to enable (view under 2° × 2°). Marks the CATRED sources of the shown "
+                            "catalogs' galaxies: by OBJECT_ID when mapped (radius not used), else "
+                            "within the radius. Click one for its p(z).",
                             className="control-help",
                         ),
                         html.Small(id="catalog-match-feedback", className="control-help"),
