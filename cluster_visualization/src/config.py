@@ -383,10 +383,11 @@ class Config:
             return path.strip()
         return None
 
-    def get_ned_specz_fits(self):
-        """Get path to the NED spectroscopic-redshift cross-match FITS catalog.
+    def get_legacy_ned_specz_fits(self):
+        """Path in the old [paths] ned_specz_fits key, or None.
 
-        Returns None if not configured (blank or missing key).
+        Galaxy catalogs are managed in the app now (Galaxy catalogs section); this is
+        only read so an older config's NED catalog is added to that list once.
         """
         if self.config_parser.has_option("paths", "ned_specz_fits"):
             path = self.config_parser.get("paths", "ned_specz_fits").strip()

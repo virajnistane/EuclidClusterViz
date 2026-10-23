@@ -11,6 +11,12 @@ import dash_bootstrap_components as dbc
 from dash import dcc, html
 
 
+# Help under the catalog filter while no galaxy catalog maps cluster IDs
+NO_FILTER_CATALOG_HELP = (
+    "Add a galaxy catalog with a cluster-ID column (Galaxy catalogs section) to filter by it."
+)
+
+
 def _group_label(text, html_for=None):
     """Heading for one control group (a filter or a setting)."""
     if html_for:
@@ -341,26 +347,25 @@ class SidebarSections:
         )
 
     @staticmethod
-    def create_ned_specz_filter_section(available=True, status=None):
-        """Only clusters with a NED spec-z cross-match (spec-z verification), at the next Apply.
+    def create_catalog_filter_section():
+        """Only clusters with galaxies in the chosen galaxy catalogs, at the next Apply.
 
-        Disabled, with the reason, when the NED catalog did not load.
+        Offers the catalogs that map a cluster-ID column (options and help are set by
+        CatalogCallbacks); disabled until there is one.
         """
-        if available:
-            help_text = f"NED catalog: {status}" if status else "Uses the NED catalog ([paths] ned_specz_fits)"
-        else:
-            help_text = f"Unavailable: NED catalog {status or 'not loaded'}"
         return html.Div(
             [
-                _group_label("Spec-z verification"),
-                dbc.Switch(
-                    id="ned-specz-filter-switch",
-                    label="Only clusters with a NED spec-z match",
-                    value=False,
-                    disabled=not available,
+                _group_label("Spec-z verification", html_for="catalog-filter-dropdown"),
+                dcc.Dropdown(
+                    id="catalog-filter-dropdown",
+                    options=[],
+                    value=[],
+                    multi=True,
+                    disabled=True,
+                    placeholder="Only clusters with a match in…",
                 ),
-                _pending_tag("ned-specz-filter-switch"),
-                _help(help_text),
+                _pending_tag("catalog-filter-dropdown"),
+                _help(NO_FILTER_CATALOG_HELP, help_id="catalog-filter-help"),
             ],
             className="control-group",
         )

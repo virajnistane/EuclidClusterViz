@@ -57,7 +57,7 @@ class UICallbacks:
             "richness-include-missing-rs",
             "flag-quality-rs-checklist",
         ],
-        "Spec-z verification": ["ned-specz-filter-switch"],
+        "Spec-z verification": ["catalog-filter-dropdown"],
         "Matched clusters": ["matching-clusters-switch"],
     }
     # Sidebar section id prefix -> starts open
@@ -150,8 +150,8 @@ class UICallbacks:
                 let k = 0;
                 Object.values(groups).forEach(ids => ids.forEach(id => { current[id] = args[k++]; }));
                 current['idcluster-upload'] = contents ? filename + ':' + contents.length : null;
-                // Checklist order follows click order, so compare arrays sorted
-                const norm = v => Array.isArray(v) ? [...v].sort((x, y) => x - y) : v;
+                // Checklist and dropdown order follows click order, so compare arrays sorted
+                const norm = v => Array.isArray(v) ? [...v].sort((x, y) => (x > y) - (x < y)) : v;
                 const same = (a, b) => JSON.stringify(norm(a)) === JSON.stringify(norm(b));
                 const changed = Object.keys(groups).filter(
                     name => groups[name].some(id => !same(current[id], applied[id]))
@@ -196,7 +196,7 @@ class UICallbacks:
                 const current = {};
                 ids.forEach((id, i) => { current[id] = args[i]; });
                 current['idcluster-upload'] = contents ? filename + ':' + contents.length : null;
-                const norm = v => Array.isArray(v) ? [...v].sort((x, y) => x - y) : v;
+                const norm = v => Array.isArray(v) ? [...v].sort((x, y) => (x > y) - (x < y)) : v;
                 const same = (a, b) => JSON.stringify(norm(a)) === JSON.stringify(norm(b));
                 return keys.map(id => same(current[id], applied[id]) ? hide : show);
             }

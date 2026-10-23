@@ -47,6 +47,7 @@ from cluster_visualization.src.visualization.catalog_traces import (
 )
 from cluster_visualization.src.visualization.trace_registry import TraceRegistry, TraceType
 from cluster_visualization.ui.catalog_controls import CatalogControls
+from cluster_visualization.ui.sidebar_sections import NO_FILTER_CATALOG_HELP
 
 CATALOG_TYPES = {TraceType.GALAXY_CATALOG, TraceType.CATALOG_MATCH}
 HIDDEN = {"display": "none"}
@@ -181,6 +182,7 @@ class CatalogCallbacks:
         self.data_loader = data_loader
 
         self._setup_list_callback()
+        self._setup_filter_options_callback()
         self._setup_dialog_callbacks()
         self._setup_remove_callback()
         self._setup_show_callback()
@@ -259,6 +261,37 @@ class CatalogCallbacks:
         def render_catalog_list(_version, values, ids):
             shown = {i["index"] for i, v in zip(ids, values) if v}
             return CatalogControls.catalog_rows(self.registry.list(), shown)
+
+    def _setup_filter_options_callback(self):
+        """Offer the catalogs that map cluster IDs in the "Spec-z verification" filter, and
+        drop chosen catalogs that no longer qualify (removed, or remapped without IDs)."""
+
+        @self.app.callback(
+            Output("catalog-filter-dropdown", "options"),
+            Output("catalog-filter-dropdown", "value"),
+            Output("catalog-filter-dropdown", "disabled"),
+            Output("catalog-filter-help", "children"),
+            Input("catalog-registry-version", "data"),
+            State("catalog-filter-dropdown", "value"),
+        )
+        def catalog_filter_options(_version, value):
+            specs = self.registry.with_capability("cluster_filter")
+            if not specs:
+                return [], [], True, NO_FILTER_CATALOG_HELP
+            options = []
+            for spec in specs:
+                catalog = self.registry.catalog(spec.id)
+                if catalog.is_available():
+                    label = f"{spec.name} ({len(catalog.cluster_ids()):,} clusters)"
+                    options.append({"label": label, "value": spec.id})
+                else:
+                    options.append(
+                        {"label": f"{spec.name} (unavailable)", "value": spec.id, "disabled": True}
+                    )
+            usable = {o["value"] for o in options if not o.get("disabled")}
+            kept = [v for v in (value or []) if v in usable]
+            help_text = "Keeps the clusters with galaxies in any chosen catalog, at the next Apply."
+            return options, kept if kept != (value or []) else dash.no_update, False, help_text
 
     def _setup_dialog_callbacks(self):
         @self.app.callback(

@@ -162,8 +162,6 @@ if data_modules_path not in sys.path:
     sys.path.append(data_modules_path)
 
 from data.catred_handler import CATREDHandler
-from data.ned_handler import NEDHandler
-
 from cluster_visualization.src.data.catalog_registry import CatalogRegistry
 
 # Import data handling modules
@@ -320,24 +318,19 @@ class ClusterVisualizationApp:
         # Initialize mosaic handler
         self.mosaic_handler = MOSAICHandler(config)
 
-        # Initialize NED spec-z verification handler (inert if not configured)
-        self.ned_handler = NEDHandler(config)
-
         # The user's galaxy catalogs (~/.config/clusterviz/catalogs.json); a catalog set
         # in the old [paths] ned_specz_fits key is added to it once
         self.catalog_registry = CatalogRegistry()
-        self.catalog_registry.import_legacy(config.get_ned_specz_fits())
+        self.catalog_registry.import_legacy(config.get_legacy_ned_specz_fits())
 
         # Initialize visualization modules
         self.trace_creator = TraceCreator(
-            colors_list, colors_list_transparent, self.catred_handler, self.ned_handler
+            colors_list, colors_list_transparent, self.catred_handler, self.catalog_registry
         )
         self.figure_manager = FigureManager()
 
         # Initialize UI layout
-        self.app.layout = AppLayout.create_layout(
-            ned_available=self.ned_handler.is_available(), ned_status=self.ned_handler.status
-        )
+        self.app.layout = AppLayout.create_layout()
 
         # Initialize callbacks
         self.setup_callbacks()

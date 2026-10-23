@@ -30,7 +30,7 @@ class TraceCreator:
     """Handles creation of all Plotly traces for cluster visualization."""
 
     def __init__(
-        self, colors_list=None, colors_list_transparent=None, catred_handler=None, ned_handler=None
+        self, colors_list=None, colors_list_transparent=None, catred_handler=None, catalog_registry=None
     ):
         """
         Initialize TraceCreator with color schemes and CATRED handler.
@@ -39,14 +39,14 @@ class TraceCreator:
             colors_list: List of colors for tile traces
             colors_list_transparent: List of transparent colors for polygon fills
             catred_handler: CATRED handler instance for trace caching
-            ned_handler: NEDHandler instance for spec-z cluster filtering (optional)
+            catalog_registry: CatalogRegistry, for "only clusters with a match in" catalogs (optional)
         """
         self.colors_list = colors_list or self._get_default_colors()
         self.colors_list_transparent = (
             colors_list_transparent or self._get_default_transparent_colors()
         )
         self.catred_handler = catred_handler
-        self.ned_handler = ned_handler
+        self.catalog_registry = catalog_registry
 
         # Proximity detection state (spatial index + caches) lives here
         self.proximity_detector = CatredProximityDetector()
@@ -94,7 +94,7 @@ class TraceCreator:
         flag_quality_zp: Optional[List[int]] = None,
         flag_quality_rs: Optional[List[int]] = None,
         idcluster_list: Optional[List[int]] = None,
-        ned_specz_filter: bool = False,
+        catalog_filter_ids: Optional[List[str]] = None,
         angular_tolerance: float = 2.0,
         z_tolerance: float = 0.02,
         threshold: float = 0.8,
@@ -183,7 +183,7 @@ class TraceCreator:
             flag_quality_zp=flag_quality_zp,
             flag_quality_rs=flag_quality_rs,
             idcluster_list=idcluster_list,
-            ned_specz_filter=ned_specz_filter,
+            catalog_filter_ids=catalog_filter_ids,
             show_unmerged_clusters=show_unmerged_clusters,
             matching_clusters=matching_clusters,
             show_cltile_info=show_cltile_info,
@@ -361,7 +361,7 @@ class TraceCreator:
         flag_quality_zp: Optional[List[int]] = None,
         flag_quality_rs: Optional[List[int]] = None,
         idcluster_list: Optional[List[int]] = None,
-        ned_specz_filter: bool = False,
+        catalog_filter_ids: Optional[List[str]] = None,
         show_unmerged_clusters: bool = False,
         matching_clusters: bool = False,
         show_cltile_info: bool = True,
@@ -385,7 +385,7 @@ class TraceCreator:
             flag_quality_zp=flag_quality_zp,
             flag_quality_rs=flag_quality_rs,
             idcluster_list=idcluster_list,
-            ned_specz_filter=ned_specz_filter,
+            catalog_filter_ids=catalog_filter_ids,
         )
 
         # Viewport culling: only clusters in (or near) the visible window are sent.
@@ -499,7 +499,7 @@ class TraceCreator:
         flag_quality_zp: Optional[List[int]] = None,
         flag_quality_rs: Optional[List[int]] = None,
         idcluster_list: Optional[List[int]] = None,
-        ned_specz_filter: bool = False,
+        catalog_filter_ids: Optional[List[str]] = None,
     ) -> np.ndarray:
         """Merged catalog after the algorithm-independent filters (redshift, richness,
         uploaded ID list, NED spec-z verification). SNR thresholds differ per algorithm
@@ -523,7 +523,7 @@ class TraceCreator:
             logger.debug(
                 "ID-cluster based filtering skipped - either not using gluematchcat or idcluster_list is None"
             )
-        return self._apply_ned_specz_filtering(merged, ned_specz_filter)
+        return self._apply_catalog_filtering(merged, catalog_filter_ids)
 
     def selected_clusters(
         self,
@@ -918,29 +918,41 @@ class TraceCreator:
 
         return filtered_data
 
-    def _apply_ned_specz_filtering(
+    def _apply_catalog_filtering(
         self,
         cluster_data: np.ndarray,
-        filter_active: bool,
+        catalog_ids: Optional[List[str]],
     ) -> np.ndarray:
-        """Restrict cluster points to those with a NED spec-z cross-match.
-
-        No-op (returns cluster_data unchanged) if the switch is off or no
-        NED catalog is configured/loaded.
-        """
-        if not filter_active:
+        """Keep the clusters that have galaxies in any of ``catalog_ids`` (galaxy catalogs
+        with a CLUSTER_ID column). No-op without chosen catalogs; catalogs that cannot be
+        loaded are skipped with a warning."""
+        if not catalog_ids:
             return cluster_data
-        if self.ned_handler is None or not self.ned_handler.is_available():
-            status = getattr(self.ned_handler, "status", "no NED handler")
-            logger.warning(f"NED spec-z filter is on but no catalog is loaded ({status}); not applied")
+        if self.catalog_registry is None:
+            logger.warning("Catalog filter is on but no catalog list is available; not applied")
+            return cluster_data
+
+        cluster_ids = []
+        for catalog_id in catalog_ids:
+            catalog = self.catalog_registry.catalog(catalog_id)
+            if catalog is None or not catalog.is_available():
+                reason = catalog.status if catalog is not None else "no longer in the list"
+                logger.warning(f"Catalog filter: skipping '{catalog_id}' ({reason})")
+                continue
+            cluster_ids.append(catalog.cluster_ids())
+        if not cluster_ids:
+            logger.warning("Catalog filter: none of the chosen catalogs could be loaded; not applied")
             return cluster_data
 
         try:
-            mask = np.isin(cluster_data["ID_UNIQUE_CLUSTER"], self.ned_handler.get_unique_cluster_ids())
-            logger.debug("NED spec-z filter: {} -> {} merged clusters", len(cluster_data), int(mask.sum()))
+            mask = np.isin(cluster_data["ID_UNIQUE_CLUSTER"], np.concatenate(cluster_ids))
+            logger.debug(
+                "Catalog filter ({}): {} -> {} merged clusters",
+                ", ".join(catalog_ids), len(cluster_data), int(mask.sum()),
+            )
             return cluster_data[mask]
         except Exception as e:
-            logger.opt(exception=e).error(f"Error applying NED spec-z filtering: {e}")
+            logger.opt(exception=e).error(f"Error applying the catalog filter: {e}")
             return cluster_data
 
     def _check_zoom_threshold(self, relayout_data: Optional[Dict], show_mer_tiles: bool) -> bool:

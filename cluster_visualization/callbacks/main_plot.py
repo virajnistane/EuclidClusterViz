@@ -334,7 +334,7 @@ class MainPlotCallbacks:
                 State("flag-quality-rs-checklist", "value"),
                 State("idcluster-upload", "contents"),
                 State("idcluster-upload", "filename"),
-                State("ned-specz-filter-switch", "value"),
+                State("catalog-filter-dropdown", "value"),
                 State("polygon-switch", "value"),
                 State("mer-switch", "value"),
                 State("aspect-ratio-switch", "value"),
@@ -378,7 +378,7 @@ class MainPlotCallbacks:
             flag_quality_rs,
             idcluster_upload_contents,
             idcluster_upload_filename,
-            ned_specz_filter,
+            catalog_filter_ids,
             show_polygons,
             show_mer_tiles,
             free_aspect_ratio,
@@ -408,7 +408,7 @@ class MainPlotCallbacks:
                     richness_include_missing_zp, richness_include_missing_rs,
                     richness_mode, flag_quality_zp, flag_quality_rs,
                     idcluster_upload_contents, idcluster_upload_filename,
-                    ned_specz_filter=ned_specz_filter,
+                    catalog_filter_ids=catalog_filter_ids,
                 )
 
                 # Load data for selected algorithm
@@ -542,7 +542,7 @@ class MainPlotCallbacks:
         richness_include_missing_zp, richness_include_missing_rs,
         richness_mode, flag_quality_zp, flag_quality_rs,
         idcluster_upload_contents, idcluster_upload_filename,
-        ned_specz_filter=False,
+        catalog_filter_ids=None,
     ):
         """Turn raw filter control values into create_traces / create_cluster_traces kwargs."""
 
@@ -584,7 +584,7 @@ class MainPlotCallbacks:
             flag_quality_zp=flag_quality_zp,
             flag_quality_rs=flag_quality_rs,
             idcluster_list=idcluster_list,
-            ned_specz_filter=bool(ned_specz_filter),
+            catalog_filter_ids=list(catalog_filter_ids or []),
         )
 
     def _count_selected(self, data, kw, fallback):
@@ -742,7 +742,7 @@ class MainPlotCallbacks:
                 State("flag-quality-rs-checklist", "value"),
                 State("idcluster-upload", "contents"),
                 State("idcluster-upload", "filename"),
-                State("ned-specz-filter-switch", "value"),
+                State("catalog-filter-dropdown", "value"),
                 State("polygon-switch", "value"),
                 State("mer-switch", "value"),
                 State("aspect-ratio-switch", "value"),
@@ -778,7 +778,7 @@ class MainPlotCallbacks:
             flag_quality_rs,
             idcluster_upload_contents,
             idcluster_upload_filename,
-            ned_specz_filter,
+            catalog_filter_ids,
             show_polygons,
             show_mer_tiles,
             free_aspect_ratio,
@@ -806,7 +806,7 @@ class MainPlotCallbacks:
                     richness_include_missing_zp, richness_include_missing_rs,
                     richness_mode, flag_quality_zp, flag_quality_rs,
                     idcluster_upload_contents, idcluster_upload_filename,
-                    ned_specz_filter=ned_specz_filter,
+                    catalog_filter_ids=catalog_filter_ids,
                 )
                 _t_load = time.perf_counter()
                 data = self.load_data(algorithm)
@@ -945,7 +945,7 @@ class MainPlotCallbacks:
                 State("redshift-include-missing", "value"),
                 State("richness-include-missing-zp", "value"),
                 State("richness-include-missing-rs", "value"),
-                State("ned-specz-filter-switch", "value"),
+                State("catalog-filter-dropdown", "value"),
                 State("applied-filters-store", "data"),
                 State("view-bounds-store", "data"),
             ],
@@ -981,7 +981,7 @@ class MainPlotCallbacks:
             redshift_include_missing,
             richness_include_missing_zp,
             richness_include_missing_rs,
-            ned_specz_filter,
+            catalog_filter_ids,
             applied_filters,
             view_store,
         ):
@@ -1016,7 +1016,7 @@ class MainPlotCallbacks:
                 richness_include_missing_rs = applied_filters.get(
                     "richness-include-missing-rs", richness_include_missing_rs
                 )
-                ned_specz_filter = applied_filters.get("ned-specz-filter-switch", ned_specz_filter)
+                catalog_filter_ids = applied_filters.get("catalog-filter-dropdown", catalog_filter_ids)
                 if applied_filters.get("idcluster-upload") is None:
                     idcluster_upload_contents = None
 
@@ -1130,7 +1130,7 @@ class MainPlotCallbacks:
                     flag_quality_zp=flag_quality_zp,
                     flag_quality_rs=flag_quality_rs,
                     idcluster_list=idcluster_list,
-                    ned_specz_filter=ned_specz_filter,
+                    catalog_filter_ids=catalog_filter_ids,
                     threshold=threshold,
                     maglim=maglim,
                     show_unmerged_clusters=show_unmerged_clusters,
@@ -1233,7 +1233,7 @@ class MainPlotCallbacks:
                         flag_quality_zp=flag_quality_zp,
                         flag_quality_rs=flag_quality_rs,
                         idcluster_list=idcluster_list,
-                        ned_specz_filter=bool(ned_specz_filter),
+                        catalog_filter_ids=list(catalog_filter_ids or []),
                     ),
                     filtered_merged_count,
                 )
@@ -1763,7 +1763,7 @@ class MainPlotCallbacks:
         flag_quality_zp=None,
         flag_quality_rs=None,
         idcluster_list=None,
-        ned_specz_filter=False,
+        catalog_filter_ids=None,
         threshold=0.8,
         maglim=None,
         show_unmerged_clusters=False,
@@ -1801,7 +1801,7 @@ class MainPlotCallbacks:
                 flag_quality_zp=flag_quality_zp,
                 flag_quality_rs=flag_quality_rs,
                 idcluster_list=idcluster_list,
-                ned_specz_filter=ned_specz_filter,
+                catalog_filter_ids=catalog_filter_ids,
                 threshold=threshold,
                 maglim=maglim,
                 show_unmerged_clusters=show_unmerged_clusters,
