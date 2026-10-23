@@ -89,6 +89,14 @@ All methods provide comprehensive visualization with:
 
 ## 🆕 Recent UI Improvements
 
+### Galaxy Catalogs
+
+The **Galaxy catalogs** sidebar section puts any galaxy catalog on the map: give a file path on the cluster,
+map its columns (RA and Dec required; spec-z, OBJECT_ID, MER tile and cluster ID optional) and switch it on.
+**Load CATRED near shown catalogs** marks the matching CATRED sources (by OBJECT_ID when mapped, else by
+position); clicking one shows its p(z) with the catalog's spec-z. **Filters → Spec-z verification** keeps only
+the clusters with galaxies in the chosen catalogs. See the [Galaxy Catalogs Guide](GALAXY_CATALOGS_GUIDE.md).
+
 ### Globe View and Large Catalogs
 
 - **Globe** button in the header: whole-sky view with cluster density (HEALPix
@@ -133,6 +141,7 @@ Updates in real-time as you zoom/pan, no server calls needed.
 
 For in-depth information on specific features:
 - **[Cluster Analysis](CLUSTER_ANALYSIS_GUIDE.md)** - Cutouts, CATRED boxes, mask overlays, trace management
+- **[Galaxy Catalogs](GALAXY_CATALOGS_GUIDE.md)** - Add NED, Euclid spec-z or any catalog by mapping its columns; CATRED matches, spec-z on p(z), cluster filter
 - **[Configuration](CONFIGURATION_GUIDE.md)** - Setup and configuration options
 - **[Tile Caching & Controls](TILE_CACHING_AND_CONTROLS.md)** - CL-tile toggle, tile definition caching, performance
 - **[Zoom-Based Oval Rendering](ZOOM_BASED_OVAL_RENDERING.md)** - Matched cluster rendering with viewport indicator

@@ -322,6 +322,52 @@ If the directory is missing or empty, `_load_local_mosaic_fits_data` in
 
 ---
 
+## Galaxy Catalogs
+
+See [GALAXY_CATALOGS_GUIDE.md](GALAXY_CATALOGS_GUIDE.md) for how catalogs work.
+
+### "file not found" or "file not readable" when reading columns
+
+The path is read on the cluster, by the app's account. Check it there
+(`ls -l /path/to/catalog.fits`). Inside the Apptainer image only bound folders exist:
+`launch_sif.sh` binds `/sps` and your home; add others with
+`CLUSTERVIZ_BIND=/path/to/catalogs ./launch_sif.sh`.
+
+### A catalog takes long to appear the first time
+
+The first time a catalog is shown, its mapped columns are read from the file; a
+FITS table is read in full (about 1.5 minutes for the 617 MB Euclid catalogue over
+sshfs). Later loads come from `~/.cache/clusterviz_catalogs/` and are immediate.
+Changing the mapping or the file starts a new cache entry; that folder can be
+deleted at any time.
+
+### Only part of a large catalog is drawn
+
+Catalogs above 10,000 rows are drawn around the current view and thinned to
+10,000 points there; the legend says "(10,000 of N here)". Zoom in to see all
+galaxies in an area. This is deliberate: the full catalog would slow every plot
+update over the SSH tunnel.
+
+### "none of N OBJECT_IDs found in CATRED"
+
+The catalog's OBJECT_IDs are not in the CATRED tiles of that area: the catalog
+may come from another data release than the configured CATRED, or the mapped
+column is not the MER OBJECT_ID. Remove the OBJECT_ID mapping (pen icon) to
+match by position instead.
+
+### "Load CATRED near shown catalogs" stays disabled
+
+Render the clusters first and zoom in to under 2° × 2°, as for the CATRED render
+button.
+
+### The Spec-z verification filter is greyed out
+
+It lists only catalogs with a merged cluster ID column mapped (the "Merged
+cluster ID" line in the Add/Edit dialog). A catalog whose file can't be loaded is
+listed as unavailable.
+
+---
+
 ## Getting Help
 
 - Check server log output for error messages
