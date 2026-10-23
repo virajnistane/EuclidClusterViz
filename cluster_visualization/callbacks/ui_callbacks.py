@@ -65,6 +65,7 @@ class UICallbacks:
         "clusters-settings": True,
         "filters-settings": True,
         "mask-controls": False,
+        "galaxy-catalogs": False,
         "image-controls": False,
         "display-options": False,
         "app-config": False,
@@ -1860,8 +1861,8 @@ class UICallbacks:
                 var count = 0;
                 var clusterPts = [];  // {ra, dec, name}
                 var catredPts = [];
-                var nedPts = [];
-                var nedCatredPts = [];
+                // Galaxy catalogs and their CATRED matches, one Aladin layer each (trace meta)
+                var galaxyLayers = {};
                 var maskPolygons = [];  // [[ra,dec], ...] per polygon segment (kept for legacy)
                 var maskMocPixels = [];  // flat int array of HEALPix pixel IDs (order 14)
                 var membersPts = [];
@@ -1869,13 +1870,13 @@ class UICallbacks:
                 (figure.data || []).forEach(function(trace) {
                     var name = (trace.name || '');
                     var isCatred = name.indexOf('CATRED') === 0;
-                    var isNed = name.indexOf('NED Spec-z') === 0;
-                    var isNedCatred = name.indexOf('NED-Nearby CATRED') === 0;
+                    var meta = trace.meta || {};
+                    var isGalaxyCatalog = meta.kind === 'catalog' || meta.kind === 'catalog_match';
                     // Modal mask cutout traces carry a 'Cutout ' prefix (CUTOUT_MASK_PREFIX)
                     var maskName = name.indexOf('Cutout ') === 0 ? name.slice(7) : name;
                     var isMask = maskName.indexOf('Mask overlay') === 0 || maskName.indexOf('Inverted mask overlay') === 0;
                     var isMembers = name.indexOf('Members (ID') === 0;
-                    var isCluster = !isCatred && !isMask && !isMembers && (
+                    var isCluster = !isCatred && !isMask && !isMembers && !isGalaxyCatalog && (
                         name.indexOf('Merged') >= 0 || name.indexOf('PZWAV') >= 0 || name.indexOf('AMICO') >= 0
                     );
                     // Exclude glow halos (no cluster-count suffix and contain 'near CATRED')
@@ -1912,24 +1913,19 @@ class UICallbacks:
                                 catredPts.push({ra: ra, dec: dec, name: 'CATRED'});
                             }
                         }
-                    } else if (isNed) {
+                    } else if (isGalaxyCatalog) {
+                        var layerKey = meta.kind + ':' + meta.catalog_id;
+                        var layer = galaxyLayers[layerKey] || (galaxyLayers[layerKey] = {
+                            name: meta.label || name, color: meta.color || '#ff8800',
+                            shape: meta.shape || 'rhomb', pts: []
+                        });
                         for (var i = 0; i < xs.length; i++) {
                             var ra = xs[i], dec = ys[i];
                             if (ra == null || dec == null) continue;
                             var dra = (ra - raCtr) * cosD;
                             var ddec = dec - decCtr;
                             if (Math.sqrt(dra*dra + ddec*ddec) <= fov2) {
-                                nedPts.push({ra: ra, dec: dec, name: 'NED'});
-                            }
-                        }
-                    } else if (isNedCatred) {
-                        for (var i = 0; i < xs.length; i++) {
-                            var ra = xs[i], dec = ys[i];
-                            if (ra == null || dec == null) continue;
-                            var dra = (ra - raCtr) * cosD;
-                            var ddec = dec - decCtr;
-                            if (Math.sqrt(dra*dra + ddec*ddec) <= fov2) {
-                                nedCatredPts.push({ra: ra, dec: dec, name: 'NED-Nearby CATRED'});
+                                layer.pts.push({ra: ra, dec: dec, name: layer.name});
                             }
                         }
                     } else if (isMask) {
@@ -1977,8 +1973,7 @@ class UICallbacks:
                 var overlayData = {
                     clusters: clusterPts,
                     catred: catredPts,
-                    ned: nedPts,
-                    ned_catred: nedCatredPts,
+                    galaxy_catalogs: Object.keys(galaxyLayers).map(function(k) { return galaxyLayers[k]; }),
                     mask_polygons: maskPolygons,
                     mask_moc_pixels: maskMocPixels,
                     mask_hips_path: maskHipsPath || null,
@@ -2103,12 +2098,6 @@ class UICallbacks:
                         var catredSrcs = (data.catred || []).map(function(r) {
                             return A.source(r.ra, r.dec, {name: r.name || 'CATRED'});
                         });
-                        var nedSrcs = (data.ned || []).map(function(r) {
-                            return A.source(r.ra, r.dec, {name: r.name || 'NED'});
-                        });
-                        var nedCatredSrcs = (data.ned_catred || []).map(function(r) {
-                            return A.source(r.ra, r.dec, {name: r.name || 'NED-Nearby CATRED'});
-                        });
                         var membersSrcs = (data.members || []).map(function(r) {
                             return A.source(r.ra, r.dec, {name: r.name || 'Member'});
                         });
@@ -2132,18 +2121,16 @@ class UICallbacks:
                             aladin.addCatalog(catredCat);
                             reg.catalogs.push(catredCat);
                         }
-                        if (nedSrcs.length) {
-                            var nedCat = A.catalog({name: 'NED Spec-z', color: '#ff8800', shape: 'rhomb', sourceSize: 10});
-                            nedCat.addSources(nedSrcs);
-                            aladin.addCatalog(nedCat);
-                            reg.catalogs.push(nedCat);
-                        }
-                        if (nedCatredSrcs.length) {
-                            var nedCatredCat = A.catalog({name: 'NED-Nearby CATRED', color: '#0096ff', shape: 'square', sourceSize: 8});
-                            nedCatredCat.addSources(nedCatredSrcs);
-                            aladin.addCatalog(nedCatredCat);
-                            reg.catalogs.push(nedCatredCat);
-                        }
+                        (data.galaxy_catalogs || []).forEach(function(layer) {
+                            if (!layer.pts || !layer.pts.length) return;
+                            var cat = A.catalog({name: layer.name, color: layer.color, shape: layer.shape,
+                                                 sourceSize: layer.shape === 'square' ? 8 : 10});
+                            cat.addSources(layer.pts.map(function(r) {
+                                return A.source(r.ra, r.dec, {name: r.name});
+                            }));
+                            aladin.addCatalog(cat);
+                            reg.catalogs.push(cat);
+                        });
                         if (membersSrcs.length) {
                             var membersCat = A.catalog({name: 'Members', color: '#FFD700', shape: 'rhomb', sourceSize: 10});
                             membersCat.addSources(membersSrcs);

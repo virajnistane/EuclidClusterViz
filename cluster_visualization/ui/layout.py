@@ -9,6 +9,7 @@ from dash import dcc, html
 
 from .sidebar_sections import SidebarSections
 from .tour_steps import EXTRA_TOURS, SECTION_TITLES
+from .catalog_controls import CatalogControls
 from .data_controls import DataControls
 from .modals import Modals
 from .tabs import TabContent
@@ -502,6 +503,7 @@ class AppLayout:
                 # Cluster Action Modal Dialog
                 # File Browser Modal Dialog
                 Modals.create_file_browser_modal(),
+                CatalogControls.create_modal(),
                 # Getting Started onboarding modal
                 Modals.create_getting_started_modal(),
                 dcc.Store(id="onboarding-seen-store", storage_type="local", data=False),
@@ -551,16 +553,21 @@ class AppLayout:
                     icon="fa-filter",
                     is_open=True,
                 ),
-                # Mask Section (CATRED controls + Healpix mask + NED spec-z)
+                # Mask Section (CATRED controls + Healpix mask)
                 AppLayout._create_collapsible_card(
                     "Mask",
                     "mask-controls",
                     [
                         DataControls.create_catred_data_section(),
                         DataControls.create_healpix_mask_section(),
-                        DataControls.create_ned_specz_section(),
                     ],
                     icon="fa-border-all",
+                ),
+                AppLayout._create_collapsible_card(
+                    "Galaxy catalogs",
+                    "galaxy-catalogs",
+                    [CatalogControls.create_section()],
+                    icon="fa-star",
                 ),
                 AppLayout._create_collapsible_card(
                     "Mosaic",

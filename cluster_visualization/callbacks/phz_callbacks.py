@@ -11,6 +11,7 @@ import plotly.graph_objs as go  # type: ignore[import]
 from dash import Input, Output, State
 from loguru import logger
 
+from cluster_visualization.src.visualization.catalog_traces import MATCH_PREFIX
 from cluster_visualization.src.visualization.figures import PHZ_EMPTY_META
 from cluster_visualization.src.visualization.trace_registry import TraceRegistry, TraceType
 
@@ -101,7 +102,7 @@ class PHZCallbacks:
             if kind in (TraceType.CLUSTER, TraceType.SELECTED_CLUSTER):
                 return dash.no_update, dash.no_update, dash.no_update
             if kind is not self.UNKNOWN_TRACE and kind not in (
-                TraceType.CATRED, TraceType.MEMBERS, TraceType.NED_NEARBY_CATRED
+                TraceType.CATRED, TraceType.MEMBERS, TraceType.CATALOG_MATCH
             ):
                 logger.debug("Click on '{}' (not a cluster or CATRED point)", clicked_trace_name)
                 return self.DEFAULT_TABS
@@ -145,7 +146,7 @@ class PHZCallbacks:
                 # First, try to match the exact clicked trace name if it's a CATRED/Members trace
                 if (
                     clicked_trace_name != "Unknown"
-                    and ("CATRED" in clicked_trace_name or "Members" in clicked_trace_name)
+                    and self._has_click_data(clicked_trace_name)
                     and clicked_trace_name in current_catred_data
                 ):
                     catred_data = current_catred_data[clicked_trace_name]
@@ -169,9 +170,7 @@ class PHZCallbacks:
 
                         # Check if this is a CATRED or Members trace
                         # Only the clicked trace can supply the point (see guard above)
-                        if trace_name == clicked_trace_name and (
-                            "CATRED" in trace_name or "Members" in trace_name
-                        ):
+                        if trace_name == clicked_trace_name and self._has_click_data(trace_name):
 
                             # Match by coordinates only: pointNumber indexes the clicked trace,
                             # which is not this one, so it can't be used as a row index here.
@@ -236,6 +235,11 @@ class PHZCallbacks:
             Input("phz-pdf-plot", "figure"),
             prevent_initial_call=True,
         )
+
+    @staticmethod
+    def _has_click_data(trace_name):
+        """Traces whose points have p(z) click data: CATRED, cluster members, catalog matches."""
+        return "CATRED" in trace_name or "Members" in trace_name or trace_name.startswith(MATCH_PREFIX)
 
     @staticmethod
     def _log_member_click(trace_name, member_data, index) -> None:

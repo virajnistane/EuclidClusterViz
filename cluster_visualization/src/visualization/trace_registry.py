@@ -11,6 +11,8 @@ from typing import Callable, Optional
 
 import plotly.graph_objs as go
 
+from cluster_visualization.src.visualization.catalog_traces import CATALOG_PREFIX, MATCH_PREFIX
+
 # Name prefix of the cluster modal's HEALPix mask cutout traces. They are built
 # like the sidebar's viewport mask (same names after the prefix) but form a
 # separate layer with its own Hide/Clear controls.
@@ -23,8 +25,8 @@ class TraceType(Enum):
     MOSAIC = auto()
     MASK_OVERLAY = auto()
     CATRED = auto()
-    NED_SPECZ = auto()
-    NED_NEARBY_CATRED = auto()
+    GALAXY_CATALOG = auto()
+    CATALOG_MATCH = auto()
     MEMBERS = auto()
     MATCHED_PAIR = auto()
     CLUSTER = auto()
@@ -93,12 +95,12 @@ def _match_catred(trace) -> bool:
     return _name_startswith(trace, "CATRED")
 
 
-def _match_ned_specz(trace) -> bool:
-    return _name_startswith(trace, "NED Spec-z")
+def _match_galaxy_catalog(trace) -> bool:
+    return _name_startswith(trace, CATALOG_PREFIX)
 
 
-def _match_ned_nearby_catred(trace) -> bool:
-    return _name_startswith(trace, "NED-Nearby CATRED")
+def _match_catalog_match(trace) -> bool:
+    return _name_startswith(trace, MATCH_PREFIX)
 
 
 def _match_members(trace) -> bool:
@@ -225,36 +227,19 @@ def _reconstruct_catred(trace: dict):
     )
 
 
-def _reconstruct_ned_specz(trace: dict):
+def _reconstruct_catalog(trace: dict):
+    """Galaxy catalog and catalog-match markers; ``meta`` names the catalog."""
     return go.Scattergl(
         x=trace.get("x", []),
         y=trace.get("y", []),
         mode=trace.get("mode", "markers"),
         marker=trace.get("marker", {}),
-        name=trace.get("name", "NED Spec-z Galaxies"),
+        name=trace.get("name", ""),
         text=trace.get("text", []),
         customdata=trace.get("customdata", None),
         hovertemplate=trace.get("hovertemplate", None),
         hoverinfo=trace.get("hoverinfo", "text"),
-        showlegend=trace.get("showlegend", True),
-        visible=trace.get("visible", True),
-    )
-
-
-def _reconstruct_ned_nearby_catred(trace: dict):
-    return go.Scattergl(
-        x=trace.get("x", []),
-        y=trace.get("y", []),
-        mode=trace.get("mode", "markers"),
-        marker=trace.get("marker", {}),
-        name=trace.get("name", "NED-Nearby CATRED Sources"),
-        text=trace.get("text", []),
-        customdata=trace.get("customdata", None),
-        hovertemplate=trace.get("hovertemplate", None),
-        hoverlabel=trace.get("hoverlabel", None),
-        hoverinfo=trace.get("hoverinfo", "text"),
-        legendgroup=trace.get("legendgroup", None),
-        opacity=trace.get("opacity", None),
+        meta=trace.get("meta", None),
         showlegend=trace.get("showlegend", True),
         visible=trace.get("visible", True),
     )
@@ -307,17 +292,17 @@ TRACE_SPECS: dict[TraceType, TraceTypeSpec] = {
         match=_match_catred,
         reconstruct=_reconstruct_catred,
     ),
-    TraceType.NED_SPECZ: TraceTypeSpec(
-        name="ned_specz",
+    TraceType.GALAXY_CATALOG: TraceTypeSpec(
+        name="galaxy_catalog",
         layer_order=45,
-        match=_match_ned_specz,
-        reconstruct=_reconstruct_ned_specz,
+        match=_match_galaxy_catalog,
+        reconstruct=_reconstruct_catalog,
     ),
-    TraceType.NED_NEARBY_CATRED: TraceTypeSpec(
-        name="ned_nearby_catred",
+    TraceType.CATALOG_MATCH: TraceTypeSpec(
+        name="catalog_match",
         layer_order=46,
-        match=_match_ned_nearby_catred,
-        reconstruct=_reconstruct_ned_nearby_catred,
+        match=_match_catalog_match,
+        reconstruct=_reconstruct_catalog,
     ),
     TraceType.MEMBERS: TraceTypeSpec(
         name="members",
@@ -350,11 +335,13 @@ TRACE_SPECS: dict[TraceType, TraceTypeSpec] = {
 _MATCH_ORDER = [
     TraceType.SELECTED_CLUSTER,
     TraceType.MATCHED_PAIR,
+    # User catalogs before the substring matchers below: a catalog named, say,
+    # "AMICO members" or "Mosaic survey" must not be taken for a cluster or mosaic trace
+    TraceType.GALAXY_CATALOG,
+    TraceType.CATALOG_MATCH,
     TraceType.MEMBERS,
     TraceType.MASK_OVERLAY,
     TraceType.CATRED,
-    TraceType.NED_SPECZ,
-    TraceType.NED_NEARBY_CATRED,
     TraceType.POLYGON,
     TraceType.MOSAIC,
     TraceType.CLUSTER,

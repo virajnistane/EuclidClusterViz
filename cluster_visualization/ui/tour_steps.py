@@ -17,6 +17,7 @@ SECTION_TITLES = {
     "clusters-settings": "Catalog",
     "filters-settings": "Filters",
     "mask-controls": "Mask",
+    "galaxy-catalogs": "Galaxy catalogs",
     "image-controls": "Mosaic",
     "display-options": "Display",
     "app-config": "Configuration",
@@ -58,6 +59,9 @@ TOUR_STEPS = {
                  "Changes wait for Apply filters at the bottom of the section."},
         {"element": "#mask-controls-header", "title": "Mask", "side": "right",
          "body": "High-resolution CATRED sources and the Healpix coverage mask."},
+        {"element": "#galaxy-catalogs-header", "title": "Galaxy catalogs", "side": "right",
+         "body": "Your own galaxy catalogs (NED, Euclid spec-z, any survey) on the plot, and the "
+                 "CATRED sources near them."},
         {"element": "#image-controls-header", "title": "Mosaic", "side": "right",
          "body": "Survey imagery behind the clusters for the current zoomed view."},
         {"element": "#display-options-header", "title": "Display", "side": "right",
@@ -146,6 +150,17 @@ TOUR_STEPS = {
          "body": "Shows the uncovered area instead of the covered one."},
         {"element": "#mask-toggle-visibility-button", "title": "Hide / Delete mask",
          "body": "Hide the mask temporarily, or delete it."},
+    ]),
+    "galaxy-catalogs": _steps("galaxy-catalogs", [
+        {"element": "#catalog-add-button", "title": "Add a catalog",
+         "body": "Give the path of a FITS, CSV, ECSV or Parquet file on the cluster, then pick which "
+                 "of its columns hold RA, Dec, spec-z and so on. Only RA and Dec are required."},
+        {"element": "#catalog-list", "title": "Your catalogs",
+         "body": "Switch a catalog on to draw it. Large catalogs are drawn for the current view. "
+                 "The pen edits the column mapping; the bin removes it from the list (not the file)."},
+        {"element": "#catalog-match-button", "title": "CATRED near shown catalogs",
+         "body": "Zoom in, then mark the CATRED sources within the radius of the shown catalogs' "
+                 "galaxies. Click a marked source for its redshift PDF."},
     ]),
     "image-controls": _steps("image-controls", [
         {"element": "#image-source-radio", "title": "Image source",

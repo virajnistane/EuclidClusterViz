@@ -76,8 +76,8 @@ class TraceCreator:
         existing_catred_traces: Optional[List] = None,
         existing_mosaic_traces: Optional[List] = None,
         existing_mask_overlay_traces: Optional[List] = None,
-        existing_ned_specz_traces: Optional[List] = None,
-        existing_ned_nearby_catred_traces: Optional[List] = None,
+        existing_catalog_traces: Optional[List] = None,
+        existing_catalog_match_traces: Optional[List] = None,
         snr_threshold_lower_pzwav: Optional[float] = None,
         snr_threshold_upper_pzwav: Optional[float] = None,
         snr_threshold_lower_amico: Optional[float] = None,
@@ -211,16 +211,13 @@ class TraceCreator:
                 f"Preserving {len(mask_overlay_traces)} existing mask overlay traces in layer order"
             )
 
-        # Prepare NED spec-z traces (preserve existing ones)
-        ned_specz_traces = existing_ned_specz_traces or []
-        if ned_specz_traces:
-            logger.debug(f"Preserving {len(ned_specz_traces)} existing NED spec-z traces in layer order")
-
-        # Prepare NED-nearby CATRED traces (preserve existing ones)
-        ned_nearby_catred_traces = existing_ned_nearby_catred_traces or []
-        if ned_nearby_catred_traces:
+        # Galaxy catalog markers and their CATRED matches (preserve existing ones)
+        catalog_traces = existing_catalog_traces or []
+        catalog_match_traces = existing_catalog_match_traces or []
+        if catalog_traces or catalog_match_traces:
             logger.debug(
-                f"Preserving {len(ned_nearby_catred_traces)} existing NED-nearby CATRED traces in layer order"
+                f"Preserving {len(catalog_traces)} galaxy catalog and "
+                f"{len(catalog_match_traces)} catalog match traces in layer order"
             )
 
         # Combine in proper layer order: polygons (bottom) → mosaics → CATRED → clusters (top)
@@ -249,8 +246,8 @@ class TraceCreator:
             + mosaic_traces
             + mask_overlay_traces
             + catred_traces
-            + ned_specz_traces
-            + ned_nearby_catred_traces
+            + catalog_traces
+            + catalog_match_traces
             + cluster_traces
         )
         self._profiler.record("create_traces:total", time.perf_counter() - _t_create)

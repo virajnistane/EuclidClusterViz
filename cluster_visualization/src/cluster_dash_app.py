@@ -164,6 +164,8 @@ if data_modules_path not in sys.path:
 from data.catred_handler import CATREDHandler
 from data.ned_handler import NEDHandler
 
+from cluster_visualization.src.data.catalog_registry import CatalogRegistry
+
 # Import data handling modules
 from data.loader import DataLoader
 from mermosaic import MOSAICHandler
@@ -186,11 +188,11 @@ logger.debug("Visualization modules loaded")
 # Import callback modules
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from callbacks.aladin_callbacks import AladinCallbacks
+from callbacks.catalog_callbacks import CatalogCallbacks
 from callbacks.catred_callbacks import CATREDCallbacks
 from callbacks.cluster_modal_callbacks import ClusterModalCallbacks
 from callbacks.main_plot import MainPlotCallbacks
 from callbacks.mosaic_callback import MOSAICCallbacks
-from callbacks.ned_callbacks import NEDCallbacks
 from callbacks.phz_callbacks import PHZCallbacks
 from callbacks.sky_overview_callbacks import SkyOverviewCallbacks
 from callbacks.ui_callbacks import UICallbacks
@@ -321,6 +323,11 @@ class ClusterVisualizationApp:
         # Initialize NED spec-z verification handler (inert if not configured)
         self.ned_handler = NEDHandler(config)
 
+        # The user's galaxy catalogs (~/.config/clusterviz/catalogs.json); a catalog set
+        # in the old [paths] ned_specz_fits key is added to it once
+        self.catalog_registry = CatalogRegistry()
+        self.catalog_registry.import_legacy(config.get_ned_specz_fits())
+
         # Initialize visualization modules
         self.trace_creator = TraceCreator(
             colors_list, colors_list_transparent, self.catred_handler, self.ned_handler
@@ -403,11 +410,10 @@ class ClusterVisualizationApp:
                 self.app, self.data_loader, self.trace_creator
             )
 
-            # NED spec-z verification display callbacks
-            self.ned_callbacks = NEDCallbacks(
+            # Galaxy catalogs section: catalog markers and CATRED near them
+            self.catalog_callbacks = CatalogCallbacks(
                 app=self.app,
-                ned_handler=self.ned_handler,
-                figure_manager=self.figure_manager,
+                registry=self.catalog_registry,
                 catred_handler=self.catred_handler,
                 data_loader=self.data_loader,
             )
