@@ -37,6 +37,7 @@ from cluster_visualization.src.data.galaxy_catalog import (
     validate_mapping,
 )
 from cluster_visualization.src.visualization.catalog_traces import (
+    DEFAULT_OPACITY,
     DEFAULT_SIZE,
     KIND_CATALOG,
     MATCH_PREFIX,
@@ -196,7 +197,7 @@ class CatalogCallbacks:
     # Figure helpers
     # ------------------------------------------------------------------
 
-    def _catalog_trace(self, catalog_id, viewport):
+    def _catalog_trace(self, catalog_id, viewport, opacity=DEFAULT_OPACITY):
         """(trace or None, status text) for a catalog about to be shown."""
         catalog = self.registry.catalog(catalog_id)
         if catalog is None:
@@ -205,7 +206,7 @@ class CatalogCallbacks:
             return None, f"⚠ {catalog.status}"
         df, total, windowed = select_for_display(catalog, viewport)
         status = catalog.status + ("; large, drawn for the current view" if windowed else "")
-        return build_catalog_trace(catalog.spec, df, total, windowed), status
+        return build_catalog_trace(catalog.spec, df, total, windowed, opacity), status
 
     @staticmethod
     def _catalog_ids(traces):
@@ -517,14 +518,19 @@ class CatalogCallbacks:
             figure_out = no
             if state.get("mode") == "edit":
                 self._forget_click_data({match_trace_name(CatalogSpec.from_dict(state["spec"]))})
-                shown = figure and any(
-                    trace_meta(t).get("catalog_id") == spec.id
+                shown = [
+                    trace_meta(t)
+                    for t in (figure or {}).get("data", [])
+                    if trace_meta(t).get("catalog_id") == spec.id
                     and trace_meta(t).get("kind") == KIND_CATALOG
-                    for t in figure.get("data", [])
-                )
+                ]
                 if shown:
                     figure = self._without_catalogs(figure, {spec.id})
-                    trace, _ = self._catalog_trace(spec.id, current_viewport(relayout, figure))
+                    trace, _ = self._catalog_trace(
+                        spec.id,
+                        current_viewport(relayout, figure),
+                        shown[0].get("opacity", DEFAULT_OPACITY),
+                    )
                     categorized = TraceRegistry.categorize_all(figure)
                     if trace is not None:
                         categorized[TraceType.GALAXY_CATALOG].append(trace)
@@ -564,9 +570,10 @@ class CatalogCallbacks:
             State({"type": "catalog-status", "index": ALL}, "children"),
             State("cluster-plot", "figure"),
             State("cluster-plot", "relayoutData"),
+            State("catalog-opacity-slider", "value"),
             prevent_initial_call=True,
         )
-        def show_catalogs(values, ids, statuses, figure, relayout):
+        def show_catalogs(values, ids, statuses, figure, relayout, opacity=None):
             """Draw the catalogs switched on and remove the ones switched off.
 
             Reconciles switches with the figure rather than acting on the one switch
@@ -600,8 +607,9 @@ class CatalogCallbacks:
 
             status = dict(zip(order, statuses))
             viewport = current_viewport(relayout, figure)
+            opacity = DEFAULT_OPACITY if opacity is None else opacity
             for cid in to_draw:
-                trace, status[cid] = self._catalog_trace(cid, viewport)
+                trace, status[cid] = self._catalog_trace(cid, viewport, opacity)
                 if trace is not None:
                     catalog_traces.append(trace)
 
@@ -653,14 +661,46 @@ class CatalogCallbacks:
                 var changed = false;
                 var data = figure.data.map(function(t) {
                     var m = t.meta || {};
-                    if (m.kind === 'catalog' && byId[m.catalog_id]) { changed = true; return byId[m.catalog_id]; }
-                    return t;
+                    var w = byId[m.catalog_id];
+                    if (m.kind !== 'catalog' || !w) { return t; }
+                    changed = true;
+                    // Keep the opacity set on the slider since the trace was built
+                    var opacity = m.opacity != null ? m.opacity : w.meta.opacity;
+                    return Object.assign({}, w, {
+                        marker: Object.assign({}, w.marker, {opacity: opacity}),
+                        meta: Object.assign({}, w.meta, {opacity: opacity})
+                    });
                 });
                 return changed ? Object.assign({}, figure, {data: data}) : NO;
             }
             """,
             Output("cluster-plot", "figure", allow_duplicate=True),
             Input("catalog-window-store", "data"),
+            State("cluster-plot", "figure"),
+            prevent_initial_call=True,
+        )
+
+        # Marker opacity slider: restyle the catalog traces in the browser
+        self.app.clientside_callback(
+            """
+            function(opacity, figure) {
+                var NO = window.dash_clientside.no_update;
+                if (opacity == null || !figure || !figure.data) { return NO; }
+                var changed = false;
+                var data = figure.data.map(function(t) {
+                    var m = t.meta || {};
+                    if (m.kind !== 'catalog' || m.opacity === opacity) { return t; }
+                    changed = true;
+                    return Object.assign({}, t, {
+                        marker: Object.assign({}, t.marker, {opacity: opacity}),
+                        meta: Object.assign({}, m, {opacity: opacity})
+                    });
+                });
+                return changed ? Object.assign({}, figure, {data: data}) : NO;
+            }
+            """,
+            Output("cluster-plot", "figure", allow_duplicate=True),
+            Input("catalog-opacity-slider", "value"),
             State("cluster-plot", "figure"),
             prevent_initial_call=True,
         )

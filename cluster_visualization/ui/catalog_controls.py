@@ -13,7 +13,12 @@ import dash_bootstrap_components as dbc
 from dash import dcc, html
 
 from cluster_visualization.src.data.galaxy_catalog import ROLES
-from cluster_visualization.src.visualization.catalog_traces import DEFAULT_SIZE, SIZES, SYMBOLS
+from cluster_visualization.src.visualization.catalog_traces import (
+    DEFAULT_OPACITY,
+    DEFAULT_SIZE,
+    SIZES,
+    SYMBOLS,
+)
 
 # Marker shape shown next to each catalog in the list (same keys as SYMBOLS)
 SYMBOL_GLYPHS = {
@@ -83,6 +88,29 @@ class CatalogControls:
                     size="sm",
                     className="w-100 mt-2 mb-3",
                     n_clicks=0,
+                ),
+                html.Div(
+                    [
+                        html.Label(
+                            "Marker opacity",
+                            htmlFor="catalog-opacity-slider",
+                            className="control-label",
+                        ),
+                        dcc.Slider(
+                            id="catalog-opacity-slider",
+                            min=0.1,
+                            max=1.0,
+                            step=0.1,
+                            value=DEFAULT_OPACITY,
+                            marks={0.1: "10%", 0.5: "50%", 1.0: "100%"},
+                        ),
+                        html.Small(
+                            "Fainter catalog markers keep the clusters on top readable. "
+                            "CATRED matches stay opaque.",
+                            className="control-help",
+                        ),
+                    ],
+                    className="control-group",
                 ),
                 html.Div(
                     [

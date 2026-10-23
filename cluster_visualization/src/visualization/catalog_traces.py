@@ -62,6 +62,9 @@ SYMBOL_CYCLE = (
     "star-open",
 )
 MATCH_SYMBOL, MATCH_SIZE = "square-open", 9
+# Opacity of catalog markers (sidebar slider): fainter markers keep the clusters drawn on
+# top readable. CATRED matches stay opaque.
+DEFAULT_OPACITY = 0.6
 
 
 def marker_style(symbol: str, size: int, color: str) -> dict:
@@ -152,7 +155,11 @@ def select_for_display(catalog, viewport: Optional[dict] = None) -> Tuple[pd.Dat
 
 
 def build_catalog_trace(
-    spec, df: pd.DataFrame, total: Optional[int] = None, windowed: bool = False
+    spec,
+    df: pd.DataFrame,
+    total: Optional[int] = None,
+    windowed: bool = False,
+    opacity: float = DEFAULT_OPACITY,
 ):
     """Marker trace for a catalog's rows (``total``: rows in the area before thinning)."""
     name = catalog_trace_name(spec)
@@ -162,7 +169,7 @@ def build_catalog_trace(
         x=df["RA"].to_numpy(),
         y=df["DEC"].to_numpy(),
         mode="markers",
-        marker=marker_style(spec.symbol, spec.size, spec.color),
+        marker=dict(marker_style(spec.symbol, spec.size, spec.color), opacity=opacity),
         name=name,
         text=hover_texts(spec, df),
         # Row of each marker in the loaded catalog, so a click finds its galaxy
@@ -177,6 +184,7 @@ def build_catalog_trace(
             "color": spec.color,
             "symbol": spec.symbol,
             "size": spec.size,
+            "opacity": opacity,
             "windowed": windowed,
         },
     )

@@ -88,6 +88,11 @@ The line under the switch gives the row count once loaded, for example
 "264,111 galaxies of 445,702 (where has_z_spec_good)", or the reason it could not
 be loaded.
 
+**Keeping clusters visible.** Catalog markers are drawn at 60% opacity by default;
+the **Marker opacity** slider under the list changes this for all shown catalogs
+(CATRED matches stay opaque). Cluster markers also have a white outline, so they
+stand out over catalog markers, CATRED sources and mosaics.
+
 **Large catalogs.** A catalog with more than 10,000 rows is drawn for the current
 view only, plus half a view on each side, and redrawn after every zoom or pan.
 If that area still holds more than 10,000 galaxies, 10,000 of them are drawn
@@ -103,7 +108,7 @@ loads take a fraction of a second. The cache is rebuilt when the file or the
 mapping changes.
 
 Shown catalogs also appear in the Aladin view, one layer each, drawn with the same
-marker shape, size and colour as on the sky map.
+marker shape, size, colour and opacity as on the sky map.
 
 ## CATRED sources near the shown catalogs
 

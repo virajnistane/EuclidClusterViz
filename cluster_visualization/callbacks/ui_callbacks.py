@@ -1871,6 +1871,7 @@ class UICallbacks:
                     var name = (trace.name || '');
                     var isCatred = name.indexOf('CATRED') === 0;
                     var meta = trace.meta || {};
+                    if (meta.outline) return;  // white outline under cluster markers (map only)
                     var isGalaxyCatalog = meta.kind === 'catalog' || meta.kind === 'catalog_match';
                     // Modal mask cutout traces carry a 'Cutout ' prefix (CUTOUT_MASK_PREFIX)
                     var maskName = name.indexOf('Cutout ') === 0 ? name.slice(7) : name;
@@ -1917,7 +1918,8 @@ class UICallbacks:
                         var layerKey = meta.kind + ':' + meta.catalog_id;
                         var layer = galaxyLayers[layerKey] || (galaxyLayers[layerKey] = {
                             name: meta.label || name, color: meta.color || '#ff8800',
-                            symbol: meta.symbol || 'diamond', size: meta.size || 7, pts: []
+                            symbol: meta.symbol || 'diamond', size: meta.size || 7,
+                            opacity: meta.opacity != null ? meta.opacity : 1, pts: []
                         });
                         for (var i = 0; i < xs.length; i++) {
                             var ra = xs[i], dec = ys[i];
@@ -2124,7 +2126,7 @@ class UICallbacks:
                         // Galaxy catalog markers drawn as on the sky map (catalog_traces.marker_style):
                         // same Plotly shape, size and colour; filled shapes get a black edge,
                         // open ("-open") shapes are outlines in the colour
-                        var markerCanvas = function(symbol, size, color) {
+                        var markerCanvas = function(symbol, size, color, opacity) {
                             var open = /-open$/.test(symbol);
                             var base = symbol.replace(/-open$/, '');
                             var r = size / 2;
@@ -2132,6 +2134,7 @@ class UICallbacks:
                             var canvas = document.createElement('canvas');
                             canvas.width = canvas.height = dim;
                             var ctx = canvas.getContext('2d'), m = dim / 2;
+                            ctx.globalAlpha = opacity;
                             var poly = function(pts) {
                                 ctx.beginPath();
                                 pts.forEach(function(p, i) {
@@ -2171,7 +2174,8 @@ class UICallbacks:
                         };
                         (data.galaxy_catalogs || []).forEach(function(layer) {
                             if (!layer.pts || !layer.pts.length) return;
-                            var shape = markerCanvas(layer.symbol, layer.size, layer.color);
+                            var shape = markerCanvas(layer.symbol, layer.size, layer.color,
+                                                     layer.opacity != null ? layer.opacity : 1);
                             var cat = A.catalog({name: layer.name, color: layer.color, shape: shape,
                                                  sourceSize: shape.width});
                             cat.addSources(layer.pts.map(function(r) {

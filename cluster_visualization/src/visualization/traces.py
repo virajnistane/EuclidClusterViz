@@ -484,7 +484,50 @@ class TraceCreator:
 
         for trace in cluster_traces:
             trace.update(meta={"cull_margin": cull_margin, "density": False})
-        return cluster_traces
+        return self._with_outlines(cluster_traces, {"cull_margin": cull_margin, "density": False})
+
+    # White outline drawn under thin and open cluster markers, so they stay readable over
+    # galaxy catalogs, CATRED sources and mosaics. The name keeps it in the cluster layer
+    # (TraceRegistry, the browser's cluster trace index), so re-renders replace it too.
+    OUTLINE_NAME = "Merged cluster outline"
+    OUTLINE_COLOR = "rgba(255,255,255,0.9)"
+    OUTLINE_WIDTH = 5
+
+    @classmethod
+    def _with_outlines(cls, traces: List, meta: Dict[str, Any]) -> List:
+        """``traces`` with an outline trace under each thin or open marker trace. The outline
+        shares the marker trace's legend group, so a legend click hides both."""
+        result: List = []
+        for trace in traces:
+            marker = getattr(trace, "marker", None)
+            symbol = getattr(marker, "symbol", None)
+            if (
+                isinstance(symbol, str)
+                and symbol.endswith(("-thin", "-open"))
+                and trace.x is not None
+                and len(trace.x)
+            ):
+                trace.legendgroup = trace.legendgroup or trace.name
+                result.append(
+                    go.Scattergl(
+                        x=trace.x,
+                        y=trace.y,
+                        mode="markers",
+                        marker=dict(
+                            size=marker.size,
+                            symbol=symbol,
+                            line=dict(width=cls.OUTLINE_WIDTH, color=cls.OUTLINE_COLOR),
+                        ),
+                        name=cls.OUTLINE_NAME,
+                        legendgroup=trace.legendgroup,
+                        showlegend=False,
+                        hoverinfo="skip",
+                        visible=trace.visible,
+                        meta={**meta, "outline": True},
+                    )
+                )
+            result.append(trace)
+        return result
 
     def _prefilter_merged(
         self,

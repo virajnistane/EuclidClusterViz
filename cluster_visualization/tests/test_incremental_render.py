@@ -348,7 +348,9 @@ class TestViewportCulling(unittest.TestCase):
         import plotly.graph_objects as go
 
         traces = self.creator.create_cluster_traces(make_data(n=200))
-        merged = [t for t in traces if t.name and t.name.startswith("Merged")]
+        merged = [
+            t for t in traces if t.name and t.name.startswith("Merged") and not t.meta.get("outline")
+        ]
         self.assertTrue(merged)
         # Markers carry only the cluster ID (SNR / z / tile are looked up on click)
         cd = np.asarray(merged[0].customdata)
@@ -364,6 +366,26 @@ class TestViewportCulling(unittest.TestCase):
         for key in ("x", "y", "customdata"):
             self.assertIsInstance(data[key], dict, key)
             self.assertIn("bdata", data[key])
+
+    def test_thin_markers_get_an_outline_underneath(self):
+        from cluster_visualization.src.visualization.trace_registry import (
+            TraceRegistry,
+            TraceType,
+        )
+
+        traces = self.creator.create_cluster_traces(make_data(n=200))
+        outlines = [i for i, t in enumerate(traces) if t.meta.get("outline")]
+        self.assertTrue(outlines)
+        for i in outlines:
+            outline, marker = traces[i], traces[i + 1]
+            self.assertTrue(marker.marker.symbol.endswith("-thin"))
+            np.testing.assert_array_equal(outline.x, marker.x)
+            self.assertEqual(outline.marker.symbol, marker.marker.symbol)
+            self.assertEqual(outline.legendgroup, marker.legendgroup)
+            self.assertEqual((outline.hoverinfo, outline.showlegend), ("skip", False))
+            self.assertEqual(outline.meta["cull_margin"], marker.meta["cull_margin"])
+            # Same layer as the clusters, so re-renders and the Apply patch replace it
+            self.assertEqual(TraceRegistry.classify_trace(outline), TraceType.CLUSTER)
 
 
 class TestCompactTraceData(unittest.TestCase):

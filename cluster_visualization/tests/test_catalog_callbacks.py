@@ -258,7 +258,7 @@ class CatalogCallbackTest(unittest.TestCase):
     def test_edit_redraws_shown_catalog(self):
         cid = self._add_ned()
         ids = [{"type": "catalog-show", "index": cid}]
-        figure = _as_json(self._show([True], ids, _cluster_figure())[0])
+        figure = _as_json(self._show([True], ids, _cluster_figure(), opacity=0.3)[0])
         state = {"mode": "edit", "id": cid, "spec": self.registry.get(cid).to_dict()}
         store = _call(
             self.fn["read_catalog_columns"],
@@ -280,13 +280,22 @@ class CatalogCallbackTest(unittest.TestCase):
         self.assertFalse(is_open)
         names = [t["name"] if isinstance(t, dict) else t.name for t in figure["data"]]
         self.assertEqual(names, ["Catalog: NED renamed", "PZWAV (Merged) 10 clusters"])
+        self.assertEqual(_as_json(figure)["data"][0]["meta"]["opacity"], 0.3)  # slider kept
 
     # -- markers ---------------------------------------------------------------
 
-    def _show(self, values, ids, figure):
+    def _show(self, values, ids, figure, opacity=None):
         prop = _pid("catalog-show", ids[0]["index"], "value")
         return _call(
-            self.fn["show_catalogs"], prop, values[0], values, ids, [""] * len(ids), figure, None
+            self.fn["show_catalogs"],
+            prop,
+            values[0],
+            values,
+            ids,
+            [""] * len(ids),
+            figure,
+            None,
+            opacity,
         )
 
     def test_show_hide(self):
@@ -308,6 +317,23 @@ class CatalogCallbackTest(unittest.TestCase):
             self._show([True], ids, figure)
         figure, _ = self._show([False], ids, figure)
         self.assertEqual(len(figure["data"]), 1)
+
+    def test_marker_opacity(self):
+        cid = self._add_ned()
+        ids = [{"type": "catalog-show", "index": cid}]
+        prop = _pid("catalog-show", cid, "value")
+        figure, _ = _call(
+            self.fn["show_catalogs"], prop, True, [True], ids, [""], _cluster_figure(), None, 0.3
+        )
+        trace = _as_json(figure)["data"][0]
+        self.assertEqual((trace["marker"]["opacity"], trace["meta"]["opacity"]), (0.3, 0.3))
+        # Without the slider value (and in new traces built elsewhere): the default
+        spec = self.registry.get(cid)
+        built = catalog_traces.build_catalog_trace(spec, pd.DataFrame({"RA": [1.0], "DEC": [2.0]}))
+        self.assertEqual(built.marker.opacity, catalog_traces.DEFAULT_OPACITY)
+        # CATRED matches stay opaque
+        match = catalog_traces.build_match_trace(spec, [1.0], [2.0], ["t"])
+        self.assertIsNone(match.marker.opacity)
 
     def test_missing_file_shows_status(self):
         cid = self.registry.add(
