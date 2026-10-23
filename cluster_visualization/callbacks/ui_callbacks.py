@@ -1917,7 +1917,7 @@ class UICallbacks:
                         var layerKey = meta.kind + ':' + meta.catalog_id;
                         var layer = galaxyLayers[layerKey] || (galaxyLayers[layerKey] = {
                             name: meta.label || name, color: meta.color || '#ff8800',
-                            shape: meta.shape || 'rhomb', pts: []
+                            symbol: meta.symbol || 'diamond', size: meta.size || 7, pts: []
                         });
                         for (var i = 0; i < xs.length; i++) {
                             var ra = xs[i], dec = ys[i];
@@ -2121,10 +2121,59 @@ class UICallbacks:
                             aladin.addCatalog(catredCat);
                             reg.catalogs.push(catredCat);
                         }
+                        // Galaxy catalog markers drawn as on the sky map (catalog_traces.marker_style):
+                        // same Plotly shape, size and colour; filled shapes get a black edge,
+                        // open ("-open") shapes are outlines in the colour
+                        var markerCanvas = function(symbol, size, color) {
+                            var open = /-open$/.test(symbol);
+                            var base = symbol.replace(/-open$/, '');
+                            var r = size / 2;
+                            var dim = Math.ceil(2 * r * 1.4 + 4);
+                            var canvas = document.createElement('canvas');
+                            canvas.width = canvas.height = dim;
+                            var ctx = canvas.getContext('2d'), m = dim / 2;
+                            var poly = function(pts) {
+                                ctx.beginPath();
+                                pts.forEach(function(p, i) {
+                                    if (i) { ctx.lineTo(m + p[0], m + p[1]); } else { ctx.moveTo(m + p[0], m + p[1]); }
+                                });
+                                ctx.closePath();
+                            };
+                            var ring = function(outer, inner, n) {  // star (inner < outer) or polygon
+                                var pts = [];
+                                for (var i = 0; i < 2 * n; i++) {
+                                    var a = -Math.PI / 2 + i * Math.PI / n, rr = (i % 2) ? inner : outer;
+                                    pts.push([rr * Math.cos(a), rr * Math.sin(a)]);
+                                }
+                                return pts;
+                            };
+                            var rc = r * 0.4, rp = r * 1.2, t = r * 2 / Math.sqrt(3);
+                            var plus = [[rp, rc], [rc, rc], [rc, rp], [-rc, rp], [-rc, rc], [-rp, rc],
+                                        [-rp, -rc], [-rc, -rc], [-rc, -rp], [rc, -rp], [rc, -rc], [rp, -rc]];
+                            if (base === 'circle') { ctx.beginPath(); ctx.arc(m, m, r, 0, 2 * Math.PI); }
+                            else if (base === 'square') { poly([[-r, -r], [r, -r], [r, r], [-r, r]]); }
+                            else if (base === 'triangle-up') { poly([[-t, r / 2], [t, r / 2], [0, -r]]); }
+                            else if (base === 'triangle-down') { poly([[-t, -r / 2], [t, -r / 2], [0, r]]); }
+                            else if (base === 'star') { poly(ring(r * 1.3, r * 0.52, 5)); }
+                            else if (base === 'hexagon') { var h = r * 1.05; poly(ring(h, h, 3)); }
+                            else if (base === 'cross') { poly(plus); }
+                            else if (base === 'x') {
+                                poly(plus.map(function(p) { return [(p[0] - p[1]) / Math.SQRT2, (p[0] + p[1]) / Math.SQRT2]; }));
+                            }
+                            else { var d = r * 1.3; poly([[0, -d], [d, 0], [0, d], [-d, 0]]); }  // diamond
+                            if (open) {
+                                ctx.lineWidth = 1.5; ctx.strokeStyle = color; ctx.stroke();
+                            } else {
+                                ctx.fillStyle = color; ctx.fill();
+                                ctx.lineWidth = 1; ctx.strokeStyle = 'black'; ctx.stroke();
+                            }
+                            return canvas;
+                        };
                         (data.galaxy_catalogs || []).forEach(function(layer) {
                             if (!layer.pts || !layer.pts.length) return;
-                            var cat = A.catalog({name: layer.name, color: layer.color, shape: layer.shape,
-                                                 sourceSize: layer.shape === 'square' ? 8 : 10});
+                            var shape = markerCanvas(layer.symbol, layer.size, layer.color);
+                            var cat = A.catalog({name: layer.name, color: layer.color, shape: shape,
+                                                 sourceSize: shape.width});
                             cat.addSources(layer.pts.map(function(r) {
                                 return A.source(r.ra, r.dec, {name: r.name});
                             }));

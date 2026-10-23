@@ -22,7 +22,10 @@ Open the **Galaxy catalogs** section of the sidebar and press **Add catalog**.
    empty what the catalog does not have. Each line says what a mapping turns on.
 3. **Options.** Optionally keep only the rows where a true/false column is true
    (**Keep only rows where**, e.g. a quality flag), pick extra columns to show on
-   hover, and set the name, colour and marker shape.
+   hover, and set the name, colour, marker shape and marker size. Shapes include
+   open ones (outlines), so where two catalogs share galaxies, give one an open
+   shape or a larger size to keep both visible. New catalogs get a colour and a
+   shape no other catalog uses.
 4. **Check** shows the row count and the RA/Dec range of the first rows, and any
    problem: a missing RA or Dec, a column of the wrong type, Dec outside ±90°,
    RA outside 0–360°, or RA that looks like hours. **Save** adds the catalog
@@ -99,14 +102,14 @@ columns. FITS tables are stored row by row, so this reads the whole file once
 loads take a fraction of a second. The cache is rebuilt when the file or the
 mapping changes.
 
-Shown catalogs also appear in the Aladin view, one layer each, in their own
-colour and marker shape.
+Shown catalogs also appear in the Aladin view, one layer each, drawn with the same
+marker shape, size and colour as on the sky map.
 
 ## CATRED sources near the shown catalogs
 
 Zoom in to under 2° × 2° and press **Load CATRED near shown catalogs**. For each
 shown catalog, the galaxies in view are matched to CATRED and the matched sources
-are marked with hollow squares in the catalog's colour. A line per catalog reports
+are marked with open squares in the catalog's colour. A line per catalog reports
 the result.
 
 - **By OBJECT_ID** (catalog maps OBJECT_ID): exact. The app looks in the galaxy's
@@ -114,8 +117,8 @@ the result.
   galaxies. The match radius and the Mask section's coverage and magnitude
   settings are not used. Example: "Euclid spec-z: 412 of 415 galaxies found by OBJECT_ID".
 - **By position** (no OBJECT_ID): the CATRED sources within the **Match radius**
-  of the galaxies, loaded with the Mask section's masked mode, coverage threshold
-  and magnitude limit. Example: "NED spec-z: 37 CATRED sources within 3.0″ of 41
+  (1″ by default) of the galaxies, loaded with the Mask section's masked mode, coverage threshold
+  and magnitude limit. Example: "NED spec-z: 12 CATRED sources within 1.0″ of 41
   galaxies".
 
 Switching a catalog off also removes its matches.

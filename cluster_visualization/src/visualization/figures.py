@@ -17,6 +17,22 @@ PHZ_EMPTY_HINT = "Click a CATRED source on the map to see its redshift probabili
 # layout.meta of the empty p(z) figure: the UI then shows the Cluster data sub-tab
 PHZ_EMPTY_META = "phz-empty"
 
+# Sky map legend: horizontal rows under the plot, anchored to the figure (yref
+# "container") so Plotly reserves room for it below the axis title instead of a side
+# column that narrows the map. Long names wrap onto more rows.
+MAP_LEGEND = dict(
+    orientation="h",
+    xref="paper",
+    x=0,
+    xanchor="left",
+    yref="container",
+    y=0,
+    yanchor="bottom",
+    font=dict(size=10),
+    itemsizing="constant",
+)
+MAP_MARGIN = dict(l=40, r=20, t=60, b=40)
+
 
 def wrap_hint(text: str, width: int = 38) -> str:
     """Break a centred Plotly annotation into short lines: annotations do not wrap,
@@ -61,17 +77,9 @@ class FigureManager:
             title=f"Cluster Detection Visualization - {algorithm}",
             xaxis_title="Right Ascension (degrees)",
             yaxis_title="Declination (degrees)",
-            legend=dict(
-                title="Legend",
-                orientation="v",
-                xanchor="left",
-                x=1.01,
-                yanchor="top",
-                y=1,
-                font=dict(size=10),
-            ),
+            legend=MAP_LEGEND,
             hovermode="closest",
-            margin=dict(l=40, r=120, t=60, b=40),
+            margin=MAP_MARGIN,
             xaxis=xaxis_config,
             yaxis=yaxis_config,
             autosize=True,
@@ -220,9 +228,7 @@ class FigureManager:
             margin=dict(l=40, r=20, t=40, b=40),
             autosize=True,
             showlegend=True,
-            legend=dict(
-                title="Legend", orientation="v", xanchor="left", x=1.01, yanchor="top", y=1
-            ),
+            legend=MAP_LEGEND,
         )
 
     def preserve_zoom_state(
@@ -313,17 +319,9 @@ class FigureManager:
             title=f"Cluster Detection Visualization - {algorithm}",
             xaxis_title="Right Ascension (degrees)",
             yaxis_title="Declination (degrees)",
-            legend=dict(
-                title="Legend",
-                orientation="v",
-                xanchor="left",
-                x=1.01,
-                yanchor="top",
-                y=1,
-                font=dict(size=10),
-            ),
+            legend=MAP_LEGEND,
             hovermode="closest",
-            margin=dict(l=40, r=120, t=60, b=40),
+            margin=MAP_MARGIN,
             xaxis=xaxis_config,
             yaxis=yaxis_config,
             autosize=True,

@@ -16,7 +16,13 @@ import plotly.colors as pc  # type: ignore[import]
 import plotly.graph_objs as go  # type: ignore[import]
 from typing import Any, Dict, List, Optional, Tuple, cast
 from loguru import logger
-from cluster_visualization.src.visualization.figures import PHZ_EMPTY_HINT, PHZ_EMPTY_META, wrap_hint
+from cluster_visualization.src.visualization.figures import (
+    MAP_LEGEND,
+    MAP_MARGIN,
+    PHZ_EMPTY_HINT,
+    PHZ_EMPTY_META,
+    wrap_hint,
+)
 from cluster_visualization.src.visualization.trace_registry import (
     CUTOUT_MASK_PREFIX,
     TraceRegistry,
@@ -1610,17 +1616,9 @@ class ClusterModalCallbacks:
             title=f"Cluster Detection Visualization - {algorithm}",
             xaxis_title="Right Ascension (degrees)",
             yaxis_title="Declination (degrees)",
-            legend=dict(
-                title="Legend",
-                orientation="v",
-                xanchor="left",
-                x=1.01,
-                yanchor="top",
-                y=1,
-                font=dict(size=10),
-            ),
+            legend=MAP_LEGEND,
             hovermode="closest",
-            margin=dict(l=40, r=120, t=60, b=40),
+            margin=MAP_MARGIN,
             xaxis=xaxis_config,
             yaxis=yaxis_config,
             autosize=True,

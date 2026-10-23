@@ -19,7 +19,13 @@ import pandas as pd  # type: ignore[import]
 import plotly.graph_objs as go  # type: ignore[import]
 from dash import Input, Output, Patch, State, html
 from loguru import logger
-from cluster_visualization.src.visualization.figures import PHZ_EMPTY_HINT, PHZ_EMPTY_META, wrap_hint
+from cluster_visualization.src.visualization.figures import (
+    MAP_LEGEND,
+    MAP_MARGIN,
+    PHZ_EMPTY_HINT,
+    PHZ_EMPTY_META,
+    wrap_hint,
+)
 
 from cluster_visualization.src.visualization.sky_overview import catalog_span_deg
 from cluster_visualization.src.visualization.trace_registry import TraceRegistry, TraceType
@@ -1938,7 +1944,7 @@ class MainPlotCallbacks:
             font=dict(size=16, color="red"),
         )
         error_fig.update_layout(
-            title="Error Loading Visualization", margin=dict(l=40, r=120, t=60, b=40), autosize=True
+            title="Error Loading Visualization", margin=MAP_MARGIN, autosize=True
         )
 
         error_status = dbc.Alert(f"Error: {error_message}", color="danger")
@@ -2238,17 +2244,9 @@ class MainPlotCallbacks:
             title=f"Cluster Detection Visualization - {algorithm}",
             xaxis_title="Right Ascension (degrees)",
             yaxis_title="Declination (degrees)",
-            legend=dict(
-                title="Legend",
-                orientation="v",
-                xanchor="left",
-                x=1.01,
-                yanchor="top",
-                y=1,
-                font=dict(size=10),
-            ),
+            legend=MAP_LEGEND,
             hovermode="closest",
-            margin=dict(l=40, r=120, t=60, b=40),
+            margin=MAP_MARGIN,
             xaxis=xaxis_config,
             yaxis=yaxis_config,
             autosize=True,

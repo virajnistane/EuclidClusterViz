@@ -13,7 +13,26 @@ import dash_bootstrap_components as dbc
 from dash import dcc, html
 
 from cluster_visualization.src.data.galaxy_catalog import ROLES
-from cluster_visualization.src.visualization.catalog_traces import SYMBOLS
+from cluster_visualization.src.visualization.catalog_traces import DEFAULT_SIZE, SIZES, SYMBOLS
+
+# Marker shape shown next to each catalog in the list (same keys as SYMBOLS)
+SYMBOL_GLYPHS = {
+    "diamond": "◆",
+    "circle": "●",
+    "square": "■",
+    "triangle-up": "▲",
+    "triangle-down": "▼",
+    "star": "★",
+    "hexagon": "⬢",
+    "cross": "✚",
+    "x": "✖",
+    "circle-open": "○",
+    "square-open": "□",
+    "diamond-open": "◇",
+    "triangle-up-open": "△",
+    "star-open": "☆",
+    "hexagon-open": "⬡",
+}
 
 
 def _badges(spec):
@@ -76,7 +95,7 @@ class CatalogControls:
                                     type="number",
                                     min=0.1,
                                     step=0.1,
-                                    value=3.0,
+                                    value=1.0,
                                 ),
                             ],
                             size="sm",
@@ -121,11 +140,14 @@ class CatalogControls:
                     html.Div(
                         [
                             html.Span(
-                                className="catalog-swatch", style={"backgroundColor": spec.color}
+                                SYMBOL_GLYPHS.get(spec.symbol, "●"),
+                                className="catalog-swatch",
+                                style={"color": spec.color},
+                                title=SYMBOLS.get(spec.symbol, spec.symbol),
                             ),
                             dbc.Switch(
                                 id={"type": "catalog-show", "index": spec.id},
-                                label=spec.name,
+                                label=html.Span(spec.name, title=spec.name),
                                 value=spec.id in shown,
                                 className="catalog-show",
                             ),
@@ -165,7 +187,8 @@ class CatalogControls:
 
     @staticmethod
     def create_modal():
-        symbol_options = [{"label": label, "value": value} for value, (label, _) in SYMBOLS.items()]
+        symbol_options = [{"label": label, "value": value} for value, label in SYMBOLS.items()]
+        size_options = [{"label": label, "value": value} for value, label in SIZES.items()]
         role_rows = [
             _labelled_row(
                 role.label + (" *" if role.required else ""),
@@ -242,7 +265,7 @@ class CatalogControls:
                                                     id="catalog-name-input", type="text", size="sm"
                                                 ),
                                             ],
-                                            width=6,
+                                            width=4,
                                         ),
                                         dbc.Col(
                                             [
@@ -275,6 +298,22 @@ class CatalogControls:
                                                 ),
                                             ],
                                             width=4,
+                                        ),
+                                        dbc.Col(
+                                            [
+                                                html.Label(
+                                                    "Size",
+                                                    htmlFor="catalog-size-dropdown",
+                                                    className="control-label",
+                                                ),
+                                                dcc.Dropdown(
+                                                    id="catalog-size-dropdown",
+                                                    options=size_options,
+                                                    value=DEFAULT_SIZE,
+                                                    clearable=False,
+                                                ),
+                                            ],
+                                            width=2,
                                         ),
                                     ],
                                     className="mb-3",

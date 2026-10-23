@@ -106,13 +106,11 @@ class TestFigureManager(unittest.TestCase):
 
         self.figure_manager._setup_layout(fig, "Test Algorithm")
 
+        # Horizontal rows under the plot (room reserved in the figure), not a side column
         legend = fig.layout.legend
-        self.assertEqual(legend.title.text, "Legend")
-        self.assertEqual(legend.orientation, "v")
-        self.assertEqual(legend.xanchor, "left")
-        self.assertEqual(legend.x, 1.01)
-        self.assertEqual(legend.yanchor, "top")
-        self.assertEqual(legend.y, 1)
+        self.assertEqual(legend.orientation, "h")
+        self.assertEqual((legend.xref, legend.x, legend.xanchor), ("paper", 0, "left"))
+        self.assertEqual((legend.yref, legend.y, legend.yanchor), ("container", 0, "bottom"))
 
     def test_preserve_zoom_state_range_format(self):
         """Test zoom state preservation with range[0], range[1] format"""

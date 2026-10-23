@@ -155,11 +155,32 @@ class CatalogCallbackTest(unittest.TestCase):
         ra_options, ra_value = out[0], out[1]
         self.assertEqual(ra_value, "RAJ2000")
         self.assertEqual([o["value"] for o in ra_options], ["RAJ2000", "DEJ2000", "zspec"])
-        self.assertEqual(out[-4:-1], ("two", "#ff8800", "diamond"))
+        self.assertEqual(out[-5:-1], ("two", "#ff8800", "diamond", 7))
         # Switching table keeps the name the user may have typed
         out = _call(fill, "catalog-hdu-dropdown.value", 0, store, 0, {"mode": "add"})
         self.assertEqual(out[1], "ra")
-        self.assertIs(out[-4], dash.no_update)
+        self.assertIs(out[-5], dash.no_update)
+
+    def test_new_catalog_gets_unused_colour_and_shape(self):
+        self._add_ned()  # diamond, #ff8800
+        store = _call(
+            self.fn["read_catalog_columns"],
+            "catalog-read-button.n_clicks",
+            1,
+            1,
+            None,
+            {"mode": "add"},
+            self.ned,
+        )[0]
+        out = _call(
+            self.fn["fill_catalog_mapping"],
+            "catalog-table-store.data",
+            store,
+            store,
+            0,
+            {"mode": "add"},
+        )
+        self.assertEqual(out[-4:-1], ("#d62728", "circle-open", 7))
 
     def test_edit_restores_saved_mapping(self):
         cid = self.registry.add(
@@ -180,7 +201,7 @@ class CatalogCallbackTest(unittest.TestCase):
         )
         roles = dict(zip([r.name for r in cc.ROLES], out[1 : 2 * len(cc.ROLES) : 2]))
         self.assertIsNone(roles["SPEC_Z"])  # the saved mapping, not the suggestion "Z"
-        self.assertEqual(out[-4:-1], ("Mine", "#123456", "diamond"))
+        self.assertEqual(out[-5:-1], ("Mine", "#123456", "diamond", 7))
 
     def _save(self, trigger, store, roles, name="NED", state=None, figure=None):
         values = [roles.get(r.name) for r in cc.ROLES]
@@ -195,6 +216,7 @@ class CatalogCallbackTest(unittest.TestCase):
             name,
             "#00aa00",
             "square",
+            10,
             state or {"mode": "add"},
             3,
             figure,
@@ -227,7 +249,8 @@ class CatalogCallbackTest(unittest.TestCase):
         self.assertEqual((is_open, version), (False, 4))
         (spec,) = self.registry.list()
         self.assertEqual(
-            (spec.name, spec.columns["SPEC_Z"], spec.symbol, spec.hdu), ("NED", "Z", "square", 1)
+            (spec.name, spec.columns["SPEC_Z"], spec.symbol, spec.size, spec.hdu),
+            ("NED", "Z", "square", 10, 1),
         )
         feedback, *_ = self._save("catalog-save-button", store, {"RA": "RA", "DEC": "DEC"})
         self.assertIn("already exists", str(feedback))
@@ -399,6 +422,35 @@ class CatalogCallbackTest(unittest.TestCase):
 
 
 class CatalogTraceTypeTest(unittest.TestCase):
+    def test_marker_styles(self):
+        open_marker = catalog_traces.marker_style("circle-open", 10, "#123456")
+        self.assertEqual(
+            (open_marker["color"], open_marker["line"]["color"]), ("#123456", "#123456")
+        )
+        filled = catalog_traces.marker_style("star", 5, "#123456")
+        self.assertEqual(
+            (filled["color"], filled["line"]["color"], filled["size"]), ("#123456", "black", 5)
+        )
+        spec = CatalogSpec(
+            "x", "/x.fits", {"RA": "RA", "DEC": "DEC"}, symbol="hexagon-open", size=13, id="x"
+        )
+        df = pd.DataFrame({"RA": [1.0], "DEC": [2.0]})
+        trace = catalog_traces.build_catalog_trace(spec, df)
+        self.assertEqual((trace.marker.symbol, trace.marker.size), ("hexagon-open", 13))
+        self.assertEqual((trace.meta["symbol"], trace.meta["size"]), ("hexagon-open", 13))
+        match = catalog_traces.build_match_trace(spec, [1.0], [2.0], ["t"])
+        self.assertEqual((match.meta["symbol"], match.marker.color), ("square-open", "#ff8800"))
+        self.assertTrue(set(catalog_traces.SYMBOL_CYCLE) <= set(catalog_traces.SYMBOLS))
+
+    def test_map_legend_sits_under_the_plot(self):
+        from cluster_visualization.src.visualization.figures import FigureManager
+
+        fig = FigureManager().create_figure([], "PZWAV")
+        self.assertEqual(
+            (fig.layout.legend.orientation, fig.layout.legend.yref), ("h", "container")
+        )
+        self.assertEqual(fig.layout.margin.r, 20)
+
     def test_catalog_names_do_not_look_like_clusters_or_mosaics(self):
         for name in ("Catalog: AMICO members", "Catalog: Mosaic survey", "Catalog: Merged spec-z"):
             self.assertEqual(TraceRegistry.classify_trace({"name": name}), TraceType.GALAXY_CATALOG)

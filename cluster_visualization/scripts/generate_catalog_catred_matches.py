@@ -81,7 +81,7 @@ def parse_arguments():
         help="Cluster detection algorithm whose data to load (default: BOTH)",
     )
     parser.add_argument(
-        "--radius-arcsec", type=float, default=3.0, help="Position match radius (default: 3.0)"
+        "--radius-arcsec", type=float, default=1.0, help="Position match radius (default: 1.0)"
     )
     parser.add_argument(
         "--threshold",

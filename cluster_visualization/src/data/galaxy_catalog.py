@@ -184,7 +184,8 @@ class CatalogSpec:
     select_column: Optional[str] = None  # keep only rows where this boolean column is true
     hover_columns: List[str] = field(default_factory=list)
     color: str = "#ff8800"
-    symbol: str = "diamond"
+    symbol: str = "diamond"  # Plotly marker symbol (catalog_traces.SYMBOLS)
+    size: int = 7  # marker size in px
     id: str = ""  # assigned by CatalogRegistry
 
     @classmethod

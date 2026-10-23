@@ -24,15 +24,52 @@ KIND_MATCH = "catalog_match"
 DISPLAY_MAX = 10_000
 WINDOW_MARGIN = 0.5  # fraction of the view added on each side of a windowed catalog
 
-# Plotly marker symbol -> (dropdown label, Aladin Lite shape)
+# Marker shapes offered per catalog (Plotly symbol -> dropdown label). Open shapes are
+# outlines in the catalog's colour, so markers of another catalog stay visible under them.
+# The Aladin view draws the same shapes (see the Aladin overlay in ui_callbacks).
 SYMBOLS = {
-    "diamond": ("Diamond", "rhomb"),
-    "square": ("Square", "square"),
-    "circle": ("Circle", "circle"),
-    "triangle-up": ("Triangle", "triangle"),
-    "cross": ("Plus", "plus"),
-    "x": ("Cross", "cross"),
+    "diamond": "Diamond",
+    "circle": "Circle",
+    "square": "Square",
+    "triangle-up": "Triangle",
+    "triangle-down": "Triangle down",
+    "star": "Star",
+    "hexagon": "Hexagon",
+    "cross": "Plus",
+    "x": "Cross",
+    "circle-open": "Circle (open)",
+    "square-open": "Square (open)",
+    "diamond-open": "Diamond (open)",
+    "triangle-up-open": "Triangle (open)",
+    "star-open": "Star (open)",
+    "hexagon-open": "Hexagon (open)",
 }
+# Marker sizes (px) offered per catalog: a larger open marker around a smaller filled one
+# keeps two catalogs with the same galaxies apart
+SIZES = {5: "Small", 7: "Medium", 10: "Large", 13: "X-large"}
+DEFAULT_SIZE = 7
+# Shapes given to new catalogs, the first one no other catalog uses
+SYMBOL_CYCLE = (
+    "diamond",
+    "circle-open",
+    "triangle-up",
+    "square-open",
+    "star",
+    "hexagon-open",
+    "triangle-down",
+    "diamond-open",
+    "circle",
+    "star-open",
+)
+MATCH_SYMBOL, MATCH_SIZE = "square-open", 9
+
+
+def marker_style(symbol: str, size: int, color: str) -> dict:
+    """Plotly marker: open shapes are drawn in ``color``; filled ones get a black edge."""
+    if symbol.endswith("-open"):
+        return dict(size=size, symbol=symbol, color=color, line=dict(width=1.5, color=color))
+    return dict(size=size, symbol=symbol, color=color, line=dict(width=1, color="black"))
+
 
 # Hover label per role (RA/DEC are always shown first)
 _HOVER_LABELS = (
@@ -125,9 +162,7 @@ def build_catalog_trace(
         x=df["RA"].to_numpy(),
         y=df["DEC"].to_numpy(),
         mode="markers",
-        marker=dict(
-            size=7, symbol=spec.symbol, color=spec.color, line=dict(width=1, color="black")
-        ),
+        marker=marker_style(spec.symbol, spec.size, spec.color),
         name=name,
         text=hover_texts(spec, df),
         # Row of each marker in the loaded catalog, so a click finds its galaxy
@@ -138,25 +173,22 @@ def build_catalog_trace(
             "kind": KIND_CATALOG,
             "catalog_id": spec.id,
             "label": spec.name,
+            # Marker style for the Aladin view
             "color": spec.color,
-            "shape": SYMBOLS.get(spec.symbol, ("", "rhomb"))[1],
+            "symbol": spec.symbol,
+            "size": spec.size,
             "windowed": windowed,
         },
     )
 
 
 def build_match_trace(spec, ra, dec, text):
-    """CATRED sources matched to a catalog: hollow squares in the catalog's colour."""
+    """CATRED sources matched to a catalog: open squares in the catalog's colour."""
     return go.Scattergl(
         x=ra,
         y=dec,
         mode="markers",
-        marker=dict(
-            size=9,
-            symbol="square",
-            color="rgba(0, 0, 0, 0)",
-            line=dict(width=1.5, color=spec.color),
-        ),
+        marker=marker_style(MATCH_SYMBOL, MATCH_SIZE, spec.color),
         name=match_trace_name(spec),
         text=text,
         hoverinfo="text",
@@ -166,6 +198,7 @@ def build_match_trace(spec, ra, dec, text):
             "catalog_id": spec.id,
             "label": f"CATRED near {spec.name}",
             "color": spec.color,
-            "shape": "square",
+            "symbol": MATCH_SYMBOL,
+            "size": MATCH_SIZE,
         },
     )

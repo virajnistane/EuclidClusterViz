@@ -37,8 +37,10 @@ from cluster_visualization.src.data.galaxy_catalog import (
     validate_mapping,
 )
 from cluster_visualization.src.visualization.catalog_traces import (
+    DEFAULT_SIZE,
     KIND_CATALOG,
     MATCH_PREFIX,
+    SYMBOL_CYCLE,
     build_catalog_trace,
     build_match_trace,
     match_trace_name,
@@ -386,6 +388,7 @@ class CatalogCallbacks:
             Output("catalog-name-input", "value"),
             Output("catalog-color-input", "value"),
             Output("catalog-symbol-dropdown", "value"),
+            Output("catalog-size-dropdown", "value"),
             Output("catalog-check-feedback", "children", allow_duplicate=True),
             Input("catalog-table-store", "data"),
             Input("catalog-hdu-dropdown", "value"),
@@ -422,17 +425,24 @@ class CatalogCallbacks:
             hoverable = [c for c in table.columns if c.kind != ARRAY]
             hover_names = {c.name for c in hoverable}
 
-            # Name, colour and marker only when a file is (re)read, not when switching tables
+            # Name and marker style only when a file is (re)read, not when switching tables.
+            # A new catalog gets a colour and a shape no other catalog uses.
             if ctx.triggered_id == "catalog-table-store":
                 if spec:
-                    name, color, symbol = spec["name"], spec.get("color"), spec.get("symbol")
+                    name, color = spec["name"], spec.get("color")
+                    symbol, size = spec.get("symbol"), spec.get("size", DEFAULT_SIZE)
                 else:
-                    used = {s.color.lower() for s in self.registry.list()}
+                    others = self.registry.list()
+                    used_colors = {s.color.lower() for s in others}
+                    used_symbols = {s.symbol for s in others}
                     name = file_stem(store["path"])
-                    color = next((c for c in PALETTE if c not in used), PALETTE[0])
-                    symbol = "diamond"
+                    color = next((c for c in PALETTE if c not in used_colors), PALETTE[0])
+                    symbol = next(
+                        (m for m in SYMBOL_CYCLE if m not in used_symbols), SYMBOL_CYCLE[0]
+                    )
+                    size = DEFAULT_SIZE
             else:
-                name = color = symbol = dash.no_update
+                name = color = symbol = size = dash.no_update
             return (
                 *out,
                 _column_options(bools),
@@ -442,6 +452,7 @@ class CatalogCallbacks:
                 name,
                 color,
                 symbol,
+                size,
                 None,
             )
 
@@ -460,6 +471,7 @@ class CatalogCallbacks:
             State("catalog-name-input", "value"),
             State("catalog-color-input", "value"),
             State("catalog-symbol-dropdown", "value"),
+            State("catalog-size-dropdown", "value"),
             State("catalog-modal-state", "data"),
             State("catalog-registry-version", "data"),
             State("cluster-plot", "figure"),
@@ -471,7 +483,7 @@ class CatalogCallbacks:
                 raise PreventUpdate
             no = dash.no_update
             role_values = values[: len(ROLES)]
-            select, hover, name, color, symbol, state, version, figure, relayout = values[
+            select, hover, name, color, symbol, size, state, version, figure, relayout = values[
                 len(ROLES) :
             ]
             if not store or index is None:
@@ -485,7 +497,8 @@ class CatalogCallbacks:
                 select_column=select or None,
                 hover_columns=list(hover or []),
                 color=color or PALETTE[0],
-                symbol=symbol or "diamond",
+                symbol=symbol or SYMBOL_CYCLE[0],
+                size=int(size or DEFAULT_SIZE),
             )
             result = validate_mapping(spec, table)
             if ctx.triggered_id == "catalog-check-button" or not result.ok:
