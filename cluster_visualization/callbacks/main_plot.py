@@ -1314,6 +1314,8 @@ class MainPlotCallbacks:
         self.app.clientside_callback(
             """
             function(threshold, figure) {
+                // Galaxy catalog traces are never CATRED, whatever their name
+                const isCatalog = t => !!(t.meta && (t.meta.kind === 'catalog' || t.meta.kind === 'catalog_match'));
                 // If no figure or threshold is null, return the figure as is
                 if (!figure || threshold === null || threshold === undefined) {
                     return window.dash_clientside.no_update;
@@ -1327,7 +1329,7 @@ class MainPlotCallbacks:
                 // Check if any CATRED traces exist
                 let hasCATREDTraces = false;
                 for (let i = 0; i < figure.data.length; i++) {
-                    if (figure.data[i].name && figure.data[i].name.includes('CATRED')) {
+                    if (figure.data[i].name && figure.data[i].name.includes('CATRED') && !isCatalog(figure.data[i])) {
                         hasCATREDTraces = true;
                         break;
                     }
@@ -1346,7 +1348,7 @@ class MainPlotCallbacks:
                     let trace = newFigure.data[i];
                     
                     // Check if this is a CATRED trace (has effective coverage data)
-                    if (trace.name && trace.name.includes('CATRED') && 
+                    if (trace.name && trace.name.includes('CATRED') && !isCatalog(trace) && 
                         trace.customdata && trace.customdata.length > 0) {
                         
                         // Store original data if not already stored

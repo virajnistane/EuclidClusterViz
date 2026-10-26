@@ -541,5 +541,36 @@ class MatcherTest(unittest.TestCase):
             self.assertAlmostEqual(float(table["PHZ_MEDIAN"][0]), 0.5)
 
 
+class CatalogTracePreservationTest(unittest.TestCase):
+    """Catalog traces survive the registry's extract / reassemble, whatever their name."""
+
+    def test_round_trip_with_colliding_name(self):
+        spec = CatalogSpec(
+            "Merged CATRED Mosaic (Enhanced)",
+            "/x.fits",
+            {"RA": "RA", "DEC": "DEC"},
+            symbol="star-open",
+            size=10,
+            id="m",
+        )
+        df = pd.DataFrame({"RA": [1.0, 2.0], "DEC": [3.0, 4.0]}, index=[5, 9])
+        traces = [
+            catalog_traces.build_catalog_trace(spec, df, opacity=0.4),
+            catalog_traces.build_match_trace(spec, [1.0], [2.0], ["t"]),
+        ]
+        figure = _as_json({"data": [t.to_plotly_json() for t in traces]})
+        figure["data"][0]["visible"] = "legendonly"
+        kept = TraceRegistry.extract_all_preserved(figure)
+        self.assertEqual(len(kept[TraceType.GALAXY_CATALOG]), 1)
+        self.assertEqual(len(kept[TraceType.CATALOG_MATCH]), 1)
+        self.assertEqual(len(kept[TraceType.CLUSTER]) + len(kept[TraceType.CATRED]), 0)
+        again = _as_json(
+            {"data": TraceRegistry.assemble_in_layer_order(kept)},
+        )["data"]
+        # Nothing lost or changed (reconstruction only adds explicit defaults)
+        for rebuilt, original in zip(again, figure["data"]):
+            self.assertEqual({key: rebuilt.get(key) for key in original}, original)
+
+
 if __name__ == "__main__":
     unittest.main()

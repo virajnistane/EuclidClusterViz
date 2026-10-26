@@ -565,6 +565,8 @@ class UICallbacks:
                         }
                         if (meta.cull_margin != null) { cullMargin = meta.cull_margin; }
                     }
+                    // A galaxy catalog is never a cluster trace, whatever its name
+                    if (meta && typeof meta === 'object' && (meta.kind === 'catalog' || meta.kind === 'catalog_match')) { return; }
                     if (name.includes('Merged') || name.includes('Unmerged')
                         || name.includes('(Enhanced)') || name.includes('Cluster in Proximity')
                         || name === 'Matched Pair' || name === '__selected_cluster__') {
@@ -850,7 +852,8 @@ class UICallbacks:
                 }
                 var changed = false;
                 var newData = figure.data.map(function(trace) {
-                    if (trace.name &&
+                    var kind = trace.meta && trace.meta.kind;  // galaxy catalogs are left alone
+                    if (trace.name && kind !== 'catalog' && kind !== 'catalog_match' &&
                             trace.name.indexOf('CATRED') !== -1 &&
                             trace.name.indexOf('MER Tile') !== -1) {
                         changed = true;
@@ -887,7 +890,8 @@ class UICallbacks:
                 }
                 var changed = false;
                 var newData = figure.data.map(function(trace) {
-                    if (trace.name &&
+                    var kind = trace.meta && trace.meta.kind;  // galaxy catalogs are left alone
+                    if (trace.name && kind !== 'catalog' && kind !== 'catalog_match' &&
                             trace.name.indexOf('CATRED') !== -1 &&
                             trace.name.indexOf('Boxed') !== -1) {
                         changed = true;

@@ -332,8 +332,13 @@ class CATREDCallbacks:
                 // Drop: CATRED scatter traces and glow halos only.
                 // Near-CATRED cluster traces ("PZWAV (Merged, near CATRED)") hold real cluster
                 // data — keep them but rename to standard names so they merge with away traces.
+                var isCatalog = function(trace) {  // galaxy catalogs stay, whatever their name
+                    var meta = trace.meta || {};
+                    return (meta.kind === 'catalog' || meta.kind === 'catalog_match');
+                };
                 var filtered = figure.data.filter(function(trace) {
                     var name = trace.name || '';
+                    if (isCatalog(trace)) return true;
                     if (name.indexOf('CATRED') === 0) return false;               // "CATRED Masked - MER Tile" etc
                     if (name.indexOf('Merged PZWAV (in CATRED') >= 0) return false;  // BOTH-algo glow halo
                     if (name.indexOf('Merged AMICO (in CATRED') >= 0) return false;  // BOTH-algo glow halo
@@ -341,6 +346,7 @@ class CATREDCallbacks:
                     return true;
                 }).map(function(trace) {
                     var name = trace.name || '';
+                    if (isCatalog(trace)) return trace;
                     // Rename near-CATRED cluster traces back to standard names
                     // so they appear as normal clusters in legend and are counted by viewport store
                     if (name.indexOf('PZWAV') >= 0 && name.indexOf('near CATRED') >= 0) {

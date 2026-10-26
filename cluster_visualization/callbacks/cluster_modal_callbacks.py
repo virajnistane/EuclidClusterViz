@@ -1762,6 +1762,8 @@ class ClusterModalCallbacks:
 
                 const filtered = (figure.data || []).filter(function(trace) {
                     const name = (trace && trace.name) ? trace.name : '';
+                    const meta = (trace && trace.meta) || {};
+                    if ((meta.kind === 'catalog' || meta.kind === 'catalog_match')) return true;  // galaxy catalogs stay, whatever their name
                     return name.indexOf('MER-Mosaic cutout') < 0;
                 });
 
@@ -1882,6 +1884,8 @@ class ClusterModalCallbacks:
 
                 const filtered = (figure.data || []).filter(function(trace) {
                     const name = (trace && trace.name) ? trace.name : '';
+                    const meta = (trace && trace.meta) || {};
+                    if ((meta.kind === 'catalog' || meta.kind === 'catalog_match')) return true;  // galaxy catalogs stay, whatever their name
                     if (name.indexOf('CATRED') >= 0 && name.indexOf('Boxed') >= 0) return false;
                     if (name.indexOf('in CATRED region') >= 0) return false;
                     if (name.indexOf('near CATRED') >= 0 && name.indexOf('clusters') < 0) return false;
@@ -1981,6 +1985,8 @@ class ClusterModalCallbacks:
 
                 const filtered = (figure.data || []).filter(function(trace) {
                     const name = (trace && trace.name) ? trace.name : '';
+                    const meta = (trace && trace.meta) || {};
+                    if ((meta.kind === 'catalog' || meta.kind === 'catalog_match')) return true;  // galaxy catalogs stay, whatever their name
                     return name.indexOf('Cutout ') !== 0;  // CUTOUT_MASK_PREFIX
                 });
 
@@ -2011,6 +2017,8 @@ class ClusterModalCallbacks:
 
                 const filtered = (figure.data || []).filter(function(trace) {
                     const name = (trace && trace.name) ? trace.name : '';
+                    const meta = (trace && trace.meta) || {};
+                    if ((meta.kind === 'catalog' || meta.kind === 'catalog_match')) return true;  // galaxy catalogs stay, whatever their name
                     return name.indexOf('Members (ID') < 0;
                 });
 
