@@ -125,6 +125,15 @@ class CatalogFilterTest(unittest.TestCase):
         self.assertEqual(sorted(both["ID_UNIQUE_CLUSTER"]), NED_IDS)
         self.assertTrue(any("skipping 'gone'" in str(m) for m in messages), messages)
 
+    def test_without_a_match(self):
+        kwargs = dict(_kwargs([self.cid]), catalog_filter_mode="without")
+        selected = TraceCreator(catalog_registry=self.registry).selected_clusters(
+            self.data, **kwargs
+        )
+        self.assertEqual(len(selected), 1000 - len(NED_IDS))
+        self.assertFalse(set(NED_IDS) & set(selected["ID_UNIQUE_CLUSTER"]))
+        self.assertEqual(_kwargs([self.cid])["catalog_filter_mode"], "with")  # default
+
     def test_status_count_follows_filter(self):
         callbacks = MainPlotCallbacks.__new__(MainPlotCallbacks)
         callbacks.trace_creator = TraceCreator(catalog_registry=self.registry)
@@ -158,7 +167,9 @@ class CatalogFilterControlTest(unittest.TestCase):
         self.assertEqual(
             (dropdown.id, dropdown.disabled, dropdown.value), ("catalog-filter-dropdown", True, [])
         )
-        self.assertEqual(section.children[3].children.children, NO_FILTER_CATALOG_HELP)
+        mode = section.children[3]
+        self.assertEqual((mode.id, mode.value), ("catalog-filter-mode", "with"))
+        self.assertEqual(section.children[-1].children.children, NO_FILTER_CATALOG_HELP)
 
     def test_options_follow_the_catalog_list(self):
         self.assertEqual(self.options(0, []), ([], [], True, NO_FILTER_CATALOG_HELP))

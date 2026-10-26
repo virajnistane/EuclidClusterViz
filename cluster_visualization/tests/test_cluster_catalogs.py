@@ -610,5 +610,80 @@ class ClusterMatchCallbackTest(unittest.TestCase):
         self.assertIn("Catalog match: NED", names)
 
 
+class ClusterCatalogFilterTest(unittest.TestCase):
+    """'Clusters with (or without) a match in' a cluster catalog: by cross-match."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.registry = CatalogRegistry(
+            os.path.join(self.tmp.name, "catalogs.json"),
+            cache_dir=os.path.join(self.tmp.name, "cache"),
+        )
+        self.spt = self.registry.add(
+            CatalogSpec("SPT-3G", _spt_fits(self.tmp.name), dict(SPT_MAPPING), kind=CLUSTER)
+        )
+        catalog = self.registry.catalog(self.spt)
+        catalog.load()
+        self.data = _data_near(catalog.df)  # SPT counterparts: Euclid IDs 11, 22, 44
+        self.creator = TraceCreator(catalog_registry=self.registry)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _ids(self, catalog_ids, mode="with"):
+        rows = self.creator._prefilter_merged(
+            self.data, catalog_filter_ids=catalog_ids, catalog_filter_mode=mode
+        )
+        return sorted(rows["ID_UNIQUE_CLUSTER"])
+
+    def test_with_and_without_a_match(self):
+        self.assertEqual(self._ids([]), [11, 22, 33, 44])
+        self.assertEqual(self._ids([self.spt]), [11, 22, 44])
+        self.assertEqual(self._ids([self.spt], "without"), [33])
+        # Matches follow the loaded algorithm's merged catalog
+        self.data["algorithm"] = "AMICO"
+        self.data["data_detcluster_mergedcat"]["RIGHT_ASCENSION_CLUSTER"][0] += 1.0
+        self.assertEqual(self._ids([self.spt]), [22, 44])
+
+    def test_union_with_a_galaxy_catalog(self):
+        galaxies = os.path.join(self.tmp.name, "galaxies.csv")
+        with open(galaxies, "w") as f:
+            f.write("ra,dec,cluster_id\n10,0,33\n")
+        gid = self.registry.add(
+            CatalogSpec("Gal", galaxies, {"RA": "ra", "DEC": "dec", "CLUSTER_ID": "cluster_id"})
+        )
+        self.assertEqual(self._ids([self.spt, gid]), [11, 22, 33, 44])
+        self.assertEqual(self._ids([self.spt, gid], "without"), [])
+
+    def test_filter_states_follow_the_resolver(self):
+        import inspect
+
+        from cluster_visualization.callbacks.main_plot import FILTER_STATES, MainPlotCallbacks
+
+        params = inspect.signature(MainPlotCallbacks._resolve_filter_kwargs).parameters
+        self.assertEqual(len(FILTER_STATES), len(params))
+        self.assertEqual(
+            [s.component_id for s in FILTER_STATES[-2:]],
+            ["catalog-filter-dropdown", "catalog-filter-mode"],
+        )
+        self.assertEqual(list(params)[-2:], ["catalog_filter_ids", "catalog_filter_mode"])
+
+    def test_dropdown_offers_cluster_catalogs(self):
+        app = dash.Dash(__name__)
+        app.layout = tcc.AppLayout.create_layout()
+        cc.CatalogCallbacks(app, self.registry)
+        fn = next(
+            v["callback"]
+            for k, v in app.callback_map.items()
+            if "catalog-filter-dropdown.options" in k
+        )
+        options, _, disabled, help_text = getattr(fn, "__wrapped__", fn)(1, [])
+        self.assertEqual(
+            options, [{"label": "SPT-3G (5 clusters, by cross-match)", "value": self.spt}]
+        )
+        self.assertFalse(disabled)
+        self.assertIn("by cross-match", help_text)
+
+
 if __name__ == "__main__":
     unittest.main()

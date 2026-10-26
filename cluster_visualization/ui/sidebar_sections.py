@@ -11,9 +11,10 @@ import dash_bootstrap_components as dbc
 from dash import dcc, html
 
 
-# Help under the catalog filter while no galaxy catalog maps cluster IDs
+# Help under the catalog filter while no catalog can filter clusters
 NO_FILTER_CATALOG_HELP = (
-    "Add a galaxy catalog with a cluster-ID column (Galaxy catalogs section) to filter by it."
+    "Add a cluster catalog, or a galaxy catalog with a cluster-ID column (External catalogs "
+    "section), to filter by it."
 )
 
 
@@ -348,23 +349,34 @@ class SidebarSections:
 
     @staticmethod
     def create_catalog_filter_section():
-        """Only clusters with galaxies in the chosen galaxy catalogs, at the next Apply.
+        """Only clusters with (or without) a match in the chosen catalogs, at the next Apply.
 
-        Offers the catalogs that map a cluster-ID column (options and help are set by
-        CatalogCallbacks); disabled until there is one.
+        Offers cluster catalogs and the galaxy catalogs that map a cluster-ID column
+        (options and help are set by CatalogCallbacks); disabled until there is one.
         """
         return html.Div(
             [
-                _group_label("Spec-z verification", html_for="catalog-filter-dropdown"),
+                _group_label("External catalogs", html_for="catalog-filter-dropdown"),
                 dcc.Dropdown(
                     id="catalog-filter-dropdown",
                     options=[],
                     value=[],
                     multi=True,
                     disabled=True,
-                    placeholder="Only clusters with a match in…",
+                    placeholder="Clusters with a match in…",
                 ),
                 _pending_tag("catalog-filter-dropdown"),
+                dbc.RadioItems(
+                    id="catalog-filter-mode",
+                    options=[
+                        {"label": "with a match", "value": "with"},
+                        {"label": "without a match", "value": "without"},
+                    ],
+                    value="with",
+                    inline=True,
+                    className="mt-1",
+                ),
+                _pending_tag("catalog-filter-mode"),
                 _help(NO_FILTER_CATALOG_HELP, help_id="catalog-filter-help"),
             ],
             className="control-group",

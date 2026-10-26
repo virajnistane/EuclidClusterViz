@@ -312,6 +312,7 @@ class SkyOverviewCallbacks:
                 State("idcluster-upload", "contents"),
                 State("idcluster-upload", "filename"),
                 State("catalog-filter-dropdown", "value"),
+                State("catalog-filter-mode", "value"),
             ],
             prevent_initial_call=True,
         )
@@ -336,6 +337,7 @@ class SkyOverviewCallbacks:
             idcluster_upload_contents,
             idcluster_upload_filename,
             catalog_filter_ids,
+            catalog_filter_mode,
         ):
             if view_mode != "globe":
                 return no_update, no_update
@@ -353,6 +355,7 @@ class SkyOverviewCallbacks:
                     richness_mode, flag_quality_zp, flag_quality_rs,
                     idcluster_upload_contents, idcluster_upload_filename,
                     catalog_filter_ids=catalog_filter_ids,
+                    catalog_filter_mode=catalog_filter_mode,
                 )
                 _t = time.perf_counter()
                 data = self.data_loader.load_data(algorithm)

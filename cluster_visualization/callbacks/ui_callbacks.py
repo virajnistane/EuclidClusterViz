@@ -57,7 +57,7 @@ class UICallbacks:
             "richness-include-missing-rs",
             "flag-quality-rs-checklist",
         ],
-        "Spec-z verification": ["catalog-filter-dropdown"],
+        "External catalogs": ["catalog-filter-dropdown", "catalog-filter-mode"],
         "Matched clusters": ["matching-clusters-switch"],
     }
     # Sidebar section id prefix -> starts open

@@ -22,6 +22,7 @@ from cluster_visualization.src.visualization.catred_proximity import (
     CatredProximityDetector,
     create_glow_trace,
 )
+from cluster_visualization.src.data.cluster_matcher import matched_cluster_ids
 from cluster_visualization.src.data.galaxy_catalog import CLUSTER
 from cluster_visualization.src.visualization.catalog_traces import (
     cluster_match_traces,
@@ -100,6 +101,7 @@ class TraceCreator:
         flag_quality_rs: Optional[List[int]] = None,
         idcluster_list: Optional[List[int]] = None,
         catalog_filter_ids: Optional[List[str]] = None,
+        catalog_filter_mode: str = "with",
         angular_tolerance: float = 2.0,
         z_tolerance: float = 0.02,
         threshold: float = 0.8,
@@ -189,6 +191,7 @@ class TraceCreator:
             flag_quality_rs=flag_quality_rs,
             idcluster_list=idcluster_list,
             catalog_filter_ids=catalog_filter_ids,
+            catalog_filter_mode=catalog_filter_mode,
             show_unmerged_clusters=show_unmerged_clusters,
             matching_clusters=matching_clusters,
             show_cltile_info=show_cltile_info,
@@ -419,6 +422,7 @@ class TraceCreator:
         flag_quality_rs: Optional[List[int]] = None,
         idcluster_list: Optional[List[int]] = None,
         catalog_filter_ids: Optional[List[str]] = None,
+        catalog_filter_mode: str = "with",
         show_unmerged_clusters: bool = False,
         matching_clusters: bool = False,
         show_cltile_info: bool = True,
@@ -443,6 +447,7 @@ class TraceCreator:
             flag_quality_rs=flag_quality_rs,
             idcluster_list=idcluster_list,
             catalog_filter_ids=catalog_filter_ids,
+            catalog_filter_mode=catalog_filter_mode,
         )
 
         # Viewport culling: only clusters in (or near) the visible window are sent.
@@ -600,9 +605,10 @@ class TraceCreator:
         flag_quality_rs: Optional[List[int]] = None,
         idcluster_list: Optional[List[int]] = None,
         catalog_filter_ids: Optional[List[str]] = None,
+        catalog_filter_mode: str = "with",
     ) -> np.ndarray:
         """Merged catalog after the algorithm-independent filters (redshift, richness,
-        uploaded ID list, NED spec-z verification). SNR thresholds differ per algorithm
+        uploaded ID list, external catalogs). SNR thresholds differ per algorithm
         and are applied later."""
         merged = self._apply_redshift_filtering(
             data["data_detcluster_mergedcat"], z_threshold_lower, z_threshold_upper, z_include_missing
@@ -623,7 +629,7 @@ class TraceCreator:
             logger.debug(
                 "ID-cluster based filtering skipped - either not using gluematchcat or idcluster_list is None"
             )
-        return self._apply_catalog_filtering(merged, catalog_filter_ids)
+        return self._apply_catalog_filtering(merged, catalog_filter_ids, catalog_filter_mode, data)
 
     def selected_clusters(
         self,
@@ -1022,10 +1028,13 @@ class TraceCreator:
         self,
         cluster_data: np.ndarray,
         catalog_ids: Optional[List[str]],
+        mode: str = "with",
+        data: Optional[Dict[str, Any]] = None,
     ) -> np.ndarray:
-        """Keep the clusters that have galaxies in any of ``catalog_ids`` (galaxy catalogs
-        with a CLUSTER_ID column). No-op without chosen catalogs; catalogs that cannot be
-        loaded are skipped with a warning."""
+        """Keep the clusters with a match in any of ``catalog_ids`` (mode "with") or in none
+        of them ("without"). Galaxy catalogs match through their CLUSTER_ID column, cluster
+        catalogs through their cross-match with ``data``'s full merged catalog. No-op
+        without chosen catalogs; catalogs that cannot be used are skipped with a warning."""
         if not catalog_ids:
             return cluster_data
         if self.catalog_registry is None:
@@ -1039,16 +1048,24 @@ class TraceCreator:
                 reason = catalog.status if catalog is not None else "no longer in the list"
                 logger.warning(f"Catalog filter: skipping '{catalog_id}' ({reason})")
                 continue
-            cluster_ids.append(catalog.cluster_ids())
+            if catalog.spec.kind == CLUSTER:
+                if data is None:
+                    logger.warning(f"Catalog filter: skipping '{catalog_id}' (no merged catalog)")
+                    continue
+                cluster_ids.append(matched_cluster_ids(catalog, data))
+            else:
+                cluster_ids.append(catalog.cluster_ids())
         if not cluster_ids:
             logger.warning("Catalog filter: none of the chosen catalogs could be loaded; not applied")
             return cluster_data
 
         try:
             mask = np.isin(cluster_data["ID_UNIQUE_CLUSTER"], np.concatenate(cluster_ids))
+            if mode == "without":
+                mask = ~mask
             logger.debug(
-                "Catalog filter ({}): {} -> {} merged clusters",
-                ", ".join(catalog_ids), len(cluster_data), int(mask.sum()),
+                "Catalog filter ({}, {} a match): {} -> {} merged clusters",
+                ", ".join(catalog_ids), mode, len(cluster_data), int(mask.sum()),
             )
             return cluster_data[mask]
         except Exception as e:

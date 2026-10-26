@@ -274,8 +274,9 @@ class CatalogCallbacks:
             return CatalogControls.catalog_rows(self.registry.list(), shown)
 
     def _setup_filter_options_callback(self):
-        """Offer the catalogs that map cluster IDs in the "Spec-z verification" filter, and
-        drop chosen catalogs that no longer qualify (removed, or remapped without IDs)."""
+        """Offer cluster catalogs and the galaxy catalogs that map cluster IDs in the "External
+        catalogs" filter, and drop chosen catalogs that no longer qualify (removed, or
+        remapped without IDs)."""
 
         @self.app.callback(
             Output("catalog-filter-dropdown", "options"),
@@ -293,7 +294,10 @@ class CatalogCallbacks:
             for spec in specs:
                 catalog = self.registry.catalog(spec.id)
                 if catalog.is_available():
-                    label = f"{spec.name} ({len(catalog.cluster_ids()):,} clusters)"
+                    if spec.kind == CLUSTER:
+                        label = f"{spec.name} ({len(catalog.df):,} clusters, by cross-match)"
+                    else:
+                        label = f"{spec.name} ({len(catalog.cluster_ids()):,} clusters)"
                     options.append({"label": label, "value": spec.id})
                 else:
                     options.append(
@@ -301,7 +305,11 @@ class CatalogCallbacks:
                     )
             usable = {o["value"] for o in options if not o.get("disabled")}
             kept = [v for v in (value or []) if v in usable]
-            help_text = "Keeps the clusters with galaxies in any chosen catalog, at the next Apply."
+            help_text = (
+                "At the next Apply, keeps the Euclid clusters with (or without) a match in any "
+                "chosen catalog: galaxies by their cluster-ID column, clusters by cross-match "
+                "(selected algorithm, each catalog's radius and Δz)."
+            )
             return options, kept if kept != (value or []) else dash.no_update, False, help_text
 
     def _setup_dialog_callbacks(self):
