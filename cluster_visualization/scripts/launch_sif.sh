@@ -1,8 +1,8 @@
 #!/bin/bash
 #
-# Launch ClusterViz from the Apptainer image (clusterviz.sif).
+# Launch ClusterViz from the Apptainer image (euclid_cluster_viz.sif).
 #
-# Standalone: copy this file next to clusterviz.sif and run it from anywhere; the
+# Standalone: copy this file next to euclid_cluster_viz.sif and run it from anywhere; the
 # repository is not needed. Build the image with "make sif".
 #
 # Usage:
@@ -12,14 +12,14 @@
 #   ./launch_sif.sh --help-launcher          # this help; --help shows the app's options
 #
 # Environment:
-#   CLUSTERVIZ_SIF    image to run (default: clusterviz.sif next to this script)
+#   CLUSTERVIZ_SIF    image to run (default: euclid_cluster_viz.sif next to this script)
 #   CLUSTERVIZ_BIND   extra bind paths, comma-separated (e.g. /data,/scratch/$USER)
 #   CLUSTERVIZ_*      other app variables (e.g. CLUSTERVIZ_LOG_LEVEL) pass through
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SIF="${CLUSTERVIZ_SIF:-$SCRIPT_DIR/clusterviz.sif}"
+SIF="${CLUSTERVIZ_SIF:-$SCRIPT_DIR/euclid_cluster_viz.sif}"
 
 if [ "${1:-}" = "--help-launcher" ]; then
     sed -n '2,/^$/s/^# \{0,1\}//p' "${BASH_SOURCE[0]}"
@@ -28,7 +28,7 @@ fi
 
 if [ ! -f "$SIF" ]; then
     echo "Error: image not found: $SIF" >&2
-    echo "Build it with 'make sif' or set CLUSTERVIZ_SIF=/path/to/clusterviz.sif" >&2
+    echo "Build it with 'make sif' or set CLUSTERVIZ_SIF=/path/to/euclid_cluster_viz.sif" >&2
     exit 1
 fi
 

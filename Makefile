@@ -8,7 +8,7 @@
 
 PY := .venv/bin/python
 DOCS := cluster_visualization/docs
-SIF := clusterviz.sif
+SIF := euclid_cluster_viz.sif
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-12s %s\n", $$1, $$2}'
