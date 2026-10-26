@@ -22,6 +22,11 @@ from cluster_visualization.src.visualization.catred_proximity import (
     CatredProximityDetector,
     create_glow_trace,
 )
+from cluster_visualization.src.data.galaxy_catalog import CLUSTER
+from cluster_visualization.src.visualization.catalog_traces import (
+    cluster_match_traces,
+    trace_meta,
+)
 from cluster_visualization.utils.profiler import TraceProfiler
 
 StructuredArray = NDArray[np.void]
@@ -213,7 +218,9 @@ class TraceCreator:
 
         # Galaxy catalog markers and their CATRED matches (preserve existing ones)
         catalog_traces = existing_catalog_traces or []
-        catalog_match_traces = existing_catalog_match_traces or []
+        catalog_match_traces = self._refresh_cluster_matches(
+            existing_catalog_match_traces or [], data, view_bounds
+        )
         if catalog_traces or catalog_match_traces:
             logger.debug(
                 f"Preserving {len(catalog_traces)} galaxy catalog and "
@@ -265,6 +272,44 @@ class TraceCreator:
         self._profiler.record("create_traces:total", time.perf_counter() - _t_create)
         self._profiler.tick_render()
         return _result
+
+    def _refresh_cluster_matches(self, traces: List, data: Dict[str, Any], view_bounds=None) -> List:
+        """Euclid counterparts of cluster catalogs follow the loaded algorithm: those drawn
+        for another algorithm are rebuilt for ``data`` (dropped if their catalog is gone)."""
+        algorithm = data.get("algorithm")
+        stale = {
+            trace_meta(t).get("catalog_id")
+            for t in traces
+            if trace_meta(t).get("catalog_kind") == CLUSTER
+            and trace_meta(t).get("algorithm") != algorithm
+        }
+        if not stale:
+            return traces
+        kept = [
+            t
+            for t in traces
+            if trace_meta(t).get("catalog_kind") != CLUSTER
+            or trace_meta(t).get("catalog_id") not in stale
+        ]
+        viewport = None
+        if view_bounds is not None:
+            ra_lo, ra_hi = sorted(float(v) for v in view_bounds[:2])
+            dec_lo, dec_hi = sorted(float(v) for v in view_bounds[2:])
+            viewport = {"ra_min": ra_lo, "ra_max": ra_hi, "dec_min": dec_lo, "dec_max": dec_hi}
+        for catalog_id in sorted(c for c in stale if c):
+            catalog = self.catalog_registry.catalog(catalog_id) if self.catalog_registry else None
+            if catalog is None or not catalog.is_available():
+                logger.info(f"Cross-match of '{catalog_id}' dropped: catalog not available")
+                continue
+            try:
+                new, _ = cluster_match_traces(catalog, data, viewport)
+            except Exception as e:
+                logger.opt(exception=e).warning(
+                    f"Cross-match of '{catalog_id}' for {algorithm} failed; dropped: {e}"
+                )
+                continue
+            kept.extend(new)
+        return kept
 
     VIEW_MARGIN = 1.0  # fraction of the view added on each side when culling (keep in sync with ui_callbacks)
 

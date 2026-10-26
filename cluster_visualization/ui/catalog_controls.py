@@ -132,7 +132,35 @@ class CatalogControls:
                 ),
                 html.Div(
                     [
-                        html.Div("CATRED near shown catalogs", className="control-label"),
+                        html.Div(
+                            "Euclid counterparts of shown cluster catalogs",
+                            className="control-label",
+                        ),
+                        dbc.Button(
+                            [
+                                html.I(className="fas fa-link me-2"),
+                                "Cross-match shown cluster catalogs",
+                            ],
+                            id="catalog-cluster-match-button",
+                            color="info",
+                            size="sm",
+                            className="w-100",
+                            n_clicks=0,
+                        ),
+                        html.Small(
+                            "Links each external cluster to the Euclid merged clusters of the "
+                            "selected algorithm (all of them, before filters) within the catalog's "
+                            "radius and Δz/(1+z); Edit a catalog to change them. Redrawn when the "
+                            "algorithm changes.",
+                            className="control-help",
+                        ),
+                        html.Small(id="catalog-cluster-match-feedback", className="control-help"),
+                    ],
+                    className="control-group",
+                ),
+                html.Div(
+                    [
+                        html.Div("CATRED near shown galaxy catalogs", className="control-label"),
                         dbc.InputGroup(
                             [
                                 dbc.InputGroupText("Match radius (arcsec)"),
@@ -150,7 +178,7 @@ class CatalogControls:
                         dbc.Button(
                             [
                                 html.I(className="fas fa-crosshairs me-2"),
-                                "Load CATRED near shown catalogs",
+                                "Load CATRED near shown galaxy catalogs",
                             ],
                             id="catalog-match-button",
                             color="info",

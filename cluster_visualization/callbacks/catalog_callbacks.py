@@ -50,6 +50,7 @@ from cluster_visualization.src.visualization.catalog_traces import (
     SYMBOL_CYCLE,
     build_catalog_trace,
     build_match_trace,
+    cluster_match_traces,
     match_trace_name,
     select_for_display,
     trace_meta,
@@ -198,6 +199,7 @@ class CatalogCallbacks:
         self._setup_window_callbacks()
         self._setup_match_button_state_callback()
         self._setup_match_callback()
+        self._setup_cluster_match_callback()
 
     # ------------------------------------------------------------------
     # Figure helpers
@@ -913,9 +915,86 @@ class CatalogCallbacks:
                 notes.append(f"{spec.name}: {summary}")
                 logger.info(f"Catalog '{spec.name}': {summary} in view")
 
+            # Cluster catalogs' Euclid counterparts stay
+            kept = [
+                t
+                for t in self._match_traces(figure)
+                if trace_meta(t).get("catalog_kind") == CLUSTER
+            ]
             categorized = TraceRegistry.extract_all_preserved(
                 figure, exclude={TraceType.CATALOG_MATCH}
             )
-            categorized[TraceType.CATALOG_MATCH] = traces
+            categorized[TraceType.CATALOG_MATCH] = kept + traces
+            figure["data"] = TraceRegistry.assemble_in_layer_order(categorized)
+            return figure, "; ".join(notes)
+
+    @staticmethod
+    def _match_traces(figure):
+        """The figure's catalog match traces, as they are (dicts)."""
+        traces = TraceRegistry.extract_traces(figure, {TraceType.CATALOG_MATCH}, reconstruct=False)
+        return traces[TraceType.CATALOG_MATCH]
+
+    # ------------------------------------------------------------------
+    # Euclid counterparts of shown cluster catalogs
+    # ------------------------------------------------------------------
+
+    def _setup_cluster_match_callback(self):
+        @self.app.callback(
+            Output("cluster-plot", "figure", allow_duplicate=True),
+            Output("catalog-cluster-match-feedback", "children"),
+            Input("catalog-cluster-match-button", "n_clicks"),
+            State("algorithm-dropdown", "value"),
+            State("cluster-plot", "relayoutData"),
+            State("cluster-plot", "figure"),
+            State(ALL_SHOW, "value"),
+            State(ALL_SHOW, "id"),
+            prevent_initial_call=True,
+        )
+        def cross_match_cluster_catalogs(n_clicks, algorithm, relayout, figure, values, ids):
+            """Draw the Euclid counterparts of every shown cluster catalog (replacing the
+            ones drawn before for those catalogs); galaxy catalogs are not touched."""
+            if not n_clicks or not figure or "data" not in figure:
+                raise PreventUpdate
+            cluster_ids = {s.id for s in self.registry.with_capability("cluster_match")}
+            shown = [i["index"] for i, on in zip(ids, values) if on and i["index"] in cluster_ids]
+            if not shown:
+                return dash.no_update, "Show a cluster catalog first."
+            if self.data_loader is None:
+                return dash.no_update, "Euclid clusters are not available."
+            try:
+                data = self.data_loader.load_data(algorithm)
+            except Exception as e:
+                logger.opt(exception=e).error(f"Cross-match: could not load {algorithm}: {e}")
+                return dash.no_update, f"Could not load the {algorithm} clusters: {e}"
+
+            viewport = current_viewport(relayout, figure)
+            traces, notes = [], []
+            for cid in shown:
+                catalog = self.registry.catalog(cid)
+                if catalog is None:
+                    continue
+                if not catalog.is_available():
+                    notes.append(f"{catalog.spec.name}: {catalog.status}")
+                    continue
+                try:
+                    new, note = cluster_match_traces(catalog, data, viewport)
+                except Exception as e:
+                    logger.opt(exception=e).error(
+                        f"Catalog '{catalog.spec.name}': cross-match failed: {e}"
+                    )
+                    notes.append(f"{catalog.spec.name}: failed ({e})")
+                    continue
+                traces += new
+                notes.append(note)
+
+            kept = [
+                t
+                for t in self._match_traces(figure)
+                if trace_meta(t).get("catalog_id") not in shown
+            ]
+            categorized = TraceRegistry.extract_all_preserved(
+                figure, exclude={TraceType.CATALOG_MATCH}
+            )
+            categorized[TraceType.CATALOG_MATCH] = kept + traces
             figure["data"] = TraceRegistry.assemble_in_layer_order(categorized)
             return figure, "; ".join(notes)

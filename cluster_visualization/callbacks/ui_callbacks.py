@@ -1876,6 +1876,7 @@ class UICallbacks:
                     var isCatred = name.indexOf('CATRED') === 0;
                     var meta = trace.meta || {};
                     if (meta.outline) return;  // white outline under cluster markers (map only)
+                    if (meta.links) return;  // cluster-catalog match lines (map only)
                     var isGalaxyCatalog = meta.kind === 'catalog' || meta.kind === 'catalog_match';
                     // Modal mask cutout traces carry a 'Cutout ' prefix (CUTOUT_MASK_PREFIX)
                     var maskName = name.indexOf('Cutout ') === 0 ? name.slice(7) : name;

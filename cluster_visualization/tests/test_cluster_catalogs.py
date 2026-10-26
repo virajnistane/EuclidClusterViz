@@ -29,6 +29,9 @@ from cluster_visualization.src.data.galaxy_catalog import (
     suggest_mapping,
     validate_mapping,
 )
+from cluster_visualization.src.visualization import catalog_traces as ct
+from cluster_visualization.src.visualization.trace_registry import TraceRegistry, TraceType
+from cluster_visualization.src.visualization.traces import TraceCreator
 
 REAL_SPT = os.path.join(os.path.dirname(__file__), "..", "..", "extra_files", "SPT3G_EDFS.fit")
 SPT_MAPPING = {
@@ -79,6 +82,21 @@ def _merged(ra, dec, z, ids=None):
     rows["DECLINATION_CLUSTER"] = dec
     rows["Z_CLUSTER"] = z
     return rows
+
+
+def _data_near(df, algorithm="PZWAV"):
+    """Euclid clusters 0.5' north of SPT rows 0 (z 0.75; Euclid z 0.76) and 1 (no z), two
+    near row 0 (the second 1.5' away), and one far away."""
+    offset = 0.5 / 60.0
+    return {
+        "algorithm": algorithm,
+        "data_detcluster_mergedcat": _merged(
+            ra=[df["RA"][0], df["RA"][1], df["RA"][0], 100.0],
+            dec=[df["DEC"][0] + offset, df["DEC"][1] + offset, df["DEC"][0] + 3 * offset, 0.0],
+            z=[0.76, 0.4, 0.74, 0.5],
+            ids=[11, 22, 44, 33],
+        ),
+    }
 
 
 class TestClusterRoles(unittest.TestCase):
@@ -431,6 +449,165 @@ class ClusterCatalogCallbackTest(unittest.TestCase):
             1, 3.0, "PZWAV", True, 0.8, 24, None, figure, [True], ids
         )
         self.assertEqual(out[1], "Show a galaxy catalog first.")
+
+
+class ClusterMatchTraceTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.spt = _spt_fits(self.tmp.name)
+        self.registry = CatalogRegistry(
+            os.path.join(self.tmp.name, "catalogs.json"),
+            cache_dir=os.path.join(self.tmp.name, "cache"),
+        )
+        self.cid = self.registry.add(
+            CatalogSpec("SPT-3G", self.spt, dict(SPT_MAPPING), kind=CLUSTER, color="#123456")
+        )
+        self.catalog = self.registry.catalog(self.cid)
+        self.catalog.load()
+        self.data = _data_near(self.catalog.df)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_links_and_rings(self):
+        traces, note = ct.cluster_match_traces(self.catalog, self.data)
+        self.assertEqual(
+            note, "SPT-3G: 2 of 5 matched (PZWAV, 2′, Δz/(1+z) ≤ 0.05; 1 by position only)"
+        )
+        links, rings = traces
+        self.assertEqual(
+            [TraceRegistry.classify_trace(t) for t in traces], [TraceType.CATALOG_MATCH] * 2
+        )
+        self.assertEqual(rings.name, "Catalog match: SPT-3G ↔ Euclid PZWAV")
+        self.assertEqual((links.legendgroup, links.showlegend), (rings.name, False))
+        self.assertTrue(links.meta["links"])
+        self.assertEqual(rings.meta["algorithm"], "PZWAV")
+        # Three pairs (two for row 0), one segment each: start, end, gap
+        self.assertEqual(len(links.x), 9)
+        self.assertTrue(np.isnan(links.x[2]))
+        self.assertEqual(len(rings.x), 2)
+        self.assertIn("SPT-CL J0330-5046", rings.text[0])
+        self.assertIn("Euclid ID 11: 0.50′, Δz/(1+z) 0.006", rings.text[0])
+        self.assertIn("+1 more Euclid cluster(s) within 2′", rings.text[0])
+        self.assertIn("Euclid ID 22: 0.50′, by position (no z)", rings.text[1])
+
+    def test_rebuilt_traces_keep_their_style(self):
+        traces, _ = ct.cluster_match_traces(self.catalog, self.data)
+        figure = tcc._as_json({"data": traces, "layout": {}})
+        rebuilt = TraceRegistry.extract_traces(figure, {TraceType.CATALOG_MATCH})[
+            TraceType.CATALOG_MATCH
+        ]
+        self.assertEqual(rebuilt[0].line.color, "#123456")
+        self.assertEqual(rebuilt[0].legendgroup, rebuilt[1].name)
+
+    def test_render_rebuilds_for_another_algorithm(self):
+        creator = TraceCreator(catalog_registry=self.registry)
+        traces, _ = ct.cluster_match_traces(self.catalog, self.data)
+        galaxy_match = {"name": "Catalog match: NED", "meta": {"kind": "catalog_match"}}
+        preserved = [galaxy_match] + tcc._as_json({"data": traces})["data"]
+        self.assertIs(creator._refresh_cluster_matches(preserved, self.data), preserved)
+
+        amico = _data_near(self.catalog.df, "AMICO")
+        out = creator._refresh_cluster_matches(preserved, amico, (50.0, 60.0, -55.0, -45.0))
+        self.assertIs(out[0], galaxy_match)
+        self.assertEqual([t.meta["algorithm"] for t in out[1:]], ["AMICO", "AMICO"])
+
+        # A catalog removed meanwhile loses its links
+        self.registry.remove(self.cid)
+        self.assertEqual(creator._refresh_cluster_matches(preserved, amico), [galaxy_match])
+
+
+class ClusterMatchCallbackTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.spt = _spt_fits(self.tmp.name)
+        self.registry = CatalogRegistry(
+            os.path.join(self.tmp.name, "catalogs.json"),
+            cache_dir=os.path.join(self.tmp.name, "cache"),
+        )
+        self.cid = self.registry.add(
+            CatalogSpec("SPT-3G", self.spt, dict(SPT_MAPPING), kind=CLUSTER)
+        )
+        catalog = self.registry.catalog(self.cid)
+        catalog.load()
+        self.data = _data_near(catalog.df)
+        loader = SimpleNamespace(load_data=lambda algorithm: dict(self.data, algorithm=algorithm))
+        self.app = dash.Dash(__name__)
+        self.app.layout = tcc.AppLayout.create_layout()
+        cc.CatalogCallbacks(
+            self.app, self.registry, SimpleNamespace(current_catred_data={}), loader
+        )
+        self.fn = {}
+        for value in self.app.callback_map.values():
+            fn = value.get("callback")
+            if fn is not None:
+                fn = getattr(fn, "__wrapped__", fn)
+                self.fn[fn.__name__] = fn
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _shown(self, ids, values):
+        figure, _ = tcc._call(
+            self.fn["show_catalogs"],
+            tcc._pid("catalog-show", ids[0]["index"], "value"),
+            True,
+            values,
+            ids,
+            [""] * len(ids),
+            tcc._cluster_figure(),
+            None,
+            None,
+        )
+        return tcc._as_json(figure)
+
+    def test_cross_match_button(self):
+        ids = [{"type": "catalog-show", "index": self.cid}]
+        match = self.fn["cross_match_cluster_catalogs"]
+        out = match(1, "PZWAV", None, tcc._cluster_figure(), [False], ids)
+        self.assertEqual(out[1], "Show a cluster catalog first.")
+
+        figure = self._shown(ids, [True])
+        figure, feedback = match(1, "PZWAV", None, figure, [True], ids)
+        self.assertIn("SPT-3G: 2 of 5 matched (PZWAV", feedback)
+        kinds = [TraceRegistry.classify_trace(t) for t in figure["data"]]
+        expected = [TraceType.GALAXY_CATALOG] + [TraceType.CATALOG_MATCH] * 2 + [TraceType.CLUSTER]
+        self.assertEqual(kinds, expected)
+        # Again with another algorithm: replaced, not added
+        figure, feedback = match(1, "AMICO", None, tcc._as_json(figure), [True], ids)
+        self.assertIn("(AMICO", feedback)
+        self.assertEqual([TraceRegistry.classify_trace(t) for t in figure["data"]], expected)
+
+    def test_catred_matches_keep_cluster_links(self):
+        ned = self.registry.add(
+            CatalogSpec("NED", tcc._ned_fits(self.tmp.name), {"RA": "RA", "DEC": "DEC"})
+        )
+        ids = [{"type": "catalog-show", "index": c} for c in (self.cid, ned)]
+        figure = self._shown(ids, [True, True])
+        figure, _ = self.fn["cross_match_cluster_catalogs"](
+            1, "PZWAV", None, figure, [True, True], ids
+        )
+        scatter = {"ra": [33.8], "dec": [-52.2], "phz_pdf": [[1.0]], "phz_median": [0.3]}
+        result = tcc.CatalogMatchResult(
+            catred_scatter=scatter,
+            catred_ra=np.array([33.8]),
+            catred_dec=np.array([-52.2]),
+            display_matched_idx=np.array([0]),
+            rows=pd.DataFrame(),
+            overall_nearest_arcsec=0.1,
+            display_galaxy_idx=np.array([0]),
+        )
+        with (
+            tcc.mock.patch.object(cc, "match_by_position", return_value=result),
+            tcc.mock.patch.object(cc, "write_matches"),
+        ):
+            figure, feedback = self.fn["load_catred_near_catalogs"](
+                1, 3.0, "PZWAV", True, 0.8, 24, None, tcc._as_json(figure), [True, True], ids
+            )
+        self.assertIn("NED: 1 CATRED sources", feedback)
+        names = [t["name"] if isinstance(t, dict) else t.name for t in figure["data"]]
+        self.assertIn("Catalog match: SPT-3G ↔ Euclid PZWAV", names)
+        self.assertIn("Catalog match: NED", names)
 
 
 if __name__ == "__main__":

@@ -228,7 +228,7 @@ def _reconstruct_catred(trace: dict):
 
 
 def _reconstruct_catalog(trace: dict):
-    """Galaxy catalog and catalog-match markers; ``meta`` names the catalog."""
+    """Catalog markers and catalog-match markers or links; ``meta`` names the catalog."""
     return go.Scattergl(
         x=trace.get("x", []),
         y=trace.get("y", []),
@@ -242,6 +242,9 @@ def _reconstruct_catalog(trace: dict):
         meta=trace.get("meta", None),
         showlegend=trace.get("showlegend", True),
         visible=trace.get("visible", True),
+        # Cluster-catalog match links (lines) and their legend group
+        line=trace.get("line", None),
+        legendgroup=trace.get("legendgroup", None),
     )
 
 

@@ -12,6 +12,9 @@ from typing import Optional, Tuple
 import numpy as np
 import pandas as pd  # type: ignore[import]
 import plotly.graph_objs as go  # type: ignore[import]
+from loguru import logger
+
+from cluster_visualization.src.data import cluster_matcher
 
 CATALOG_PREFIX = "Catalog: "
 MATCH_PREFIX = "Catalog match: "
@@ -63,6 +66,9 @@ SYMBOL_CYCLE = (
     "star-open",
 )
 MATCH_SYMBOL, MATCH_SIZE = "square-open", 9
+# Euclid counterparts of a cluster catalog: a ring around each matched external cluster
+# (this much larger than the catalog's marker) and a line to each counterpart
+CLUSTER_MATCH_SYMBOL, CLUSTER_MATCH_GROWTH = "circle-open", 8
 # Opacity of catalog markers (sidebar slider): fainter markers keep the clusters drawn on
 # top readable. CATRED matches stay opaque.
 DEFAULT_OPACITY = 0.6
@@ -225,3 +231,136 @@ def build_match_trace(spec, ra, dec, text):
             "size": MATCH_SIZE,
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Cluster catalogs: Euclid counterparts
+# ---------------------------------------------------------------------------
+
+
+def cluster_match_name(spec, algorithm) -> str:
+    return f"{MATCH_PREFIX}{spec.name} ↔ Euclid {algorithm}"
+
+
+def _in_window(ra, dec, viewport, margin=WINDOW_MARGIN) -> np.ndarray:
+    dra = (viewport["ra_max"] - viewport["ra_min"]) * margin
+    ddec = (viewport["dec_max"] - viewport["dec_min"]) * margin
+    return (
+        (ra >= viewport["ra_min"] - dra)
+        & (ra <= viewport["ra_max"] + dra)
+        & (dec >= viewport["dec_min"] - ddec)
+        & (dec <= viewport["dec_max"] + ddec)
+    )
+
+
+def _cluster_match_hover(spec, ext: pd.DataFrame, best: pd.DataFrame, merged, extra) -> list:
+    """Hover of each ring: the external cluster, its nearest Euclid counterpart, the offsets."""
+    texts = []
+    for (_, pair), n_more in zip(best.iterrows(), extra):
+        row = ext.loc[pair["EXT_ROW"]]
+        title = row["SOURCE_ID"] if "SOURCE_ID" in ext.columns else f"#{int(pair['EXT_ROW'])}"
+        lines = [
+            f"<b>{title}</b> ({spec.name})",
+            f"Euclid ID {pair['ID_UNIQUE_CLUSTER']}: {pair['SEP_ARCMIN']:.2f}′",
+        ]
+        if np.isfinite(pair["DZ"]):
+            z_euclid = float(merged["Z_CLUSTER"][int(pair["EUCLID_ROW"])])
+            lines[-1] += f", Δz/(1+z) {pair['DZ']:.3f}"
+            lines.append(f"z {row['Z']:.3f}, Euclid z {z_euclid:.3f}")
+        else:
+            lines[-1] += ", by position (no z)"
+        if n_more:
+            lines.append(f"+{n_more} more Euclid cluster(s) within {spec.match_radius_arcmin:g}′")
+        texts.append("<br>".join(lines))
+    return texts
+
+
+def build_cluster_match_traces(spec, matches, ext, merged, algorithm, viewport=None):
+    """([links, rings], windowed): a line from each external cluster to each Euclid
+    counterpart, and a ring on each matched external cluster with the nearest one on hover.
+
+    More than DISPLAY_MAX pairs are cut to the viewport (plus margin) when there is one.
+    """
+    if len(matches) == 0:
+        return [], False
+    ext_row = matches["EXT_ROW"].to_numpy()
+    euclid_row = matches["EUCLID_ROW"].to_numpy(dtype=np.int64)
+    ext_ra = ext.loc[ext_row, "RA"].to_numpy(dtype=float)
+    ext_dec = ext.loc[ext_row, "DEC"].to_numpy(dtype=float)
+    windowed = False
+    if len(matches) > DISPLAY_MAX and viewport is not None:
+        keep = _in_window(ext_ra, ext_dec, viewport)
+        matches, euclid_row = matches[keep], euclid_row[keep]
+        ext_ra, ext_dec = ext_ra[keep], ext_dec[keep]
+        windowed = True
+    eu_ra = np.asarray(merged["RIGHT_ASCENSION_CLUSTER"], dtype=float)[euclid_row]
+    eu_dec = np.asarray(merged["DECLINATION_CLUSTER"], dtype=float)[euclid_row]
+
+    name = cluster_match_name(spec, algorithm)
+    meta = {
+        "kind": KIND_MATCH,
+        "catalog_kind": spec.kind,
+        "catalog_id": spec.id,
+        "algorithm": algorithm,
+        "label": f"Euclid counterparts of {spec.name}",
+        "color": spec.color,
+        "symbol": CLUSTER_MATCH_SYMBOL,
+        "size": spec.size + CLUSTER_MATCH_GROWTH,
+    }
+    # One segment per pair, NaN-separated; a pair across RA 0/360 is not drawn
+    wraps = np.abs(ext_ra - eu_ra) > 180
+    gap = np.full(len(ext_ra), np.nan)
+    xs = np.column_stack([np.where(wraps, np.nan, ext_ra), eu_ra, gap]).ravel()
+    ys = np.column_stack([ext_dec, eu_dec, gap]).ravel()
+    links = go.Scattergl(
+        x=xs,
+        y=ys,
+        mode="lines",
+        line=dict(color=spec.color, width=1.5),
+        name=f"{name} (links)",
+        legendgroup=name,
+        hoverinfo="skip",
+        showlegend=False,
+        meta={**meta, "links": True},
+    )
+
+    best = matches[matches["BEST"].astype(bool)]
+    extra = (matches.groupby("EXT_ROW").size() - 1).reindex(best["EXT_ROW"]).to_numpy()
+    rings = go.Scattergl(
+        x=ext.loc[best["EXT_ROW"], "RA"].to_numpy(dtype=float),
+        y=ext.loc[best["EXT_ROW"], "DEC"].to_numpy(dtype=float),
+        mode="markers",
+        marker=marker_style(CLUSTER_MATCH_SYMBOL, spec.size + CLUSTER_MATCH_GROWTH, spec.color),
+        name=name,
+        legendgroup=name,
+        text=_cluster_match_hover(spec, ext, best, merged, extra),
+        hoverinfo="text",
+        showlegend=True,
+        meta=meta,
+    )
+    return [links, rings], windowed
+
+
+def cluster_match_traces(catalog, data, viewport=None):
+    """(traces, feedback line) of a cluster catalog's Euclid counterparts in ``data``
+    (the merged catalog of the loaded algorithm, before filters)."""
+    spec = catalog.spec
+    matches = cluster_matcher.cached_matches(catalog, data)
+    if matches is None:
+        return [], f"{spec.name}: {catalog.status}"
+    algorithm = data.get("algorithm")
+    counts = cluster_matcher.match_summary(matches, len(catalog.df))
+    note = (
+        f"{spec.name}: {counts['matched']:,} of {counts['external']:,} matched ({algorithm}, "
+        f"{spec.match_radius_arcmin:g}′, Δz/(1+z) ≤ {spec.match_dz:g}"
+    )
+    if counts["position_only"]:
+        note += f"; {counts['position_only']:,} by position only"
+    note += ")"
+    traces, windowed = build_cluster_match_traces(
+        spec, matches, catalog.df, data["data_detcluster_mergedcat"], algorithm, viewport
+    )
+    if windowed:
+        note += "; links drawn for the current view"
+    logger.info(note)
+    return traces, note
