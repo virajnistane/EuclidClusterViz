@@ -5,13 +5,44 @@ Single source of truth for trace identification, layer ordering,
 and extraction/reassembly across all callbacks.
 """
 
+import base64
 from enum import Enum, auto
 from dataclasses import dataclass
 from typing import Callable, Optional
 
+import numpy as np
 import plotly.graph_objs as go
 
 from cluster_visualization.src.visualization.catalog_traces import CATALOG_PREFIX, MATCH_PREFIX
+
+# Trace data arrays that may come back from the browser as Plotly typed arrays
+_ARRAY_KEYS = ("x", "y", "z", "customdata", "text", "lat", "lon")
+
+
+def decode_typed_array(value):
+    """A Plotly typed array ({"dtype": "f8", "bdata": <base64>, "shape": ...}) as a numpy
+    array; any other value unchanged.
+
+    Plotly 6 encodes numpy data arrays this way when a go.Figure is serialized, so the
+    traces of a figure the browser sends back can hold these dicts instead of lists.
+    """
+    if not (isinstance(value, dict) and "bdata" in value and "dtype" in value):
+        return value
+    array = np.frombuffer(base64.b64decode(value["bdata"]), dtype=np.dtype(value["dtype"]))
+    shape = value.get("shape")
+    if shape:
+        dims = shape if isinstance(shape, (list, tuple)) else str(shape).split(",")
+        array = array.reshape([int(d) for d in dims])
+    return array
+
+
+def _decode_arrays(trace: dict) -> dict:
+    """``trace`` with its typed-array data decoded (the same dict when there are none)."""
+    typed = [k for k in _ARRAY_KEYS if isinstance(trace.get(k), dict)]
+    if not typed:
+        return trace
+    return {**trace, **{k: decode_typed_array(trace[k]) for k in typed}}
+
 
 # Name prefix of the cluster modal's HEALPix mask cutout traces. They are built
 # like the sidebar's viewport mask (same names after the prefix) but form a
@@ -385,7 +416,7 @@ class TraceRegistry:
             if classified in trace_types:
                 spec = TRACE_SPECS[classified]
                 if reconstruct and isinstance(trace, dict):
-                    result[classified].append(spec.reconstruct(trace))
+                    result[classified].append(spec.reconstruct(_decode_arrays(trace)))
                 else:
                     result[classified].append(trace)
 

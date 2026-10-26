@@ -188,3 +188,69 @@ class TestMaskOverlayBugRegression:
 
     def test_inverted_mask_aladin_classified(self):
         assert TraceRegistry.classify_trace({"name": "Inverted mask aladin moc"}) == TraceType.MASK_OVERLAY
+
+
+# ---------------------------------------------------------------------------
+# Figures the browser sends back with Plotly typed arrays
+# ---------------------------------------------------------------------------
+
+
+class TestTypedArrays:
+    """Plotly 6 serializes numpy data as {"dtype", "bdata"} when Dash sends a go.Figure; the
+    figure comes back that way, and preserved traces must carry plain arrays again."""
+
+    @staticmethod
+    def _round_trip(traces):
+        import json
+
+        import plotly.graph_objs as go
+        from plotly.io.json import to_json_plotly
+
+        return json.loads(to_json_plotly(go.Figure(data=traces)))
+
+    def test_catalog_and_link_traces_decode_for_the_dec_centre(self):
+        import numpy as np
+        import plotly.graph_objs as go
+
+        from cluster_visualization.src.visualization.figures import FigureManager
+
+        catalog = go.Scattergl(
+            x=np.array([54.0, 54.2]),
+            y=np.array([-51.0, -50.0]),
+            customdata=np.array([3, 7]),
+            name="Catalog: SPT",
+            meta={"kind": "catalog"},
+        )
+        links = go.Scattergl(
+            x=np.array([54.0, 54.01, np.nan]),
+            y=np.array([-51.0, -50.99, np.nan]),
+            mode="lines",
+            name="Catalog match: SPT ↔ Euclid PZWAV (links)",
+            meta={"kind": "catalog_match"},
+        )
+        figure = self._round_trip([catalog, links])
+        assert isinstance(figure["data"][0]["y"], dict)  # typed array, as in the browser
+
+        kinds = {TraceType.GALAXY_CATALOG, TraceType.CATALOG_MATCH}
+        found = TraceRegistry.extract_traces(figure, kinds)
+        (cat,) = found[TraceType.GALAXY_CATALOG]
+        assert list(cat.y) == [-51.0, -50.0]
+        assert list(cat.customdata) == [3, 7]
+        traces = found[TraceType.GALAXY_CATALOG] + found[TraceType.CATALOG_MATCH]
+        assert FigureManager()._extract_dec_center(traces) == pytest.approx(-50.995)
+        # Raw dicts too (callers that skip reconstruction)
+        assert FigureManager()._extract_dec_center(figure["data"]) == pytest.approx(-50.995)
+        FigureManager().create_figure(traces, "PZWAV", False)  # the CATRED box path
+
+    def test_decode_keeps_shape_and_other_values(self):
+        import base64
+
+        import numpy as np
+
+        from cluster_visualization.src.visualization.trace_registry import decode_typed_array
+
+        z = np.arange(6, dtype="f4").reshape(2, 3)
+        typed = {"dtype": "f4", "bdata": base64.b64encode(z.tobytes()).decode(), "shape": "2, 3"}
+        assert decode_typed_array(typed).tolist() == z.tolist()
+        assert decode_typed_array([1, 2]) == [1, 2]
+        assert decode_typed_array({"other": 1}) == {"other": 1}

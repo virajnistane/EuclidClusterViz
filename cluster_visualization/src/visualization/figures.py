@@ -172,13 +172,26 @@ class FigureManager:
         return fig
 
     def _extract_dec_center(self, traces) -> float:
-        """Return median Dec (y-values) across all traces; fallback 0.0."""
-        ys: List[float] = []
+        """Return median Dec (finite y-values) across all traces; fallback 0.0.
+
+        y may be a list (None for gaps), a numpy array (NaN gaps, e.g. match links) or a
+        Plotly typed array from a figure the browser sent back.
+        """
+        from cluster_visualization.src.visualization.trace_registry import decode_typed_array
+
+        ys: List[np.ndarray] = []
         src = traces.data if hasattr(traces, "data") else traces
         for trace in src:
-            if hasattr(trace, "y") and trace.y is not None:
-                ys.extend(float(v) for v in trace.y if v is not None)
-        return float(np.median(ys)) if ys else 0.0
+            y = trace.get("y") if isinstance(trace, dict) else getattr(trace, "y", None)
+            if y is None:
+                continue
+            try:
+                values = np.asarray(decode_typed_array(y), dtype=float).ravel()
+            except (TypeError, ValueError):
+                continue  # not numeric (e.g. categories)
+            ys.append(values[np.isfinite(values)])
+        values = np.concatenate(ys) if ys else np.array([])
+        return float(np.median(values)) if len(values) else 0.0
 
     def _get_axis_config(
         self, free_aspect_ratio: bool, visible: bool = True, dec_center: float = 0.0
