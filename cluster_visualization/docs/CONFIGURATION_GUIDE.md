@@ -106,10 +106,10 @@ defaults below are those in `config.ini`.
 See [VIEWPORT_OPTIMIZATION.md](VIEWPORT_OPTIMIZATION.md) and
 [VIEW_MODE_SWITCHING_GUIDE.md](VIEW_MODE_SWITCHING_GUIDE.md).
 
-#### Galaxy catalogs (not in the config)
+#### External catalogs (not in the config)
 
-Extra galaxy catalogs (NED spec-z, Euclid spec-z, any survey) are added in the app,
-in the **Galaxy catalogs** section, and saved per user in
+Galaxy catalogs (NED spec-z, Euclid spec-z, any survey) and cluster catalogs (SPT,
+Planck, ...) are added in the app, in the **External catalogs** section, and saved per user in
 `~/.config/clusterviz/catalogs.json` (`$XDG_CONFIG_HOME/clusterviz/` if set), not in
 the config file. See [GALAXY_CATALOGS_GUIDE.md](GALAXY_CATALOGS_GUIDE.md).
 

@@ -355,16 +355,24 @@ may come from another data release than the configured CATRED, or the mapped
 column is not the MER OBJECT_ID. Remove the OBJECT_ID mapping (pen icon) to
 match by position instead.
 
-### "Load CATRED near shown catalogs" stays disabled
+### "Load CATRED near shown galaxy catalogs" stays disabled
 
 Render the clusters first and zoom in to under 2° × 2°, as for the CATRED render
 button.
 
-### The Spec-z verification filter is greyed out
+### The External catalogs filter is greyed out
 
-It lists only catalogs with a merged cluster ID column mapped (the "Merged
-cluster ID" line in the Add/Edit dialog). A catalog whose file can't be loaded is
-listed as unavailable.
+It lists cluster catalogs and the galaxy catalogs with a merged cluster ID column
+mapped (the "Merged cluster ID" line in the Add/Edit dialog). A catalog whose file
+can't be loaded is listed as unavailable.
+
+### A cluster catalog matches few or no Euclid clusters
+
+The cross-match uses the catalog's radius and Δz/(1+z) (pen icon to change them)
+against the merged clusters of the selected algorithm. Check that the redshift
+column is a redshift (not a flag or a placeholder like −99) and that the radius
+suits the survey's position accuracy: SZ catalogs such as Planck may need several
+arcminutes. Clusters without a redshift are matched by position only.
 
 ---
 

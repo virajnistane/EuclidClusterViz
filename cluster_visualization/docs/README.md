@@ -175,7 +175,7 @@ The same tasks are available through `make` (run `make` for the list):
 - **HEALPix Mask Overlay**: Effective coverage footprint visualization with configurable opacity
 - **Globe Sky Overview**: Whole-sky view with filtered cluster density as HEALPix cells and CL-tile outlines; zooming in hands over to the 2-D map at the same place and back
 - **Large Catalogs**: The sky map sends only the clusters around the current view and switches to a density map when the visible area holds too many
-- **Galaxy Catalogs**: Add any galaxy catalog (NED spec-z, Euclid spec-z, other surveys) from a path on the cluster by mapping its columns to RA, Dec, spec-z, OBJECT_ID, cluster ID…; markers, CATRED matches by OBJECT_ID or position, the catalog's spec-z on the p(z) plot, and a "clusters with a match in" filter ([guide](GALAXY_CATALOGS_GUIDE.md))
+- **External Catalogs**: Add any galaxy catalog (NED spec-z, Euclid spec-z, other surveys) or cluster catalog (SPT, Planck, ACT, eROSITA, redMaPPer…) from a path on the cluster by mapping its columns; galaxies get CATRED matches by OBJECT_ID or position and their spec-z on the p(z) plot; clusters are cross-matched with the Euclid clusters (radius and Δz/(1+z)), linked on the map and listed in the cluster card; a "with / without a match" cluster filter covers both ([guide](GALAXY_CATALOGS_GUIDE.md))
 - **PHZ Analysis**: Interactive photometric redshift probability distribution plots with improved click detection
 
 ### 🎨 **Cluster Analysis Tools**
@@ -334,11 +334,11 @@ The header toggle switches between **Standard View** (the 2-D sky map), **Globe*
 
 The sidebar starts with the **Render clusters** button (later **Re-render · <algorithm>**), followed by collapsible sections:
 - **Catalog**: Detection algorithm (PZWAV, AMICO, or PZWAV and AMICO), CL-tile information, unmerged clusters
-- **Filters**: Redshift, SNR (only the selected algorithm's filter is shown), Richness (Off / ZP / RS with quality flags), Cluster-ID list upload with **Clear**, Spec-z verification (only clusters with galaxies in the chosen galaxy catalogs), and Show matched clusters (CAT-CL)
+- **Filters**: Redshift, SNR (only the selected algorithm's filter is shown), Richness (Off / ZP / RS with quality flags), Cluster-ID list upload with **Clear**, External catalogs (only clusters with, or without, a match in the chosen galaxy or cluster catalogs), and Show matched clusters (CAT-CL)
   - Each range filter shows the selected range against the data range with Min/Max number inputs synced to the slider
   - Filters take effect only when you press the sticky **Apply filters** button; it lists what changed and each pending control shows a **Not applied** tag
 - **Mask**: High-res CATRED data and the HEALPix effective-coverage mask overlay
-- **Galaxy catalogs**: Your own galaxy catalogs on the map, added from a file path with a column-mapping dialog, and CATRED sources near them ([guide](GALAXY_CATALOGS_GUIDE.md))
+- **External catalogs**: Your own galaxy and cluster catalogs on the map, added from a file path with a column-mapping dialog; CATRED sources near the galaxies and Euclid counterparts of the clusters ([guide](GALAXY_CATALOGS_GUIDE.md))
 - **Mosaic**: Background image overlays with opacity control
 - **Display**: MER tiles, CL-tile (CORE) polygon fill, free aspect ratio — these update live, using the last-applied filters
 - **Configuration**: Active catalog and tile data paths, GlueMatchCat file selector

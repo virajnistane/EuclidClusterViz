@@ -89,13 +89,20 @@ All methods provide comprehensive visualization with:
 
 ## 🆕 Recent UI Improvements
 
-### Galaxy Catalogs
+### External Catalogs
 
-The **Galaxy catalogs** sidebar section puts any galaxy catalog on the map: give a file path on the cluster,
-map its columns (RA and Dec required; spec-z, OBJECT_ID, MER tile and cluster ID optional) and switch it on.
-**Load CATRED near shown catalogs** marks the matching CATRED sources (by OBJECT_ID when mapped, else by
-position); clicking one shows its p(z) with the catalog's spec-z. **Filters → Spec-z verification** keeps only
-the clusters with galaxies in the chosen catalogs. See the [Galaxy Catalogs Guide](GALAXY_CATALOGS_GUIDE.md).
+The **External catalogs** sidebar section puts galaxy and cluster catalogs on the map: give a file path on the
+cluster, choose **Galaxies** or **Clusters**, map its columns (RA and Dec required; the rest optional) and switch it on.
+
+- **Galaxies** (spec-z, OBJECT_ID, MER tile, cluster ID): **Load CATRED near shown galaxy catalogs** marks the
+  matching CATRED sources (by OBJECT_ID when mapped, else by position); clicking one shows its p(z) with the
+  catalog's spec-z.
+- **Clusters** (name, redshift, mass, richness, SNR; e.g. SPT, Planck): **Cross-match shown cluster catalogs**
+  links each external cluster to the Euclid clusters within the catalog's radius and Δz/(1+z), and clicking a
+  Euclid cluster lists its **Known counterparts** in the cluster card.
+
+**Filters → External catalogs** keeps only the clusters with (or without) a match in the chosen catalogs.
+See the [External Catalogs Guide](GALAXY_CATALOGS_GUIDE.md).
 
 ### Globe View and Large Catalogs
 
@@ -141,7 +148,7 @@ Updates in real-time as you zoom/pan, no server calls needed.
 
 For in-depth information on specific features:
 - **[Cluster Analysis](CLUSTER_ANALYSIS_GUIDE.md)** - Cutouts, CATRED boxes, mask overlays, trace management
-- **[Galaxy Catalogs](GALAXY_CATALOGS_GUIDE.md)** - Add NED, Euclid spec-z or any catalog by mapping its columns; CATRED matches, spec-z on p(z), cluster filter
+- **[External Catalogs](GALAXY_CATALOGS_GUIDE.md)** - Add galaxy (NED, Euclid spec-z) or cluster (SPT, Planck) catalogs by mapping their columns; CATRED matches, spec-z on p(z), cross-match with the Euclid clusters, cluster filter
 - **[Configuration](CONFIGURATION_GUIDE.md)** - Setup and configuration options
 - **[Tile Caching & Controls](TILE_CACHING_AND_CONTROLS.md)** - CL-tile toggle, tile definition caching, performance
 - **[Zoom-Based Oval Rendering](ZOOM_BASED_OVAL_RENDERING.md)** - Matched cluster rendering with viewport indicator

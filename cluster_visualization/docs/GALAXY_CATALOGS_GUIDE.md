@@ -1,53 +1,65 @@
-# Galaxy Catalogs Guide
+# External Catalogs Guide
 
-Put any galaxy catalog on the sky map: a NED spec-z cross-match, the Euclid spec-z
-galaxy catalogue, or a table from any other survey. You tell the app which of the
-catalog's columns hold the right ascension, declination, redshift and so on, and it
-does the rest: markers with hover details, CATRED sources matched to the galaxies,
-the catalog's spec-z next to each source's photometric p(z), and a cluster filter.
+Put external catalogs on the sky map, of two kinds:
 
-Catalogs are added in the app, not in the config file, and are kept per user.
+- **Galaxy catalogs**: a NED spec-z cross-match, the Euclid spec-z galaxy
+  catalogue, or a table from any other survey. You get markers with hover details,
+  CATRED sources matched to the galaxies, the catalog's spec-z next to each source's
+  photometric p(z), and a cluster filter.
+- **Cluster catalogs**: SPT, Planck, ACT, eROSITA, redMaPPer and the like. You get
+  markers with hover details, links to the Euclid clusters they match, a
+  "with / without a match" cluster filter, and the matches in the cluster card
+  (see [Cluster catalogs](#cluster-catalogs)).
+
+You tell the app which of the catalog's columns hold the right ascension,
+declination, redshift and so on, and it does the rest. Catalogs are added in the
+app, not in the config file, and are kept per user.
 
 ## Adding a catalog
 
-Open the **Galaxy catalogs** section of the sidebar and press **Add catalog**.
+Open the **External catalogs** section of the sidebar and press **Add catalog**.
 
-1. **File.** Type the path of the catalog on the cluster (for example
+1. **Kind.** Choose **Galaxies** or **Clusters**. The kind decides which standard
+   columns are offered (below) and what the catalog can do.
+2. **File.** Type the path of the catalog on the cluster (for example
    `/sps/euclid/Users/.../catalog.fits`) and press **Read columns** (or Enter).
    Supported: FITS (`.fits`, `.fit`, `.fts`, `.fits.gz`), CSV, ECSV and Parquet.
    Only the column list is read at this point, so even a large file opens at once.
    A FITS file with several tables gets a **Table** picker.
-2. **Columns.** Each standard column has a dropdown listing the file's columns of
+3. **Columns.** Each standard column has a dropdown listing the file's columns of
    a suitable type. Common names are filled in for you; check them, and leave
    empty what the catalog does not have. Each line says what a mapping turns on.
-3. **Options.** Optionally keep only the rows where a true/false column is true
+4. **Options.** Optionally keep only the rows where a true/false column is true
    (**Keep only rows where**, e.g. a quality flag), pick extra columns to show on
    hover, and set the name, colour, marker shape and marker size. Shapes include
    open ones (outlines), so where two catalogs share galaxies, give one an open
    shape or a larger size to keep both visible. New catalogs get a colour and a
-   shape no other catalog uses.
-4. **Check** shows the row count and the RA/Dec range of the first rows, and any
+   shape no other catalog uses. Cluster catalogs also have the
+   [cross-match settings](#matching-with-the-euclid-clusters).
+5. **Check** shows the row count and the RA/Dec range of the first rows, and any
    problem: a missing RA or Dec, a column of the wrong type, Dec outside ±90°,
-   RA outside 0–360°, or RA that looks like hours. **Save** adds the catalog
+   RA outside 0–360°, or RA that looks like hours. It also warns when a mapped
+   number column holds values of −99 or less in the first rows: such values are
+   taken as placeholders for "missing" and ignored. **Save** adds the catalog
    (it refuses while there are errors).
 
 The pen next to a catalog reopens this dialog with its mapping; the bin removes
 the catalog from the list (the file itself is never touched).
 
-### Standard columns
+### Standard columns of galaxy catalogs
 
 | Column | Required | Type | Turns on |
 |---|---|---|---|
 | Right ascension (deg) | yes | number | markers, viewport, position match |
 | Declination (deg) | yes | number | markers, viewport, position match |
-| Source ID | no | integer or text | hover; key of the match file |
+| Name / ID | no | integer or text | hover; key of the match file |
 | Euclid MER OBJECT_ID | no | integer | exact CATRED match by ID; p(z) when clicking a marker |
 | MER tile ID | no | integer | faster OBJECT_ID lookup (opens that tile first) |
 | Spectroscopic redshift | no | number | hover; line on the p(z) plot; match file |
 | Spec-z uncertainty | no | number | hover; band around the p(z) line |
 | Spec-z quality flag | no | any | hover |
 | Photometric redshift | no | number | hover; match file |
-| Merged cluster ID (`ID_UNIQUE_CLUSTER`) | no | integer | the "Spec-z verification" cluster filter |
+| Merged cluster ID (`ID_UNIQUE_CLUSTER`) | no | integer | the "External catalogs" cluster filter |
 
 The tags next to a catalog in the list show what it can do: **ID** (OBJECT_ID
 mapped), **spec-z** and **clusters** (cluster IDs mapped).
@@ -110,10 +122,10 @@ mapping changes.
 Shown catalogs also appear in the Aladin view, one layer each, drawn with the same
 marker shape, size, colour and opacity as on the sky map.
 
-## CATRED sources near the shown catalogs
+## CATRED sources near the shown galaxy catalogs
 
-Zoom in to under 2° × 2° and press **Load CATRED near shown catalogs**. For each
-shown catalog, the galaxies in view are matched to CATRED and the matched sources
+Zoom in to under 2° × 2° and press **Load CATRED near shown galaxy catalogs**. For
+each shown galaxy catalog (cluster catalogs are skipped), the galaxies in view are matched to CATRED and the matched sources
 are marked with open squares in the catalog's colour. A line per catalog reports
 the result.
 
@@ -176,13 +188,106 @@ so only a few CATRED tiles are in memory at a time. Without `--output` it adds t
 the catalog's match file. Other options: `--radius-arcsec`, `--threshold`,
 `--maglim`, `--unmasked`, `--algorithm`, `--cell-deg`, `--registry`.
 
+## Cluster catalogs
+
+A cluster catalog lists galaxy clusters found by another survey. Choose
+**Clusters** in the Add dialog to add one.
+
+### Standard columns of cluster catalogs
+
+| Column | Required | Type | Turns on |
+|---|---|---|---|
+| Right ascension (deg) | yes | number | markers, viewport, cross-match |
+| Declination (deg) | yes | number | markers, viewport, cross-match |
+| Name / ID | no | integer or text | hover; cluster card |
+| Cluster redshift | no | number | hover; the Δz cut of the cross-match |
+| Redshift uncertainty | no | number | hover |
+| Mass (e.g. M500) | no | number | hover; cluster card |
+| Richness | no | number | hover; cluster card |
+| Detection SNR / significance | no | number | hover; cluster card |
+
+Units declared in the file (for example `1e+14solMass` for a mass) are shown
+with the values on hover and in the cluster card. The list tags a cluster catalog
+**cluster catalog**, plus **z** when its redshift is mapped.
+
+**Example: SPT-3G clusters in EDFS** (`SPT3G_EDFS.fit`, VizieR J/A+A/706/A17, 217 clusters):
+
+| Standard column | Catalog column |
+|---|---|
+| Right ascension | `RAJ2000` |
+| Declination | `DEJ2000` |
+| Name / ID | `IAUName` |
+| Cluster redshift | `z` |
+| Redshift uncertainty | `e_z` |
+| Mass | `M500c` (in 10¹⁴ M☉) |
+| Richness | `lambda` |
+| Detection SNR / significance | `xi` |
+
+All of these are filled in automatically when the file is read as **Clusters**.
+Some SPT clusters have no redshift; they are matched by position only (below).
+Planck PSZ2 (`RA`, `DEC`, `NAME`, `REDSHIFT`, `MSZ`, `SNR`), ACT and redMaPPer
+(`lambda`, `z_lambda`) catalogs are recognised the same way.
+
+### Matching with the Euclid clusters
+
+Each cluster catalog has two cross-match settings in its Add/Edit dialog:
+
+- **Radius** (arcmin, 2′ by default): how far an external cluster may lie from a
+  Euclid merged cluster.
+- **Δz/(1+z)** (0.05 by default): when both clusters have a redshift,
+  `|z_Euclid − z| / (1 + z)` must be at most this. When either has none, the match
+  is by position only.
+
+The Euclid side is always the **full merged catalog of the selected algorithm**
+(PZWAV, AMICO or both), before any sidebar filter, so a filter never changes which
+clusters count as matched. Values of −99 or less in the redshift column count as
+missing.
+
+### Euclid counterparts on the map
+
+Show one or more cluster catalogs and press **Cross-match shown cluster catalogs**.
+For each catalog:
+
+- a line joins every external cluster to each Euclid cluster it matches;
+- a ring in the catalog's colour marks each matched external cluster. Its hover
+  gives the nearest Euclid counterpart, the separation and Δz/(1+z) (or "by
+  position (no z)"), both redshifts, and how many more Euclid clusters are within
+  the radius.
+
+A line per catalog reports the result, in the form "SPT-3G: N of 217 matched
+(PZWAV, 2′, Δz/(1+z) ≤ 0.05; M by position only)". Pressing the button again
+replaces the links. When you switch algorithm and render, the links are redrawn
+for the new algorithm. Switching a catalog off, editing it or removing it removes
+its links. Aladin shows the rings but not the lines. With more than 10,000 pairs,
+only the links around the current view are drawn and the result line says so.
+
+Clicking an external cluster marker does nothing (there is no p(z) for a cluster).
+
+### Known counterparts in the cluster card
+
+Click a Euclid cluster: the card lists, under **Known counterparts**, the clusters
+of every cluster catalog in your list (shown or not) within that catalog's radius
+and Δz, nearest first, five per catalog. A line looks like this (the separation
+and Δz depend on the Euclid cluster):
+
+> SPT-3G: SPT-CL J0337-5046, z 0.750, 0.50′, Δz/(1+z) 0.006, mass 3.74 [1e+14solMass], richness 189, SNR 15.9
+
+A catalog without a counterpart says "none within 2′". The entry is not shown when
+you have no cluster catalog.
+
 ## Cluster filter
 
-**Filters → Spec-z verification** lists the catalogs that map cluster IDs, with
-their cluster count. Choose one or more and press **Apply filters**: only the
-merged clusters with galaxies in any chosen catalog stay on the map, in the globe
-and in the cluster tools. Clear the choice and apply again to show all clusters.
-The control is disabled until a catalog maps cluster IDs.
+**Filters → External catalogs** lists the cluster catalogs and the galaxy catalogs
+that map cluster IDs. Choose one or more, choose **with a match** or **without a
+match**, and press **Apply filters**. Only the merged clusters with (or without) a
+match in any chosen catalog stay on the map, in the globe and in the cluster tools.
+
+- A galaxy catalog matches the clusters named in its cluster-ID column.
+- A cluster catalog matches the Euclid clusters it cross-matches (see
+  [Matching with the Euclid clusters](#matching-with-the-euclid-clusters)).
+
+Clear the choice and apply again to show all clusters. The control is disabled
+until there is a catalog to filter by.
 
 ## Where things are kept
 
