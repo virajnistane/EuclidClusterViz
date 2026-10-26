@@ -12,6 +12,7 @@ from dash import Input, Output, State
 from loguru import logger
 
 from cluster_visualization.src.data.catalog_matcher import match_by_id, spec_z_values
+from cluster_visualization.src.data.galaxy_catalog import CLUSTER
 from cluster_visualization.src.visualization.catalog_traces import MATCH_PREFIX, trace_meta
 from cluster_visualization.src.visualization.figures import PHZ_EMPTY_META
 from cluster_visualization.src.visualization.trace_registry import TraceRegistry, TraceType
@@ -255,7 +256,8 @@ class PHZCallbacks:
 
     def _catalog_galaxy_pz(self, clickData, figure, algorithm):
         """p(z) of a clicked galaxy catalog marker: its CATRED source found by OBJECT_ID,
-        with the galaxy's spec-z. Explains instead when the catalog maps no OBJECT_ID."""
+        with the galaxy's spec-z. Explains instead when the catalog maps no OBJECT_ID.
+        Cluster catalog markers are left alone."""
         catred_tabs = ("phz-tab", "phz-catred-subtab")
         try:
             point = clickData["points"][0]
@@ -269,6 +271,8 @@ class PHZCallbacks:
             if self.catalog_registry is not None and meta.get("catalog_id")
             else None
         )
+        if catalog is not None and catalog.spec.kind == CLUSTER:
+            return dash.no_update, dash.no_update, dash.no_update  # no p(z) for a cluster
         if catalog is None or row is None or not catalog.is_available():
             return self.DEFAULT_TABS
         spec, df = catalog.spec, catalog.df

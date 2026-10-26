@@ -1,6 +1,7 @@
 """
-Galaxy catalog callbacks: the Galaxy catalogs section (list and Add/Edit dialog),
-catalog markers on the plot, and CATRED sources near the shown catalogs.
+External catalog callbacks: the External catalogs section (list and Add/Edit dialog),
+galaxy and cluster catalog markers on the plot, and CATRED sources near the shown
+galaxy catalogs.
 
 Catalogs come from CatalogRegistry (per-user JSON). A catalog is loaded the first
 time it is shown; catalogs too large to draw whole are drawn for the current view
@@ -26,11 +27,16 @@ from cluster_visualization.src.data.catalog_matcher import (
 from cluster_visualization.src.data.galaxy_catalog import (
     ARRAY,
     BOOL,
+    CATALOG_KINDS,
+    CLUSTER,
+    GALAXY,
     ROLES,
     CatalogSpec,
     ColumnInfo,
     TableInfo,
+    column_units,
     compatible_columns,
+    roles_for,
     inspect_columns,
     suggest_mapping,
     suggest_select_column,
@@ -168,7 +174,7 @@ def format_catred_hover(catred_scatter, idx, title):
 
 
 class CatalogCallbacks:
-    """Callbacks of the Galaxy catalogs section."""
+    """Callbacks of the External catalogs section."""
 
     def __init__(self, app, registry, catred_handler=None, data_loader=None):
         """
@@ -305,6 +311,7 @@ class CatalogCallbacks:
             Output("catalog-path-feedback", "children"),
             Output("catalog-mapping-section", "style"),
             Output("catalog-check-feedback", "children"),
+            Output("catalog-kind-radio", "value"),
             Input("catalog-add-button", "n_clicks"),
             Input({"type": "catalog-edit", "index": ALL}, "n_clicks"),
             Input("catalog-cancel-button", "n_clicks"),
@@ -315,23 +322,24 @@ class CatalogCallbacks:
                 raise PreventUpdate
             trigger = ctx.triggered_id
             if trigger == "catalog-cancel-button":
-                return (False,) + (dash.no_update,) * 6
+                return (False,) + (dash.no_update,) * 7
             # "t" makes every opening a new value, so the read callback fires for a repeated Edit
             if trigger == "catalog-add-button":
                 return (
                     True,
                     {"mode": "add", "t": time.time()},
-                    "Add galaxy catalog",
+                    "Add catalog",
                     "",
                     None,
                     HIDDEN,
                     None,
+                    GALAXY,
                 )
             spec = self.registry.get(trigger["index"])
             if spec is None:
                 raise PreventUpdate
             state = {"mode": "edit", "id": spec.id, "spec": spec.to_dict(), "t": time.time()}
-            return True, state, f"Edit {spec.name}", spec.path, None, HIDDEN, None
+            return True, state, f"Edit {spec.name}", spec.path, None, HIDDEN, None, spec.kind
 
         @self.app.callback(
             Output("catalog-table-store", "data"),
@@ -382,6 +390,10 @@ class CatalogCallbacks:
 
         @self.app.callback(
             *role_outputs,
+            *[Output(f"catalog-role-row-{role.name}", "style") for role in ROLES],
+            Output("catalog-match-settings", "style"),
+            Output("catalog-match-radius-input", "value"),
+            Output("catalog-match-dz-input", "value"),
             Output("catalog-select-dropdown", "options"),
             Output("catalog-select-dropdown", "value"),
             Output("catalog-hover-dropdown", "options"),
@@ -393,12 +405,24 @@ class CatalogCallbacks:
             Output("catalog-check-feedback", "children", allow_duplicate=True),
             Input("catalog-table-store", "data"),
             Input("catalog-hdu-dropdown", "value"),
+            Input("catalog-kind-radio", "value"),
             State("catalog-modal-state", "data"),
             prevent_initial_call=True,
         )
-        def fill_catalog_mapping(store, index, state):
+        def fill_catalog_mapping(store, index, kind, state):
+            # The kind shows its roles' rows (and the cross-match settings for clusters)
+            kind = kind if kind in CATALOG_KINDS else GALAXY
+            row_styles = [None if kind in role.catalogs else HIDDEN for role in ROLES]
+            match_style = SHOWN if kind == CLUSTER else HIDDEN
             if not store or index is None:
-                raise PreventUpdate
+                if ctx.triggered_id != "catalog-kind-radio":
+                    raise PreventUpdate
+                return (
+                    *(dash.no_update,) * (2 * len(ROLES)),
+                    *row_styles,
+                    match_style,
+                    *(dash.no_update,) * 11,
+                )
             table = _table_from_store(store, index)
             state = state or {}
             spec = state.get("spec") if state.get("mode") == "edit" else None
@@ -406,13 +430,14 @@ class CatalogCallbacks:
                 spec
                 and os.path.realpath(spec["path"]) == os.path.realpath(store["path"])
                 and spec.get("hdu") == table.hdu
+                and spec.get("kind", GALAXY) == kind
             )
             if same_table:
                 mapping = spec.get("columns") or {}
                 select = spec.get("select_column")
                 hover = spec.get("hover_columns") or []
             else:
-                mapping = suggest_mapping(table)
+                mapping = suggest_mapping(table, kind)
                 select = suggest_select_column(table)
                 hover = []
 
@@ -420,7 +445,7 @@ class CatalogCallbacks:
             for role in ROLES:
                 names = compatible_columns(table, role.name)
                 columns = [c for c in table.columns if c.name in names]
-                value = mapping.get(role.name)
+                value = mapping.get(role.name) if kind in role.catalogs else None
                 out += [_column_options(columns), value if value in names else None]
             bools = [c for c in table.columns if c.kind == BOOL]
             hoverable = [c for c in table.columns if c.kind != ARRAY]
@@ -444,8 +469,18 @@ class CatalogCallbacks:
                     size = DEFAULT_SIZE
             else:
                 name = color = symbol = size = dash.no_update
+            if ctx.triggered_id == "catalog-table-store":
+                defaults = CatalogSpec("", "", {})
+                radius = (spec or {}).get("match_radius_arcmin", defaults.match_radius_arcmin)
+                dz = (spec or {}).get("match_dz", defaults.match_dz)
+            else:
+                radius = dz = dash.no_update
             return (
                 *out,
+                *row_styles,
+                match_style,
+                radius,
+                dz,
                 _column_options(bools),
                 select if select in {c.name for c in bools} else None,
                 _column_options(hoverable),
@@ -477,6 +512,9 @@ class CatalogCallbacks:
             State("catalog-registry-version", "data"),
             State("cluster-plot", "figure"),
             State("cluster-plot", "relayoutData"),
+            State("catalog-kind-radio", "value"),
+            State("catalog-match-radius-input", "value"),
+            State("catalog-match-dz-input", "value"),
             prevent_initial_call=True,
         )
         def check_or_save_catalog(_check, _save, store, index, *values):
@@ -484,23 +522,45 @@ class CatalogCallbacks:
                 raise PreventUpdate
             no = dash.no_update
             role_values = values[: len(ROLES)]
-            select, hover, name, color, symbol, size, state, version, figure, relayout = values[
-                len(ROLES) :
-            ]
+            (
+                select,
+                hover,
+                name,
+                color,
+                symbol,
+                size,
+                state,
+                version,
+                figure,
+                relayout,
+                kind,
+                radius,
+                dz,
+            ) = values[len(ROLES) :]
             if not store or index is None:
                 return _alert("Read the file's columns first.", "warning"), no, no, no
             table = _table_from_store(store, index)
+            kind = kind if kind in CATALOG_KINDS else GALAXY
+            kind_roles = {role.name for role in roles_for(kind)}
+            columns = {
+                role.name: v for role, v in zip(ROLES, role_values) if v and role.name in kind_roles
+            }
             spec = CatalogSpec(
                 name=(name or "").strip(),
                 path=store["path"],
-                columns={role.name: v for role, v in zip(ROLES, role_values) if v},
+                columns=columns,
                 hdu=table.hdu,
                 select_column=select or None,
                 hover_columns=list(hover or []),
                 color=color or PALETTE[0],
                 symbol=symbol or SYMBOL_CYCLE[0],
                 size=int(size or DEFAULT_SIZE),
+                kind=kind,
+                units=column_units(table, columns),
             )
+            if kind == CLUSTER:
+                # Kept as typed (None when cleared) so validate_mapping reports it
+                spec.match_radius_arcmin, spec.match_dz = radius, dz
             result = validate_mapping(spec, table)
             if ctx.triggered_id == "catalog-check-button" or not result.ok:
                 return _feedback(result), no, no, no
@@ -779,8 +839,9 @@ class CatalogCallbacks:
             if not n_clicks or not figure or "data" not in figure:
                 raise PreventUpdate
             shown = [i["index"] for i, on in zip(ids, values) if on]
-            if not shown:
-                return dash.no_update, "Show a catalog first."
+            galaxy_ids = {s.id for s in self.registry.with_capability("match_position")}
+            if not any(cid in galaxy_ids for cid in shown):
+                return dash.no_update, "Show a galaxy catalog first."
             viewport = current_viewport(relayout, figure)
             if viewport is None:
                 return dash.no_update, "Zoom in first."
@@ -792,7 +853,9 @@ class CatalogCallbacks:
             traces, notes = [], []
             for cid in shown:
                 catalog = self.registry.catalog(cid)
-                if catalog is None or not catalog.is_available():
+                if catalog is None or "match_position" not in catalog.capabilities():
+                    continue  # cluster catalogs have no CATRED sources
+                if not catalog.is_available():
                     continue
                 spec = catalog.spec
                 galaxies = catalog.in_box(**viewport)

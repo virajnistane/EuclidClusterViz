@@ -151,13 +151,13 @@ class CatalogCallbackTest(unittest.TestCase):
         self.assertEqual((len(options), index, hdu_style, section), (2, 0, cc.SHOWN, cc.SHOWN))
 
         fill = self.fn["fill_catalog_mapping"]
-        out = _call(fill, "catalog-table-store.data", store, store, 1, {"mode": "add"})
+        out = _call(fill, "catalog-table-store.data", store, store, 1, "galaxy", {"mode": "add"})
         ra_options, ra_value = out[0], out[1]
         self.assertEqual(ra_value, "RAJ2000")
         self.assertEqual([o["value"] for o in ra_options], ["RAJ2000", "DEJ2000", "zspec"])
         self.assertEqual(out[-5:-1], ("two", "#ff8800", "diamond", 7))
         # Switching table keeps the name the user may have typed
-        out = _call(fill, "catalog-hdu-dropdown.value", 0, store, 0, {"mode": "add"})
+        out = _call(fill, "catalog-hdu-dropdown.value", 0, store, 0, "galaxy", {"mode": "add"})
         self.assertEqual(out[1], "ra")
         self.assertIs(out[-5], dash.no_update)
 
@@ -178,6 +178,7 @@ class CatalogCallbackTest(unittest.TestCase):
             store,
             store,
             0,
+            "galaxy",
             {"mode": "add"},
         )
         self.assertEqual(out[-4:-1], ("#d62728", "circle-open", 7))
@@ -197,13 +198,30 @@ class CatalogCallbackTest(unittest.TestCase):
             self.ned,
         )[0]
         out = _call(
-            self.fn["fill_catalog_mapping"], "catalog-table-store.data", store, store, 0, state
+            self.fn["fill_catalog_mapping"],
+            "catalog-table-store.data",
+            store,
+            store,
+            0,
+            "galaxy",
+            state,
         )
         roles = dict(zip([r.name for r in cc.ROLES], out[1 : 2 * len(cc.ROLES) : 2]))
         self.assertIsNone(roles["SPEC_Z"])  # the saved mapping, not the suggestion "Z"
         self.assertEqual(out[-5:-1], ("Mine", "#123456", "diamond", 7))
 
-    def _save(self, trigger, store, roles, name="NED", state=None, figure=None):
+    def _save(
+        self,
+        trigger,
+        store,
+        roles,
+        name="NED",
+        state=None,
+        figure=None,
+        kind="galaxy",
+        radius=2.0,
+        dz=0.05,
+    ):
         values = [roles.get(r.name) for r in cc.ROLES]
         args = [
             0,
@@ -221,6 +239,9 @@ class CatalogCallbackTest(unittest.TestCase):
             3,
             figure,
             None,
+            kind,
+            radius,
+            dz,
         ]
         return _call(self.fn["check_or_save_catalog"], f"{trigger}.n_clicks", 1, *args)
 
@@ -439,7 +460,7 @@ class CatalogCallbackTest(unittest.TestCase):
         ids = [{"type": "catalog-show", "index": cid}]
         load = self.fn["load_catred_near_catalogs"]
         out = load(1, 3.0, "PZWAV", True, 0.8, 24, None, _cluster_figure(), [False], ids)
-        self.assertEqual(out[1], "Show a catalog first.")
+        self.assertEqual(out[1], "Show a galaxy catalog first.")
         figure = _cluster_figure()
         figure["layout"] = {}
         self.assertEqual(

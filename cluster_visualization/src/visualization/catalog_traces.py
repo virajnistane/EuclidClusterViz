@@ -1,5 +1,6 @@
 """
-Plot traces for user galaxy catalogs and their CATRED matches.
+Plot traces for user galaxy and cluster catalogs, and their matches (CATRED sources
+near galaxies; Euclid counterparts of external clusters).
 
 Traces are found again by name prefix (TraceRegistry) and carry ``meta``
 ({"kind", "catalog_id", ...}) so callbacks and the Aladin overlay can tell which
@@ -84,7 +85,14 @@ _HOVER_LABELS = (
     ("SPEC_Z_QUALITY", "z_spec flag"),
     ("PHOT_Z", "z_phot"),
     ("CLUSTER_ID", "Cluster ID"),
+    ("Z", "z"),
+    ("Z_ERR", "z err"),
+    ("MASS", "Mass"),
+    ("RICHNESS", "Richness"),
+    ("SNR", "SNR"),
 )
+# Units not worth repeating on every hover line
+_PLAIN_UNITS = {"", "deg", "degree", "degrees"}
 
 
 def catalog_trace_name(spec) -> str:
@@ -112,8 +120,14 @@ def hover_texts(spec, df: pd.DataFrame) -> list:
     """One hover string per row: name, position, mapped roles, then hover columns."""
     from cluster_visualization.src.data.galaxy_catalog import GalaxyCatalog
 
+    units = getattr(spec, "units", None) or {}
     lines = [("RA", _format(df["RA"])), ("Dec", _format(df["DEC"]))]
-    lines += [(label, _format(df[role])) for role, label in _HOVER_LABELS if role in df.columns]
+    for role, label in _HOVER_LABELS:
+        if role in df.columns:
+            unit = units.get(role, "")
+            if unit.strip().lower() not in _PLAIN_UNITS:
+                label = f"{label} [{unit}]"
+            lines.append((label, _format(df[role])))
     for column in spec.hover_columns:
         name = GalaxyCatalog.hover_name(column)
         if name in df.columns:
@@ -178,6 +192,7 @@ def build_catalog_trace(
         showlegend=True,
         meta={
             "kind": KIND_CATALOG,
+            "catalog_kind": spec.kind,
             "catalog_id": spec.id,
             "label": spec.name,
             # Marker style for the Aladin view

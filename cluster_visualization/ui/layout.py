@@ -558,7 +558,7 @@ class AppLayout:
                     icon="fa-border-all",
                 ),
                 AppLayout._create_collapsible_card(
-                    "Galaxy catalogs",
+                    "External catalogs",
                     "galaxy-catalogs",
                     [CatalogControls.create_section()],
                     icon="fa-star",

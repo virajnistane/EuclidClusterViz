@@ -50,6 +50,7 @@ from cluster_visualization.src.data.catalog_matcher import (  # noqa: E402
     write_matches,
 )
 from cluster_visualization.src.data.catalog_registry import CatalogRegistry  # noqa: E402
+from cluster_visualization.src.data.galaxy_catalog import CLUSTER  # noqa: E402
 
 
 def parse_arguments():
@@ -132,7 +133,7 @@ def main():
     if args.list or not args.catalog:
         specs = registry.list()
         if not specs:
-            print(f"No catalogs in {registry.path}; add one in the app's Galaxy catalogs section.")
+            print(f"No catalogs in {registry.path}; add one in the app's External catalogs section.")
         for spec in specs:
             method = "OBJECT_ID" if "OBJECT_ID" in spec.columns else "position"
             print(f"{spec.id:24s} {spec.name:30s} {method:9s} {spec.path}")
@@ -143,6 +144,8 @@ def main():
     spec = find_catalog(registry, args.catalog)
     if spec is None:
         sys.exit(f"No catalog '{args.catalog}' in {registry.path} (see --list).")
+    if spec.kind == CLUSTER:
+        sys.exit(f"'{spec.name}' is a cluster catalog; CATRED matches are for galaxy catalogs.")
     catalog = registry.catalog(spec.id)
     if not catalog.is_available():
         sys.exit(f"Catalog '{spec.name}': {catalog.status}")

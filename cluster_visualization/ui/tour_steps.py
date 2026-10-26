@@ -17,7 +17,7 @@ SECTION_TITLES = {
     "clusters-settings": "Catalog",
     "filters-settings": "Filters",
     "mask-controls": "Mask",
-    "galaxy-catalogs": "Galaxy catalogs",
+    "galaxy-catalogs": "External catalogs",
     "image-controls": "Mosaic",
     "display-options": "Display",
     "app-config": "Configuration",
@@ -59,9 +59,10 @@ TOUR_STEPS = {
                  "Changes wait for Apply filters at the bottom of the section."},
         {"element": "#mask-controls-header", "title": "Mask", "side": "right",
          "body": "High-resolution CATRED sources and the Healpix coverage mask."},
-        {"element": "#galaxy-catalogs-header", "title": "Galaxy catalogs", "side": "right",
-         "body": "Your own galaxy catalogs (NED, Euclid spec-z, any survey) on the plot, and the "
-                 "CATRED sources near them."},
+        {"element": "#galaxy-catalogs-header", "title": "External catalogs", "side": "right",
+         "body": "Your own galaxy catalogs (NED, Euclid spec-z, any survey) and cluster catalogs "
+                 "(SPT, Planck, ...) on the plot, CATRED sources near the galaxies and Euclid "
+                 "counterparts of the clusters."},
         {"element": "#image-controls-header", "title": "Mosaic", "side": "right",
          "body": "Survey imagery behind the clusters for the current zoomed view."},
         {"element": "#display-options-header", "title": "Display", "side": "right",

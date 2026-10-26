@@ -1,9 +1,10 @@
 """
-Galaxy catalogs sidebar section and its Add/Edit dialog.
+External catalogs sidebar section and its Add/Edit dialog.
 
-The section lists the user's catalogs (CatalogRegistry) with a Show switch each,
-and holds the "CATRED near shown catalogs" controls. The dialog maps a catalog
-file's columns to the app's standard roles (galaxy_catalog.ROLES). Callbacks:
+The section lists the user's galaxy and cluster catalogs (CatalogRegistry) with a
+Show switch each, and holds the "CATRED near shown catalogs" controls. The dialog
+maps a catalog file's columns to the app's standard roles for the chosen kind
+(galaxy_catalog.roles_for); rows of the other kind's roles are hidden. Callbacks:
 callbacks/catalog_callbacks.py. Styling: ``catalog-*`` classes in enhanced_styles.css.
 """
 
@@ -12,7 +13,7 @@ import os
 import dash_bootstrap_components as dbc
 from dash import dcc, html
 
-from cluster_visualization.src.data.galaxy_catalog import ROLES
+from cluster_visualization.src.data.galaxy_catalog import CLUSTER, GALAXY, ROLES
 from cluster_visualization.src.visualization.catalog_traces import (
     DEFAULT_OPACITY,
     DEFAULT_SIZE,
@@ -40,8 +41,22 @@ SYMBOL_GLYPHS = {
 }
 
 
+HIDDEN = {"display": "none"}
+
+
 def _badges(spec):
     mapped = set(spec.columns)
+    if spec.kind == CLUSTER:
+        badges = [
+            html.Span(
+                "cluster catalog",
+                className="catalog-badge",
+                title="Clusters: cross-match with the Euclid clusters, filter, card counterparts",
+            )
+        ]
+        if "Z" in mapped:
+            badges.append(html.Span("z", className="catalog-badge", title="Redshift mapped"))
+        return badges
     badges = []
     for role, text, title in (
         ("OBJECT_ID", "ID", "OBJECT_ID mapped: exact CATRED match"),
@@ -53,8 +68,9 @@ def _badges(spec):
     return badges
 
 
-def _labelled_row(label, label_for, help_text, control):
+def _labelled_row(label, label_for, help_text, control, row_id=None, style=None):
     """Mapping line in the dialog: label and help on the left, the control on the right."""
+    extra = {} if row_id is None else {"id": row_id}
     return dbc.Row(
         [
             dbc.Col(
@@ -67,11 +83,13 @@ def _labelled_row(label, label_for, help_text, control):
             dbc.Col(control, width=7),
         ],
         className="catalog-role-row align-items-center",
+        style=style,
+        **extra,
     )
 
 
 class CatalogControls:
-    """Galaxy catalogs section, catalog list rows and the Add/Edit dialog."""
+    """External catalogs section, catalog list rows and the Add/Edit dialog."""
 
     @staticmethod
     def create_section():
@@ -159,7 +177,8 @@ class CatalogControls:
         """One row per catalog: Show switch, colour, feature badges, Edit/Remove."""
         if not specs:
             return html.Small(
-                "No catalogs yet. Add one from a FITS, CSV, ECSV or Parquet file on the cluster.",
+                "No catalogs yet. Add galaxies (e.g. NED spec-z) or clusters (e.g. SPT, Planck) "
+                "from a FITS, CSV, ECSV or Parquet file on the cluster.",
                 className="control-help",
             )
         return [
@@ -228,16 +247,92 @@ class CatalogControls:
                     placeholder="Required" if role.required else "Not used",
                     clearable=not role.required,
                 ),
+                row_id=f"catalog-role-row-{role.name}",
+                style=None if GALAXY in role.catalogs else HIDDEN,
             )
             for role in ROLES
         ]
+        match_settings = html.Div(
+            [
+                html.Div("Cross-match with Euclid clusters", className="control-label"),
+                dbc.Row(
+                    [
+                        dbc.Col(
+                            dbc.InputGroup(
+                                [
+                                    dbc.InputGroupText("Radius (arcmin)"),
+                                    dbc.Input(
+                                        id="catalog-match-radius-input",
+                                        type="number",
+                                        min=0.01,
+                                        step=0.1,
+                                        value=2.0,
+                                    ),
+                                ],
+                                size="sm",
+                            ),
+                            width=6,
+                        ),
+                        dbc.Col(
+                            dbc.InputGroup(
+                                [
+                                    dbc.InputGroupText("Δz/(1+z) ≤"),
+                                    dbc.Input(
+                                        id="catalog-match-dz-input",
+                                        type="number",
+                                        min=0,
+                                        step=0.01,
+                                        value=0.05,
+                                    ),
+                                ],
+                                size="sm",
+                            ),
+                            width=6,
+                        ),
+                    ]
+                ),
+                html.Small(
+                    "A Euclid merged cluster is a counterpart when it lies within the radius and, "
+                    "if both have a redshift, |z_Euclid − z| / (1 + z) is within the tolerance "
+                    "(by position only otherwise).",
+                    className="control-help",
+                ),
+            ],
+            id="catalog-match-settings",
+            style=HIDDEN,
+            className="mt-3",
+        )
         return dbc.Modal(
             [
-                dbc.ModalHeader(dbc.ModalTitle("Add galaxy catalog", id="catalog-modal-title")),
+                dbc.ModalHeader(dbc.ModalTitle("Add catalog", id="catalog-modal-title")),
                 dbc.ModalBody(
                     [
                         dcc.Store(id="catalog-modal-state"),
                         dcc.Store(id="catalog-table-store"),
+                        html.Div(
+                            [
+                                html.Label(
+                                    "Catalog of",
+                                    htmlFor="catalog-kind-radio",
+                                    className="control-label",
+                                ),
+                                dbc.RadioItems(
+                                    id="catalog-kind-radio",
+                                    options=[
+                                        {"label": "Galaxies", "value": GALAXY},
+                                        {"label": "Clusters", "value": CLUSTER},
+                                    ],
+                                    value=GALAXY,
+                                    inline=True,
+                                ),
+                                html.Small(
+                                    "Galaxies: spec-z, CATRED matches, p(z). Clusters (SPT, Planck, "
+                                    "ACT, eROSITA, redMaPPer, ...): cross-match with the Euclid clusters.",
+                                    className="control-help",
+                                ),
+                            ],
+                            className="mb-3",
+                        ),
                         html.Label(
                             "Catalog file on the cluster",
                             htmlFor="catalog-path-input",
@@ -367,6 +462,7 @@ class CatalogControls:
                                     "any other columns",
                                     dcc.Dropdown(id="catalog-hover-dropdown", multi=True),
                                 ),
+                                match_settings,
                                 html.Div(id="catalog-check-feedback", className="mt-3"),
                             ],
                             id="catalog-mapping-section",

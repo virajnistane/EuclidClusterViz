@@ -1,10 +1,12 @@
 """
-User-supplied galaxy catalogs (NED spec-z, Euclid spec-z, any survey).
+User-supplied external catalogs: galaxies (NED spec-z, Euclid spec-z, any survey)
+and clusters (SPT, Planck, ACT, eROSITA, redMaPPer, ...).
 
 A catalog is any table with sky positions. The app works with a fixed set of
-standard roles (RA, DEC, SPEC_Z, ...); each catalog maps the roles it can fill
-to its own column names, and everything downstream reads only the standard
-names. A feature is available for a catalog when the roles it needs are mapped
+standard roles (RA, DEC, SPEC_Z, ...), each available to galaxy catalogs, cluster
+catalogs or both (Role.catalogs); each catalog maps the roles it can fill to its
+own column names, and everything downstream reads only the standard names. A
+feature is available for a catalog when its kind and the roles it maps allow it
 (see GalaxyCatalog.capabilities).
 
 Framework-independent - no Dash imports.
@@ -24,6 +26,11 @@ from loguru import logger
 FLOAT, INT, BOOL, STR, ARRAY = "float", "int", "bool", "str", "array"
 NUMERIC = (FLOAT, INT)
 
+# Catalog kinds (CatalogSpec.kind)
+GALAXY, CLUSTER = "galaxy", "cluster"
+CATALOG_KINDS = (GALAXY, CLUSTER)
+BOTH_KINDS = (GALAXY, CLUSTER)
+
 FITS_EXTENSIONS = (".fits", ".fit", ".fts", ".fits.gz", ".fit.gz")
 CSV_EXTENSIONS = (".csv",)
 ECSV_EXTENSIONS = (".ecsv",)
@@ -31,6 +38,8 @@ PARQUET_EXTENSIONS = (".parquet", ".pq")
 
 # Rows read to check a mapping (RA/Dec ranges) without loading the table
 SAMPLE_ROWS = 5000
+# Numeric values at or below this in a mapped column are taken for "missing" placeholders
+SENTINEL_MAX = -99
 
 
 @dataclass(frozen=True)
@@ -43,6 +52,7 @@ class Role:
     required: bool
     enables: str  # shown next to the dropdown: what mapping this role turns on
     aliases: Tuple[str, ...]  # lower-case column names that prefill the dropdown, best first
+    catalogs: Tuple[str, ...] = (GALAXY,)  # catalog kinds that offer this role
 
 
 ROLES: Tuple[Role, ...] = (
@@ -62,6 +72,7 @@ ROLES: Tuple[Role, ...] = (
             "alpha_j2000",
             "ra_icrs",
         ),
+        BOTH_KINDS,
     ),
     Role(
         "DEC",
@@ -79,14 +90,25 @@ ROLES: Tuple[Role, ...] = (
             "delta_j2000",
             "de_icrs",
         ),
+        BOTH_KINDS,
     ),
     Role(
         "SOURCE_ID",
-        "Source ID",
+        "Name / ID",
         (INT, STR),
         False,
-        "hover; key of the CATRED match file",
-        ("source_id", "id", "objid", "obj_id", "galaxy_id", "name"),
+        "hover; key of the CATRED match file (galaxies)",
+        (
+            "source_id",
+            "id",
+            "objid",
+            "obj_id",
+            "galaxy_id",
+            "iauname",
+            "cluster_name",
+            "name",
+        ),
+        BOTH_KINDS,
     ),
     Role(
         "OBJECT_ID",
@@ -144,9 +166,61 @@ ROLES: Tuple[Role, ...] = (
         "'only clusters with a match' filter",
         ("id_unique_cluster", "cluster_id"),
     ),
+    # Cluster catalogs
+    Role(
+        "Z",
+        "Cluster redshift",
+        NUMERIC,
+        False,
+        "hover; Δz cut of the cross-match (position only without it)",
+        ("z", "redshift", "z_cl", "zcl", "z_best", "z_lambda", "z_spec", "zspec", "z_phot"),
+        (CLUSTER,),
+    ),
+    Role(
+        "Z_ERR",
+        "Redshift uncertainty",
+        NUMERIC,
+        False,
+        "hover",
+        ("e_z", "z_err", "zerr", "z_lambda_err", "z_lambda_e", "redshift_err", "sigma_z"),
+        (CLUSTER,),
+    ),
+    Role(
+        "MASS",
+        "Mass (e.g. M500)",
+        NUMERIC,
+        False,
+        "hover; counterparts in the cluster card",
+        ("m500c", "m500", "msz", "m500_cal", "m500_sz", "mass"),
+        (CLUSTER,),
+    ),
+    Role(
+        "RICHNESS",
+        "Richness",
+        NUMERIC,
+        False,
+        "hover",
+        ("lambda", "richness", "lambda_chisq", "n_gal", "ngal"),
+        (CLUSTER,),
+    ),
+    Role(
+        "SNR",
+        "Detection SNR / significance",
+        NUMERIC,
+        False,
+        "hover",
+        ("xi", "snr", "sn", "snr_max", "significance", "detection_snr"),
+        (CLUSTER,),
+    ),
 )
 ROLES_BY_NAME: Dict[str, Role] = {r.name: r for r in ROLES}
 ROLE_NAMES = tuple(ROLES_BY_NAME)
+
+
+def roles_for(kind: str) -> Tuple[Role, ...]:
+    """Roles a catalog of ``kind`` can map, in dialog order."""
+    return tuple(r for r in ROLES if kind in r.catalogs)
+
 
 # Boolean columns that prefill "keep only rows where ... is true"
 SELECT_ALIASES = ("has_z_spec_good", "has_z_spec", "good", "use")
@@ -187,13 +261,22 @@ class CatalogSpec:
     symbol: str = "diamond"  # Plotly marker symbol (catalog_traces.SYMBOLS)
     size: int = 7  # marker size in px
     id: str = ""  # assigned by CatalogRegistry
+    kind: str = GALAXY  # GALAXY or CLUSTER
+    # Cluster catalogs: cross-match with the Euclid merged clusters
+    match_radius_arcmin: float = 2.0
+    match_dz: float = 0.05  # |z_Euclid - z| / (1 + z)
+    units: Dict[str, str] = field(default_factory=dict)  # role -> unit of its column, for hover
 
     @classmethod
     def from_dict(cls, data: dict) -> "CatalogSpec":
         known = {k: v for k, v in data.items() if k in cls.__dataclass_fields__}
         spec = cls(**known)
-        spec.columns = {r: c for r, c in (spec.columns or {}).items() if r in ROLES_BY_NAME and c}
+        if spec.kind not in CATALOG_KINDS:
+            spec.kind = GALAXY
+        allowed = {r.name for r in roles_for(spec.kind)}
+        spec.columns = {r: c for r, c in (spec.columns or {}).items() if r in allowed and c}
         spec.hover_columns = list(spec.hover_columns or [])
+        spec.units = {r: u for r, u in (spec.units or {}).items() if r in spec.columns and u}
         return spec
 
     def to_dict(self) -> dict:
@@ -461,18 +544,28 @@ def read_columns(
 # ---------------------------------------------------------------------------
 
 
+def column_units(table: TableInfo, columns: Dict[str, str]) -> Dict[str, str]:
+    """{role: unit} for mapped columns whose unit the file declares."""
+    units = {}
+    for role, name in columns.items():
+        col = table.column(name)
+        if col is not None and col.unit:
+            units[role] = col.unit
+    return units
+
+
 def compatible_columns(table: TableInfo, role: str) -> List[str]:
     """Columns whose type can fill ``role`` (dropdown options)."""
     kinds = ROLES_BY_NAME[role].kinds
     return [c.name for c in table.columns if c.kind in kinds]
 
 
-def suggest_mapping(table: TableInfo) -> Dict[str, str]:
+def suggest_mapping(table: TableInfo, kind: str = GALAXY) -> Dict[str, str]:
     """Prefill: {role: column} from common column names, each column used once."""
     by_lower = {c.name.lower(): c for c in table.columns}
     mapping: Dict[str, str] = {}
     used = set()
-    for role in ROLES:
+    for role in roles_for(kind):
         for alias in role.aliases:
             col = by_lower.get(alias)
             if col is not None and col.kind in role.kinds and col.name not in used:
@@ -499,12 +592,30 @@ def validate_mapping(spec: CatalogSpec, table: Optional[TableInfo] = None) -> Va
 
     if not spec.name.strip():
         result.errors.append("Give the catalog a name.")
-    for role in ROLES:
+    if spec.kind not in CATALOG_KINDS:
+        result.errors.append(f"Unknown catalog kind '{spec.kind}'.")
+        return result
+    kind_roles = roles_for(spec.kind)
+    for role in kind_roles:
         if role.required and not spec.columns.get(role.name):
             result.errors.append(f"{role.label}: choose a column (required).")
+    if spec.kind == CLUSTER:
+        try:
+            if not float(spec.match_radius_arcmin) > 0:
+                result.errors.append("Match radius: must be more than 0 arcmin.")
+        except (TypeError, ValueError):
+            result.errors.append("Match radius: enter a number of arcmin.")
+        try:
+            if not float(spec.match_dz) >= 0:
+                result.errors.append("Match Δz/(1+z): must be 0 or more.")
+        except (TypeError, ValueError):
+            result.errors.append("Match Δz/(1+z): enter a number.")
 
     for role_name, col_name in spec.columns.items():
-        role = ROLES_BY_NAME[role_name]
+        role = ROLES_BY_NAME.get(role_name)
+        if role is None or role not in kind_roles:
+            result.errors.append(f"{role_name}: not a column role of {spec.kind} catalogs.")
+            continue
         col = table.column(col_name)
         if col is None:
             result.errors.append(f"{role.label}: no column '{col_name}' in the file.")
@@ -532,9 +643,13 @@ def validate_mapping(spec: CatalogSpec, table: Optional[TableInfo] = None) -> Va
     if result.errors:
         return result
 
+    numeric = [r for r in ROLE_NAMES if r in spec.columns and ROLES_BY_NAME[r].kinds == NUMERIC]
     try:
         sample = read_columns(
-            spec.path, [spec.columns["RA"], spec.columns["DEC"]], spec.hdu, nrows=SAMPLE_ROWS
+            spec.path,
+            list(dict.fromkeys(spec.columns[r] for r in ["RA", "DEC"] + numeric)),
+            spec.hdu,
+            nrows=SAMPLE_ROWS,
         )
     except Exception as e:
         result.errors.append(f"Could not read the file: {e}")
@@ -558,6 +673,18 @@ def validate_mapping(spec: CatalogSpec, table: Optional[TableInfo] = None) -> Va
         result.errors.append(
             f"Dec: values {dec.min():.3f}..{dec.max():.3f} are outside -90..90 degrees."
         )
+    for role_name in numeric:
+        if role_name in ("RA", "DEC"):
+            continue
+        col_name = spec.columns[role_name]
+        values = pd.to_numeric(sample[col_name], errors="coerce").to_numpy(dtype=float)
+        n_sentinel = int((values <= SENTINEL_MAX).sum())
+        if n_sentinel:
+            result.warnings.append(
+                f"{ROLES_BY_NAME[role_name].label}: {n_sentinel:,} of the first {len(values):,} "
+                f"rows of '{col_name}' are {SENTINEL_MAX} or less (placeholders for missing "
+                "values?); they are treated as missing."
+            )
 
     n = f"{table.nrows:,} rows" if table.nrows is not None else "row count known after loading"
     result.info.append(
@@ -590,6 +717,8 @@ class GalaxyCatalog:
         self.n_total: Optional[int] = None  # rows in the file, before selection
         self.status = "not loaded"
         self._index = None
+        # Cross-matches with Euclid merged catalogs (cluster_matcher.cached_matches)
+        self.match_cache: Dict[tuple, pd.DataFrame] = {}
 
     # -- loading -------------------------------------------------------------
 
@@ -623,6 +752,7 @@ class GalaxyCatalog:
         """Load (or reload) the catalog; False with ``status`` set on failure."""
         spec = self.spec
         self.df, self._index = None, None
+        self.match_cache = {}
         if not os.path.isfile(spec.path):
             self.status = f"file not found: {spec.path}"
             logger.warning(f"Catalog '{spec.name}': {self.status}")
@@ -674,6 +804,8 @@ class GalaxyCatalog:
                 values = raw[spec.columns[role]]
                 if ROLES_BY_NAME[role].kinds == NUMERIC:
                     values = pd.to_numeric(values, errors="coerce").astype(float)
+                    if role not in ("RA", "DEC"):
+                        values = values.where(values > SENTINEL_MAX)
                 out[role] = values
         for col in spec.hover_columns:
             out[self.hover_name(col)] = raw[col]
@@ -685,6 +817,13 @@ class GalaxyCatalog:
 
     def _describe(self) -> str:
         df = self.df
+        if self.spec.kind == CLUSTER:
+            text = f"{len(df):,} clusters"
+            if "Z" in df.columns:
+                text += f" ({int(np.isfinite(df['Z'].to_numpy()).sum()):,} with z)"
+            if self.n_total is not None and self.n_total != len(df):
+                text += f" of {self.n_total:,} rows"
+            return text
         text = f"{len(df):,} galaxies"
         if self.n_total is not None and self.n_total != len(df):
             text += f" of {self.n_total:,}"
@@ -705,6 +844,8 @@ class GalaxyCatalog:
     def capabilities(self) -> set:
         """Features this catalog's mapping enables (from the spec; no loading)."""
         mapped = set(self.spec.columns)
+        if self.spec.kind == CLUSTER:
+            return {"display", "cluster_match", "cluster_filter"}
         caps = {"display", "match_position"}
         if "OBJECT_ID" in mapped:
             caps.add("match_id")
