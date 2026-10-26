@@ -44,6 +44,29 @@ except ImportError:
 MEMBER_COLUMNS = ("ID_UNIQUE_CLUSTER", "OBJECT_ID", "PMEM_ZP", "PMEM_RS")
 
 
+def _snr_range(rows: np.ndarray) -> Tuple[Optional[float], Optional[float]]:
+    """(min, max) SNR_CLUSTER of ``rows``; (None, None) when there are none (a catalog with
+    no clusters of one algorithm), as for an algorithm that is not loaded."""
+    if len(rows) == 0:
+        return None, None
+    return float(rows["SNR_CLUSTER"].min()), float(rows["SNR_CLUSTER"].max())
+
+
+def _concatenate_common_columns(arrays: List[np.ndarray]) -> np.ndarray:
+    """Rows of all ``arrays`` in one table, keeping the columns they all have (in the first
+    one's order). The PZWAV and AMICO merged catalogs do not have the same columns, and
+    numpy cannot join tables with different columns."""
+    from numpy.lib import recfunctions
+
+    common = [
+        name for name in arrays[0].dtype.names if all(name in a.dtype.names for a in arrays[1:])
+    ]
+    dropped = sorted({n for a in arrays for n in a.dtype.names} - set(common))
+    if dropped:
+        logger.info(f"Merged catalogs: columns not in every catalog left out: {', '.join(dropped)}")
+    return np.concatenate([recfunctions.repack_fields(a[common]) for a in arrays])
+
+
 class DataLoader:
     """Handles loading and caching of cluster detection data."""
 
@@ -548,17 +571,11 @@ class DataLoader:
             # Filter by algorithm if not BOTH
             if algorithm == "BOTH":
                 data_merged = data_all
-                snr_min_pzwav = float(
-                    data_merged[data_merged["DET_CODE_NB"] == 2]["SNR_CLUSTER"].min()
+                snr_min_pzwav, snr_max_pzwav = _snr_range(
+                    data_merged[data_merged["DET_CODE_NB"] == 2]
                 )
-                snr_max_pzwav = float(
-                    data_merged[data_merged["DET_CODE_NB"] == 2]["SNR_CLUSTER"].max()
-                )
-                snr_min_amico = float(
-                    data_merged[data_merged["DET_CODE_NB"] == 1]["SNR_CLUSTER"].min()
-                )
-                snr_max_amico = float(
-                    data_merged[data_merged["DET_CODE_NB"] == 1]["SNR_CLUSTER"].max()
+                snr_min_amico, snr_max_amico = _snr_range(
+                    data_merged[data_merged["DET_CODE_NB"] == 1]
                 )
                 logger.info(f"Loaded {len(data_merged)} clusters (PZWAV + AMICO) from {os.path.basename(fitsfile)}")
             else:
@@ -625,7 +642,7 @@ class DataLoader:
                         snr_max_amico = None
 
                 # Combine arrays
-                data_merged = np.concatenate(all_data)
+                data_merged = _concatenate_common_columns(all_data)
                 logger.info(f"Loaded {len(data_merged)} merged clusters in total (combined)")
             else:
                 # Load single file

@@ -749,6 +749,8 @@ class MainPlotCallbacks:
                 # Tells the browser's viewport tracker this answer has arrived (always a
                 # new value, so the tracker runs even when the figure summary is unchanged)
                 Output("viewport-ack", "data"),
+                # Apply with no patchable map on screen asks for a full (background) render
+                Output("render-full-request", "data", allow_duplicate=True),
             ],
             [
                 Input("apply-filters-button", "n_clicks"),
@@ -787,6 +789,7 @@ class MainPlotCallbacks:
                 State("rendered-meta-store", "data"),
                 State("cluster-trace-index-store", "data"),
                 State("view-bounds-store", "data"),
+                State("render-full-request", "data"),
             ],
             prevent_initial_call=True,
         )
@@ -823,9 +826,10 @@ class MainPlotCallbacks:
             rendered_meta,
             trace_index,
             view_store,
+            full_request=None,
         ):
             if not n_clicks and not patch_request and not viewport_request:
-                return dash.no_update, dash.no_update, dash.no_update, dash.no_update
+                return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
             ack = self._viewport_ack(dash.callback_context.triggered_id, viewport_request)
             tag = f"viewport #{ack['id']}" if ack["id"] is not None else "apply"
@@ -841,11 +845,6 @@ class MainPlotCallbacks:
                     idcluster_upload_contents, idcluster_upload_filename,
                     catalog_filter_ids=catalog_filter_ids,
                 )
-                _t_load = time.perf_counter()
-                data = self.load_data(algorithm)
-                view_bounds, cull = self._cull_settings(data, view_store)
-                _dt_load = time.perf_counter() - _t_load
-
                 can_patch = bool(
                     self.trace_creator is not None
                     and rendered_meta
@@ -853,35 +852,24 @@ class MainPlotCallbacks:
                     and trace_index
                     and trace_index.get("n", 0) > 0
                 )
-
                 if not can_patch:
-                    # Figure on screen is not this algorithm's (or unknown): rebuild in full
-                    logger.debug("Apply filters - full rebuild (no patchable render on screen)")
-                    traces = self.create_traces(
-                        data,
-                        show_polygons,
-                        show_mer_tiles,
-                        relayout_data,
-                        catred_masked,
-                        show_unmerged_clusters=show_unmerged_clusters,
-                        matching_clusters=matching_clusters,
-                        show_cltile_info=show_cltile_info,
-                        view_bounds=view_bounds,
-                        **kw,
+                    # The map on screen is another algorithm's (the redraw for the new one is
+                    # under way, or failed) or there is none. Patching would mix algorithms,
+                    # and rebuilding here would drop CATRED, catalogs, mosaics, masks and
+                    # members, which this callback never receives. Pans wait for that redraw;
+                    # Apply asks for a full render, which keeps them.
+                    if dash.callback_context.triggered_id == "viewport-request":
+                        logger.debug(f"Patch [{tag}] skipped: no {algorithm} map on screen yet")
+                        return dash.no_update, dash.no_update, dash.no_update, ack, dash.no_update
+                    logger.debug(f"Apply [{tag}]: no patchable {algorithm} map, full render")
+                    return (
+                        dash.no_update, dash.no_update, dash.no_update, ack, (full_request or 0) + 1
                     )
-                    fig = (
-                        self.figure_manager.create_figure(traces, algorithm, free_aspect_ratio)
-                        if self.figure_manager
-                        else self._create_fallback_figure(traces, algorithm, free_aspect_ratio)
-                    )
-                    if self.figure_manager:
-                        self.figure_manager.preserve_zoom_state(fig, relayout_data, None)
-                    if box_coords:
-                        fig.add_trace(self._selected_cluster_marker(box_coords))
-                    status = self._filtered_status(
-                        algorithm, data, kw, show_polygons, show_mer_tiles, free_aspect_ratio
-                    )
-                    return fig, status, {"algorithm": algorithm, "cull": cull}, ack
+
+                _t_load = time.perf_counter()
+                data = self.load_data(algorithm)
+                view_bounds, cull = self._cull_settings(data, view_store)
+                _dt_load = time.perf_counter() - _t_load
 
                 # Incremental: rebuild only the cluster traces
                 self.trace_creator.proximity_detector.clear_bounds_cache()
@@ -928,13 +916,13 @@ class MainPlotCallbacks:
                     f"Patch [{tag}] ({shown}): {len(cluster_traces)} traces in {time.perf_counter() - _t_total:.2f}s "
                     f"[load {_dt_load:.2f}s, traces {_dt_traces:.2f}s, encode {_dt_patch:.2f}s]"
                 )
-                return patch, status, dash.no_update, ack
+                return patch, status, dash.no_update, ack, dash.no_update
 
             except Exception as e:
                 logger.exception(f"Patch [{tag}] failed: {e}")
                 _fig, _phz, status = self._create_error_plots(str(e))
                 # Still acknowledge, so the browser stops waiting for this request
-                return dash.no_update, status, dash.no_update, ack
+                return dash.no_update, status, dash.no_update, ack, dash.no_update
 
     def _setup_options_update_callback(self):
         """Setup real-time options update callback (preserves zoom)"""
@@ -1052,6 +1040,14 @@ class MainPlotCallbacks:
                 catalog_filter_ids = applied_filters.get("catalog-filter-dropdown", catalog_filter_ids)
                 if applied_filters.get("idcluster-upload") is None:
                     idcluster_upload_contents = None
+
+            # New algorithm: the applied SNR / redshift / richness ranges belong to the previous
+            # catalog (with PZWAV shown, the AMICO SNR range is a 0-100 placeholder) and would
+            # hide clusters of this one. Its sliders are being reset to its full range, so draw
+            # without range cuts, as those sliders will show.
+            if dash.callback_context.triggered_id == "algorithm-dropdown":
+                snr_range_pzwav = snr_range_amico = redshift_range = None
+                richness_range_zp = richness_range_rs = None
 
             try:
                 # Extract SNR values from range sliders (separate for PZWAV and AMICO)
