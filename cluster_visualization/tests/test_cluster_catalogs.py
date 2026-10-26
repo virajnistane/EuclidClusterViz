@@ -433,6 +433,10 @@ class ClusterCatalogCallbackTest(unittest.TestCase):
         self.assertIn("Mass [1e+14solMass]: 3.7000", trace["text"][0])
         self.assertIn("SNR: 4.5000", trace["text"][0])
         self.assertIn("<b>SPT-3G</b>", trace["text"][0])
+        # A cluster with missing values lists them as nan instead of leaving them out
+        for line in ("z: nan", "z err: nan", "Mass [1e+14solMass]: nan", "Richness: nan"):
+            self.assertIn(line, trace["text"][1])
+        self.assertIn("SNR: 8.3750", trace["text"][1])
 
         # No p(z) for a cluster marker
         app = dash.Dash(__name__)
@@ -449,6 +453,21 @@ class ClusterCatalogCallbackTest(unittest.TestCase):
             1, 3.0, "PZWAV", True, 0.8, 24, None, figure, [True], ids
         )
         self.assertEqual(out[1], "Show a galaxy catalog first.")
+
+
+class HoverMissingValuesTest(unittest.TestCase):
+    def test_cluster_catalogs_show_nan_galaxy_catalogs_skip(self):
+        df = pd.DataFrame(
+            {"RA": [10.0], "DEC": [-5.0], "SOURCE_ID": [None], "Z": [np.nan], "SPEC_Z": [np.nan]}
+        )
+        cluster = CatalogSpec("SPT", "x.fits", {"RA": "a", "DEC": "b", "Z": "z"}, kind=CLUSTER)
+        text = ct.hover_texts(cluster, df[["RA", "DEC", "SOURCE_ID", "Z"]])[0]
+        self.assertIn("ID: nan", text)
+        self.assertIn("z: nan", text)
+        galaxy = CatalogSpec("NED", "x.fits", {"RA": "a", "DEC": "b", "SPEC_Z": "z"})
+        text = ct.hover_texts(galaxy, df[["RA", "DEC", "SOURCE_ID", "SPEC_Z"]])[0]
+        self.assertNotIn("nan", text)
+        self.assertNotIn("z_spec", text)
 
 
 class ClusterMatchTraceTest(unittest.TestCase):
@@ -490,6 +509,7 @@ class ClusterMatchTraceTest(unittest.TestCase):
         self.assertIn("Euclid ID 11: 0.50′, Δz/(1+z) 0.006", rings.text[0])
         self.assertIn("+1 more Euclid cluster(s) within 2′", rings.text[0])
         self.assertIn("Euclid ID 22: 0.50′, by position (no z)", rings.text[1])
+        self.assertIn("z nan, Euclid z 0.400", rings.text[1])  # missing redshift shown
 
     def test_rebuilt_traces_keep_their_style(self):
         traces, _ = ct.cluster_match_traces(self.catalog, self.data)

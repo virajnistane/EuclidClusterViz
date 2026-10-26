@@ -115,29 +115,40 @@ def trace_meta(trace) -> dict:
     return meta if isinstance(meta, dict) else {}
 
 
-def _format(values: pd.Series) -> np.ndarray:
-    """Values as hover strings: 4 decimals for floats, plain otherwise, blank for missing."""
+# Hover text of a missing value in cluster catalogs (galaxy catalogs leave the line out)
+MISSING = "nan"
+
+
+def _format(values: pd.Series, missing: str = "") -> np.ndarray:
+    """Values as hover strings: 4 decimals for floats, plain otherwise, ``missing`` for missing."""
     if pd.api.types.is_float_dtype(values):
-        return np.array(["" if not np.isfinite(v) else f"{v:.4f}" for v in values], dtype=object)
-    return np.array(["" if pd.isna(v) else str(v) for v in values], dtype=object)
+        return np.array(
+            [missing if not np.isfinite(v) else f"{v:.4f}" for v in values], dtype=object
+        )
+    return np.array([missing if pd.isna(v) else str(v) for v in values], dtype=object)
 
 
 def hover_texts(spec, df: pd.DataFrame) -> list:
-    """One hover string per row: name, position, mapped roles, then hover columns."""
-    from cluster_visualization.src.data.galaxy_catalog import GalaxyCatalog
+    """One hover string per row: name, position, mapped roles, then hover columns.
 
+    Cluster catalogs show a missing value as "nan", so every mapped column is listed for
+    every cluster; galaxy catalogs leave missing values out.
+    """
+    from cluster_visualization.src.data.galaxy_catalog import CLUSTER, GalaxyCatalog
+
+    missing = MISSING if getattr(spec, "kind", None) == CLUSTER else ""
     units = getattr(spec, "units", None) or {}
-    lines = [("RA", _format(df["RA"])), ("Dec", _format(df["DEC"]))]
+    lines = [("RA", _format(df["RA"], missing)), ("Dec", _format(df["DEC"], missing))]
     for role, label in _HOVER_LABELS:
         if role in df.columns:
             unit = units.get(role, "")
             if unit.strip().lower() not in _PLAIN_UNITS:
                 label = f"{label} [{unit}]"
-            lines.append((label, _format(df[role])))
+            lines.append((label, _format(df[role], missing)))
     for column in spec.hover_columns:
         name = GalaxyCatalog.hover_name(column)
         if name in df.columns:
-            lines.append((column, _format(df[name])))
+            lines.append((column, _format(df[name], missing)))
     title = f"<b>{spec.name}</b>"
     return [
         "<br>".join(
@@ -263,12 +274,13 @@ def _cluster_match_hover(spec, ext: pd.DataFrame, best: pd.DataFrame, merged, ex
             f"<b>{title}</b> ({spec.name})",
             f"Euclid ID {pair['ID_UNIQUE_CLUSTER']}: {pair['SEP_ARCMIN']:.2f}′",
         ]
+        z_euclid = float(merged["Z_CLUSTER"][int(pair["EUCLID_ROW"])])
+        z_ext = float(row["Z"]) if "Z" in ext.columns else np.nan
         if np.isfinite(pair["DZ"]):
-            z_euclid = float(merged["Z_CLUSTER"][int(pair["EUCLID_ROW"])])
             lines[-1] += f", Δz/(1+z) {pair['DZ']:.3f}"
-            lines.append(f"z {row['Z']:.3f}, Euclid z {z_euclid:.3f}")
         else:
             lines[-1] += ", by position (no z)"
+        lines.append(f"z {z_ext:.3f}, Euclid z {z_euclid:.3f}")  # NaN reads "nan"
         if n_more:
             lines.append(f"+{n_more} more Euclid cluster(s) within {spec.match_radius_arcmin:g}′")
         texts.append("<br>".join(lines))
