@@ -46,9 +46,9 @@ From: python:3.14-slim
     rm -rf /app/cluster_visualization/.ruff_cache
     /opt/venv/bin/python -m compileall -q /app/cluster_visualization
 
-    # core/app.py writes tmp/browser_debug.log under the project root; /app is
-    # read-only inside the image, so point it at the container's /tmp.
-    ln -s /tmp /app/tmp
+    # No /app/tmp: /app is read-only at run time, so core/app.py writes its browser
+    # debug log to ~/.cache/clusterviz/ instead (not the node's shared /tmp, where the
+    # file may belong to another user).
 
 %environment
     export VIRTUAL_ENV=/opt/venv

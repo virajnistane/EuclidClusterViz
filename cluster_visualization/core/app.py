@@ -105,19 +105,42 @@ class ClusterVisualizationCore:
         if not hasattr(app.server, "_debug_log_setup"):
             import os as _os, datetime as _dt
 
-            _log_path = _os.path.join(
-                _os.path.dirname(_os.path.dirname(_os.path.dirname(__file__))),
-                "tmp", "browser_debug.log"
-            )
-            _os.makedirs(_os.path.dirname(_log_path), exist_ok=True)
+            # tmp/ under the project root, else the user's cache directory: in the Apptainer
+            # image /app/tmp is the node's shared /tmp, where the file may belong to
+            # another user. Writing this log must never fail a request.
+            _cache_home = _os.environ.get("XDG_CACHE_HOME") or _os.path.expanduser("~/.cache")
+            _log_path = None
+            for _candidate in (
+                _os.path.join(
+                    _os.path.dirname(_os.path.dirname(_os.path.dirname(__file__))),
+                    "tmp", "browser_debug.log"
+                ),
+                _os.path.join(_cache_home, "clusterviz", "browser_debug.log"),
+            ):
+                try:
+                    _os.makedirs(_os.path.dirname(_candidate), exist_ok=True)
+                    with open(_candidate, "a"):
+                        pass
+                    _log_path = _candidate
+                    break
+                except OSError:
+                    continue
+
+            def _append_log(line):
+                if _log_path is None:
+                    return
+                try:
+                    with open(_log_path, "a") as _f:
+                        _f.write(line)
+                except OSError as exc:
+                    logger.debug(f"Browser debug log not written: {exc}")
 
             @app.server.route("/log", methods=["POST"])
             def browser_log():
                 from flask import request as _req, jsonify
                 msg = (_req.get_data(as_text=True) or "").strip()
                 ts = _dt.datetime.now().strftime("%H:%M:%S.%f")[:-3]
-                with open(_log_path, "a") as _f:
-                    _f.write(f"[{ts}] {msg}\n")
+                _append_log(f"[{ts}] {msg}\n")
                 return jsonify(ok=True)
 
             # Large callback responses (e.g. viewport marker patches): size and server time,
@@ -135,8 +158,7 @@ class ClusterVisualizationCore:
                 if t0 is not None and _req.path.endswith("_dash-update-component") and size > 50_000:
                     ms = (_dt.datetime.now() - t0).total_seconds() * 1000
                     ts = _dt.datetime.now().strftime("%H:%M:%S.%f")[:-3]
-                    with open(_log_path, "a") as _f:
-                        _f.write(f"[{ts}] server HTTP {size}B in {ms:.0f}ms\n")
+                    _append_log(f"[{ts}] server HTTP {size}B in {ms:.0f}ms\n")
                 return response
 
             app.server._debug_log_setup = True
