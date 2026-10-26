@@ -36,6 +36,46 @@ except ImportError:
     logger.warning("Could not import get_idclusters_array from utils. ID cluster upload functionality may be affected.")
 
 
+# Cluster filter controls, in MainPlotCallbacks._resolve_filter_kwargs argument order.
+# Callbacks that redraw the clusters elsewhere (CATRED load, CATRED box) read the same
+# ones, so their map shows the same clusters as a render or Apply.
+FILTER_STATES = [
+    State("snr-range-slider-pzwav", "value"),
+    State("snr-range-slider-amico", "value"),
+    State("snr-include-missing-pzwav", "value"),
+    State("snr-include-missing-amico", "value"),
+    State("redshift-range-slider", "value"),
+    State("redshift-include-missing", "value"),
+    State("richness-range-slider-zp", "value"),
+    State("richness-range-slider-rs", "value"),
+    State("richness-include-missing-zp", "value"),
+    State("richness-include-missing-rs", "value"),
+    State("richness-mode-radio", "value"),
+    State("flag-quality-zp-checklist", "value"),
+    State("flag-quality-rs-checklist", "value"),
+    State("idcluster-upload", "contents"),
+    State("idcluster-upload", "filename"),
+    State("catalog-filter-dropdown", "value"),
+]
+
+
+def cull_settings(trace_creator, data, view_store):
+    """(view_bounds, cull) for drawing the clusters of ``data``.
+
+    Culling is on for catalogs above [view] cull_min_clusters merged clusters
+    (config.ini, default 5000); smaller catalogs are sent whole so zooming never
+    needs a server trip.
+    The bounds are the window the browser recorded as sent (view-bounds-store).
+    """
+    merged = data.get("data_detcluster_mergedcat") if isinstance(data, dict) else None
+    n = len(merged) if merged is not None else 0
+    # From the app's TraceCreator (configured from config.ini at startup)
+    cull_min = trace_creator.cull_min_clusters() if trace_creator is not None else 5000
+    cull = n > cull_min
+    sent = (view_store or {}).get("sent") if cull else None
+    bounds = tuple(float(v) for v in sent) if sent and len(sent) == 4 else None
+    return bounds, cull
+
 
 class MainPlotCallbacks:
     """Handles main plot rendering callbacks"""
@@ -523,21 +563,8 @@ class MainPlotCallbacks:
         return {"id": req_id, "t": time.time()}
 
     def _cull_settings(self, data, view_store):
-        """(view_bounds, cull) for a render.
-
-        Culling is on for catalogs above [view] cull_min_clusters merged clusters
-        (config.ini, default 5000); smaller catalogs are sent whole so zooming never
-        needs a server trip.
-        The bounds are the window the browser recorded as sent (view-bounds-store).
-        """
-        merged = data.get("data_detcluster_mergedcat") if isinstance(data, dict) else None
-        n = len(merged) if merged is not None else 0
-        # From the app's TraceCreator (configured from config.ini at startup)
-        cull_min = self.trace_creator.cull_min_clusters() if self.trace_creator is not None else 5000
-        cull = n > cull_min
-        sent = (view_store or {}).get("sent") if cull else None
-        bounds = tuple(float(v) for v in sent) if sent and len(sent) == 4 else None
-        return bounds, cull
+        """(view_bounds, cull) for a render (see cull_settings)."""
+        return cull_settings(self.trace_creator, data, view_store)
 
     @staticmethod
     def _resolve_filter_kwargs(

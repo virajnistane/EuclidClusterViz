@@ -20,7 +20,11 @@ from cluster_visualization.src.visualization.figures import (
 )
 import time
 
-from cluster_visualization.callbacks.utils import get_idclusters_array
+from cluster_visualization.callbacks.main_plot import (
+    FILTER_STATES,
+    MainPlotCallbacks,
+    cull_settings,
+)
 from cluster_visualization.src.visualization.trace_registry import TraceRegistry, TraceType
 from cluster_visualization.utils.profiler import TraceProfiler
 
@@ -116,12 +120,6 @@ class CATREDCallbacks:
             [
                 State("algorithm-dropdown", "value"),
                 State("matching-clusters-switch", "value"),
-                State("snr-range-slider-pzwav", "value"),
-                State("snr-range-slider-amico", "value"),
-                State("redshift-range-slider", "value"),
-                State("idcluster-upload", "contents"),
-                State("idcluster-upload", "filename"),
-                State("catalog-filter-dropdown", "value"),
                 State("polygon-switch", "value"),
                 State("mer-switch", "value"),
                 State("aspect-ratio-switch", "value"),
@@ -132,6 +130,8 @@ class CATREDCallbacks:
                 State("magnitude-limit-slider", "value"),
                 State("cluster-plot", "relayoutData"),
                 State("cluster-plot", "figure"),
+                *FILTER_STATES,
+                State("view-bounds-store", "data"),
             ],
             background=True,
             running=[
@@ -149,12 +149,6 @@ class CATREDCallbacks:
             catred_n_clicks,
             algorithm,
             matching_clusters,
-            snr_range_pzwav,
-            snr_range_amico,
-            redshift_range,
-            idcluster_upload_contents,
-            idcluster_upload_filename,
-            catalog_filter_ids,
             show_polygons,
             show_mer_tiles,
             free_aspect_ratio,
@@ -165,7 +159,11 @@ class CATREDCallbacks:
             maglim,
             relayout_data,
             current_figure,
+            *filter_values_and_view,
         ):
+            # Same cluster filters and culling window as a render (FILTER_STATES, then
+            # view-bounds-store), so the redrawn clusters match the map's
+            *filter_values, view_store = filter_values_and_view
             if catred_n_clicks == 0:
                 return dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
@@ -176,44 +174,7 @@ class CATREDCallbacks:
             try:
                 _profiler = TraceProfiler()
                 _t_total = time.perf_counter()
-                set_progress((10, "Extracting SNR values..."))
-
-                # Extract SNR values from range sliders (separate for PZWAV and AMICO)
-                snr_pzwav_lower = (
-                    snr_range_pzwav[0] if snr_range_pzwav and len(snr_range_pzwav) == 2 else None
-                )
-                snr_pzwav_upper = (
-                    snr_range_pzwav[1] if snr_range_pzwav and len(snr_range_pzwav) == 2 else None
-                )
-
-                snr_amico_lower = (
-                    snr_range_amico[0] if snr_range_amico and len(snr_range_amico) == 2 else None
-                )
-                snr_amico_upper = (
-                    snr_range_amico[1] if snr_range_amico and len(snr_range_amico) == 2 else None
-                )
-
-                # Determine which SNR range to use based on algorithm
-                if algorithm == "PZWAV":
-                    snr_lower = snr_pzwav_lower
-                    snr_upper = snr_pzwav_upper
-                elif algorithm == "AMICO":
-                    snr_lower = snr_amico_lower
-                    snr_upper = snr_amico_upper
-                else:  # BOTH
-                    snr_lower = (snr_pzwav_lower, snr_amico_lower)
-                    snr_upper = (snr_pzwav_upper, snr_amico_upper)
-
-                # Extract redshift values from range slider
-                z_lower = redshift_range[0] if redshift_range and len(redshift_range) == 2 else None
-                z_upper = redshift_range[1] if redshift_range and len(redshift_range) == 2 else None
-
-                # Process uploaded ID cluster list if provided
-                if idcluster_upload_contents:
-                    idcluster_list = get_idclusters_array(idcluster_upload_contents, idcluster_upload_filename)
-                else:
-                    idcluster_list = None
-
+                set_progress((10, "Reading filters..."))
 
                 # Load data for selected algorithm
                 set_progress((30, f"Loading {algorithm} cluster data..."))
@@ -263,18 +224,12 @@ class CATREDCallbacks:
                         existing_mask_overlay_traces=existing_mask_overlay_traces,  # 🆕 PASS MASK OVERLAY TRACES
                         existing_catalog_traces=existing_catalog_traces,
                         existing_catalog_match_traces=existing_catalog_match_traces,
-                        snr_threshold_lower_pzwav=snr_pzwav_lower,
-                        snr_threshold_upper_pzwav=snr_pzwav_upper,
-                        snr_threshold_lower_amico=snr_amico_lower,
-                        snr_threshold_upper_amico=snr_amico_upper,
-                        z_threshold_lower=z_lower,
-                        z_threshold_upper=z_upper,
-                        idcluster_list=idcluster_list,
-                        catalog_filter_ids=catalog_filter_ids,
                         threshold=threshold,
                         show_unmerged_clusters=show_unmerged_clusters,
                         show_cltile_info=show_cltile_info,
                         matching_clusters=matching_clusters,
+                        view_bounds=cull_settings(self.trace_creator, data, view_store)[0],
+                        **MainPlotCallbacks._resolve_filter_kwargs(*filter_values),
                     )
 
                 # Update the CATRED traces cache with the new trace count
@@ -487,20 +442,19 @@ class CATREDCallbacks:
         existing_catalog_traces=None,
         existing_catalog_match_traces=None,
         manual_catred_data=None,
-        snr_threshold_lower_pzwav=None,
-        snr_threshold_upper_pzwav=None,
-        snr_threshold_lower_amico=None,
-        snr_threshold_upper_amico=None,
-        z_threshold_lower=None,
-        z_threshold_upper=None,
-        idcluster_list=None,
-        catalog_filter_ids=None,
         threshold=0.8,
         show_unmerged_clusters=False,
         show_cltile_info=True,
         matching_clusters=False,
+        view_bounds=None,
+        **filter_kw,
     ):
-        """Create traces using modular or fallback method"""
+        """Create traces using modular or fallback method.
+
+        ``filter_kw``: the cluster filters, as MainPlotCallbacks._resolve_filter_kwargs
+        returns them; ``view_bounds``: the window the browser was last sent (main_plot
+        cull_settings), so the clusters are culled as in a render.
+        """
         if self.trace_creator:
             return self.trace_creator.create_traces(
                 data,
@@ -514,18 +468,12 @@ class CATREDCallbacks:
                 existing_catalog_traces=existing_catalog_traces,
                 existing_catalog_match_traces=existing_catalog_match_traces,
                 manual_catred_data=manual_catred_data,
-                snr_threshold_lower_pzwav=snr_threshold_lower_pzwav,
-                snr_threshold_upper_pzwav=snr_threshold_upper_pzwav,
-                snr_threshold_lower_amico=snr_threshold_lower_amico,
-                snr_threshold_upper_amico=snr_threshold_upper_amico,
-                z_threshold_lower=z_threshold_lower,
-                z_threshold_upper=z_threshold_upper,
-                idcluster_list=idcluster_list,
-                catalog_filter_ids=catalog_filter_ids,
                 threshold=threshold,
                 show_unmerged_clusters=show_unmerged_clusters,
                 show_cltile_info=show_cltile_info,
                 matching_clusters=matching_clusters,
+                view_bounds=view_bounds,
+                **filter_kw,
             )
         else:
             # Fallback to inline trace creation
@@ -539,13 +487,13 @@ class CATREDCallbacks:
                 existing_mosaic_traces=existing_mosaic_traces,  # 🆕 ADD MOSAIC TRACES
                 existing_mask_overlay_traces=existing_mask_overlay_traces,
                 manual_catred_data=manual_catred_data,
-                snr_threshold_lower_pzwav=snr_threshold_lower_pzwav,
-                snr_threshold_upper_pzwav=snr_threshold_upper_pzwav,
-                snr_threshold_lower_amico=snr_threshold_lower_amico,
-                snr_threshold_upper_amico=snr_threshold_upper_amico,
-                z_threshold_lower=z_threshold_lower,
-                z_threshold_upper=z_threshold_upper,
-                idcluster_list=idcluster_list,
+                snr_threshold_lower_pzwav=filter_kw.get("snr_threshold_lower_pzwav"),
+                snr_threshold_upper_pzwav=filter_kw.get("snr_threshold_upper_pzwav"),
+                snr_threshold_lower_amico=filter_kw.get("snr_threshold_lower_amico"),
+                snr_threshold_upper_amico=filter_kw.get("snr_threshold_upper_amico"),
+                z_threshold_lower=filter_kw.get("z_threshold_lower"),
+                z_threshold_upper=filter_kw.get("z_threshold_upper"),
+                idcluster_list=filter_kw.get("idcluster_list"),
                 threshold=threshold,
                 show_unmerged_clusters=show_unmerged_clusters,
                 show_cltile_info=show_cltile_info,

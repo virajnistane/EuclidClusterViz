@@ -233,8 +233,20 @@ class TraceCreator:
                 import diskcache as _dc
                 import os as _os
                 _state_dir = _os.path.join(_os.path.expanduser("~"), ".cache", "clusterviz_state")
+                # Preserved CATRED traces built by an earlier render (another worker process)
+                # keep their click data; this render only holds the traces it built
+                _kept = {
+                    (t.get("name") if isinstance(t, dict) else getattr(t, "name", None))
+                    for t in (existing_catred_traces or [])
+                }
                 with _dc.Cache(_state_dir) as _sc:
-                    _sc.set("catred_click_data", self.current_catred_data)
+                    _merged = {
+                        k: v
+                        for k, v in (_sc.get("catred_click_data") or {}).items()
+                        if k in _kept
+                    }
+                    _merged.update(self.current_catred_data)
+                    _sc.set("catred_click_data", _merged)
                 logger.debug(f"Persisted {len(self.current_catred_data)} CATRED trace(s) to state cache "
                       f"(keys: {list(self.current_catred_data.keys())})")
             except Exception as _exc:
@@ -1589,6 +1601,31 @@ class TraceCreator:
                 )
                 data_traces.append(merged_trace)
         else:
+            if matching_clusters and has_det_code and algorithm == "BOTH":
+                # Matched pairs only, with their ovals, as without CATRED (and as
+                # selected_clusters counts them)
+                datamod_detcluster_mergedcat = datamod_detcluster_mergedcat[
+                    np.logical_not(np.isnan(datamod_detcluster_mergedcat["CROSS_ID_CLUSTER"]))
+                ]
+                det_code = datamod_detcluster_mergedcat["DET_CODE_NB"]
+                oval_trace = self._matched_pair_trace(
+                    self._apply_snr_filtering(
+                        datamod_detcluster_mergedcat[det_code == 2],
+                        snr_threshold_lower_pzwav,
+                        snr_threshold_upper_pzwav,
+                        snr_include_missing_pzwav,
+                    ),
+                    self._apply_snr_filtering(
+                        datamod_detcluster_mergedcat[det_code == 1],
+                        snr_threshold_lower_amico,
+                        snr_threshold_upper_amico,
+                        snr_include_missing_amico,
+                    ),
+                    relayout_data,
+                )
+                if oval_trace is not None:
+                    data_traces.append(oval_trace)
+
             # CATRED data present - create separate traces based on proximity to CATRED points
             near_catred_mask = self.proximity_detector.check_proximity_batch(
                 datamod_detcluster_mergedcat["RIGHT_ASCENSION_CLUSTER"],

@@ -16,6 +16,11 @@ import plotly.colors as pc  # type: ignore[import]
 import plotly.graph_objs as go  # type: ignore[import]
 from typing import Any, Dict, List, Optional, Tuple, cast
 from loguru import logger
+from cluster_visualization.callbacks.main_plot import (
+    FILTER_STATES,
+    MainPlotCallbacks,
+    cull_settings,
+)
 from cluster_visualization.src.visualization.figures import (
     MAP_LEGEND,
     MAP_MARGIN,
@@ -520,9 +525,6 @@ class ClusterModalCallbacks:
             #
             [
                 State("algorithm-dropdown", "value"),
-                State("snr-range-slider-pzwav", "value"),
-                State("snr-range-slider-amico", "value"),
-                State("redshift-range-slider", "value"),
                 State("polygon-switch", "value"),
                 State("mer-switch", "value"),
                 State("aspect-ratio-switch", "value"),
@@ -551,9 +553,11 @@ class ClusterModalCallbacks:
                 State("catred-mode-switch", "value"),
                 State("catred-threshold-slider", "value"),
                 State("magnitude-limit-slider", "value"),
-                State("catalog-filter-dropdown", "value"),
                 State("cluster-plot", "relayoutData"),
                 State("cluster-plot", "figure"),
+                *FILTER_STATES,
+                State("matching-clusters-switch", "value"),
+                State("view-bounds-store", "data"),
             ],
             prevent_initial_call=True,
             background=True,
@@ -578,9 +582,6 @@ class ClusterModalCallbacks:
             catred_box_clicks,
             mask_cutout_clicks,
             algorithm,
-            snr_range_pzwav,
-            snr_range_amico,
-            redshift_range,
             show_polygons,
             show_mer_tiles,
             free_aspect_ratio,
@@ -604,11 +605,14 @@ class ClusterModalCallbacks:
             catred_masked,
             threshold,
             maglim,
-            catalog_filter_ids,
             relayout_data,
             current_figure,
+            *filters_and_view,
         ):
             """Handle tab action button clicks"""
+            # The sidebar's cluster filters (main_plot FILTER_STATES), the matching switch
+            # and the culling window: the CATRED box redraws the clusters as a render would
+            *filter_values, matching_clusters, view_store = filters_and_view
             set_progress((5, "Initializing..."))
             ctx = callback_context
             if not ctx.triggered:
@@ -785,35 +789,10 @@ class ClusterModalCallbacks:
                     ]
                 )
 
-                # Extract separate SNR values from range sliders
-                snr_pzwav_lower = (
-                    snr_range_pzwav[0] if snr_range_pzwav and len(snr_range_pzwav) == 2 else None
-                )
-                snr_pzwav_upper = (
-                    snr_range_pzwav[1] if snr_range_pzwav and len(snr_range_pzwav) == 2 else None
-                )
-                snr_amico_lower = (
-                    snr_range_amico[0] if snr_range_amico and len(snr_range_amico) == 2 else None
-                )
-                snr_amico_upper = (
-                    snr_range_amico[1] if snr_range_amico and len(snr_range_amico) == 2 else None
-                )
-
-                # Determine which SNR to use based on algorithm
-                if algorithm == "PZWAV":
-                    snr_lower, snr_upper = snr_pzwav_lower, snr_pzwav_upper
-                elif algorithm == "AMICO":
-                    snr_lower, snr_upper = snr_amico_lower, snr_amico_upper
-                else:  # BOTH - use PZWAV SNR (could also use both, but for simplicity)
-                    snr_lower, snr_upper = snr_pzwav_lower, snr_pzwav_upper
-
-                # Extract redshift values from redshift range slider
-                redshift_lower = (
-                    redshift_range[0] if redshift_range and len(redshift_range) == 2 else None
-                )
-                redshift_upper = (
-                    redshift_range[1] if redshift_range and len(redshift_range) == 2 else None
-                )
+                # Cluster filters as in a render; the box uses the same redshift range
+                filter_kw = MainPlotCallbacks._resolve_filter_kwargs(*filter_values)
+                redshift_lower = filter_kw["z_threshold_lower"]
+                redshift_upper = filter_kw["z_threshold_upper"]
 
                 logger.debug(f"catred_redshift_bin_width received: {catred_redshift_bin_width!r}")
                 
@@ -870,19 +849,22 @@ class ClusterModalCallbacks:
                         relayout_data,
                         catred_masked,
                         catred_box_data=catred_box_data,
-                        existing_catred_traces=[],
+                        # CATRED loaded from the sidebar stays; a new box replaces the old box
+                        existing_catred_traces=[
+                            t
+                            for t in existing_catred_traces
+                            if "Boxed" not in (getattr(t, "name", None) or "")
+                        ],
                         existing_mosaic_traces=existing_mosaic_traces,
                         existing_mask_overlay_traces=existing_mask_overlay_traces,
                         existing_catalog_traces=existing_catalog_traces,
                         existing_catalog_match_traces=existing_catalog_match_traces,
-                        snr_threshold_lower_pzwav=snr_pzwav_lower,
-                        snr_threshold_upper_pzwav=snr_pzwav_upper,
-                        snr_threshold_lower_amico=snr_amico_lower,
-                        snr_threshold_upper_amico=snr_amico_upper,
-                        catalog_filter_ids=catalog_filter_ids,
                         threshold=catred_mask_threshold,
                         show_unmerged_clusters=show_unmerged_clusters,
                         show_cltile_info=show_cltile_info,
+                        matching_clusters=matching_clusters,
+                        view_bounds=cull_settings(self.trace_creator, data, view_store)[0],
+                        **filter_kw,
                     )
 
                 if self.figure_manager:
