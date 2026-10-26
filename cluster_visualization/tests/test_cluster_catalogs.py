@@ -685,5 +685,68 @@ class ClusterCatalogFilterTest(unittest.TestCase):
         self.assertIn("by cross-match", help_text)
 
 
+class ClusterCardCounterpartsTest(unittest.TestCase):
+    """'Known counterparts' in the selected-cluster card."""
+
+    def setUp(self):
+        from cluster_visualization.callbacks.cluster_modal_callbacks import ClusterModalCallbacks
+
+        self.tmp = tempfile.TemporaryDirectory()
+        self.registry = CatalogRegistry(
+            os.path.join(self.tmp.name, "catalogs.json"),
+            cache_dir=os.path.join(self.tmp.name, "cache"),
+        )
+        self.card = ClusterModalCallbacks.__new__(ClusterModalCallbacks)
+        self.card.trace_creator = SimpleNamespace(catalog_registry=self.registry)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _card(self, ra, dec, z):
+        record = {"Z_CLUSTER": z, "ID_UNIQUE_CLUSTER": 11}
+        content = self.card._build_cluster_tab_content(
+            ra, dec, "10.00", f"{z}", "PZWAV", 11, "", merged_record=record
+        )
+        return str(content)
+
+    def test_no_cluster_catalog_no_entry(self):
+        self.assertNotIn("Known counterparts", self._card(54.0, -51.0, 0.76))
+
+    def test_counterparts_listed(self):
+        cid = self.registry.add(
+            CatalogSpec(
+                "SPT-3G",
+                _spt_fits(self.tmp.name),
+                dict(SPT_MAPPING),
+                kind=CLUSTER,
+                units={"MASS": "1e+14solMass"},
+            )
+        )
+        df = self.registry.catalog(cid).get_all()
+        text = self._card(df["RA"][0], df["DEC"][0] + 0.5 / 60.0, 0.76)
+        self.assertIn("Known counterparts", text)
+        self.assertIn(
+            "SPT-3G: SPT-CL J0330-5046, z 0.750, 0.50′, Δz/(1+z) 0.006, "
+            "mass 3.7 [1e+14solMass], richness 189, SNR 4.5",
+            text,
+        )
+        # Too far in redshift, then too far away
+        self.assertIn("SPT-3G: none within 2′", self._card(df["RA"][0], df["DEC"][0], 1.5))
+        self.assertIn("SPT-3G: none within 2′", self._card(100.0, 0.0, 0.76))
+        # Without a Euclid redshift: by position
+        self.assertIn("0.00′, by position", self._card(df["RA"][1], df["DEC"][1], float("nan")))
+
+    def test_unavailable_catalog_shows_its_status(self):
+        self.registry.add(
+            CatalogSpec(
+                "Gone",
+                os.path.join(self.tmp.name, "gone.fits"),
+                {"RA": "a", "DEC": "b"},
+                kind=CLUSTER,
+            )
+        )
+        self.assertIn("Gone: file not found", self._card(54.0, -51.0, 0.76))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -21,6 +21,7 @@ from cluster_visualization.callbacks.main_plot import (
     MainPlotCallbacks,
     cull_settings,
 )
+from cluster_visualization.src.data.cluster_matcher import counterparts
 from cluster_visualization.src.visualization.figures import (
     MAP_LEGEND,
     MAP_MARGIN,
@@ -362,6 +363,78 @@ class ClusterModalCallbacks:
                 pass
         return text
 
+    # Counterparts listed per cluster catalog in the card; the rest are counted
+    COUNTERPARTS_SHOWN = 5
+
+    @staticmethod
+    def _counterpart_text(spec, row) -> str:
+        """'SPT-CL J0337-5046, z 0.750, 0.50′, Δz/(1+z) 0.006, mass 3.74 [1e+14solMass]'."""
+
+        def number(role):
+            try:
+                value = float(row[role]) if role in row.index else float("nan")
+            except (TypeError, ValueError):
+                return None
+            return value if np.isfinite(value) else None
+
+        name = row["SOURCE_ID"] if "SOURCE_ID" in row.index else f"#{row.name}"
+        parts = [str(name)]
+        if number("Z") is not None:
+            parts.append(f"z {number('Z'):.3f}")
+        parts.append(f"{row['SEP_ARCMIN']:.2f}′")
+        dz = number("DZ")
+        parts.append(f"Δz/(1+z) {dz:.3f}" if dz is not None else "by position")
+        for role, label in (("MASS", "mass"), ("RICHNESS", "richness"), ("SNR", "SNR")):
+            value = number(role)
+            if value is not None:
+                unit = (spec.units or {}).get(role, "")
+                parts.append(f"{label} {value:.3g}" + (f" [{unit}]" if unit else ""))
+        return ", ".join(parts)
+
+    def _counterparts_item(self, ra, dec, merged_record):
+        """'Known counterparts' entry of the card: the clusters of every cluster catalog
+        within its radius and Δz of this cluster ([] when there is no cluster catalog)."""
+        registry = getattr(getattr(self, "trace_creator", None), "catalog_registry", None)
+        specs = registry.with_capability("cluster_match") if registry is not None else []
+        if not specs:
+            return []
+        try:
+            z = float((merged_record or {}).get("Z_CLUSTER"))
+        except (TypeError, ValueError):
+            z = None
+        if z is not None and not np.isfinite(z):
+            z = None
+        lines = []
+        for spec in specs:
+            catalog = registry.catalog(spec.id)
+            if catalog is None:
+                continue
+            if not catalog.is_available():
+                lines.append(html.Div(f"{spec.name}: {catalog.status}", className="control-help"))
+                continue
+            try:
+                rows = counterparts(catalog, float(ra), float(dec), z)
+            except Exception as e:
+                logger.opt(exception=e).warning(f"Counterparts in '{spec.name}' failed: {e}")
+                lines.append(
+                    html.Div(f"{spec.name}: could not be searched", className="control-help")
+                )
+                continue
+            if len(rows) == 0:
+                lines.append(
+                    html.Div(
+                        f"{spec.name}: none within {spec.match_radius_arcmin:g}′",
+                        className="control-help",
+                    )
+                )
+                continue
+            for _, row in rows.head(self.COUNTERPARTS_SHOWN).iterrows():
+                lines.append(html.Div(f"{spec.name}: {self._counterpart_text(spec, row)}"))
+            if len(rows) > self.COUNTERPARTS_SHOWN:
+                more = len(rows) - self.COUNTERPARTS_SHOWN
+                lines.append(html.Div(f"{spec.name}: +{more} more", className="control-help"))
+        return [html.Dt("Known counterparts"), html.Dd(lines)]
+
     def _build_cluster_tab_content(
         self, ra, dec, snr_str, z_str, algorithm, merged_cluster_id, resolution_note,
         merged_record=None, tile=None,
@@ -397,7 +470,8 @@ class ClusterModalCallbacks:
                 )
                 + (item("CL tile", tile) if tile else [])
                 + item("Richness ZP", self._richness_text(merged_record, "ZP"))
-                + item("Richness RS", self._richness_text(merged_record, "RS")),
+                + item("Richness RS", self._richness_text(merged_record, "RS"))
+                + self._counterparts_item(ra, dec, merged_record),
                 className="tool-facts",
             ),
             html.Small(resolution_note, className="control-help"),
